@@ -33,6 +33,6 @@ executable nothing
 
     -- LANGUAGE extensions used by modules in this package.
     -- other-extensions:
-    build-depends:    base ^>=4.16.4.0,mtl>=2.3.1,containers,text,Cabal,transformers,xhtml
+    build-depends:    base ^>=4.16.4.0,mtl>=2.3.1,containers,text,Cabal,transformers,xhtml, exceptions
     hs-source-dirs:   app
     default-language: Haskell2010
