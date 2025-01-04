@@ -339,7 +339,6 @@ type TheoremSchemaM tType sE eL r s o = TheoremSchemaMT tType sE eL r s o (Eithe
 data EstTmMError s sE o tType eL where
     EstTmMErrMError :: BigException eL -> EstTmMError s sE o tType eL
     EstTmMErrMExcept :: SomeException -> EstTmMError s sE o tType eL
-    -- EstTmMErrBasic :: TmErr s sE o tType -> EstTmMError s sE o tType eL
     EstTmMResultNotProved :: s ->  EstTmMError s sE o tType eL
     EstTmMErrResultSanity :: s -> sE -> EstTmMError s sE o tType eL
     EstTmMErrLemmaSanity :: s -> sE -> EstTmMError s sE o tType eL
