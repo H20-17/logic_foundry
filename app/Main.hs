@@ -35,8 +35,7 @@ import Control.Monad.Reader
 import Control.Arrow
 import Control.Monad.Except
 
-import Control.Monad.Error.Class
-import Foreign.C (eEXIST, throwErrnoIfMinus1Retry_)
+
 --import Control.Exception
 import Control.Monad.Catch
     ( SomeException, MonadCatch(..), MonadThrow(..), Exception )
@@ -208,7 +207,7 @@ modifyPS f g m1 = do
 
 
 
-data BigException  eL where
+data BigException eL where
     BErrSubproof :: BigException eL -> BigException eL
     BEPrfErr :: eL -> BigException eL
     deriving (Typeable,Show)
@@ -216,6 +215,14 @@ data BigException  eL where
 instance ErrorEmbed eL (BigException eL) where
      errEmbed::eL -> BigException  eL
      errEmbed = BEPrfErr
+
+
+bigExceptionTrans :: (eL1 -> eL2) -> BigException  eL1 -> BigException eL2
+bigExceptionTrans f be1 =
+    case be1 of 
+        BErrSubproof be2 -> BErrSubproof (bigExceptionTrans f be2)
+        BEPrfErr e1 -> (BEPrfErr . f) e1
+
 
 
 type ProofStateGenT tType sE eL r s o m x = ProofStateT (BigException eL) eL [tType] r (Set s,Map o tType) m x
@@ -251,11 +258,12 @@ class (Ord s,TypeableTerm t o tType sE)
 
 
 
+
 data TestSubproofErr senttype sanityerrtype logicerrtype where
    TestSubproofErrResultNotSane :: senttype -> sanityerrtype -> TestSubproofErr senttype sanityerrtype logicerrtype
    TestSubproofErrorSubproofFailedOnErr :: logicerrtype
                                     -> TestSubproofErr senttype sanityerrtype logicerrtype
-   TestSubproofErrorResultNotProved :: TestSubproofErr senttype sanityerrtype logicerrtype
+   TestSubproofErrorResultNotProved :: senttype -> TestSubproofErr senttype sanityerrtype logicerrtype
    deriving(Show)
 
 
@@ -268,7 +276,7 @@ testSubproof varstack constdict already_proven consequent subproof =
              maybe (return ()) (throwError . TestSubproofErrResultNotSane consequent) sc
              (proven,_) <- left TestSubproofErrorSubproofFailedOnErr (runProof varstack subproof (already_proven,constdict))
              unless (consequent `Set.member` (proven `Set.union` already_proven))
-                                 (throwError TestSubproofErrorResultNotProved)
+                                 (throwError $ TestSubproofErrorResultNotProved consequent)
 
 
 data TheoremSchema s r o tType where
@@ -278,6 +286,7 @@ data TheoremSchema s r o tType where
                        theoremProof :: r,
                        theorem :: s
                     } -> TheoremSchema s r o tType
+    deriving Show
 
 
 
@@ -332,6 +341,15 @@ data TheoremSchemaMT tType sE eL r s o m x where
                        constDictM :: Map o tType
                      } -> TheoremSchemaMT tType sE eL r s o m x
 
+
+instance (Show s, Show o, Show tType) => Show (TheoremSchemaMT tType sE eL r s o m x) where
+    show :: (Show s, Show o, Show tType) => TheoremSchemaMT tType sE eL r s o m x -> String
+    show (TheoremSchemaMT ls prog constDict) =
+        "TheoremSchemaMT " <> show ls <> " <<Monadic subproof>> " <> show constDict
+
+
+
+
 type TheoremSchemaM tType sE eL r s o = TheoremSchemaMT tType sE eL r s o (Either SomeException) ()
 
 
@@ -381,6 +399,7 @@ data ProofByAsmSchema s r where
                        asmPrfProof :: r,
                        asmPrfConsequent :: s
                     } -> ProofByAsmSchema s r
+    deriving Show
 
 
 
@@ -410,6 +429,7 @@ data ProofByUGSchema s r tType where
                        ugPrfProof :: r,
                        ugTType :: tType
                     } -> ProofByUGSchema s r tType
+    deriving (Show)
 
 
 class (PropLogicSent s sE t o tType) => PredLogicSent s t o tType sE | s->o, s->tType, s->t  where
@@ -497,16 +517,22 @@ data PropLogError s sE o tType where
     PLErrTheorem :: TheoremError s sE (PropLogError s sE o tType) o tType -> PropLogError s sE o tType
     PLErrTheoremM :: EstTmMError s sE o tType (PropLogError s sE o tType) -> PropLogError s sE o tType
     PLExclMidSanityErr :: s -> sE -> PropLogError s sE o tType
+    PLSimpLAdjNotProven :: s -> PropLogError s sE o tType
+    PLAdjLeftNotProven :: s -> PropLogError s sE o tType
+    PLAdjReftNotProven :: s -> PropLogError s sE o tType
     deriving(Show)
 
 
 data PropLogR tType s sE o where
-    MP :: s -> s -> PropLogR tType s sE o
+    MP :: s -> PropLogR tType s sE o
     PLProofByAsm :: ProofByAsmSchema s [PropLogR tType s sE o]-> PropLogR tType s sE o
     PLTheorem :: TheoremSchema s [PropLogR tType s sE o] o tType -> PropLogR tType s sE o
     PLTheoremM :: TheoremSchemaM tType sE (PropLogError s sE o tType ) [PropLogR tType s sE o] s o -> PropLogR tType s sE o
     PLExclMid :: s -> PropLogR tType s sE o
-    
+    PLSimpL :: s -> s ->  PropLogR tType s sE o
+    PLSimpR :: s -> s ->  PropLogR tType s sE o
+    PLAdj :: s -> s -> PropLogR tType s sE o
+    deriving(Show)
 
 
 
@@ -515,9 +541,9 @@ pLrunProof :: (Proof (PropLogError s sE o tType) [PropLogR tType s sE o] (Set s,
                             [tType] -> PropLogR tType s sE o -> (Set s, Map o tType) -> Either (PropLogError s sE o tType) s
 pLrunProof varStack rule (proven,constDict) = 
       case rule of
-        MP antecedant conseq -> do
-             let implication = build_implication antecedant conseq
-             unless (build_implication antecedant conseq  `Set.member` proven) ((throwError . PLErrMPImplNotProven) implication)
+        MP implication -> do
+             (antecedant, conseq) <- maybe ((throwError . PLErrSentenceNotImp) implication) return (parse_implication implication)
+             unless (implication  `Set.member` proven) ((throwError . PLErrMPImplNotProven) implication)
              unless (antecedant `Set.member` proven) ((throwError . PLErrMPAnteNotProven) antecedant)
              return conseq
         PLProofByAsm schema ->
@@ -530,6 +556,15 @@ pLrunProof varStack rule (proven,constDict) =
         PLExclMid s -> do
              maybe (return ())   (throwError . PLExclMidSanityErr s) (checkSanity varStack s constDict)
              return $ buildDis s (buildNot s)
+        PLSimpL a b -> do
+            let aAndB = buildAdj a b
+            unless (aAndB  `Set.member` proven) ((throwError . PLSimpLAdjNotProven) aAndB)
+            return a
+        PLAdj a b -> do
+            let aAndB = buildAdj a b
+            unless (a `Set.member` proven) ((throwError . PLAdjLeftNotProven) a)
+            unless (b `Set.member` proven) ((throwError . PLAdjLeftNotProven) b)
+            return aAndB
 
 
 
@@ -584,12 +619,41 @@ data PredLogR s sE o t tType where
     PredProofTheorem :: TheoremSchema s [PredLogR s sE o t tType] o tType -> PredLogR s sE o t tType
     PredProofTheoremM :: TheoremSchemaM tType sE (PredProofError s sE o t tType) [PredLogR s sE o t tType] s o -> 
                              PredLogR s sE o t tType
+    deriving(Show)
+
+
+mpM :: (Monad m, PropLogicSent s sE t0 o tType) => s -> ProofStateGenT tType sE (PropLogError s sE o tType) [PropLogR tType s sE o] s o m s
+mpM impl = do
+       (sentences,_) <- monadifyProof [MP impl]
+       return $ Set.elemAt 0 sentences
+
+predProofUIM :: (Monad m, PredLogicSent s t o tType sE) 
+                   => t -> s -> ProofStateGenT tType sE (PredProofError s sE o t tType) [PredLogR s sE o t tType] s o m s
+predProofUIM term sent = do
+        (sentences,_) <- monadifyProof [PredProofUI term sent]
+        return $ Set.elemAt 0 sentences
+
+predProofPropM :: (PredLogicSent s t o tType sE, Monad m) => ProofStateGenT tType sE (PropLogError s sE o tType) [PropLogR tType s sE o] s o m x ->
+                     ProofStateGenT tType sE (PredProofError s sE o t tType) [PredLogR s sE o t tType] s o m x
+predProofPropM = modifyPS (bigExceptionTrans PredProofErrPL) (fmap PredProofProp)         
+
+predProofMPM :: (Monad m, PredLogicSent s t o tType sE) 
+                   => s -> ProofStateGenT tType sE (PredProofError s sE o t tType) [PredLogR s sE o t tType] s o m s
+predProofMPM impl = do
+     predProofPropM $ mpM impl
+
+predProofMP :: s -> PredLogR s sE o t tType
+predProofMP a = PredProofProp  (MP a)
 
 
 
 
 
 
+predProofSimpL :: s -> s -> PredLogR s sE o t tType
+predProofSimpL a b = PredProofProp  (PLSimpL a b)
+predProofAdj :: s -> s -> PredLogR s sE o t tType
+predProofAdj a b = PredProofProp  (PLAdj a b)
 
 
 predPrfRunProof :: (PredLogicSent s t o tType sE,
@@ -667,6 +731,7 @@ data PropDeBr where
       MemberDeBr :: ObjDeBr -> ObjDeBr -> PropDeBr
       ForAllDeBr :: PropDeBr -> PropDeBr
       ExistsDeBr :: PropDeBr -> PropDeBr
+      GTDeBr :: ObjDeBr -> ObjDeBr -> PropDeBr
     deriving (Eq, Ord, Show)
   
   
@@ -729,6 +794,7 @@ boundDepthPropDeBr p = case p of
     EqualsDeBr o1 o2 -> max (boundDepthObjDeBr o1) (boundDepthObjDeBr o2)
     ForAllDeBr p -> boundDepthPropDeBr p + 1
     ExistsDeBr p -> boundDepthPropDeBr p + 1
+    GTDeBr o1 o2 -> max (boundDepthObjDeBr o1) (boundDepthObjDeBr o2)
 
 checkSanityPropDeBr :: PropDeBr -> Int -> Set Text -> Set Int -> Maybe DeBrSe
 checkSanityPropDeBr prop freevarStackHeight consts boundVars = 
@@ -750,7 +816,8 @@ checkSanityPropDeBr prop freevarStackHeight consts boundVars =
                             (Set.insert (boundDepthPropDeBr prop) boundVars )
         ExistsDeBr prop -> checkSanityPropDeBr prop freevarStackHeight consts
                             (Set.insert (boundDepthPropDeBr prop) boundVars )
-
+        GTDeBr o1 o2 -> checkSanityObjDeBr o1 freevarStackHeight consts boundVars
+                         <|> checkSanityObjDeBr o2 freevarStackHeight consts boundVars
 
 
 instance TypeableTerm ObjDeBr Text () DeBrSe where
@@ -767,22 +834,30 @@ instance PropLogicSent PropDeBr DeBrSe ObjDeBr Text () where
         prop (Prelude.length freeVarStack) (keysSet constDict) mempty
   buildAdj :: PropDeBr -> PropDeBr -> PropDeBr
   buildAdj = AndDeBr
+
   parseAdj :: PropDeBr -> Maybe (PropDeBr, PropDeBr)
   parseAdj p = case p of
                  AndDeBr p1 p2 -> Just (p1,p2) 
                  _ -> Nothing
+
+
   build_implication :: PropDeBr -> PropDeBr -> PropDeBr
   build_implication = ImplDeBr
+
   parse_implication :: PropDeBr -> Maybe (PropDeBr, PropDeBr)
   parse_implication p = case p of
                  ImplDeBr p1 p2 -> Just (p1,p2) 
                  _ -> Nothing
+
+
   buildNot :: PropDeBr -> PropDeBr
   buildNot = NotDeBr
+
   parseNot :: PropDeBr -> Maybe PropDeBr
   parseNot p = case p of
     NotDeBr p1 -> Just p1
     _ -> Nothing
+
   buildDis :: PropDeBr -> PropDeBr -> PropDeBr
   buildDis = OrDeBr
   parseDis :: PropDeBr -> Maybe (PropDeBr, PropDeBr)
@@ -812,6 +887,7 @@ propDeBrBoundVarInside prop idx = case prop of
     MemberDeBr o1 o2 -> objDeBrBoundVarInside o1 idx || objDeBrBoundVarInside o2 idx
     ForAllDeBr p -> propDeBrBoundVarInside p idx
     ExistsDeBr p -> propDeBrBoundVarInside p idx
+    GTDeBr o1 o2 -> objDeBrBoundVarInside o1 idx || objDeBrBoundVarInside o2 idx
 
 
 objDeBrSub :: Int -> Int -> ObjDeBr -> ObjDeBr -> ObjDeBr
@@ -842,6 +918,7 @@ propDeBrSub boundVarIdx boundvarOffsetThreshold prop t = case prop of
     MemberDeBr o1 o2 -> MemberDeBr (objDeBrSub boundVarIdx boundvarOffsetThreshold o1 t) (objDeBrSub boundVarIdx boundvarOffsetThreshold o2 t)  
     ForAllDeBr p -> ForAllDeBr (propDeBrSub boundVarIdx (calcBVOThreshold p) p t)
     ExistsDeBr p -> ExistsDeBr (propDeBrSub boundVarIdx (calcBVOThreshold p) p t)
+    GTDeBr o1 o2 -> GTDeBr (objDeBrSub boundVarIdx boundvarOffsetThreshold o1 t) (objDeBrSub boundVarIdx boundvarOffsetThreshold o2 t)
   where
           calcBVOThreshold p = if propDeBrBoundVarInside p boundVarIdx then
                                       boundDepthPropDeBr p
@@ -868,13 +945,13 @@ propDeBrApplyUG prop freevarIdx boundvarIdx =
         NotDeBr p -> NotDeBr (propDeBrApplyUG p freevarIdx boundvarIdx)
         AndDeBr p1 p2 -> AndDeBr (propDeBrApplyUG p1 freevarIdx boundvarIdx) (propDeBrApplyUG p2 freevarIdx boundvarIdx) 
         OrDeBr p1 p2 -> OrDeBr (propDeBrApplyUG p1 freevarIdx boundvarIdx) (propDeBrApplyUG p2 freevarIdx boundvarIdx)
-        ImplDeBr p1 p2 -> OrDeBr (propDeBrApplyUG p1 freevarIdx boundvarIdx) (propDeBrApplyUG p2 freevarIdx boundvarIdx)
+        ImplDeBr p1 p2 -> ImplDeBr (propDeBrApplyUG p1 freevarIdx boundvarIdx) (propDeBrApplyUG p2 freevarIdx boundvarIdx)
         EquivDeBr p1 p2 -> EquivDeBr (propDeBrApplyUG p1 freevarIdx boundvarIdx) (propDeBrApplyUG p2 freevarIdx boundvarIdx)
         EqualsDeBr o1 o2 -> EqualsDeBr (objDeBrApplyUG o1 freevarIdx boundvarIdx) (objDeBrApplyUG o2 freevarIdx boundvarIdx)
         MemberDeBr o1 o2 -> MemberDeBr (objDeBrApplyUG o1 freevarIdx boundvarIdx) (objDeBrApplyUG o2 freevarIdx boundvarIdx)
         ForAllDeBr p -> ForAllDeBr (propDeBrApplyUG p freevarIdx boundvarIdx)
         ExistsDeBr p -> ExistsDeBr (propDeBrApplyUG p freevarIdx boundvarIdx)
-
+        GTDeBr o1 o2 -> GTDeBr (objDeBrApplyUG o1 freevarIdx boundvarIdx) (objDeBrApplyUG o2 freevarIdx boundvarIdx)
 
 
 
@@ -929,8 +1006,90 @@ main = do
         Nothing -> print "parse failed!"
     --let z = applyUG xn () 102
     -- (print . show) z
-    let proof = [MP y1 (NumDeBr 99 `EqualsDeBr` NumDeBr 99),MP (NumDeBr 99 `EqualsDeBr` NumDeBr 99) (NumDeBr 1001 `EqualsDeBr` NumDeBr 1001)] 
+    let proof = [
+                  MP y0
+                , MP y2
+                , PLProofByAsm $ ProofByAsmSchema y1 [MP $ build_implication y1 (NumDeBr 99 `EqualsDeBr` NumDeBr 99)] (NumDeBr 99 `EqualsDeBr` FreeVarDeBr 0)
+                ] 
     let zb = runProof [] proof (Set.fromList [y0,y1,y2], mempty) -- :: Either ErrDeBr (Set PropDeBr, Map Text ())
     (print . show) zb
---yrdy
+    
 
+    let z1 = ForAllDeBr (((BoundVarDeBr 0  `MemberDeBr` (ConstDeBr . pack) "N") `AndDeBr` (BoundVarDeBr 0 `GTDeBr` NumDeBr 10)) `ImplDeBr` (BoundVarDeBr 0 `GTDeBr` NumDeBr 0))
+    let z2 = ForAllDeBr (((BoundVarDeBr 0  `MemberDeBr` (ConstDeBr . pack) "N") `AndDeBr` (BoundVarDeBr 0 `GTDeBr` NumDeBr 0)) `ImplDeBr` (BoundVarDeBr 0 `EqualsDeBr` NumDeBr 0))
+    let generalizable = ((FreeVarDeBr 0  `MemberDeBr` (ConstDeBr . pack) "N") `AndDeBr` (FreeVarDeBr 0 `GTDeBr` NumDeBr 10)) `ImplDeBr` (FreeVarDeBr 0 `EqualsDeBr` NumDeBr 0)
+    let asm = (FreeVarDeBr 0  `MemberDeBr` (ConstDeBr . pack) "N") `AndDeBr` (FreeVarDeBr 0 `GTDeBr` NumDeBr 10)
+    let mid = (FreeVarDeBr 0  `MemberDeBr` (ConstDeBr . pack) "N") `AndDeBr` (FreeVarDeBr 0 `GTDeBr` NumDeBr 0)
+    let proof2 = [
+                    PredProofByUG (ProofByUGSchema generalizable
+                                     [
+                                        PredProofByAsm (ProofByAsmSchema asm [
+                                             PredProofUI (FreeVarDeBr 0) z1,
+                                             predProofMP $ build_implication asm (FreeVarDeBr 0 `GTDeBr` NumDeBr 0),
+                                             predProofSimpL (FreeVarDeBr 0  `MemberDeBr` (ConstDeBr . pack) "N") (FreeVarDeBr 0 `GTDeBr` NumDeBr 10),
+                                             predProofAdj (FreeVarDeBr 0  `MemberDeBr` (ConstDeBr . pack) "N") (FreeVarDeBr 0 `GTDeBr` NumDeBr 0),
+                                             PredProofUI (FreeVarDeBr 0) z2,
+                                             predProofMP $ build_implication mid (FreeVarDeBr 0 `EqualsDeBr` NumDeBr 0)
+                                        ]  (FreeVarDeBr 0 `EqualsDeBr` NumDeBr 0))
+                                     ] ()
+                                  )
+                 ]
+
+    let proof3 = [
+                    PredProofByUG (ProofByUGSchema generalizable
+                                     [
+                                        PredProofByAsm (ProofByAsmSchema asm [
+                                             PredProofUI (FreeVarDeBr 0) z1,
+                                              
+
+                                             predProofMP $ build_implication asm (FreeVarDeBr 0 `GTDeBr` NumDeBr 0)
+                                      
+                                        ]  z1)
+                                     ] ()
+                                  )
+                 ]
+    let zb2 = runProof [] proof2 (Set.fromList [z1,z2],Data.Map.insert (pack "N") () mempty)
+
+    
+
+    let zb3 = runProof [()] [PredProofUI (FreeVarDeBr 0) z1] (Set.fromList [z1,z2],Data.Map.insert (pack "N") () mempty)
+           
+    (print.show) zb2
+    (print.show) zb3
+    x <- runProofStateGenT prog [] (Set.fromList [z1,z2]) (Data.Map.insert (pack "N") () mempty)
+
+    (print . show) x
+
+
+data MyException = MyException
+  deriving(Show, Typeable)
+instance Exception MyException
+ 
+prog::ProofStateGenT () DeBrSe PredErrDeBr [PredRuleDeBr] PropDeBr Text IO ()
+prog = do
+    let z1 = ForAllDeBr (((BoundVarDeBr 0  `MemberDeBr` (ConstDeBr . pack) "N") `AndDeBr` (BoundVarDeBr 0 `GTDeBr` NumDeBr 10)) `ImplDeBr` (BoundVarDeBr 0 `GTDeBr` NumDeBr 0))
+    let z2 = ForAllDeBr (((BoundVarDeBr 0  `MemberDeBr` (ConstDeBr . pack) "N") `AndDeBr` (BoundVarDeBr 0 `GTDeBr` NumDeBr 0)) `ImplDeBr` (BoundVarDeBr 0 `EqualsDeBr` NumDeBr 0))
+    let generalizable = ((FreeVarDeBr 0  `MemberDeBr` (ConstDeBr . pack) "N") `AndDeBr` (FreeVarDeBr 0 `GTDeBr` NumDeBr 10)) `ImplDeBr` (FreeVarDeBr 0 `EqualsDeBr` NumDeBr 0)
+    let asm = (FreeVarDeBr 0  `MemberDeBr` (ConstDeBr . pack) "N") `AndDeBr` (FreeVarDeBr 0 `GTDeBr` NumDeBr 10)
+    let mid = (FreeVarDeBr 0  `MemberDeBr` (ConstDeBr . pack) "N") `AndDeBr` (FreeVarDeBr 0 `GTDeBr` NumDeBr 0)
+    fux<- runProofByUGM () (\schm -> [PredProofByUG schm]) do
+        runProofByAsmM (\schm -> [PredProofByAsm schm]) asm do
+            s<-predProofUIM (FreeVarDeBr 0) z1
+            s<- predProofMPM s
+            monadifyProof [
+                                             -- predProofMP asm (FreeVarDeBr 0 `GTDeBr` NumDeBr 0),
+                                             predProofSimpL (FreeVarDeBr 0  `MemberDeBr` (ConstDeBr . pack) "N") (FreeVarDeBr 0 `GTDeBr` NumDeBr 10),
+                                             predProofAdj (FreeVarDeBr 0  `MemberDeBr` (ConstDeBr . pack) "N") (FreeVarDeBr 0 `GTDeBr` NumDeBr 0),
+                                             PredProofUI (FreeVarDeBr 0) z2,
+                                             predProofMP $ build_implication mid (FreeVarDeBr 0 `EqualsDeBr` NumDeBr 0)]
+            
+            throwM MyException `catch` (\(e::SomeException)-> return (z1,()))
+            pure (FreeVarDeBr 0 `EqualsDeBr` NumDeBr 0,())
+    (lift . print . show) fux
+    return ()
+
+--yrdy
+---ImplDeBr (AndDeBr (MemberDeBr (FreeVarDeBr 0) (ConstDeBr \"N\")) (MemberDeBr (FreeVarDeBr 0) (NumDeBr 10))) (MemberDeBr (FreeVarDeBr 0) (NumDeBr 0))
+---
+
+-- ImplDeBr (AndDeBr (MemberDeBr (FreeVarDeBr 0) (ConstDeBr \"N\")) (GTDeBr (FreeVarDeBr 0) (NumDeBr 10))) (GTDeBr (FreeVarDeBr 0) (NumDeBr 0)
