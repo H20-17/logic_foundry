@@ -12,8 +12,16 @@
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ExtendedDefaultRules #-}
+{-# LANGUAGE UnicodeSyntax #-}
+
 -- {-# LANGUAGE AllowAmbiguousTypes #-}
+
+
 module Main where
+
+
 
 import Data.Monoid
 import Data.Functor.Identity ( Identity(runIdentity) )
@@ -24,7 +32,7 @@ import Text.XHtml (vspace, name, abbr, p, table)
 import Data.Set (Set)
 import Data.List (mapAccumL)
 import qualified Data.Set as Set
-import Data.Text
+import Data.Text ( pack, Text)
 import Data.Map
 import Distribution.Simple (ProfDetailLevel(ProfDetailExportedFunctions))
 import Data.Text.Internal.Encoding.Utf8 (ord2)
@@ -43,7 +51,7 @@ import qualified GHC.Stack.Types
 import Data.Data (Typeable)
 import Distribution.PackageDescription (TestType)
 
-
+default(Text)
 
 
 class ErrorEmbed e1 e2 where
@@ -59,22 +67,15 @@ class Monoid s => Proof e r s c | r -> s, r->e, r->c  where
 
 
 
-runProofE :: (Proof e1 r s c) => c -> r ->s -> (e1 -> e2) -> Either e2 s
-runProofE c r s f = left f (runProof c r s)
-
-
-
-
-
 data ProofStateT eM eL c r s m x where
   ProofStateTInternal :: {runProofStateTTop :: RWST c r s (ExceptT eM m) x}
                    -> ProofStateT eM eL c r s m x
 
 
+
+
 runProofStateT ::  (Monad m, ErrorEmbed eL eM, Proof eL r s c) => ProofStateT eM eL c r s m x -> c -> s -> m (Either eM (x,s, r))
 runProofStateT ps c s = runExceptT $ runRWST (runProofStateTTop ps) c s
-
-
 
 
 
@@ -174,8 +175,8 @@ monadifyProof :: (Monoid r, Proof eL r s c, Monad m, ErrorEmbed eL eM) => r -> P
 monadifyProof p = ProofStateTInternal $ do
                         c <- ask
                         u <- get
-                        let proofResult = runProofE c p u errEmbed
-                        resultSet <- either (lift . throwError) return proofResult
+                        let proofResult = runProof c p u
+                        resultSet <- either (lift . throwError . errEmbed) return proofResult
                         put (u <> resultSet)
                         tell p
                         return resultSet
@@ -247,13 +248,13 @@ class (Eq tType, Ord o) => TypeableTerm t o tType sE | t -> o, t->tType, t -> sE
 class (Ord s,TypeableTerm t o tType sE) 
               => PropLogicSent s sE t o tType | s -> sE, s->t where
      checkSanity :: [tType] -> s -> Map o tType -> Maybe sE
-     buildAdj :: s -> s -> s
+     (.&&.) :: s -> s -> s
      parseAdj :: s -> Maybe(s,s)
-     build_implication:: s->s->s
+     (.->.) :: s->s->s
      parse_implication:: s -> Maybe (s,s)
-     buildNot :: s -> s
-     parseNot :: s -> Maybe s
-     buildDis :: s -> s -> s
+     neg :: s -> s
+     parseNeg :: s -> Maybe s
+     (.||.) :: s -> s -> s
      parseDis :: s -> Maybe (s,s)
 
 
@@ -392,6 +393,22 @@ establishTheoremM existingConsts already_proven ((TheoremSchemaMT lemmas proofpr
                      maybeLemmaMissing = if not (a `Set.member` already_proven)
                                           then (Just . EstTmMErrLemmaNotEstablished) a else Nothing
 
+data ExpTmMError eL where
+    ExpTmMErrMError :: BigException eL -> ExpTmMError eL
+    ExpTmMErrMExcept :: SomeException -> ExpTmMError eL
+    deriving (Show)
+
+
+expandTheoremM :: (Monoid r1,  Proof eL1 r1 (Set s, Map o tType) [tType], 
+                     PropLogicSent s sE t o tType)
+                            => TheoremSchemaM tType sE eL1 r1 s o -> Either (ExpTmMError eL1) (TheoremSchema s r1 o tType)
+expandTheoremM ((TheoremSchemaMT lemmas proofprog constdict):: TheoremSchemaM tType sE eL1 r1 s o) =
+      do
+          prfResult <- left ExpTmMErrMExcept (runProofStateGen proofprog mempty lemmas constdict)
+          (((),tm), (proven, newconsts), r1) <- left ExpTmMErrMError prfResult
+          return $ TheoremSchema constdict lemmas r1 tm
+
+
 
 data ProofByAsmSchema s r where
    ProofByAsmSchema :: {
@@ -420,7 +437,7 @@ proofByAsm varstack constdict already_proven (ProofByAsmSchema assumption subpro
          let contextSents = Set.insert assumption already_proven
          let mayTestResult = testSubproof varstack constdict contextSents consequent subproof
          maybe (return ()) (throwError . ProofByAsmErrSubproofFailedOnErr) mayTestResult
-         return $ build_implication assumption consequent
+         return $ assumption .->. consequent
 
 
 data ProofByUGSchema s r tType where
@@ -432,7 +449,7 @@ data ProofByUGSchema s r tType where
     deriving (Show)
 
 
-class (PropLogicSent s sE t o tType) => PredLogicSent s t o tType sE | s->o, s->tType, s->t  where
+class (PropLogicSent s sE t o tType) => PredLogicSent s t o tType sE | s→o, s->tType, s->t  where
     -- o is the type of constants
     parseExists :: s -> Maybe (t->s,tType)
     -- create generalization from sentence and varstack
@@ -440,6 +457,8 @@ class (PropLogicSent s sE t o tType) => PredLogicSent s t o tType sE | s->o, s->
     -- create generalization from sentence and varstack
     applyUG ::s -> tType -> Int -> s
     -- constToTerm :: o -> t
+
+
 
 
 
@@ -492,7 +511,7 @@ runProofByAsmM f asm prog =  do
         varstack <- ask
         (consequent, extraData) <-
                   runSubproofM (\ s p -> f (ProofByAsmSchema asm p s)) (Set.singleton asm <> proven) constDict varstack prog
-        return (build_implication asm consequent,extraData)
+        return (asm .->. consequent,extraData)
 
 
 
@@ -513,6 +532,7 @@ data PropLogError s sE o tType where
     PLErrMPImplNotProven :: s-> PropLogError s sE o tType
     PLErrMPAnteNotProven :: s-> PropLogError s sE o tType
     PLErrSentenceNotImp :: s -> PropLogError s sE o tType
+    PLErrSentenceNotAdj :: s -> PropLogError s sE o tType
     PLErrPrfByAsmErr :: ProofByAsmError s sE (PropLogError s sE o tType) -> PropLogError s sE o tType
     PLErrTheorem :: TheoremError s sE (PropLogError s sE o tType) o tType -> PropLogError s sE o tType
     PLErrTheoremM :: EstTmMError s sE o tType (PropLogError s sE o tType) -> PropLogError s sE o tType
@@ -529,7 +549,7 @@ data PropLogR tType s sE o where
     PLTheorem :: TheoremSchema s [PropLogR tType s sE o] o tType -> PropLogR tType s sE o
     PLTheoremM :: TheoremSchemaM tType sE (PropLogError s sE o tType ) [PropLogR tType s sE o] s o -> PropLogR tType s sE o
     PLExclMid :: s -> PropLogR tType s sE o
-    PLSimpL :: s -> s ->  PropLogR tType s sE o
+    PLSimpL :: s -> PropLogR tType s sE o
     PLSimpR :: s -> s ->  PropLogR tType s sE o
     PLAdj :: s -> s -> PropLogR tType s sE o
     deriving(Show)
@@ -555,13 +575,13 @@ pLrunProof varStack rule (proven,constDict) =
             left PLErrTheoremM (establishTheoremM constDict proven schema)
         PLExclMid s -> do
              maybe (return ())   (throwError . PLExclMidSanityErr s) (checkSanity varStack s constDict)
-             return $ buildDis s (buildNot s)
-        PLSimpL a b -> do
-            let aAndB = buildAdj a b
+             return $ s .||. neg s
+        PLSimpL aAndB -> do
+            (a,b) <- maybe ((throwError . PLErrSentenceNotAdj) aAndB) return (parseAdj aAndB)
             unless (aAndB  `Set.member` proven) ((throwError . PLSimpLAdjNotProven) aAndB)
             return a
         PLAdj a b -> do
-            let aAndB = buildAdj a b
+            let aAndB = a .&&. b
             unless (a `Set.member` proven) ((throwError . PLAdjLeftNotProven) a)
             unless (b `Set.member` proven) ((throwError . PLAdjLeftNotProven) b)
             return aAndB
@@ -620,11 +640,23 @@ data PredLogR s sE o t tType where
     PredProofTheoremM :: TheoremSchemaM tType sE (PredProofError s sE o t tType) [PredLogR s sE o t tType] s o -> 
                              PredLogR s sE o t tType
     deriving(Show)
-
+-- data NewFuck where
+--        ∀→ ∀ :: NewFuck
+        -- A :: NewFuck
 
 mpM :: (Monad m, PropLogicSent s sE t0 o tType) => s -> ProofStateGenT tType sE (PropLogError s sE o tType) [PropLogR tType s sE o] s o m s
 mpM impl = do
        (sentences,_) <- monadifyProof [MP impl]
+       return $ Set.elemAt 0 sentences
+
+plSimpLM :: (Monad m, PropLogicSent s sE t0 o tType) => s -> ProofStateGenT tType sE (PropLogError s sE o tType) [PropLogR tType s sE o] s o m s
+plSimpLM aAndB = do
+       (sentences,_) <- monadifyProof [PLSimpL aAndB]
+       return $ Set.elemAt 0 sentences
+
+plAdjM :: (Monad m, PropLogicSent s sE t0 o tType) => s -> s-> ProofStateGenT tType sE (PropLogError s sE o tType) [PropLogR tType s sE o] s o m s
+plAdjM a b = do
+       (sentences,_) <- monadifyProof [PLAdj a b]
        return $ Set.elemAt 0 sentences
 
 predProofUIM :: (Monad m, PredLogicSent s t o tType sE) 
@@ -633,14 +665,32 @@ predProofUIM term sent = do
         (sentences,_) <- monadifyProof [PredProofUI term sent]
         return $ Set.elemAt 0 sentences
 
+
+predProofEIM :: (Monad m, PredLogicSent s t o tType sE) 
+                   => s -> o -> ProofStateGenT tType sE (PredProofError s sE o t tType) [PredLogR s sE o t tType] s o m s
+predProofEIM sent const = do
+        (sentences,_) <- monadifyProof [PredProofEI sent const]
+        return $ Set.elemAt 0 sentences
+
+
 predProofPropM :: (PredLogicSent s t o tType sE, Monad m) => ProofStateGenT tType sE (PropLogError s sE o tType) [PropLogR tType s sE o] s o m x ->
                      ProofStateGenT tType sE (PredProofError s sE o t tType) [PredLogR s sE o t tType] s o m x
 predProofPropM = modifyPS (bigExceptionTrans PredProofErrPL) (fmap PredProofProp)         
 
 predProofMPM :: (Monad m, PredLogicSent s t o tType sE) 
                    => s -> ProofStateGenT tType sE (PredProofError s sE o t tType) [PredLogR s sE o t tType] s o m s
-predProofMPM impl = do
-     predProofPropM $ mpM impl
+predProofMPM = predProofPropM . mpM
+
+predProofSimpLM :: (Monad m, PredLogicSent s t o tType sE) 
+                   => s -> ProofStateGenT tType sE (PredProofError s sE o t tType) [PredLogR s sE o t tType] s o m s
+predProofSimpLM = predProofPropM . plSimpLM
+
+predProofAdjM :: (Monad m, PredLogicSent s t o tType sE) 
+                   => s -> s -> ProofStateGenT tType sE (PredProofError s sE o t tType) [PredLogR s sE o t tType] s o m s
+predProofAdjM a b = predProofPropM $ plAdjM a b
+
+
+
 
 predProofMP :: s -> PredLogR s sE o t tType
 predProofMP a = PredProofProp  (MP a)
@@ -650,8 +700,8 @@ predProofMP a = PredProofProp  (MP a)
 
 
 
-predProofSimpL :: s -> s -> PredLogR s sE o t tType
-predProofSimpL a b = PredProofProp  (PLSimpL a b)
+predProofSimpL :: s -> PredLogR s sE o t tType
+predProofSimpL a = PredProofProp  (PLSimpL a)
 predProofAdj :: s -> s -> PredLogR s sE o t tType
 predProofAdj a b = PredProofProp  (PLAdj a b)
 
@@ -722,25 +772,45 @@ instance (PredLogicSent s t o tType sE)
 
  
 data PropDeBr where
-      NotDeBr :: PropDeBr -> PropDeBr
-      AndDeBr :: PropDeBr -> PropDeBr -> PropDeBr
-      OrDeBr :: PropDeBr -> PropDeBr -> PropDeBr
-      ImplDeBr :: PropDeBr -> PropDeBr -> PropDeBr
-      EquivDeBr :: PropDeBr -> PropDeBr -> PropDeBr
-      EqualsDeBr :: ObjDeBr -> ObjDeBr -> PropDeBr
-      MemberDeBr :: ObjDeBr -> ObjDeBr -> PropDeBr
-      ForAllDeBr :: PropDeBr -> PropDeBr
-      ExistsDeBr :: PropDeBr -> PropDeBr
-      GTDeBr :: ObjDeBr -> ObjDeBr -> PropDeBr
+      Neg :: PropDeBr -> PropDeBr
+      (:&&:)  :: PropDeBr -> PropDeBr -> PropDeBr
+      (:||:) :: PropDeBr -> PropDeBr -> PropDeBr
+      (:->:)  :: PropDeBr -> PropDeBr -> PropDeBr
+      (:<->:) :: PropDeBr -> PropDeBr -> PropDeBr
+      (:==:) :: ObjDeBr -> ObjDeBr -> PropDeBr
+      (:<-:) :: ObjDeBr -> ObjDeBr -> PropDeBr
+      Forall :: PropDeBr -> PropDeBr
+      Exists :: PropDeBr -> PropDeBr
+      (:>=:) :: ObjDeBr -> ObjDeBr -> PropDeBr
     deriving (Eq, Ord, Show)
   
+
+
+
+
+
+infixl 9 :&&:
+infixl 9 :||:
+infixl 9 :->:
+infixl 9 :<->:
+infixl 9 :==:
+infixl 9 :<-:
+infixl 9 :>=:
+
+
+
+data PropDeBr2 = PropDeBr2 :⤈: PropDeBr2
+    deriving (Eq, Ord, Show)
   
+
+
+
 data ObjDeBr where
-      NumDeBr :: Int -> ObjDeBr
-      ConstDeBr :: Text -> ObjDeBr
-      HilbertDeBr :: PropDeBr -> ObjDeBr
-      BoundVarDeBr :: Int -> ObjDeBr
-      FreeVarDeBr :: Int ->ObjDeBr
+      Integ :: Int -> ObjDeBr
+      Constant :: Text -> ObjDeBr
+      Hilbert :: PropDeBr -> ObjDeBr
+      Bound :: Int -> ObjDeBr
+      Free :: Int ->ObjDeBr
    deriving (Eq, Ord, Show)
 
 
@@ -753,29 +823,29 @@ data DeBrSe where
 
 boundDepthObjDeBr :: ObjDeBr -> Int
 boundDepthObjDeBr obj = case obj of
-     NumDeBr num -> 0
-     ConstDeBr name -> 0
-     HilbertDeBr prop -> boundDepthPropDeBr prop + 1
-     BoundVarDeBr idx -> 0
-     FreeVarDeBr idx -> 0
+     Integ num -> 0
+     Constant name -> 0
+     Hilbert prop -> boundDepthPropDeBr prop + 1
+     Bound idx -> 0
+     Free idx -> 0
 
 
 checkSanityObjDeBr :: ObjDeBr -> Int -> Set Text -> Set Int -> Maybe DeBrSe
 
 checkSanityObjDeBr obj varStackHeight constSet boundSet = case obj of
-     NumDeBr num -> Nothing
-     ConstDeBr name -> if name `Set.member` constSet then
+     Integ num -> Nothing
+     Constant name -> if name `Set.member` constSet then
                            Nothing
                        else
                            (return . ObjDeBrSeConstNotDefd) name
-     HilbertDeBr prop -> checkSanityPropDeBr prop varStackHeight constSet 
+     Hilbert prop -> checkSanityPropDeBr prop varStackHeight constSet 
                             (Set.insert (boundDepthPropDeBr prop) boundSet )
-     BoundVarDeBr idx -> 
+     Bound idx -> 
         if idx `Set.member` boundSet then
             Nothing
         else
             (return . ObjDeBrBoundVarIdx) idx
-     FreeVarDeBr idx ->
+     Free idx ->
         if idx >= 0 && idx < varStackHeight then
             Nothing
         else
@@ -785,38 +855,38 @@ checkSanityObjDeBr obj varStackHeight constSet boundSet = case obj of
 
 boundDepthPropDeBr :: PropDeBr -> Int
 boundDepthPropDeBr p = case p of
-    NotDeBr p -> boundDepthPropDeBr p
-    AndDeBr p1 p2 -> max (boundDepthPropDeBr p1) (boundDepthPropDeBr p2)
-    OrDeBr p1 p2 -> max (boundDepthPropDeBr p1) (boundDepthPropDeBr p2)
-    ImplDeBr p1 p2 -> max (boundDepthPropDeBr p1) (boundDepthPropDeBr p2)
-    EquivDeBr p1 p2 -> max (boundDepthPropDeBr p1) (boundDepthPropDeBr p2)
-    MemberDeBr o1 o2 -> max (boundDepthObjDeBr o1) (boundDepthObjDeBr o2)
-    EqualsDeBr o1 o2 -> max (boundDepthObjDeBr o1) (boundDepthObjDeBr o2)
-    ForAllDeBr p -> boundDepthPropDeBr p + 1
-    ExistsDeBr p -> boundDepthPropDeBr p + 1
-    GTDeBr o1 o2 -> max (boundDepthObjDeBr o1) (boundDepthObjDeBr o2)
+    Neg p -> boundDepthPropDeBr p
+    (:&&:) p1 p2 -> max (boundDepthPropDeBr p1) (boundDepthPropDeBr p2)
+    (:||:) p1 p2 -> max (boundDepthPropDeBr p1) (boundDepthPropDeBr p2)
+    (:->:) p1 p2 -> max (boundDepthPropDeBr p1) (boundDepthPropDeBr p2)
+    (:<->:) p1 p2 -> max (boundDepthPropDeBr p1) (boundDepthPropDeBr p2)
+    (:<-:) o1 o2 -> max (boundDepthObjDeBr o1) (boundDepthObjDeBr o2)
+    (:==:) o1 o2 -> max (boundDepthObjDeBr o1) (boundDepthObjDeBr o2)
+    Forall p -> boundDepthPropDeBr p + 1
+    Exists p -> boundDepthPropDeBr p + 1
+    (:>=:) o1 o2 -> max (boundDepthObjDeBr o1) (boundDepthObjDeBr o2)
 
 checkSanityPropDeBr :: PropDeBr -> Int -> Set Text -> Set Int -> Maybe DeBrSe
 checkSanityPropDeBr prop freevarStackHeight consts boundVars = 
       case prop of
-        NotDeBr p -> checkSanityPropDeBr p freevarStackHeight consts boundVars
-        AndDeBr p1 p2 -> checkSanityPropDeBr p1 freevarStackHeight consts boundVars
+        Neg p -> checkSanityPropDeBr p freevarStackHeight consts boundVars
+        (:&&:) p1 p2 -> checkSanityPropDeBr p1 freevarStackHeight consts boundVars
                          <|> checkSanityPropDeBr p2 freevarStackHeight consts boundVars
-        OrDeBr p1 p2 -> checkSanityPropDeBr p1 freevarStackHeight consts boundVars
+        (:||:) p1 p2 -> checkSanityPropDeBr p1 freevarStackHeight consts boundVars
                          <|> checkSanityPropDeBr p2 freevarStackHeight consts boundVars
-        ImplDeBr p1 p2 -> checkSanityPropDeBr p1 freevarStackHeight consts boundVars
+        (:->:)  p1 p2 -> checkSanityPropDeBr p1 freevarStackHeight consts boundVars
                          <|> checkSanityPropDeBr p2 freevarStackHeight consts boundVars
-        EquivDeBr p1 p2 -> checkSanityPropDeBr p1 freevarStackHeight consts boundVars
+        (:<->:) p1 p2 -> checkSanityPropDeBr p1 freevarStackHeight consts boundVars
                          <|> checkSanityPropDeBr p2 freevarStackHeight consts boundVars
-        MemberDeBr o1 o2 -> checkSanityObjDeBr o1 freevarStackHeight consts boundVars
+        (:<-:) o1 o2 -> checkSanityObjDeBr o1 freevarStackHeight consts boundVars
                          <|> checkSanityObjDeBr o2 freevarStackHeight consts boundVars
-        EqualsDeBr o1 o2 -> checkSanityObjDeBr o1 freevarStackHeight consts boundVars
+        (:==:) o1 o2 -> checkSanityObjDeBr o1 freevarStackHeight consts boundVars
                          <|> checkSanityObjDeBr o2 freevarStackHeight consts boundVars
-        ForAllDeBr prop -> checkSanityPropDeBr prop freevarStackHeight consts
+        Forall prop -> checkSanityPropDeBr prop freevarStackHeight consts
                             (Set.insert (boundDepthPropDeBr prop) boundVars )
-        ExistsDeBr prop -> checkSanityPropDeBr prop freevarStackHeight consts
+        Exists prop -> checkSanityPropDeBr prop freevarStackHeight consts
                             (Set.insert (boundDepthPropDeBr prop) boundVars )
-        GTDeBr o1 o2 -> checkSanityObjDeBr o1 freevarStackHeight consts boundVars
+        (:>=:) o1 o2 -> checkSanityObjDeBr o1 freevarStackHeight consts boundVars
                          <|> checkSanityObjDeBr o2 freevarStackHeight consts boundVars
 
 
@@ -826,81 +896,80 @@ instance TypeableTerm ObjDeBr Text () DeBrSe where
      getTypeTerm term vs constDict = 
          maybe (return ()) throwError (checkSanityObjDeBr term (Prelude.length vs) (keysSet constDict) mempty)
      const2Term :: Text -> ObjDeBr
-     const2Term = ConstDeBr
+     const2Term = Constant
 
 instance PropLogicSent PropDeBr DeBrSe ObjDeBr Text () where
   checkSanity :: [()] -> PropDeBr -> Map Text () -> Maybe DeBrSe
   checkSanity freeVarStack prop constDict = checkSanityPropDeBr
         prop (Prelude.length freeVarStack) (keysSet constDict) mempty
-  buildAdj :: PropDeBr -> PropDeBr -> PropDeBr
-  buildAdj = AndDeBr
+  (.&&.) :: PropDeBr -> PropDeBr -> PropDeBr
+  (.&&.) = (:&&:)
 
   parseAdj :: PropDeBr -> Maybe (PropDeBr, PropDeBr)
   parseAdj p = case p of
-                 AndDeBr p1 p2 -> Just (p1,p2) 
+                 (:&&:) p1 p2 -> Just (p1,p2) 
                  _ -> Nothing
 
-
-  build_implication :: PropDeBr -> PropDeBr -> PropDeBr
-  build_implication = ImplDeBr
+  (.->.) :: PropDeBr -> PropDeBr -> PropDeBr
+  (.->.) = (:->:)
 
   parse_implication :: PropDeBr -> Maybe (PropDeBr, PropDeBr)
   parse_implication p = case p of
-                 ImplDeBr p1 p2 -> Just (p1,p2) 
+                 (:->:) p1 p2 -> Just (p1,p2) 
                  _ -> Nothing
 
 
-  buildNot :: PropDeBr -> PropDeBr
-  buildNot = NotDeBr
+  neg :: PropDeBr -> PropDeBr
+  neg = Neg
 
-  parseNot :: PropDeBr -> Maybe PropDeBr
-  parseNot p = case p of
-    NotDeBr p1 -> Just p1
+  parseNeg :: PropDeBr -> Maybe PropDeBr
+  parseNeg p = case p of
+    Neg p1 -> Just p1
     _ -> Nothing
 
-  buildDis :: PropDeBr -> PropDeBr -> PropDeBr
-  buildDis = OrDeBr
+  (.||.) :: PropDeBr -> PropDeBr -> PropDeBr
+  (.||.) = (:||:)
   parseDis :: PropDeBr -> Maybe (PropDeBr, PropDeBr)
   parseDis p = case p of
-                 OrDeBr p1 p2 -> Just(p1,p2)
+                 (:||:) p1 p2 -> Just(p1,p2)
                  _ -> Nothing
 
 objDeBrBoundVarInside :: ObjDeBr -> Int -> Bool
 objDeBrBoundVarInside obj idx =
     case obj of
-        NumDeBr num -> False
-        ConstDeBr const -> False
-        HilbertDeBr p -> propDeBrBoundVarInside p idx
-        BoundVarDeBr i -> idx == i
-        FreeVarDeBr i -> False
+        Integ num -> False
+        Constant const -> False
+        Hilbert p -> propDeBrBoundVarInside p idx
+        Bound i -> idx == i
+        Free i -> False
 
 
 
 propDeBrBoundVarInside :: PropDeBr -> Int -> Bool
 propDeBrBoundVarInside prop idx = case prop of
-    NotDeBr p -> propDeBrBoundVarInside p idx
-    AndDeBr p1 p2 -> propDeBrBoundVarInside p1 idx || propDeBrBoundVarInside p2 idx
-    OrDeBr p1 p2 -> propDeBrBoundVarInside p1 idx || propDeBrBoundVarInside p2 idx
-    ImplDeBr p1 p2 -> propDeBrBoundVarInside p1 idx || propDeBrBoundVarInside p2 idx
-    EquivDeBr p1 p2 -> propDeBrBoundVarInside p1 idx || propDeBrBoundVarInside p2 idx
-    EqualsDeBr o1 o2 -> objDeBrBoundVarInside o1 idx || objDeBrBoundVarInside o2 idx
-    MemberDeBr o1 o2 -> objDeBrBoundVarInside o1 idx || objDeBrBoundVarInside o2 idx
-    ForAllDeBr p -> propDeBrBoundVarInside p idx
-    ExistsDeBr p -> propDeBrBoundVarInside p idx
-    GTDeBr o1 o2 -> objDeBrBoundVarInside o1 idx || objDeBrBoundVarInside o2 idx
+    Neg p -> propDeBrBoundVarInside p idx
+    (:&&:) p1 p2 -> propDeBrBoundVarInside p1 idx || propDeBrBoundVarInside p2 idx
+    (:||:) p1 p2 -> propDeBrBoundVarInside p1 idx || propDeBrBoundVarInside p2 idx
+    (:->:) p1 p2 -> propDeBrBoundVarInside p1 idx || propDeBrBoundVarInside p2 idx
+    (:<->:) p1 p2 -> propDeBrBoundVarInside p1 idx || propDeBrBoundVarInside p2 idx
+    (:==:) o1 o2 -> objDeBrBoundVarInside o1 idx || objDeBrBoundVarInside o2 idx
+    (:<-:) o1 o2 -> objDeBrBoundVarInside o1 idx || objDeBrBoundVarInside o2 idx
+    Forall p -> propDeBrBoundVarInside p idx
+    Exists p -> propDeBrBoundVarInside p idx
+    (:>=:) o1 o2 -> objDeBrBoundVarInside o1 idx || objDeBrBoundVarInside o2 idx
 
 
 objDeBrSub :: Int -> Int -> ObjDeBr -> ObjDeBr -> ObjDeBr
 objDeBrSub boundVarIdx boundvarOffsetThreshold obj t = case obj of
-    NumDeBr num -> NumDeBr num
-    ConstDeBr const -> ConstDeBr const
-    HilbertDeBr p -> HilbertDeBr (propDeBrSub boundVarIdx (calcBVOThreshold p) p t)                            
-    BoundVarDeBr idx 
+    Integ num -> Integ num
+    Constant const -> Constant const
+    Hilbert p -> Hilbert (propDeBrSub boundVarIdx (calcBVOThreshold p) p t)                            
+    Bound idx 
                  | idx==boundVarIdx -> t
-                 | idx >= boundvarOffsetThreshold -> BoundVarDeBr (idx + termDepth)
-                 | idx < boundVarIdx -> BoundVarDeBr idx
+                 | idx >= boundvarOffsetThreshold -> Bound (idx + termDepth)
+                 | idx < boundVarIdx -> Bound idx
 
-    FreeVarDeBr idx -> FreeVarDeBr idx
+    Free idx -> Free idx
   where
         termDepth = boundDepthObjDeBr t
         calcBVOThreshold p = if propDeBrBoundVarInside p boundVarIdx then
@@ -909,16 +978,16 @@ objDeBrSub boundVarIdx boundvarOffsetThreshold obj t = case obj of
 
 propDeBrSub :: Int -> Int -> PropDeBr -> ObjDeBr -> PropDeBr
 propDeBrSub boundVarIdx boundvarOffsetThreshold prop t = case prop of
-    NotDeBr p -> NotDeBr (propDeBrSub boundVarIdx boundvarOffsetThreshold p t)
-    AndDeBr p1 p2 ->  AndDeBr (propDeBrSub boundVarIdx boundvarOffsetThreshold p1 t) (propDeBrSub boundVarIdx boundvarOffsetThreshold p2 t) 
-    OrDeBr p1 p2 ->  OrDeBr (propDeBrSub boundVarIdx boundvarOffsetThreshold p1 t) (propDeBrSub boundVarIdx boundvarOffsetThreshold p2 t) 
-    ImplDeBr p1 p2 ->  ImplDeBr (propDeBrSub boundVarIdx boundvarOffsetThreshold p1 t) (propDeBrSub boundVarIdx boundvarOffsetThreshold p2 t)
-    EquivDeBr p1 p2 ->  EquivDeBr (propDeBrSub boundVarIdx boundvarOffsetThreshold p1 t) (propDeBrSub boundVarIdx boundvarOffsetThreshold p2 t)
-    EqualsDeBr o1 o2 -> EqualsDeBr (objDeBrSub boundVarIdx boundvarOffsetThreshold o1 t) (objDeBrSub boundVarIdx boundvarOffsetThreshold o2 t)   
-    MemberDeBr o1 o2 -> MemberDeBr (objDeBrSub boundVarIdx boundvarOffsetThreshold o1 t) (objDeBrSub boundVarIdx boundvarOffsetThreshold o2 t)  
-    ForAllDeBr p -> ForAllDeBr (propDeBrSub boundVarIdx (calcBVOThreshold p) p t)
-    ExistsDeBr p -> ExistsDeBr (propDeBrSub boundVarIdx (calcBVOThreshold p) p t)
-    GTDeBr o1 o2 -> GTDeBr (objDeBrSub boundVarIdx boundvarOffsetThreshold o1 t) (objDeBrSub boundVarIdx boundvarOffsetThreshold o2 t)
+    Neg p -> Neg (propDeBrSub boundVarIdx boundvarOffsetThreshold p t)
+    (:&&:) p1 p2 ->  (:&&:) (propDeBrSub boundVarIdx boundvarOffsetThreshold p1 t) (propDeBrSub boundVarIdx boundvarOffsetThreshold p2 t) 
+    (:||:) p1 p2 ->  (:||:) (propDeBrSub boundVarIdx boundvarOffsetThreshold p1 t) (propDeBrSub boundVarIdx boundvarOffsetThreshold p2 t) 
+    (:->:) p1 p2 ->  (:->:) (propDeBrSub boundVarIdx boundvarOffsetThreshold p1 t) (propDeBrSub boundVarIdx boundvarOffsetThreshold p2 t)
+    (:<->:) p1 p2 ->  (:<->:) (propDeBrSub boundVarIdx boundvarOffsetThreshold p1 t) (propDeBrSub boundVarIdx boundvarOffsetThreshold p2 t)
+    (:==:) o1 o2 -> (:==:) (objDeBrSub boundVarIdx boundvarOffsetThreshold o1 t) (objDeBrSub boundVarIdx boundvarOffsetThreshold o2 t)   
+    (:<-:) o1 o2 -> (:<-:) (objDeBrSub boundVarIdx boundvarOffsetThreshold o1 t) (objDeBrSub boundVarIdx boundvarOffsetThreshold o2 t)  
+    Forall p -> Forall (propDeBrSub boundVarIdx (calcBVOThreshold p) p t)
+    Exists p -> Exists (propDeBrSub boundVarIdx (calcBVOThreshold p) p t)
+    (:>=:) o1 o2 -> (:>=:) (objDeBrSub boundVarIdx boundvarOffsetThreshold o1 t) (objDeBrSub boundVarIdx boundvarOffsetThreshold o2 t)
   where
           calcBVOThreshold p = if propDeBrBoundVarInside p boundVarIdx then
                                       boundDepthPropDeBr p
@@ -928,30 +997,30 @@ propDeBrSub boundVarIdx boundvarOffsetThreshold prop t = case prop of
 objDeBrApplyUG :: ObjDeBr -> Int -> Int -> ObjDeBr
 objDeBrApplyUG obj freevarIdx boundvarIdx =
     case obj of
-        NumDeBr num -> NumDeBr num
-        ConstDeBr name -> ConstDeBr name
-        HilbertDeBr p1 -> HilbertDeBr (propDeBrApplyUG p1 freevarIdx boundvarIdx)
-        BoundVarDeBr idx -> BoundVarDeBr idx
-        FreeVarDeBr idx -> if idx == freevarIdx then
-                               BoundVarDeBr boundvarIdx
+        Integ num -> Integ num
+        Constant name -> Constant name
+        Hilbert p1 -> Hilbert (propDeBrApplyUG p1 freevarIdx boundvarIdx)
+        Bound idx -> Bound idx
+        Free idx -> if idx == freevarIdx then
+                               Bound boundvarIdx
                            else
-                               FreeVarDeBr idx 
+                               Free idx 
 
 
 
 propDeBrApplyUG :: PropDeBr -> Int -> Int -> PropDeBr
 propDeBrApplyUG prop freevarIdx boundvarIdx =
     case prop of
-        NotDeBr p -> NotDeBr (propDeBrApplyUG p freevarIdx boundvarIdx)
-        AndDeBr p1 p2 -> AndDeBr (propDeBrApplyUG p1 freevarIdx boundvarIdx) (propDeBrApplyUG p2 freevarIdx boundvarIdx) 
-        OrDeBr p1 p2 -> OrDeBr (propDeBrApplyUG p1 freevarIdx boundvarIdx) (propDeBrApplyUG p2 freevarIdx boundvarIdx)
-        ImplDeBr p1 p2 -> ImplDeBr (propDeBrApplyUG p1 freevarIdx boundvarIdx) (propDeBrApplyUG p2 freevarIdx boundvarIdx)
-        EquivDeBr p1 p2 -> EquivDeBr (propDeBrApplyUG p1 freevarIdx boundvarIdx) (propDeBrApplyUG p2 freevarIdx boundvarIdx)
-        EqualsDeBr o1 o2 -> EqualsDeBr (objDeBrApplyUG o1 freevarIdx boundvarIdx) (objDeBrApplyUG o2 freevarIdx boundvarIdx)
-        MemberDeBr o1 o2 -> MemberDeBr (objDeBrApplyUG o1 freevarIdx boundvarIdx) (objDeBrApplyUG o2 freevarIdx boundvarIdx)
-        ForAllDeBr p -> ForAllDeBr (propDeBrApplyUG p freevarIdx boundvarIdx)
-        ExistsDeBr p -> ExistsDeBr (propDeBrApplyUG p freevarIdx boundvarIdx)
-        GTDeBr o1 o2 -> GTDeBr (objDeBrApplyUG o1 freevarIdx boundvarIdx) (objDeBrApplyUG o2 freevarIdx boundvarIdx)
+        Neg p -> Neg (propDeBrApplyUG p freevarIdx boundvarIdx)
+        (:&&:) p1 p2 -> (:&&:) (propDeBrApplyUG p1 freevarIdx boundvarIdx) (propDeBrApplyUG p2 freevarIdx boundvarIdx) 
+        (:||:) p1 p2 -> (:||:) (propDeBrApplyUG p1 freevarIdx boundvarIdx) (propDeBrApplyUG p2 freevarIdx boundvarIdx)
+        (:->:) p1 p2 -> (:->:) (propDeBrApplyUG p1 freevarIdx boundvarIdx) (propDeBrApplyUG p2 freevarIdx boundvarIdx)
+        (:<->:) p1 p2 -> (:<->:) (propDeBrApplyUG p1 freevarIdx boundvarIdx) (propDeBrApplyUG p2 freevarIdx boundvarIdx)
+        (:==:) o1 o2 -> (:==:) (objDeBrApplyUG o1 freevarIdx boundvarIdx) (objDeBrApplyUG o2 freevarIdx boundvarIdx)
+        (:<-:) o1 o2 -> (:<-:) (objDeBrApplyUG o1 freevarIdx boundvarIdx) (objDeBrApplyUG o2 freevarIdx boundvarIdx)
+        Forall p -> Forall (propDeBrApplyUG p freevarIdx boundvarIdx)
+        Exists p -> Exists (propDeBrApplyUG p freevarIdx boundvarIdx)
+        (:>=:) o1 o2 -> (:>=:) (objDeBrApplyUG o1 freevarIdx boundvarIdx) (objDeBrApplyUG o2 freevarIdx boundvarIdx)
 
 
 
@@ -959,7 +1028,7 @@ instance PredLogicSent PropDeBr ObjDeBr Text () DeBrSe where
     parseExists :: PropDeBr -> Maybe (ObjDeBr -> PropDeBr,())
     parseExists prop = do
         case prop of
-            ExistsDeBr p -> Just (propDeBrSub (boundVarIdx p) (calcBVOThreshold p) p,())
+            Exists p -> Just (propDeBrSub (boundVarIdx p) (calcBVOThreshold p) p,())
             _ -> Nothing
        where boundVarIdx = boundDepthPropDeBr
              calcBVOThreshold p = if propDeBrBoundVarInside p (boundVarIdx p) then
@@ -969,7 +1038,7 @@ instance PredLogicSent PropDeBr ObjDeBr Text () DeBrSe where
     parseForall :: PropDeBr -> Maybe (ObjDeBr -> PropDeBr, ())
     parseForall prop = do
         case prop of
-            ForAllDeBr p -> Just (propDeBrSub (boundVarIdx p) (calcBVOThreshold p) p,())
+            Forall p -> Just (propDeBrSub (boundVarIdx p) (calcBVOThreshold p) p,())
             _ -> Nothing
       where boundVarIdx = boundDepthPropDeBr
             calcBVOThreshold p = if propDeBrBoundVarInside p (boundVarIdx p) then
@@ -977,7 +1046,7 @@ instance PredLogicSent PropDeBr ObjDeBr Text () DeBrSe where
                                   else 
                                       boundDepthPropDeBr p + 1             
     applyUG :: PropDeBr -> () -> Int -> PropDeBr
-    applyUG prop () idx = ForAllDeBr (propDeBrApplyUG prop idx (boundDepthPropDeBr prop))
+    applyUG prop () idx = Forall (propDeBrApplyUG prop idx (boundDepthPropDeBr prop))
       
 
 type PropErrDeBr = PropLogError PropDeBr DeBrSe Text ObjDeBr
@@ -989,18 +1058,18 @@ type PredRuleDeBr = PredLogR PropDeBr DeBrSe Text ObjDeBr ()
 
 main :: IO ()
 main = do
-    let y0 =  (NumDeBr 0 `EqualsDeBr` NumDeBr 0) `ImplDeBr` (NumDeBr 99 `EqualsDeBr` NumDeBr 99)
-    let y1 = NumDeBr 0 `EqualsDeBr` NumDeBr 0
-    let y2= (NumDeBr 99 `EqualsDeBr` NumDeBr 99) `ImplDeBr` (NumDeBr 1001 `EqualsDeBr` NumDeBr 1001)
-    let x0 = ExistsDeBr (ForAllDeBr ((NumDeBr 0 `EqualsDeBr` FreeVarDeBr 102) 
-              `AndDeBr` (BoundVarDeBr 0 `MemberDeBr` BoundVarDeBr 1)) `AndDeBr` (BoundVarDeBr 1 `MemberDeBr` BoundVarDeBr 1))
-    let x1 = ForAllDeBr (ForAllDeBr (ForAllDeBr ((BoundVarDeBr 3 `EqualsDeBr` BoundVarDeBr 2) `AndDeBr` ForAllDeBr (BoundVarDeBr 0 `EqualsDeBr` BoundVarDeBr 1))))
+    let y0 =  (Integ 0 :==: Integ 0) :->: (Integ 99 :==: Integ 99)
+    let y1 = Integ 0 :==: Integ 0
+    let y2= (Integ 99 :==: Integ 99) :->: (Integ 1001 :==: Integ 1001)
+    let x0 = Exists (Forall ((Integ 0 :==: Free 102) 
+              :&&: (Bound 0 :<-: Bound 1)) :&&: (Bound 1 :<-: Bound 1))
+    let x1 = Forall (Forall (Forall ((Bound 3 :==: Bound 2) :&&: Forall (Bound 0 :==: Bound 1))))
     (print . show) (checkSanity [(),()] x0 mempty)
     (print . show) x1
     let f = parseForall x1
     case f of
         Just (f,()) -> do
-            let term1 = HilbertDeBr (NumDeBr 0 `MemberDeBr` NumDeBr 0)
+            let term1 = Hilbert (Integ 0 :<-: Integ 0)
             let fNew = f term1
             (print.show) fNew
         Nothing -> print "parse failed!"
@@ -1009,28 +1078,28 @@ main = do
     let proof = [
                   MP y0
                 , MP y2
-                , PLProofByAsm $ ProofByAsmSchema y1 [MP $ build_implication y1 (NumDeBr 99 `EqualsDeBr` NumDeBr 99)] (NumDeBr 99 `EqualsDeBr` FreeVarDeBr 0)
+                , PLProofByAsm $ ProofByAsmSchema y1 [MP $ y1 .->. (Integ 99 :==: Integ 99)] (Integ 99 :==: Free 0)
                 ] 
     let zb = runProof [] proof (Set.fromList [y0,y1,y2], mempty) -- :: Either ErrDeBr (Set PropDeBr, Map Text ())
     (print . show) zb
     
 
-    let z1 = ForAllDeBr (((BoundVarDeBr 0  `MemberDeBr` (ConstDeBr . pack) "N") `AndDeBr` (BoundVarDeBr 0 `GTDeBr` NumDeBr 10)) `ImplDeBr` (BoundVarDeBr 0 `GTDeBr` NumDeBr 0))
-    let z2 = ForAllDeBr (((BoundVarDeBr 0  `MemberDeBr` (ConstDeBr . pack) "N") `AndDeBr` (BoundVarDeBr 0 `GTDeBr` NumDeBr 0)) `ImplDeBr` (BoundVarDeBr 0 `EqualsDeBr` NumDeBr 0))
-    let generalizable = ((FreeVarDeBr 0  `MemberDeBr` (ConstDeBr . pack) "N") `AndDeBr` (FreeVarDeBr 0 `GTDeBr` NumDeBr 10)) `ImplDeBr` (FreeVarDeBr 0 `EqualsDeBr` NumDeBr 0)
-    let asm = (FreeVarDeBr 0  `MemberDeBr` (ConstDeBr . pack) "N") `AndDeBr` (FreeVarDeBr 0 `GTDeBr` NumDeBr 10)
-    let mid = (FreeVarDeBr 0  `MemberDeBr` (ConstDeBr . pack) "N") `AndDeBr` (FreeVarDeBr 0 `GTDeBr` NumDeBr 0)
+    let z1 = Forall (((Bound 0  :<-: (Constant . pack) "N") :&&: (Bound 0 :>=: Integ 10)) :->: (Bound 0 :>=: Integ 0))
+    let z2 = Forall (((Bound 0  :<-: (Constant . pack) "N") :&&: (Bound 0 :>=: Integ 0)) :->: (Bound 0 :==: Integ 0))
+    let generalizable = ((Free 0  :<-: (Constant . pack) "N") :&&: (Free 0 :>=: Integ 10)) :->: (Free 0 :==: Integ 0)
+    let asm = (Free 0  :<-: (Constant . pack) "N") :&&: (Free 0 :>=: Integ 10)
+    let mid = (Free 0  :<-: (Constant . pack) "N") :&&: (Free 0 :>=: Integ 0)
     let proof2 = [
                     PredProofByUG (ProofByUGSchema generalizable
                                      [
                                         PredProofByAsm (ProofByAsmSchema asm [
-                                             PredProofUI (FreeVarDeBr 0) z1,
-                                             predProofMP $ build_implication asm (FreeVarDeBr 0 `GTDeBr` NumDeBr 0),
-                                             predProofSimpL (FreeVarDeBr 0  `MemberDeBr` (ConstDeBr . pack) "N") (FreeVarDeBr 0 `GTDeBr` NumDeBr 10),
-                                             predProofAdj (FreeVarDeBr 0  `MemberDeBr` (ConstDeBr . pack) "N") (FreeVarDeBr 0 `GTDeBr` NumDeBr 0),
-                                             PredProofUI (FreeVarDeBr 0) z2,
-                                             predProofMP $ build_implication mid (FreeVarDeBr 0 `EqualsDeBr` NumDeBr 0)
-                                        ]  (FreeVarDeBr 0 `EqualsDeBr` NumDeBr 0))
+                                             PredProofUI (Free 0) z1,
+                                             predProofMP $ asm .->. (Free 0 :>=: Integ 0),
+                                             predProofSimpL $ (:&&:) (Free 0  :<-: (Constant . pack) "N") (Free 0 :>=: Integ 10),
+                                             predProofAdj (Free 0  :<-: (Constant . pack) "N") (Free 0 :>=: Integ 0),
+                                             PredProofUI (Free 0) z2,
+                                             predProofMP $ mid .->. (Free 0 :==: Integ 0)
+                                        ]  (Free 0 :==: Integ 0))
                                      ] ()
                                   )
                  ]
@@ -1039,10 +1108,10 @@ main = do
                     PredProofByUG (ProofByUGSchema generalizable
                                      [
                                         PredProofByAsm (ProofByAsmSchema asm [
-                                             PredProofUI (FreeVarDeBr 0) z1,
+                                             PredProofUI (Free 0) z1,
                                               
 
-                                             predProofMP $ build_implication asm (FreeVarDeBr 0 `GTDeBr` NumDeBr 0)
+                                             predProofMP $ asm .->. (Free 0 :>=: Integ 0)
                                       
                                         ]  z1)
                                      ] ()
@@ -1052,14 +1121,16 @@ main = do
 
     
 
-    let zb3 = runProof [()] [PredProofUI (FreeVarDeBr 0) z1] (Set.fromList [z1,z2],Data.Map.insert (pack "N") () mempty)
-           
+    let zb3 = runProof [()] [PredProofUI (Free 0) z1] (Set.fromList [z1,z2],Data.Map.insert (pack "N") () mempty)
+    let t="shit"
+
     (print.show) zb2
     (print.show) zb3
     x <- runProofStateGenT prog [] (Set.fromList [z1,z2]) (Data.Map.insert (pack "N") () mempty)
-
-    (print . show) x
-
+    let y = show x
+    print "hi wattup"
+    --(putStrLn . show) x
+    (putStrLn . show) x
 
 data MyException = MyException
   deriving(Show, Typeable)
@@ -1067,29 +1138,24 @@ instance Exception MyException
  
 prog::ProofStateGenT () DeBrSe PredErrDeBr [PredRuleDeBr] PropDeBr Text IO ()
 prog = do
-    let z1 = ForAllDeBr (((BoundVarDeBr 0  `MemberDeBr` (ConstDeBr . pack) "N") `AndDeBr` (BoundVarDeBr 0 `GTDeBr` NumDeBr 10)) `ImplDeBr` (BoundVarDeBr 0 `GTDeBr` NumDeBr 0))
-    let z2 = ForAllDeBr (((BoundVarDeBr 0  `MemberDeBr` (ConstDeBr . pack) "N") `AndDeBr` (BoundVarDeBr 0 `GTDeBr` NumDeBr 0)) `ImplDeBr` (BoundVarDeBr 0 `EqualsDeBr` NumDeBr 0))
-    let generalizable = ((FreeVarDeBr 0  `MemberDeBr` (ConstDeBr . pack) "N") `AndDeBr` (FreeVarDeBr 0 `GTDeBr` NumDeBr 10)) `ImplDeBr` (FreeVarDeBr 0 `EqualsDeBr` NumDeBr 0)
-    let asm = (FreeVarDeBr 0  `MemberDeBr` (ConstDeBr . pack) "N") `AndDeBr` (FreeVarDeBr 0 `GTDeBr` NumDeBr 10)
-    let mid = (FreeVarDeBr 0  `MemberDeBr` (ConstDeBr . pack) "N") `AndDeBr` (FreeVarDeBr 0 `GTDeBr` NumDeBr 0)
+    let z1 = Forall (((Bound 0  :<-: (Constant . pack) "N") :&&: (Bound 0 :>=: Integ 10))  :->: (Bound 0 :>=: Integ 0))
+    let z2 = Forall (((Bound 0  :<-: (Constant . pack) "N") :&&: (Bound 0 :>=: Integ 0)) :->: (Bound 0 :==: Integ 0))
+    let generalizable = ((Free 0  :<-: (Constant . pack) "N") :&&: (Free 0 :>=: Integ 10)) :->: (Free 0 :==: Integ 0)
+    let asm = (Free 0  :<-: (Constant . pack) "N") :&&: (Free 0 :>=: Integ 10)
+    let mid = (Free 0  :<-: (Constant . pack) "N") :&&: (Free 0 :>=: Integ 0)
     fux<- runProofByUGM () (\schm -> [PredProofByUG schm]) do
         runProofByAsmM (\schm -> [PredProofByAsm schm]) asm do
-            s<-predProofUIM (FreeVarDeBr 0) z1
-            s<- predProofMPM s
-            monadifyProof [
-                                             -- predProofMP asm (FreeVarDeBr 0 `GTDeBr` NumDeBr 0),
-                                             predProofSimpL (FreeVarDeBr 0  `MemberDeBr` (ConstDeBr . pack) "N") (FreeVarDeBr 0 `GTDeBr` NumDeBr 10),
-                                             predProofAdj (FreeVarDeBr 0  `MemberDeBr` (ConstDeBr . pack) "N") (FreeVarDeBr 0 `GTDeBr` NumDeBr 0),
-                                             PredProofUI (FreeVarDeBr 0) z2,
-                                             predProofMP $ build_implication mid (FreeVarDeBr 0 `EqualsDeBr` NumDeBr 0)]
-            
-            throwM MyException `catch` (\(e::SomeException)-> return (z1,()))
-            pure (FreeVarDeBr 0 `EqualsDeBr` NumDeBr 0,())
-    (lift . print . show) fux
+            s1 <-predProofUIM (Free 0) z1
+            s2 <- predProofMPM s1
+            (lift . print) "Coment1"
+            (lift . print . show) s1
+
+            natAsm <- predProofSimpLM asm
+            (lift . print) "COmment 2"
+            s3 <- predProofAdjM natAsm s2
+            s4 <-predProofUIM (Free 0) z2
+            s5 <- predProofMPM s4
+            return (s5,())
+   
+    (lift . print . pack . show) fux
     return ()
-
---yrdy
----ImplDeBr (AndDeBr (MemberDeBr (FreeVarDeBr 0) (ConstDeBr \"N\")) (MemberDeBr (FreeVarDeBr 0) (NumDeBr 10))) (MemberDeBr (FreeVarDeBr 0) (NumDeBr 0))
----
-
--- ImplDeBr (AndDeBr (MemberDeBr (FreeVarDeBr 0) (ConstDeBr \"N\")) (GTDeBr (FreeVarDeBr 0) (NumDeBr 10))) (GTDeBr (FreeVarDeBr 0) (NumDeBr 0)
