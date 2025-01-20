@@ -1215,8 +1215,8 @@ data MyException = MyException
   deriving(Show, Typeable)
 instance Exception MyException
 -- 
-prog::ProofStateGenT () PredErrDeBr [PredRuleDeBr] PropDeBr Text IO ()
-prog = do
+testprog::ProofStateGenT () PredErrDeBr [PredRuleDeBr] PropDeBr Text IO ()
+testprog = do
     let z1 = Forall (((Bound 0  :<-: (Constant . pack) "N") :&&: (Bound 0 :>=: Integ 10))  :->: (Bound 0 :>=: Integ 0))
     let z2 = Forall (((Bound 0  :<-: (Constant . pack) "N") :&&: (Bound 0 :>=: Integ 0)) :->: (Bound 0 :==: Integ 0))
     let generalizable = ((Free 0  :<-: (Constant . pack) "N") :&&: (Free 0 :>=: Integ 10)) :->: (Free 0 :==: Integ 0)
