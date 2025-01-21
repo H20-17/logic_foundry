@@ -174,31 +174,6 @@ modifyPS g m1 = do
 
 
 
--- data BigExceptionOld eL s sE o tType where
---    BErrSubproof :: BigExceptionOld eL s sE o tType -> BigExceptionOld eL s sE o tType
---    BEPrfErr :: eL -> BigExceptionOld eL s sE o tType
---    BEChkThmMErr :: CheckTheoremMError s sE -> BigExceptionOld eL s sE o tType
---    BERunThmErrConstNotDefd :: o ->  BigExceptionOld eL s sE o tType
---    BERunThmErrConstTypeConflict :: o -> tType -> tType -> BigExceptionOld eL s sE o tType
---    BERunThmErrLemmaNotEstablished :: s -> BigExceptionOld eL s sE o tType
---    BEPrfByAsmAsmSanity :: s -> sE -> BigExceptionOld eL s sE o tType
---    BESubPrfResultSanity :: s -> sE -> BigExceptionOld eL s sE o tType
---    BESubPrfResultNotProven :: s -> BigExceptionOld eL s sE o tType
---    deriving (Typeable,Show)
-
--- instance ErrorEmbed eL (BigException eL s sE o tType) where
---     errEmbed::eL -> BigException  eL s sE o tType
---     errEmbed = BEPrfErr
-
-
--- bigExceptionTrans :: (eL1 -> eL2) -> BigException eL1 s sE o tType -> BigException eL2 s sE o tType
--- bigExceptionTrans f be1 =
---    case be1 of 
---        BErrSubproof be2 -> BErrSubproof (bigExceptionTrans f be2)
---        BEPrfErr e1 -> (BEPrfErr . f) e1
-
-
-
 type ProofStateGenT tType eL r s o m x = ProofStateT eL [tType] r (Set s,Map o tType) m x
 
 runProofStateGenT ::  (Monad m, Proof eL r (Set s, Map o tType) [tType], MonadThrow m     )
@@ -288,49 +263,39 @@ constDictTest envDict = Data.Map.foldrWithKey f Nothing
 
 
 data ChkTheoremError senttype sanityerrtype logcicerrtype o tType where
-   ChkTheoremErrLemmaSanityErr :: senttype -> sanityerrtype -> ChkTheoremError senttype sanityerrtype logcicerrtype o tType
+   ChkTheoremErrLemmaNotEstablished :: senttype -> ChkTheoremError senttype sanityerrtype logcicerrtype o tType
+   ChkTheoremErrLemmaSanity :: senttype -> sanityerrtype -> ChkTheoremError senttype sanityerrtype logcicerrtype o tType
+   --The lemma is insane or not closed
    ChkTheoremErrSubproofErr :: TestSubproofErr senttype sanityerrtype logcicerrtype -> ChkTheoremError senttype sanityerrtype logcicerrtype o tType
+   ChkTheoremErrConstNotDefd :: o -> ChkTheoremError senttype sanityerrtype logcicerrtype o tType
+   ChkTheoremErrConstTypeConflict :: o -> tType -> tType -> ChkTheoremError senttype sanityerrtype logcicerrtype o tType
    deriving(Show)
 
 
 
 checkTheorem :: (Proof eL1 r1 (Set s, Map o tType) [tType], PropLogicSent s tType, TypedSent o tType sE s    )
-                            => TheoremSchema s r1 o tType -> Maybe (ChkTheoremError s sE eL1 o tType)
-checkTheorem (TheoremSchema constdict lemmas subproof theorem) =
-
-    Prelude.foldr f1 Nothing lemmas
+                            => TheoremSchema s r1 o tType -> Maybe (Set s, Map o tType) -> Maybe (ChkTheoremError s sE eL1 o tType)
+checkTheorem (TheoremSchema constdict lemmas subproof theorem) mayPrState =
+        
+        maybe g1 g2 mayPrState
     <|> fmap ChkTheoremErrSubproofErr (testSubproof mempty constdict lemmas theorem subproof)
-      where 
-            f1 a = maybe maybeLemmaNotSane Just
-              where
-                   maybeLemmaNotSane = fmap (ChkTheoremErrLemmaSanityErr a) (checkSanity mempty a constdict)
-
-data TheoremError senttype sanityerrtype logcicerrtype o tType where
-   TheoremErrLemmaNotEstablished :: senttype -> TheoremError senttype sanityerrtype logcicerrtype o tType
-   TheoremErrConstDictNotDefd :: o -> TheoremError senttype sanityerrtype logcicerrtype o tType
-   TheoremErrConstTypeConflict :: o -> tType -> tType -> TheoremError senttype sanityerrtype logcicerrtype o tType
-   TheoremErrChkTheorem :: ChkTheoremError senttype sanityerrtype logcicerrtype o tType
-                 -> TheoremError senttype sanityerrtype logcicerrtype o tType
-   deriving(Show)
-
-
-establishTheorem :: (Proof eL1 r1 (Set s, Map o tType) [tType], PropLogicSent s tType, TypedSent o tType sE s)
-                            => Map o tType -> Set s -> TheoremSchema s r1 o tType -> Maybe (TheoremError s sE eL1 o tType)
-establishTheorem existingConsts already_proven (TheoremSchema constdict lemmas subproof theorem) =
-        fmap constDictErr (constDictTest existingConsts constdict)
-    <|> Prelude.foldr f1 Nothing lemmas
-    <|> fmap TheoremErrChkTheorem (checkTheorem (TheoremSchema constdict lemmas subproof theorem))
-      where 
-            f1 a  = maybe maybeLemmaMissing Just
-              where
-                   maybeLemmaMissing = if not (a `Set.member` already_proven)
-                                          then (Just . TheoremErrLemmaNotEstablished) a else Nothing
-            constDictErr (k,Nothing) = TheoremErrConstDictNotDefd k
-            constDictErr (k, Just (a,b)) = TheoremErrConstTypeConflict k a b
-                           
-
-
-
+      where
+         g2 (already_proven, existingConsts) =    fmap constDictErr (constDictTest existingConsts constdict)
+                                               <|> Prelude.foldr f1 Nothing lemmas
+           where
+             constDictErr (k,Nothing) = ChkTheoremErrConstNotDefd k
+             constDictErr (k, Just (a,b)) = ChkTheoremErrConstTypeConflict k a b
+             f1 a = maybe (maybeLemmaMissing <|> maybeLemmaInsane) Just 
+               where
+                  maybeLemmaMissing = if not (a `Set.member` already_proven)
+                                          then (Just . ChkTheoremErrLemmaNotEstablished) a else Nothing
+                  maybeLemmaInsane = fmap (ChkTheoremErrLemmaSanity a) (checkSanity mempty a constdict)
+         g1  = Prelude.foldr f1 Nothing lemmas
+           where
+             f1 a = maybe maybeLemmaInsane Just 
+               where
+                  maybeLemmaInsane = fmap (ChkTheoremErrLemmaSanity a) (checkSanity mempty a constdict)
+                     
 
 
 
@@ -374,11 +339,13 @@ instance (
 
 
 checkTheoremM :: (Show s, Typeable s, Monoid r1, Proof eL1 r1 (Set s,Map o tType) [tType], Monad m, MonadThrow m,
-                      PropLogicSent s tType, TypedSent o tType sE s, Show sE, Typeable sE )
-                 =>   Set s -> ProofStateGenT tType eL1 r1 s o m (s, x) -> Map o tType ->
-                               m (s, r1, x)
-checkTheoremM lemmas prog constdict =  do
-    maybe (return ()) throwM (Prelude.foldr f1 Nothing lemmas)
+                      PropLogicSent s tType, TypedSent o tType sE s, Show sE, Typeable sE, Typeable tType, Show tType,
+                      Typeable o, Show o )
+                 =>   Set s -> ProofStateGenT tType eL1 r1 s o m (s, x) -> Map o tType -> 
+                      Maybe (Set s, Map o tType)
+                              -> m (s, r1, x)
+checkTheoremM lemmas prog constdict mayPrState =  do
+    maybe (maybe (return ()) throwM g1) (maybe (return ()) throwM . g2) mayPrState
     ((tm, extra), (proven, consts), proof) <- runProofStateGenT prog [] lemmas constdict
     let sc = checkSanity mempty tm constdict
     maybe (return ()) (throwM . BigExceptResultSanity tm) sc
@@ -388,18 +355,28 @@ checkTheoremM lemmas prog constdict =  do
 
     return (tm,proof,extra)
         where 
-            f1 a = maybe maybeLemmaNotSane Just
+            g2 (already_proven, existingConsts) = fmap constDictErr (constDictTest existingConsts constdict)
+                                               <|> Prelude.foldr f1 Nothing lemmas
+             where
+                constDictErr (k,Nothing) = BigExceptConstNotDefd k
+                constDictErr (k, Just (a,b)) = BigExceptConstTypeConflict k a b
+                f1 a = maybe (maybeLemmaInsane <|> maybeLemmaMissing) Just 
+                  where
+                     maybeLemmaMissing = if not (a `Set.member` already_proven)
+                                          then (Just . BigExceptLemmaNotEstablished) a else Nothing
+                     maybeLemmaInsane = fmap (BigExceptLemmaSanityErr a) (checkSanity mempty a constdict)
+            g1 = Prelude.foldr f1 Nothing lemmas
               where
-                   maybeLemmaNotSane = fmap (BigExceptLemmaSanityErr a) (checkSanity mempty a constdict)   
+                 f1 a = maybe maybeLemmaInsane Just 
+                   where
+                      maybeLemmaInsane = fmap (BigExceptLemmaSanityErr a) (checkSanity mempty a constdict)
+  
 
 
 
 
 data EstTmMError s o tType where
     EstTmMErrMExcept :: SomeException -> EstTmMError s o tType
-    EstTmMErrLemmaNotEstablished :: s -> EstTmMError s o tType
-    EstTmMErrConstDictNotDefd :: o -> EstTmMError s o tType
-    EstTmMErrConstTypeConflict :: o -> tType -> tType ->  EstTmMError s o tType
     deriving (Show)
    
 
@@ -408,24 +385,13 @@ data EstTmMError s o tType where
 
 establishTheoremM :: (Monoid r1,  Proof eL1 r1 (Set s, Map o tType) [tType],
                      PropLogicSent s tType,
-                     Show s, Typeable s, Ord o, TypedSent o tType sE s, Show sE, Typeable sE)
+                     Show s, Typeable s, Ord o, TypedSent o tType sE s, Show sE, Typeable sE, Typeable tType, Show tType, Typeable o,
+                     Show o)
                             => Map o tType -> Set s -> TheoremSchemaM tType eL1 r1 s o -> Either (EstTmMError s o tType) s
 establishTheoremM existingConsts already_proven ((TheoremSchemaMT lemmas proofprog constdict):: TheoremSchemaM tType eL1 r1 s o) = 
     do
-        maybe (return ()) (throwError . constDictErr) (constDictTest existingConsts constdict)
-        maybe (return ()) throwError (Prelude.foldr f1 Nothing lemmas)
-        (tm, prf, ()) <-  left EstTmMErrMExcept $ checkTheoremM lemmas proofprog constdict
-        -- (tm, prf, ()) <- left EstTmMErrMError prfResult
+        (tm, prf, ()) <-  left EstTmMErrMExcept $ checkTheoremM lemmas proofprog constdict (Just (already_proven,existingConsts))
         return tm
-   where
-     constDictErr (k,Nothing) = EstTmMErrConstDictNotDefd k
-     constDictErr (k, Just (a,b)) = EstTmMErrConstTypeConflict k a b
-     f1 a  = maybe maybeLemmaMissing Just
-            where
-                maybeLemmaMissing = if not (a `Set.member` already_proven)
-                                    then (Just . EstTmMErrLemmaNotEstablished) a else Nothing
-
-
 
 
 
@@ -435,11 +401,12 @@ data ExpTmMError where
 
 
 expandTheoremM :: (Monoid r1,  Proof eL1 r1 (Set s, Map o tType) [tType],
-                     PropLogicSent s tType, Show s, Typeable s, TypedSent o tType sE s, Show sE, Typeable sE)
+                     PropLogicSent s tType, Show s, Typeable s, TypedSent o tType sE s, Show sE, Typeable sE,
+                     Typeable tType, Show tType, Typeable o, Show o)
                             => TheoremSchemaM tType eL1 r1 s o -> Either ExpTmMError (TheoremSchema s r1 o tType)
 expandTheoremM ((TheoremSchemaMT lemmas proofprog constdict):: TheoremSchemaM tType eL1 r1 s o) =
       do
-          (tm,r1,()) <- left ExpTmMErrMExcept (checkTheoremM lemmas proofprog constdict)
+          (tm,r1,()) <- left ExpTmMErrMExcept (checkTheoremM lemmas proofprog constdict Nothing)
           return $ TheoremSchema constdict lemmas r1 tm
 
 
@@ -542,18 +509,10 @@ runTheoremM :: (Monoid r1, Proof eL1 r1 (Set s,Map o tType) [tType], Monad m,
                                ProofStateGenT tType eL1 r1 s o m (s, x)
 runTheoremM f lemmas prog constDict =  do
         (proven, existingConsts) <- getProofState
-        maybe (return ()) (throwM . constDictErr) (constDictTest existingConsts existingConsts)
-        maybe (return ()) throwM (Prelude.foldr (f1 proven) Nothing lemmas)
-        (tm, proof, extra) <- lift $ checkTheoremM lemmas prog constDict
+        (tm, proof, extra) <- lift $ checkTheoremM lemmas prog constDict (Just (proven,existingConsts))
         monadifyProof (f $ TheoremSchema constDict lemmas proof tm)
         return (tm, extra)
-    where
-        constDictErr (k,Nothing) =  BigExceptConstNotDefd k
-        constDictErr (k, Just (a,b)) = BigExceptConstTypeConflict  k a b
-        f1 proven a = maybe (maybeLemmaMissing proven) Just
-           where
-              maybeLemmaMissing proven = if not (a `Set.member` proven)
-                             then (Just . BigExceptLemmaNotEstablished) a else Nothing
+
 
 runProofByAsmM :: (Monoid r1, Proof eL1 r1 (Set s,Map o tType) [tType], Monad m,
                        PropLogicSent s tType, MonadThrow m,
@@ -593,7 +552,7 @@ data PropLogError s sE o tType where
     PLErrSentenceNotImp :: s -> PropLogError s sE o tType
     PLErrSentenceNotAdj :: s -> PropLogError s sE o tType
     PLErrPrfByAsmErr :: ProofByAsmError s sE (PropLogError s sE o tType) -> PropLogError s sE o tType
-    PLErrTheorem :: TheoremError s sE (PropLogError s sE o tType) o tType -> PropLogError s sE o tType
+    PLErrTheorem :: ChkTheoremError s sE (PropLogError s sE o tType) o tType -> PropLogError s sE o tType
     PLErrTheoremM :: EstTmMError s o tType -> PropLogError s sE o tType
     PLExclMidSanityErr :: s -> sE -> PropLogError s sE o tType
     PLSimpLAdjNotProven :: s -> PropLogError s sE o tType
@@ -616,7 +575,8 @@ data PropLogR tType s sE o where
 
 
 pLrunProof :: (Proof (PropLogError s sE o tType) [PropLogR tType s sE o] (Set s, Map o tType) [tType],
-               PropLogicSent s tType, Show sE, Typeable sE, Show s, Typeable s, Ord o, TypedSent o tType sE s) =>
+               PropLogicSent s tType, Show sE, Typeable sE, Show s, Typeable s, Ord o, TypedSent o tType sE s,
+               Show o, Typeable o, Typeable tType, Show tType) =>
                             [tType] -> PropLogR tType s sE o -> (Set s, Map o tType) -> Either (PropLogError s sE o tType) s
 pLrunProof varStack rule (proven,constDict) = 
       case rule of
@@ -628,7 +588,7 @@ pLrunProof varStack rule (proven,constDict) =
         PLProofByAsm schema ->
              left PLErrPrfByAsmErr (proofByAsm varStack constDict proven schema)
         PLTheorem schema -> do
-              maybe (return ()) (throwError . PLErrTheorem) (establishTheorem constDict proven schema)
+              maybe (return ()) (throwError . PLErrTheorem) (checkTheorem schema (Just (proven,constDict)))
               (return . theorem) schema
         PLTheoremM schema ->
             left PLErrTheoremM (establishTheoremM constDict proven schema)
@@ -649,7 +609,8 @@ pLrunProof varStack rule (proven,constDict) =
 
 
 
-instance (PropLogicSent s tType, Show sE, Typeable sE, Show s, Typeable s, Ord o, TypedSent o tType sE s)
+instance (PropLogicSent s tType, Show sE, Typeable sE, Show s, Typeable s, Ord o, TypedSent o tType sE s,
+          Typeable o, Show o, Typeable tType, Show tType)
              => Proof (PropLogError s sE o tType) [PropLogR tType s sE o] (Set s, Map o tType) [tType] where
    runProof :: [tType] -> [PropLogR tType s sE o] -> (Set s, Map o tType) -> Either (PropLogError s sE o tType) (Set s, Map o tType)
    runProof varStack rs (proven, constDict) = foldM f (mempty,mempty) rs
@@ -664,7 +625,7 @@ instance (PropLogicSent s tType, Show sE, Typeable sE, Show s, Typeable s, Ord o
 
 data PredProofError s sE o t tType where
     PredProofPrfByAsmErr :: ProofByAsmError s sE (PredProofError s sE o t tType) -> PredProofError s sE o t tType
-    PredProofErrTheorem :: TheoremError s sE (PredProofError s sE o t tType) o tType -> PredProofError s sE o t tType
+    PredProofErrTheorem :: ChkTheoremError s sE (PredProofError s sE o t tType) o tType -> PredProofError s sE o t tType
     PredProofErrTheoremM :: EstTmMError s o tType -> PredProofError s sE o t tType
     PredProofErrPL ::  PropLogError s sE o tType -> PredProofError s sE o t tType
     PredProofErrUG :: ProofByUGError s sE  (PredProofError s sE o t tType) -> PredProofError s sE o t tType
@@ -783,7 +744,8 @@ predProofAdj a b = PredProofProp  (PLAdj a b)
 
 predPrfRunProof :: (PredLogicSent s t tType,
                Proof (PredProofError s sE o t tType) [PredLogR s sE o t tType] (Set s, Map o tType) [tType],
-               Show sE, Typeable sE, Show s, Typeable s, TypeableTerm t o tType sE, TypedSent o tType sE s ) =>
+               Show sE, Typeable sE, Show s, Typeable s, TypeableTerm t o tType sE, TypedSent o tType sE s,
+               Typeable o, Show o,Typeable tType, Show tType ) =>
                             [tType] -> PredLogR s sE o t tType -> (Set s, Map o tType) -> Either (PredProofError s sE o t tType) (s,Maybe (o,tType))
 predPrfRunProof varStack rule (proven,constDict) = 
       case rule of
@@ -794,7 +756,7 @@ predPrfRunProof varStack rule (proven,constDict) =
                implication <- left PredProofPrfByAsmErr (proofByAsm varStack constDict proven schema)
                return (implication, Nothing)
           PredProofTheorem schema -> do
-               maybe (return ()) (throwError . PredProofErrTheorem) (establishTheorem constDict proven schema)
+               maybe (return ()) (throwError . PredProofErrTheorem) (checkTheorem schema (Just (proven,constDict)))
                return (theorem schema, Nothing)
           PredProofTheoremM schema -> do
                theorem <- left PredProofErrTheoremM (establishTheoremM constDict proven schema)
@@ -833,7 +795,7 @@ predPrfRunProof varStack rule (proven,constDict) =
 
 
 instance (PredLogicSent s t tType, Show sE, Typeable sE, Show s, Typeable s, TypedSent o tType sE s,
-             TypeableTerm t o tType sE) 
+             TypeableTerm t o tType sE, Typeable o, Show o, Typeable tType, Show tType) 
           => Proof (PredProofError s sE o t tType) [PredLogR s sE o t tType] (Set s, Map o tType) [tType] where
     runProof :: [tType] -> [PredLogR s sE o t tType] -> (Set s, Map o tType) -> Either (PredProofError s sE o t tType) (Set s, Map o tType)
     runProof varStack rs (proven, constDict) = foldM f (mempty,mempty) rs
@@ -1205,7 +1167,7 @@ main = do
 
     (print.show) zb2
     (print.show) zb3
-    x <- runProofStateGenT prog [] (Set.fromList [z1,z2]) (Data.Map.insert (pack "N") () mempty)
+    x <- runProofStateGenT testprog [] (Set.fromList [z1,z2]) (Data.Map.insert (pack "N") () mempty)
     let y = show x
     print "hi wattup"
     --(putStrLn . show) x
