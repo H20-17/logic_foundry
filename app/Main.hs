@@ -30,7 +30,7 @@ import Text.XHtml (vspace, name, abbr, p, table, rules)
 import Data.Set (Set)
 import Data.List (mapAccumL)
 import qualified Data.Set as Set
-import Data.Text ( pack, Text)
+import Data.Text ( pack, Text, unpack)
 import Data.Map
 import Distribution.Simple (ProfDetailLevel(ProfDetailExportedFunctions))
 import Data.Text.Internal.Encoding.Utf8 (ord2)
@@ -986,11 +986,60 @@ data PropDeBr where
       Forall :: PropDeBr -> PropDeBr
       Exists :: PropDeBr -> PropDeBr
       (:>=:) :: ObjDeBr -> ObjDeBr -> PropDeBr
-    deriving (Eq, Ord, Show)
-  
+    deriving (Eq, Ord)
+
+
+propNeedsBrackets :: PropDeBr -> Bool
+propNeedsBrackets p = case p of
+    Neg q -> False
+    (:&&:) a b -> True 
+    (:||:) a b -> True
+    (:->:)  a b -> True
+    (:<->:) a b -> True
+    (:==:) a b -> True
+    (:<-:) a b -> True
+    Forall a -> False
+    Exists a -> False
+    (:>=:) a b -> True
+
+
+maybeWrapProp :: PropDeBr -> [Char]
+maybeWrapProp p = if propNeedsBrackets p then
+                          "(" <> show p <> ")"
+                       else
+                           show p
+
+
+unaryOpPropShow :: Text -> PropDeBr -> [Char]
+unaryOpPropShow opSymb a =
+    unpack opSymb <> " " <> maybeWrapProp a
 
 
 
+binaryOpPropShow :: Text -> PropDeBr -> PropDeBr -> [Char]
+binaryOpPropShow opSymb a b =
+    maybeWrapProp a <> " " <> unpack opSymb <> " " <> maybeWrapProp b
+
+                          
+
+binaryOpObjShow :: Text -> ObjDeBr -> ObjDeBr -> [Char]
+binaryOpObjShow opSymb a b =
+    show a <> " " <> unpack opSymb <> " " <> show b
+
+
+instance Show PropDeBr where
+    show :: PropDeBr -> String
+    show prop = case prop of
+        Neg a -> unaryOpPropShow "¬" a
+        (:&&:) a b -> binaryOpPropShow "∧" a b
+        (:||:) a b -> binaryOpPropShow "∨" a b
+        (:->:) a b -> binaryOpPropShow "→" a b
+        (:<->:) a b -> binaryOpPropShow "↔" a b
+        (:==:) a b -> binaryOpObjShow "=" a b
+        (:<-:) a b -> binaryOpObjShow "∈" a b
+        Forall a ->  "∀x" <> show (boundDepthPropDeBr a) <> "(" <> show a <> ")"
+        Exists a ->  "∃x" <> show (boundDepthPropDeBr a) <> "(" <> show a <> ")"
+        (:>=:) a b -> binaryOpObjShow "≥" a b
 
 
 infixl 9 :&&:
@@ -1010,7 +1059,17 @@ data ObjDeBr where
       Hilbert :: PropDeBr -> ObjDeBr
       Bound :: Int -> ObjDeBr
       Free :: Int ->ObjDeBr
-   deriving (Eq, Ord, Show)
+   deriving (Eq, Ord)
+
+instance Show ObjDeBr where
+    show :: ObjDeBr -> String
+    show obj = case obj of
+        Integ i -> show i
+        Constant c -> unpack c
+        Hilbert p -> "εx" <> show (boundDepthPropDeBr p) <> "(" <> show p <> ")"
+        Bound i -> "x" <> show i
+        Free i -> "v" <> show i        
+
 
 
 data DeBrSe where
