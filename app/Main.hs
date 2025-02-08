@@ -1427,7 +1427,7 @@ showPredDeBrStep contextDepth index lineNum step =
              PrfStdTheorem prop steps ->
                    (pack . show) prop
                 <> " THEOREM\n"
-                <> showPredDeBrSteps (contextDepth + 1) (index <> [lineNum]) steps
+                <> showPredDeBrSteps (contextDepth + 1) ([]) steps
                 <> "\n"
                 <> Data.Text.concat (replicate contextDepth "│")
                 <> "└"   -- will be unicode corner when I get to it
