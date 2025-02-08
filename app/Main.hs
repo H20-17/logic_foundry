@@ -30,9 +30,10 @@ import Text.XHtml (vspace, name, abbr, p, table, rules)
 import Data.Set (Set)
 import Data.List (mapAccumL)
 import qualified Data.Set as Set
-import Data.Text ( pack, Text, unpack)
+import Data.Text ( pack, Text, unpack,concat)
+import Data.List (intersperse)
 import Data.Map
-import Distribution.Simple (ProfDetailLevel(ProfDetailExportedFunctions))
+import Distribution.Simple (ProfDetailLevel(ProfDetailExportedFunctions), KnownExtension (ListTuplePuns))
 import Data.Text.Internal.Encoding.Utf8 (ord2)
 import Data.Maybe
 import GHC.RTS.Flags (MiscFlags(linkerMemBase))
@@ -47,6 +48,7 @@ import Control.Monad.Catch
 import qualified GHC.Stack.Types
 import Data.Data (Typeable)
 import Distribution.PackageDescription (TestType)
+import Distribution.Backpack.LinkedComponent (extendLinkedComponentMap)
 
 
 default(Text)
@@ -213,7 +215,7 @@ data PrfStdStep s o tType where
     PrfStdPrfByAsm ::  s -> [PrfStdStep s o tType] -> PrfStdStep s o tType
     PrfStdTheoremM :: s -> PrfStdStep s o tType
     PrfStdStepFreevar :: Int -> tType -> PrfStdStep s o tType
-    deriving Show
+
 
 
 
@@ -572,7 +574,7 @@ proofByUG state context (ProofByUGSchema lambda subproof) =
          let newContext = PrfStdContext newVarstack
          let newContextDepth = contextDepth context + 1
          let newContext = PrfStdContext newVarstack newStepIdxPrefix newContextDepth
-         let newState = PrfStdState (provenSents state) (consts state) 0
+         let newState = PrfStdState (provenSents state) (consts state) 1
          let newFreeTerm = free2Term $ length varstack
          let generalizable = lType2Func lambda newFreeTerm 
          let eitherTestResult = testSubproof newContext newState generalizable subproof
@@ -725,7 +727,7 @@ pLrunProof state context rule =
             leftIndex <- maybe ((throwError . PLAdjLeftNotProven) a) return (Data.Map.lookup a (provenSents state))
             rightIndex <- maybe ((throwError . PLAdjRightNotProven) b) return (Data.Map.lookup b (provenSents state))
             let aAndB = a .&&. b
-            return (aAndB, PrfStdStepStep a "ADJ" [leftIndex,rightIndex])
+            return (aAndB, PrfStdStepStep aAndB "ADJ" [leftIndex,rightIndex])
 
 
 
@@ -918,7 +920,6 @@ predPrfRunProof state context rule =
           PredProofEI existsSent const -> do 
                let existsParse = parseExists existsSent
                lambda <- maybe ((throwError . PredProofErrEINotExists) existsSent) return existsParse
-               --(f,tType) <- maybe ((throwError . PredProofErrEINotExists) existsSent) return existsParse
                let mayExistsSentIdx = Data.Map.lookup existsSent (provenSents state)
                existsSentIdx <- maybe ((throwError . PredProofErrEINotProven) existsSent) return mayExistsSentIdx
                let constNotDefined = isNothing $ Data.Map.lookup const constDict
@@ -928,8 +929,6 @@ predPrfRunProof state context rule =
                let tType = lTypeTType lambda
                return (eIResultSent,Just (const,tType), PrfStdStepStep eIResultSent "EI" [existsSentIdx])
           PredProofEG term lambda -> do
-               --let existsParse = parseExists existsSent
-               -- (f,tType) <- maybe ((throwError . PredProofErrEGNotExists) existsSent) return existsParse
                let eitherTermType = getTypeTerm term varStack constDict
                termType <- left PredProofTermSanity eitherTermType
                let tType = lTypeTType lambda
@@ -939,7 +938,7 @@ predPrfRunProof state context rule =
                let maySourceSentIdx = Data.Map.lookup sourceSent (provenSents state)
                sourceSentIdx <- maybe ((throwError . PredProofErrEGNotGeneralization term) lambda) return maySourceSentIdx
                let existsSent = lType2Exists lambda
-               return (existsSent,Nothing, PrfStdStepStep sourceSent "EI" [sourceSentIdx])
+               return (existsSent,Nothing, PrfStdStepStep sourceSent "EG" [sourceSentIdx])
           PredProofUI term forallSent -> do
                let mayForallSentIdx = Data.Map.lookup forallSent (provenSents state)
                forallSentIdx <- maybe ((throwError . PredProofErrUINotProven) forallSent) return mayForallSentIdx
@@ -950,7 +949,7 @@ predPrfRunProof state context rule =
                let tType = lTypeTType lambda
                unless (tType == termType) ((throwError .  PredProofErrUITermTypeMismatch term termType forallSent) tType)
                let f = lType2Func lambda
-               return (f term,Nothing, PrfStdStepStep (f term) "EI" [forallSentIdx])
+               return (f term,Nothing, PrfStdStepStep (f term) "UI" [forallSentIdx])
     where
         proven = (keysSet . provenSents) state
         constDict = fmap fst (consts state)
@@ -1057,8 +1056,8 @@ instance Show PropDeBr where
         (:<->:) a b -> binaryOpPropShow "↔" a b
         (:==:) a b -> binaryOpObjShow "=" a b
         (:<-:) a b -> binaryOpObjShow "∈" a b
-        Forall a ->  "∀x" <> show (boundDepthPropDeBr a) <> "(" <> show a <> ")"
-        Exists a ->  "∃x" <> show (boundDepthPropDeBr a) <> "(" <> show a <> ")"
+        Forall a ->  "∀𝑥" <> (unpack . showIndexAsSubscript . boundDepthPropDeBr) a <> "(" <> show a <> ")"
+        Exists a ->  "∃𝑥" <> (unpack . showIndexAsSubscript . boundDepthPropDeBr) a <> "(" <> show a <> ")"
         (:>=:) a b -> binaryOpObjShow "≥" a b
 
 
@@ -1090,17 +1089,18 @@ data LambdaDeBr where
 
 instance Show LambdaDeBr where
     show :: LambdaDeBr -> String
-    show (Lambda p) = "λ(" <> show p <> ")"
-
+    show (Lambda p) = "λ𝑥" <> (unpack . showIndexAsSubscript . boundDepthPropDeBr) p 
+                           <>"(" <> show p <> ")"
+    
 
 instance Show ObjDeBr where
     show :: ObjDeBr -> String
     show obj = case obj of
         Integ i -> show i
         Constant c -> unpack c
-        Hilbert p -> "εx" <> show (boundDepthPropDeBr p) <> "(" <> show p <> ")"
-        Bound i -> "x" <> show i
-        Free i -> "v" <> show i        
+        Hilbert p -> "ε𝑥" <> (unpack . showIndexAsSubscript . boundDepthPropDeBr) p <> "(" <> show p <> ")"
+        Bound i -> "𝑥" <> (unpack . showIndexAsSubscript) i
+        Free i -> "𝑣" <> (unpack . showIndexAsSubscript) i        
 
 
 
@@ -1325,13 +1325,16 @@ propDeBrApplyUG prop freevarIdx boundvarIdx =
 
 
 
-assignSequentialList :: Ord s => Int -> [s] -> (Int, Map s [Int])
-assignSequentialList base = Prelude.foldr (\el (i, m) -> (i + 1, Data.Map.insert el [i] m)) (base, mempty)
+assignNullIndices :: Ord s => [s] -> Map s [Int]
+assignNullIndices = Prelude.foldr f mempty
+     where f el = Data.Map.insert el []
 
 
 createInitialState :: (Ord o, Ord s) => [s] -> [o] -> PrfStdState s o ()
-createInitialState sents consts = PrfStdState (snd (assignSequentialList 0 sents)) 
-                                     (fmap (\x -> ((),x)) (snd (assignSequentialList (length sents) consts))) (length sents + length consts)
+createInitialState sents consts = PrfStdState (assignNullIndices sents) 
+                           (fmap (\x -> ((),x)) (assignNullIndices consts)) 0
+
+
 
 
 createInitialContext :: PrfStdContext ()
@@ -1380,6 +1383,95 @@ type PredErrDeBr = PredProofError PropDeBr DeBrSe Text ObjDeBr () LambdaDeBr
 type PredRuleDeBr = PredLogR PropDeBr DeBrSe Text ObjDeBr () LambdaDeBr
 
 
+type PrfStdStepPredDeBr = PrfStdStep PropDeBr Text ()
+
+subscriptCharTable :: [Text]
+subscriptCharTable = ["₀","₁","₂","₃","₄","₅","₆","₇","₈","₉"]
+
+showIndexAsSubscript :: Int -> Text
+showIndexAsSubscript n =  Data.Text.concat (Prelude.map f (show n))
+      where
+          f char = subscriptCharTable!!read [char]
+
+
+
+
+showPredDeBrStep :: Int -> [Int] ->Int  -> PrfStdStepPredDeBr -> Text
+showPredDeBrStep contextDepth index lineNum step =
+    Data.Text.concat (replicate contextDepth "│")
+          <> showIndex index 
+          <> (if (not . Prelude.null) index then "." else "")
+          <> (pack . show) lineNum
+          <> ": "
+          <> showStepInfo
+      where
+        showIndexDepend i = if Prelude.null i then "?" else showIndex i 
+        showIndex i = Data.Text.concat (intersperse "." (Prelude.map (pack . show) i))
+        showStepInfo = 
+          case step of
+             PrfStdStepStep prop justification depends -> 
+                  (pack . show) prop
+                <> " "
+                <> justification
+                <> "["
+                <> Data.Text.concat (intersperse "," (Prelude.map showIndexDepend depends))
+                <> "]"
+             PrfStdStepLemma prop mayWhereProven ->
+                   (pack . show) prop
+                <> " LEMMA"
+                <> maybe "" (("[^" <>) . (<> "]"). showIndexDepend) mayWhereProven
+             PrfStdStepConst constName _ mayWhereDefined ->
+                   "Const "
+                <> constName
+                <> maybe "" (("[^" <>) . (<> "]"). showIndexDepend) mayWhereDefined
+             PrfStdTheorem prop steps ->
+                   (pack . show) prop
+                <> " THEOREM\n"
+                <> showPredDeBrSteps (contextDepth + 1) (index <> [lineNum]) steps
+                <> "\n"
+                <> Data.Text.concat (replicate contextDepth "│")
+                <> "└"   -- will be unicode corner when I get to it
+             PrfStdPrfByUG prop steps ->
+                   (pack . show) prop
+                <> " PRF_BY_UG\n"
+                <> showPredDeBrSteps (contextDepth + 1) (index <> [lineNum]) steps
+                <> "\n"
+                <> Data.Text.concat (replicate contextDepth "│")
+                <> "└"   -- will be unicode corner when I get to it
+             PrfStdPrfByAsm prop steps ->
+                   (pack . show) prop
+                <> " PRF_BY_ASM\n"
+                <> showPredDeBrSteps (contextDepth + 1) (index <> [lineNum]) steps
+                <> "\n"
+                <> Data.Text.concat (replicate contextDepth "│")
+                <> "└"   -- will be unicode corner when I get to it
+             PrfStdTheoremM prop  ->
+                   (pack . show) prop
+                <> " PRF_BY_THEOREM_M"
+             PrfStdStepFreevar index _ ->
+                   "FreeVar 𝑣"
+                <> showIndexAsSubscript index
+
+             
+
+showPredDeBrSteps :: Int -> [Int] ->  [PrfStdStepPredDeBr] -> Text
+showPredDeBrSteps contextDepth index steps = fst foldResult
+    where 
+        foldResult = Prelude.foldl f ("", 0) steps
+           where
+             f (accumText,stepNum) step = (accumText <> showPredDeBrStep contextDepth index stepNum step <> eol,
+                                           stepNum + 1)
+                  where eol = if stepNum == length steps - 1 then "" else "\n"
+
+
+showPredDeBrStepsBase :: [PrfStdStepPredDeBr] -> Text
+showPredDeBrStepsBase = showPredDeBrSteps 0 []
+
+
+
+
+
+
 instance Semigroup (PrfStdState PropDeBr Text ()) where
     (<>) :: PrfStdState PropDeBr Text () -> PrfStdState PropDeBr Text () -> PrfStdState PropDeBr Text ()
     (<>) (PrfStdState provenSentsA constsA stepCountA) (PrfStdState provenSentsB constsB stepCountB)
@@ -1417,9 +1509,8 @@ main = do
 
 
 
-    let zb = runProof createInitialContext proof (createInitialState [y0,y1,y2] []) -- :: Either ErrDeBr (Set PropDeBr, Map Text ())
-    (print . show) zb
-    
+    let zb = runProof createInitialContext proof (createInitialState [y0,y1,y2] []) 
+    either (putStrLn . show) (putStrLn . unpack . showPredDeBrStepsBase . snd) zb
 
     let z1 = Forall (((Bound 0  :<-: (Constant . pack) "N") :&&: (Bound 0 :>=: Integ 10)) :->: (Bound 0 :>=: Integ 0))
     let z2 = Forall (((Bound 0  :<-: (Constant . pack) "N") :&&: (Bound 0 :>=: Integ 0)) :->: (Bound 0 :==: Integ 0))
@@ -1459,9 +1550,9 @@ main = do
 
     let zb3 = runProof createInitialContext [PredProofUI (Free 0) z1] (createInitialState [z1,z2] ["N"])
     let t="shit"
-
-    (putStrLn . show) zb2
-    (putStrLn . show) zb3
+    print "fuck"
+    either (putStrLn . show) (putStrLn . unpack . showPredDeBrStepsBase . snd)  zb2
+    either (putStrLn . show) (putStrLn . unpack . showPredDeBrStepsBase . snd) zb3
     x <- runProofGeneratorT testprog createInitialContext (createInitialState [z1,z2] ["N"])
     let y = show x
     print "hi wattup"
