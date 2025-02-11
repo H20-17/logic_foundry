@@ -50,6 +50,7 @@ import qualified GHC.Stack.Types
 import Data.Data (Typeable)
 import Distribution.PackageDescription (TestType)
 import Distribution.Backpack.LinkedComponent (extendLinkedComponentMap)
+import GHC.Generics (Associativity (NotAssociative, RightAssociative, LeftAssociative))
 
 
 default(Text)
@@ -247,7 +248,13 @@ class (Ord s, Eq tType)
      (.||.) :: s -> s -> s
      parseDis :: s -> Maybe (s,s)
 
-
+infixr 3 .&&.
+infixr 2 .||.
+infixr 0 .->.
+--infixr 0 .<->.
+--infix  4 .==.
+--infix  4 .<-.
+--infix  4 .>=.
 
 
 data TestSubproofErr senttype sanityerrtype logicerrtype where
@@ -1085,66 +1092,120 @@ data PropDeBr where
     deriving (Eq, Ord)
 
 
-propNeedsBrackets :: PropDeBr -> Bool
-propNeedsBrackets p = case p of
-    Neg q -> False
-    (:&&:) a b -> True 
-    (:||:) a b -> True
-    (:->:)  a b -> True
-    (:<->:) a b -> True
-    (:==:) a b -> True
-    (:<-:) a b -> True
-    Forall a -> False
-    Exists a -> False
-    (:>=:) a b -> True
+infixr 3 :&&:
+infixr 2 :||:
+infixr 0 :->:
+infixr 0 :<->:
+infix  4 :==:
+infix  4 :<-:
+infix  4 :>=:
 
-
-maybeWrapProp :: PropDeBr -> [Char]
-maybeWrapProp p = if propNeedsBrackets p then
-                          "(" <> show p <> ")"
-                       else
-                           show p
-
-
-unaryOpPropShow :: Text -> PropDeBr -> [Char]
-unaryOpPropShow opSymb a =
-    unpack opSymb <> " " <> maybeWrapProp a
+data SubexpParseTree where
+    BinaryOp :: Text -> SubexpParseTree -> SubexpParseTree -> SubexpParseTree
+    UnaryOp :: Text -> SubexpParseTree ->SubexpParseTree
+    Binding :: Text -> Int -> SubexpParseTree -> SubexpParseTree
+    Atom :: Text -> SubexpParseTree
 
 
 
-binaryOpPropShow :: Text -> PropDeBr -> PropDeBr -> [Char]
-binaryOpPropShow opSymb a b =
-    maybeWrapProp a <> " " <> unpack opSymb <> " " <> maybeWrapProp b
+class SubexpDeBr sub where
+    toSubexpParseTree :: sub -> SubexpParseTree
 
-                          
 
-binaryOpObjShow :: Text -> ObjDeBr -> ObjDeBr -> [Char]
-binaryOpObjShow opSymb a b =
-    show a <> " " <> unpack opSymb <> " " <> show b
+
+
+binaryOpInData :: [(Text,(Associativity,Int))]
+binaryOpInData = [("=",(NotAssociative,5)),("→",(RightAssociative,1)),("↔",(RightAssociative,1)),("∈",(NotAssociative,5)),("∧",(RightAssociative,4)),("∨",(RightAssociative,3)),
+     ("≥",(NotAssociative,5))]
+
+
+--The Int is it's precedence number.
+binaryOpData :: Map Text (Associativity, Int)
+binaryOpData = Data.Map.fromList binaryOpInData
+
+
+instance SubexpDeBr ObjDeBr where
+    toSubexpParseTree :: ObjDeBr -> SubexpParseTree
+    toSubexpParseTree obj = case obj of
+        Integ i -> (Atom . pack . show) i
+        Constant c -> Atom c
+        Hilbert p -> Binding "ε" (boundDepthPropDeBr p) (toSubexpParseTree p)
+        Bound i -> Atom $ "𝑥" <> showIndexAsSubscript i
+        Free i -> Atom $ "𝑣" <> showIndexAsSubscript i      
+
+
+instance SubexpDeBr PropDeBr where
+  toSubexpParseTree :: PropDeBr -> SubexpParseTree
+  toSubexpParseTree p = case p of
+    Neg q -> UnaryOp "¬" (toSubexpParseTree q)
+    (:&&:) a b -> BinaryOp "∧" (toSubexpParseTree a) (toSubexpParseTree b)
+    (:||:) a b -> BinaryOp "∨" (toSubexpParseTree a) (toSubexpParseTree b)
+    (:->:)  a b -> BinaryOp "→" (toSubexpParseTree a) (toSubexpParseTree b)
+    (:<->:) a b -> BinaryOp "↔"(toSubexpParseTree a) (toSubexpParseTree b)
+    (:==:) a b -> BinaryOp "=" (toSubexpParseTree a) (toSubexpParseTree b)
+    (:<-:) a b -> BinaryOp "∈" (toSubexpParseTree a) (toSubexpParseTree b)
+    Forall a -> Binding "∀" (boundDepthPropDeBr a) (toSubexpParseTree a)
+    Exists a -> Binding "∃" (boundDepthPropDeBr a) (toSubexpParseTree a)
+    (:>=:) a b -> BinaryOp "≥" (toSubexpParseTree a) (toSubexpParseTree b)
+
+showSubexpParseTree :: SubexpParseTree -> Text
+showSubexpParseTree sub = case sub of
+    UnaryOp opSymb sub1 ->
+           opSymb
+        <> case sub1 of
+              UnaryOp _ _ -> showSubexpParseTree sub1
+              BinaryOp {} -> "(" <>  showSubexpParseTree sub1 <> ")"
+              Binding {} -> showSubexpParseTree sub1
+              Atom _ -> showSubexpParseTree sub1
+    BinaryOp opSymb sub1 sub2 ->
+           case sub1 of
+              UnaryOp _ _ -> showSubexpParseTree sub1
+              BinaryOp opSymbL _ _ -> 
+                 (   
+                   if prec opSymb < prec opSymbL
+                      || prec opSymb == prec opSymbL 
+                          && assoc opSymbL == LeftAssociative && assoc opSymb == LeftAssociative
+                    then
+                        showSubexpParseTree sub1
+                    else
+                        "(" <> showSubexpParseTree sub1 <> ")"
+
+                   )
+              Binding {} -> showSubexpParseTree sub1
+              Atom _ -> showSubexpParseTree sub1
+          <> " " <> opSymb <> " "
+          <> case sub2 of
+               UnaryOp _ _-> showSubexpParseTree sub2
+               BinaryOp opSymbR _ _ -> 
+                 (
+                  if prec opSymb < prec opSymbR
+                      || prec opSymb == prec opSymbR 
+                          && assoc opSymbR == RightAssociative && assoc opSymb == RightAssociative
+                    then
+                        showSubexpParseTree sub2
+                    else
+                        "(" <> showSubexpParseTree sub2 <> ")"
+                   )
+               Binding {} -> showSubexpParseTree sub2
+               Atom _ -> showSubexpParseTree sub2
+    Binding quant idx sub1 -> quant <> "𝑥" <> showIndexAsSubscript idx <> "(" <> showSubexpParseTree sub1 <> ")" 
+    Atom text -> text       
+  where
+    assoc opSymb = fst $ binaryOpData!opSymb
+    prec opSymb = snd $ binaryOpData!opSymb
+
+
+instance Show ObjDeBr where
+    show :: ObjDeBr -> String
+    show = unpack . showSubexpParseTree . toSubexpParseTree                         
 
 
 instance Show PropDeBr where
     show :: PropDeBr -> String
-    show prop = case prop of
-        Neg a -> unaryOpPropShow "¬" a
-        (:&&:) a b -> binaryOpPropShow "∧" a b
-        (:||:) a b -> binaryOpPropShow "∨" a b
-        (:->:) a b -> binaryOpPropShow "→" a b
-        (:<->:) a b -> binaryOpPropShow "↔" a b
-        (:==:) a b -> binaryOpObjShow "=" a b
-        (:<-:) a b -> binaryOpObjShow "∈" a b
-        Forall a ->  "∀𝑥" <> (unpack . showIndexAsSubscript . boundDepthPropDeBr) a <> "(" <> show a <> ")"
-        Exists a ->  "∃𝑥" <> (unpack . showIndexAsSubscript . boundDepthPropDeBr) a <> "(" <> show a <> ")"
-        (:>=:) a b -> binaryOpObjShow "≥" a b
+    show = unpack . showSubexpParseTree . toSubexpParseTree
+           
 
 
-infixl 9 :&&:
-infixl 9 :||:
-infixl 9 :->:
-infixl 9 :<->:
-infixl 9 :==:
-infixl 9 :<-:
-infixl 9 :>=:
 
 
 
@@ -1168,17 +1229,6 @@ instance Show LambdaDeBr where
     show :: LambdaDeBr -> String
     show (Lambda p) = "λ𝑥" <> (unpack . showIndexAsSubscript . boundDepthPropDeBr) p 
                            <>"(" <> show p <> ")"
-    
-
-instance Show ObjDeBr where
-    show :: ObjDeBr -> String
-    show obj = case obj of
-        Integ i -> show i
-        Constant c -> unpack c
-        Hilbert p -> "ε𝑥" <> (unpack . showIndexAsSubscript . boundDepthPropDeBr) p <> "(" <> show p <> ")"
-        Bound i -> "𝑥" <> (unpack . showIndexAsSubscript) i
-        Free i -> "𝑣" <> (unpack . showIndexAsSubscript) i        
-
 
 
 data DeBrSe where
@@ -1488,42 +1538,42 @@ showPredDeBrStep contextDepth index lineNum showSubproof step =
           case step of
              PrfStdStepStep prop justification depends -> 
                   (pack . show) prop
-                <> " "
+                <> "    "
                 <> justification
                 <> "["
                 <> Data.Text.concat (intersperse "," (Prelude.map showIndexDepend depends))
                 <> "]"
              PrfStdStepLemma prop mayWhereProven ->
                    (pack . show) prop
-                <> " LEMMA"
+                <> "    LEMMA"
                 <> maybe "" (("[🠥" <>) . (<> "]"). showIndexDepend) mayWhereProven
              PrfStdStepConst constName _ mayWhereDefined ->
                    "Const "
                 <> constName
-                <> " CONSTDEF"
+                <> "    CONSTDEF"
                 <> maybe "" (("[🠥" <>) . (<> "]"). showIndexDepend) mayWhereDefined
              PrfStdTheorem prop steps ->
                    (pack . show) prop
-                <> " THEOREM"
+                <> "    THEOREM"
                 <> showSubproofF steps
              PrfStdPrfByUG prop steps ->
                    (pack . show) prop
-                <> " PRF_BY_UG"
+                <> "    PRF_BY_UG"
                 <> showSubproofF steps
              PrfStdPrfByAsm prop steps ->
                    (pack . show) prop
-                <> " PRF_BY_ASM"
+                <> "    PRF_BY_ASM"
                 <> showSubproofF steps
              PrfStdTheoremM prop  ->
                    (pack . show) prop
-                <> " PRF_BY_THEOREM_M"
+                <> "    PRF_BY_THEOREM_M"
              PrfStdStepFreevar index _ ->
                    "FreeVar 𝑣"
                 <> showIndexAsSubscript index
-                <> " VARDEF"
+                <> "    VARDEF"
              PrfStdStepAsm prop ->
                     (pack . show) prop
-                <> " ASM"              
+                <> "    ASM"              
              where
                 showSubproofF steps = 
                     if showSubproof then
@@ -1597,11 +1647,13 @@ instance Monoid (PrfStdState PropDeBr Text ()) where
   mempty = PrfStdState mempty mempty 0
 
 testTheoremMSchema :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) => TheoremSchemaMT () PredErrDeBr [PredRuleDeBr] PropDeBr Text m ()
-testTheoremMSchema = TheoremSchemaMT (Data.Set.fromList [z1,z2]) theoremProg (Data.Map.insert "N" () mempty)
+testTheoremMSchema = TheoremSchemaMT (Data.Set.fromList [z1,z2,z3,z4,z5]) theoremProg (Data.Map.insert "N" () mempty)
   where
-    z1 = Forall (((Bound 0  :<-: (Constant . pack) "N") :&&: (Bound 0 :>=: Integ 10)) :->: (Bound 0 :>=: Integ 0))
+    z1 = Forall (Bound 0  :<-: (Constant . pack) "N" :&&: Bound 0 :>=: Integ 10 :->: Bound 0 :>=: Integ 0)
     z2 = Forall (((Bound 0  :<-: (Constant . pack) "N") :&&: (Bound 0 :>=: Integ 0)) :->: (Bound 0 :==: Integ 0))
-
+    z3 = (Integ 0 :>=: Integ 0) :||: ((Integ 0 :>=: Integ 0) :||: (Integ 0 :>=: Integ 0))
+    z4 = ((Integ 0 :>=: Integ 0) :||: (Integ 0 :>=: Integ 0)) :||: (Integ 0 :>=: Integ 21)
+    z5 = (Integ 0 :>=: Integ 0) :->: ((Integ 0 :>=: Integ 0) :->: (Integ 0 :>=: Integ 88))
 
 
 main :: IO ()
@@ -1673,9 +1725,9 @@ main = do
     let zb3 = runProof createInitialContext [PredProofUI (Free 0) z1] (createInitialState [z1,z2] ["N"])
     either (putStrLn . show) (putStrLn . unpack . showPredDeBrStepsBase . snd)  zb2
     either (putStrLn . show) (putStrLn . unpack . showPredDeBrStepsBase . snd) zb3
-    (a,b,c,d) <- runProofGeneratorT testprog createInitialContext (createInitialState [z1,z2] ["N"])
+    --(a,b,c,d) <- runProofGeneratorT testprog createInitialContext (createInitialState [z1,z2] ["N"])
     print "hi wattup"
-    (putStrLn . unpack . showPredDeBrStepsBase) d
+    --(putStrLn . unpack . showPredDeBrStepsBase) d
     print "YOYOYOYOYOYOYOYOYOYO"
     (a,b,c,d) <- checkTheoremM Nothing testTheoremMSchema
     print "yo"
