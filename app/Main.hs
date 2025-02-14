@@ -285,8 +285,8 @@ testSubproof context state consequent subproof =
 
 data TheoremSchema s r o tType where
    TheoremSchema :: {
-                       constDict :: Map o tType,
-                       lemmas :: Set s,
+                       constDict :: [(o,tType)],
+                       lemmas :: [s],
                        theoremProof :: r,
                        theorem :: s
                     } -> TheoremSchema s r o tType
@@ -318,47 +318,56 @@ data ChkTheoremError senttype sanityerrtype logcicerrtype o tType where
    ChkTheoremErrSubproofErr :: TestSubproofErr senttype sanityerrtype logcicerrtype -> ChkTheoremError senttype sanityerrtype logcicerrtype o tType
    ChkTheoremErrConstNotDefd :: o -> ChkTheoremError senttype sanityerrtype logcicerrtype o tType
    ChkTheoremErrConstTypeConflict :: o -> tType -> tType -> ChkTheoremError senttype sanityerrtype logcicerrtype o tType
+   ChkTheoremErrSchemaDupConst :: o -> ChkTheoremError senttype sanityerrtype logcicerrtype o tType
    deriving(Show)
 
 
-assignSequentialSet :: Ord s => Int -> Set s -> (Int, Map s [Int])
-assignSequentialSet base = Set.foldr (\el (i, m) -> (i + 1, Data.Map.insert el [i] m)) (base, mempty)
+assignSequentialSet :: Ord s => Int -> [s] -> (Int, Map s [Int])
+assignSequentialSet base = Prelude.foldr (\el (i, m) -> (i + 1, Data.Map.insert el [i] m)) (base, mempty)
 
-assignSequentialMap :: Ord o => Int -> Map o tType -> (Int,Map o (tType,[Int]))
-assignSequentialMap base = Data.Map.foldrWithKey f (base,mempty)
+
+
+assignSequentialMap :: Ord o => Int -> [(o,tType)] -> Either o (Int,Map o (tType,[Int]))
+assignSequentialMap base = Prelude.foldr f (Right (base,mempty))
    where 
-      f k v (count,m) = (count+1, Data.Map.insert k (v,[count]) m)
+      f (k, v) foldObj = case foldObj of
+                           Left o -> Left o
+                           Right (count,m) ->
+                             case Data.Map.lookup k m of
+                                Nothing -> Right (count+1, Data.Map.insert k (v,[count]) m)
+                                Just _ -> Left k
 
 checkTheorem :: (ProofStd s eL1 r1 o tType, PropLogicSent s tType, TypedSent o tType sE s    )
                             => TheoremSchema s r1 o tType -> Maybe (PrfStdState s o tType,PrfStdContext tType)
                                        -> Either (ChkTheoremError s sE eL1 o tType) [PrfStdStep s o tType]
 checkTheorem (TheoremSchema constdict lemmas subproof theorem) mayPrStateCxt =
   do
-       maybe (return ()) throwError (maybe g1 g2 mayPrStateCxt)
+       let eitherConstDictMap = assignSequentialMap 0 constdict
+       (newStepCountA, newConsts) <- either (throwError . ChkTheoremErrSchemaDupConst) return eitherConstDictMap
+       let (newStepCountB, newProven) = assignSequentialSet newStepCountA lemmas
+       let constdictPure = Data.Map.map fst newConsts
+       maybe (return ()) throwError (maybe (g1 constdictPure) (g2 constdictPure) mayPrStateCxt)
+       let newContext = PrfStdContext [] [] (maybe 0  ((+1) . contextDepth . snd) mayPrStateCxt)
+       let newState = PrfStdState newProven newConsts newStepCountB
+
+
        preSubproof <- left ChkTheoremErrSubproofErr (testSubproof newContext newState theorem subproof)
        return $ conststeps <> lemmasteps <> preSubproof
       where
-         conststeps = Data.Map.foldrWithKey h1 [] constdict
-         lemmasteps = Set.foldr h2 [] lemmas
-         h1 const constType accumList = accumList <> [PrfStdStepConst const constType (q mayPrStateCxt)]
+         conststeps = Prelude.foldr h1 [] constdict
+         lemmasteps = Prelude.foldr h2 [] lemmas
+         h1 (const,constType) accumList =  PrfStdStepConst const constType (q mayPrStateCxt) : accumList
             where
                  q Nothing = Nothing
                  q (Just (state,_)) = fmap snd (Data.Map.lookup const (consts state)) 
-         h2 lemma accumList = accumList <> [PrfStdStepLemma lemma (q mayPrStateCxt)]
+         h2 lemma accumList = PrfStdStepLemma lemma (q mayPrStateCxt) : accumList
             where
                  q Nothing = Nothing
                  q (Just (state,_)) = Data.Map.lookup lemma (provenSents state) 
 
-
-
-         newContext = PrfStdContext [] [] (maybe 0  ((+1) . contextDepth . snd) mayPrStateCxt)
-         newState = PrfStdState newProven newConsts newStepCountB
-              where 
-                 (newStepCountA, newConsts) = assignSequentialMap 0 constdict
-                 (newStepCountB, newProven) = assignSequentialSet newStepCountA lemmas
-         g2 (PrfStdState alreadyProven alreadyDefinedConsts stepCount, 
+         g2 constdictPure (PrfStdState alreadyProven alreadyDefinedConsts stepCount, 
                  PrfStdContext freeVarTypeStack stepIdfPrefix contextDepth) 
-               = fmap constDictErr (constDictTest (fmap fst alreadyDefinedConsts) constdict)
+               = fmap constDictErr (constDictTest (fmap fst alreadyDefinedConsts) constdictPure)
                                                <|> Prelude.foldr f1 Nothing lemmas
            where
              constDictErr (k,Nothing) = ChkTheoremErrConstNotDefd k
@@ -367,13 +376,12 @@ checkTheorem (TheoremSchema constdict lemmas subproof theorem) mayPrStateCxt =
                where
                   maybeLemmaMissing = if not (a `Set.member` Data.Map.keysSet alreadyProven)
                                           then (Just . ChkTheoremErrLemmaNotEstablished) a else Nothing
-                  maybeLemmaInsane = fmap (ChkTheoremErrLemmaSanity a) (checkSanity mempty a constdict)
-         g1  = Prelude.foldr f1 Nothing lemmas
+                  maybeLemmaInsane = fmap (ChkTheoremErrLemmaSanity a) (checkSanity mempty a constdictPure)
+         g1 constdictPure = Prelude.foldr f1 Nothing lemmas
            where
              f1 a = maybe maybeLemmaInsane Just 
                where
-                  maybeLemmaInsane = fmap (ChkTheoremErrLemmaSanity a) (checkSanity mempty a constdict)
-                     
+                  maybeLemmaInsane = fmap (ChkTheoremErrLemmaSanity a) (checkSanity mempty a constdictPure)
 
 
 establishTheorem :: (ProofStd s eL1 r1 o tType, PropLogicSent s tType, TypedSent o tType sE s    )
@@ -389,9 +397,9 @@ establishTheorem schema state context = do
 
 data TheoremSchemaMT tType eL r s o m x where
    TheoremSchemaMT :: {
-                       lemmasM :: Set s,
+                       lemmasM :: [s],
                        proofM :: ProofGenTStd tType eL r s o m (s,x),
-                       constDictM :: Map o tType
+                       constDictM :: [(o,tType)]
                      } -> TheoremSchemaMT tType eL r s o m x
 
 
@@ -413,6 +421,7 @@ data BigException s sE o tType where
    BigExceptConstTypeConflict :: o -> tType -> tType -> BigException s sE o tType
    BigExceptLemmaNotEstablished :: s -> BigException s sE o tType
    BigExceptAsmSanity :: s -> sE -> BigException s sE o tType
+   BigExceptSchemaConstDup :: o -> BigException s sE o tType
 
 
    deriving(Show)
@@ -479,28 +488,30 @@ checkTheoremM :: (Show s, Typeable s, Monoid r1, ProofStd s eL1 r1 o tType, Mona
                  =>  Maybe (PrfStdState s o tType,PrfStdContext tType) ->  TheoremSchemaMT tType eL1 r1 s o m x
                               -> m (s, r1, x, [PrfStdStep s o tType])
 checkTheoremM mayPrStateCxt (TheoremSchemaMT lemmas prog constdict) =  do
-    maybe (maybe (return ()) throwM g1) (maybe (return ()) throwM . g2) mayPrStateCxt
-    let (newStepCountA, newConsts) = assignSequentialMap 0 constdict
+    let eitherConstDictMap = assignSequentialMap 0 constdict
+    (newStepCountA, newConsts) <- either (throwM . BigExceptSchemaConstDup) return eitherConstDictMap
     let (newStepCountB, newProven) = assignSequentialSet newStepCountA lemmas
+    let constdictPure = Data.Map.map fst newConsts
+    maybe (maybe (return ()) throwM (g1 constdictPure)) (maybe (return ()) throwM . g2 constdictPure) mayPrStateCxt
     let newContext = PrfStdContext [] [] (maybe 0  ((+1) . contextDepth . snd) mayPrStateCxt)
     let preambleSteps = conststeps <> lemmasteps
     let newState = PrfStdState newProven newConsts newStepCountB
     (extra,tm,proof,newSteps) <- runSubproofM newState newContext preambleSteps prog
-    return (tm,proof,extra,preambleSteps<>newSteps)
-        where
-            conststeps = Data.Map.foldrWithKey h1 [] constdict
-            lemmasteps = Set.foldr h2 [] lemmas
-            h1 const constType accumList = accumList <> [PrfStdStepConst const constType (q mayPrStateCxt)]
+    return (tm,proof,extra,preambleSteps<>newSteps) 
+       where
+            conststeps = Prelude.foldr h1 [] constdict
+            lemmasteps = Prelude.foldr h2 [] lemmas
+            h1 (const,constType) accumList = PrfStdStepConst const constType (q mayPrStateCxt) : accumList
               where
                  q Nothing = Nothing
                  q (Just (state,_)) = fmap snd (Data.Map.lookup const (consts state)) 
-            h2 lemma accumList = accumList <> [PrfStdStepLemma lemma (q mayPrStateCxt)]
+            h2 lemma accumList = PrfStdStepLemma lemma (q mayPrStateCxt) : accumList
               where
                  q Nothing = Nothing
                  q (Just (state,_)) = Data.Map.lookup lemma (provenSents state) 
 
-            g2 (PrfStdState alreadyProven alreadyDefinedConsts stepCount, PrfStdContext freeVarTypeStack stepIdfPrefix contextDepth) 
-                 = fmap constDictErr (constDictTest (fmap fst alreadyDefinedConsts) constdict)
+            g2 constdictPure (PrfStdState alreadyProven alreadyDefinedConsts stepCount, PrfStdContext freeVarTypeStack stepIdfPrefix contextDepth) 
+                 = fmap constDictErr (constDictTest (fmap fst alreadyDefinedConsts) constdictPure)
                                                <|> Prelude.foldr f1 Nothing lemmas
              where
                 constDictErr (k,Nothing) = BigExceptConstNotDefd k
@@ -509,12 +520,12 @@ checkTheoremM mayPrStateCxt (TheoremSchemaMT lemmas prog constdict) =  do
                   where
                      maybeLemmaMissing = if not (a `Set.member` Data.Map.keysSet alreadyProven)
                                           then (Just . BigExceptLemmaNotEstablished) a else Nothing
-                     maybeLemmaInsane = fmap (BigExceptLemmaSanityErr a) (checkSanity mempty a constdict)
-            g1 = Prelude.foldr f1 Nothing lemmas
+                     maybeLemmaInsane = fmap (BigExceptLemmaSanityErr a) (checkSanity mempty a constdictPure)
+            g1 constdictPure = Prelude.foldr f1 Nothing lemmas
               where
                  f1 a = maybe maybeLemmaInsane Just 
                    where
-                      maybeLemmaInsane = fmap (BigExceptLemmaSanityErr a) (checkSanity mempty a constdict)
+                      maybeLemmaInsane = fmap (BigExceptLemmaSanityErr a) (checkSanity mempty a constdictPure)
   
 
 
@@ -1647,7 +1658,7 @@ instance Monoid (PrfStdState PropDeBr Text ()) where
   mempty = PrfStdState mempty mempty 0
 
 testTheoremMSchema :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) => TheoremSchemaMT () PredErrDeBr [PredRuleDeBr] PropDeBr Text m ()
-testTheoremMSchema = TheoremSchemaMT (Data.Set.fromList [z1,z2,z3,z4,z5]) theoremProg (Data.Map.insert "N" () mempty)
+testTheoremMSchema = TheoremSchemaMT [z1,z2,z3,z4,z5] theoremProg [("N",()), ("N",())]
   where
     z1 = Forall (Bound 0  :<-: (Constant . pack) "N" :&&: Bound 0 :>=: Integ 10 :->: Bound 0 :>=: Integ 0)
     z2 = Forall (((Bound 0  :<-: (Constant . pack) "N") :&&: (Bound 0 :>=: Integ 0)) :->: (Bound 0 :==: Integ 0))
