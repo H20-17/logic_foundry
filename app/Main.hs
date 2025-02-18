@@ -219,11 +219,10 @@ data PrfStdStep s o tType where
     PrfStdStepLemma :: s -> Maybe [Int] -> PrfStdStep s o tType
     PrfStdStepConst :: o -> tType -> Maybe [Int] -> PrfStdStep s o tType
     PrfStdTheorem :: s -> [PrfStdStep s o tType] -> PrfStdStep s o tType
-    PrfStdPrfByUG :: s -> [PrfStdStep s o tType] -> PrfStdStep s o tType
-    PrfStdPrfByAsm ::  s -> [PrfStdStep s o tType] -> PrfStdStep s o tType
+    PrfStdPrfBySubproof :: s -> Text -> [PrfStdStep s o tType] ->  PrfStdStep s o tType
     PrfStdTheoremM :: s -> PrfStdStep s o tType
     PrfStdStepFreevar :: Int -> tType -> PrfStdStep s o tType
-    PrfStdStepAsm :: s -> PrfStdStep s o tType 
+
 
 
 
@@ -269,21 +268,26 @@ data TestSubproofErr senttype sanityerrtype logicerrtype where
 
 
 testSubproof :: (ProofStd s eL1 r1 o tType, PropLogicSent s tType, TypedSent o tType sE s    )
-                       => PrfStdContext tType -> PrfStdState s o tType -> s -> r1 
-                             -> Either (TestSubproofErr s sE eL1) [PrfStdStep s o tType]
-testSubproof context state consequent subproof =
+                       => PrfStdContext tType -> PrfStdState s o tType -> PrfStdState s o tType -> 
+                          [PrfStdStep s o tType] -> s -> r1 
+                             -> Either (TestSubproofErr s sE eL1) ([PrfStdStep s o tType],[Int])
+testSubproof context baseState preambleState preambleSteps targetProp subproof =
       --either return (const Nothing) eitherResult
       do
              let frVarTypeStack = freeVarTypeStack context
-             let constdict = fmap fst (consts state)
-             let sc = checkSanity frVarTypeStack consequent constdict
-             maybe (return ()) (throwError . TestSubproofErrResultNotSane consequent) sc
-             (newState,steps) <- left TestSubproofErrorSubproofFailedOnErr (runProof context subproof state)
-             let alreadyProven = (keysSet  . provenSents) state
-             let newlyProven = (keysSet . provenSents) newState
-             unless (consequent `Set.member` (newlyProven `Set.union` alreadyProven))
-                                 (throwError $ TestSubproofErrorResultNotProved consequent)
-             return steps
+             let baseStateZero = PrfStdState (provenSents baseState) (consts baseState) 0
+             let startState = baseStateZero <> preambleState
+             let constdict = fmap fst (consts startState)
+             let sc = checkSanity frVarTypeStack targetProp constdict
+             maybe (return ()) (throwError . TestSubproofErrResultNotSane targetProp) sc
+             (newState,newSteps) <- left TestSubproofErrorSubproofFailedOnErr (runProof context subproof startState)
+             let endState = preambleState <> newState
+             let mayResultIndex = Data.Map.lookup targetProp (provenSents endState)
+             resultIndex <- maybe (throwError $ TestSubproofErrorResultNotProved targetProp) return mayResultIndex
+             let resultLine = last resultIndex
+             let finalSteps = preambleSteps <> newSteps
+             let stepsNeeded = Prelude.take (resultLine + 1) finalSteps
+             return (stepsNeeded,resultIndex)
 
 
 data TheoremSchema s r o tType where
@@ -344,7 +348,7 @@ assignSequentialMap base ls = Prelude.foldr f (Right (base,mempty)) ls
 
 checkTheorem :: (ProofStd s eL1 r1 o tType, PropLogicSent s tType, TypedSent o tType sE s    )
                             => TheoremSchema s r1 o tType -> Maybe (PrfStdState s o tType,PrfStdContext tType)
-                                       -> Either (ChkTheoremError s sE eL1 o tType) [PrfStdStep s o tType]
+                                       -> Either (ChkTheoremError s sE eL1 o tType) ([PrfStdStep s o tType],[Int])
 checkTheorem (TheoremSchema constdict lemmas subproof theorem) mayPrStateCxt =
   do
        let eitherConstDictMap = assignSequentialMap 0 constdict
@@ -354,10 +358,11 @@ checkTheorem (TheoremSchema constdict lemmas subproof theorem) mayPrStateCxt =
        maybe (return ()) throwError (maybe (g1 constdictPure) (g2 constdictPure) mayPrStateCxt)
        let newContext = PrfStdContext [] [] (maybe []  ((<>[True]) . contextFrames . snd) mayPrStateCxt)
        let newState = PrfStdState newProven newConsts newStepCountB
+       let preambleSteps = conststeps <> lemmasteps
 
-
-       preSubproof <- left ChkTheoremErrSubproofErr (testSubproof newContext newState theorem subproof)
-       return $ conststeps <> lemmasteps <> preSubproof
+       (newSteps,resultIndex) <- left ChkTheoremErrSubproofErr (
+                                      testSubproof newContext mempty newState preambleSteps theorem subproof)
+       return (preambleSteps <> newSteps,resultIndex)
       where
          conststeps = Prelude.foldr h1 [] constdict
          lemmasteps = Prelude.foldr h2 [] lemmas
@@ -393,7 +398,7 @@ establishTheorem :: (ProofStd s eL1 r1 o tType, PropLogicSent s tType, TypedSent
                             => TheoremSchema s r1 o tType -> PrfStdState s o tType -> PrfStdContext tType
                                        -> Either (ChkTheoremError s sE eL1 o tType) (PrfStdStep s o tType)
 establishTheorem schema state context = do
-    steps <- checkTheorem schema (Just (state,context))
+    (steps,resultIndex) <- checkTheorem schema (Just (state,context))
     let tm = theorem schema
     return (PrfStdTheorem tm steps)
 
@@ -447,7 +452,8 @@ class Monad m => StdPrfPrintMonadFrame m where
 
 class (Monad m, StdPrfPrintMonadFrame m) => StdPrfPrintMonad s o tType m |  s -> o, s-> tType where
      printSteps :: [Bool] -> [Int] -> Int -> [PrfStdStep s o tType] -> m ()
-     printMReturn :: [Bool] -> s -> m ()
+     printMReturn :: [Bool] -> s -> [Int] -> m ()
+
 
 
 
@@ -465,8 +471,8 @@ instance (StdPrfPrintMonad s o tType m,
              => StdPrfPrintMonad s o tType (ProofGenTStd tType eL r s o m) where
   printSteps :: [Bool] -> [Int] -> Int -> [PrfStdStep s o tType] -> ProofGenTStd tType eL r s o m ()
   printSteps contextFrames idx stepStart steps = lift $ printSteps contextFrames idx stepStart steps
-  printMReturn :: [Bool] -> s -> ProofGenTStd tType eL r s o m ()
-  printMReturn contextFrames returnSent = lift $ printMReturn contextFrames returnSent
+  printMReturn :: [Bool] -> s -> [Int] -> ProofGenTStd tType eL r s o m ()
+  printMReturn contextFrames returnSent idx = lift $ printMReturn contextFrames returnSent idx
 
 
 
@@ -491,7 +497,7 @@ checkTheoremM :: (Show s, Typeable s, Monoid r1, ProofStd s eL1 r1 o tType, Mona
                       Show eL1, Typeable eL1,
                       Typeable o, Show o, StdPrfPrintMonad s o tType m )
                  =>  Maybe (PrfStdState s o tType,PrfStdContext tType) ->  TheoremSchemaMT tType eL1 r1 s o m x
-                              -> m (s, r1, x, [PrfStdStep s o tType])
+                              -> m (s, r1, x, [PrfStdStep s o tType], Int)
 checkTheoremM mayPrStateCxt (TheoremSchemaMT lemmas prog constdict) =  do
     let eitherConstDictMap = assignSequentialMap 0 constdict
     (newStepCountA, newConsts) <- either (throwM . BigExceptSchemaConstDup) return eitherConstDictMap
@@ -501,8 +507,8 @@ checkTheoremM mayPrStateCxt (TheoremSchemaMT lemmas prog constdict) =  do
     let newContext = PrfStdContext [] [] (maybe []  ((<>[True]) . contextFrames . snd) mayPrStateCxt)
     let preambleSteps = conststeps <> lemmasteps
     let newState = PrfStdState newProven newConsts newStepCountB
-    (extra,tm,proof,newSteps) <- runSubproofM newState newContext preambleSteps prog
-    return (tm,proof,extra,preambleSteps<>newSteps) 
+    (extra,tm,proof,newSteps, resultIndex) <- runSubproofM newContext mempty newState preambleSteps prog
+    return (tm,proof,extra,newSteps, head resultIndex) 
        where
             conststeps = Prelude.foldr h1 [] constdict
             lemmasteps = Prelude.foldr h2 [] lemmas
@@ -533,8 +539,15 @@ checkTheoremM mayPrStateCxt (TheoremSchemaMT lemmas prog constdict) =  do
                       maybeLemmaInsane = fmap (BigExceptLemmaSanityErr a) (checkSanity mempty a constdictPure)
   
 
-
-
+checkTheoremMConsistency :: (Show s, Typeable s, Monoid r1, ProofStd s eL1 r1 o tType, Monad m, MonadThrow m,
+                      PropLogicSent s tType, TypedSent o tType sE s, Show sE, Typeable sE, Typeable tType, Show tType,
+                      Show eL1, Typeable eL1,
+                      Typeable o, Show o, StdPrfPrintMonad s o tType m )
+                 =>  TheoremSchemaMT tType eL1 r1 s o m x
+                              -> m (s, r1, x, [PrfStdStep s o tType], Int)
+checkTheoremMConsistency schema = do
+                        (tm, prf, extra, steps, index) <- checkTheoremM Nothing schema
+                        return (tm, prf, extra, steps, index)
 
 data EstTmMError s o tType where
     EstTmMErrMExcept :: SomeException -> EstTmMError s o tType
@@ -552,7 +565,7 @@ establishTheoremM :: (Monoid r1, ProofStd s eL1 r1 o tType ,
                                   TheoremSchemaM tType eL1 r1 s o -> Either (EstTmMError s o tType) (s, PrfStdStep s o tType)
 establishTheoremM state context (schema :: TheoremSchemaM tType eL1 r1 s o) = 
     do
-        (tm, prf, (),_) <-  left EstTmMErrMExcept $ checkTheoremM  (Just (state,context)) schema
+        (tm, prf, (),_,_) <-  left EstTmMErrMExcept $ checkTheoremM  (Just (state,context)) schema
         return (tm, PrfStdTheoremM tm)
 
 
@@ -569,7 +582,7 @@ expandTheoremM :: (Monoid r1, ProofStd s eL1 r1 o tType ,
                             => TheoremSchemaM tType eL1 r1 s o -> Either ExpTmMError (TheoremSchema s r1 o tType)
 expandTheoremM ((TheoremSchemaMT lemmas proofprog constdict):: TheoremSchemaM tType eL1 r1 s o) =
       do
-          (tm,r1,(),_) <- left ExpTmMErrMExcept (checkTheoremM Nothing (TheoremSchemaMT lemmas proofprog constdict))
+          (tm,r1,(),_,_) <- left ExpTmMErrMExcept (checkTheoremM Nothing (TheoremSchemaMT lemmas proofprog constdict))
           return $ TheoremSchema constdict lemmas r1 tm
 
 
@@ -602,15 +615,15 @@ proofByAsm state context (ProofByAsmSchema assumption subproof consequent) =
          maybe (return ()) (throwError .  ProofByAsmErrAsmNotSane assumption) sc
          let alreadyProven = provenSents state
          let newStepIdxPrefix = stepIdxPrefix context ++ [stepCount state]
-         let newSents = Data.Map.insert assumption (newStepIdxPrefix ++ [0]) alreadyProven
+         let newSents = Data.Map.insert assumption (newStepIdxPrefix ++ [0]) mempty
          let newContextFrames = contextFrames context <> [False]
          let newContext = PrfStdContext frVarTypeStack newStepIdxPrefix newContextFrames
-         let newState = PrfStdState newSents (consts state) 1
-         let eitherTestResult = testSubproof newContext newState consequent subproof
-         testResult <- either (throwError . ProofByAsmErrSubproofFailedOnErr) return eitherTestResult
+         let newState = PrfStdState newSents mempty 1
+         let preambleSteps = [PrfStdStepStep assumption "ASM" []]
+         let eitherTestResult = testSubproof newContext state newState preambleSteps consequent subproof
+         (finalSteps,resultIndex) <- either (throwError . ProofByAsmErrSubproofFailedOnErr) return eitherTestResult
          let implication = assumption .->. consequent
-         let finalSteps = [PrfStdStepAsm assumption] <> testResult
-         return (implication, PrfStdPrfByAsm implication finalSteps)
+         return (implication, PrfStdPrfBySubproof implication "PRF_BY_ASM" finalSteps)
 
 
 data ProofByUGSchema lType r where
@@ -657,14 +670,14 @@ proofByUG state context (ProofByUGSchema lambda subproof) =
          let newContext = PrfStdContext newVarstack
          let newContextFrames = contextFrames context <> [False]
          let newContext = PrfStdContext newVarstack newStepIdxPrefix newContextFrames
-         let newState = PrfStdState (provenSents state) (consts state) 1
+         let newState = PrfStdState mempty mempty 1
          let newFreeTerm = free2Term $ length varstack
-         let generalizable = lType2Func lambda newFreeTerm 
-         let eitherTestResult = testSubproof newContext newState generalizable subproof
-         testResult <- either (throwError . ProofByUGErrSubproofFailedOnErr) return eitherTestResult
+         let generalizable = lType2Func lambda newFreeTerm
+         let preambleSteps = [PrfStdStepFreevar (length varstack) (lTypeTType lambda)]
+         let eitherTestResult = testSubproof newContext state newState preambleSteps generalizable subproof
+         (finalSteps,resultIndex) <- either (throwError . ProofByUGErrSubproofFailedOnErr) return eitherTestResult
          let generalized = lType2Forall lambda
-         let finalSteps = [PrfStdStepFreevar (length varstack) (lTypeTType lambda)] <> testResult
-         return  (generalized, PrfStdPrfByUG generalized finalSteps)
+         return  (generalized, PrfStdPrfBySubproof generalized "PRF_BY_UG" finalSteps)
 
 
 
@@ -675,21 +688,26 @@ proofByUG state context (ProofByUGSchema lambda subproof) =
 runSubproofM :: ( Monoid r1, ProofStd s eL1 r1 o tType, Monad m,
                         PropLogicSent s tType, Show eL1, Typeable eL1, Show s, Typeable s,
                         MonadThrow m, TypedSent o tType sE s, Show sE, Typeable sE, StdPrfPrintMonad s o tType m )
-                 =>   PrfStdState s o tType -> PrfStdContext tType
+                 =>    PrfStdContext tType -> PrfStdState s o tType -> PrfStdState s o tType
                           -> [PrfStdStep s o tType] -> ProofGenTStd tType eL1 r1 s o m (s, x) ->
-                          m (x,s,r1,[PrfStdStep s o tType])
-runSubproofM state context preambleSteps prog =  do
+                          m (x,s,r1,[PrfStdStep s o tType],[Int])
+runSubproofM context baseState preambleState preambleSteps prog =  do
           printStartFrame (contextFrames context)
           printSteps (contextFrames context) (stepIdxPrefix context) 0 preambleSteps
-          ((prfResult,extraData),newState,r,newSteps) <- runProofGeneratorT prog context state
-          let constdict = fmap fst (consts state)
+          let baseStateZero = PrfStdState (provenSents baseState) (consts baseState) 0
+          let startState = baseStateZero <> preambleState
+          ((prfResult,extraData),newState,r,newSteps) <- runProofGeneratorT prog context startState
+          let constdict = fmap fst (consts startState)
           let sc = checkSanity (freeVarTypeStack context) prfResult constdict
           maybe (return ()) (throwM . BigExceptResultSanity prfResult) sc
-          let nowProven = (keysSet . provenSents) newState
-          unless (prfResult `Set.member` nowProven)
-                             ((throwM . BigExceptResNotProven) prfResult)
-          printMReturn (contextFrames context) prfResult
-          return (extraData, prfResult, r,newSteps)
+          let endState = preambleState <> newState
+          let mayResultIndex = Data.Map.lookup prfResult (provenSents endState)
+          resultIndex <- maybe ((throwM . BigExceptResNotProven) prfResult) return mayResultIndex
+          let resultLine = last resultIndex
+          let finalSteps = preambleSteps <> newSteps
+          let newStepsNeeded = Prelude.take (resultLine + 1) finalSteps
+          printMReturn (contextFrames context) prfResult resultIndex
+          return (extraData, prfResult, r,newStepsNeeded,resultIndex)
 
 
 
@@ -703,7 +721,7 @@ runTheoremM :: (Monoid r1, ProofStd s eL1 r1 o tType, Monad m,
 runTheoremM f (TheoremSchemaMT lemmas prog constDict) =  do
         state <- getProofState
         context <- ask
-        (tm, proof, extra, newSteps) <- lift $ checkTheoremM (Just (state,context)) (TheoremSchemaMT lemmas prog constDict)
+        (tm, proof, extra, newSteps, _) <- lift $ checkTheoremM (Just (state,context)) (TheoremSchemaMT lemmas prog constDict)
         monadifyProofStd (f $ TheoremSchema constDict lemmas proof tm)
         return (tm, extra)
 
@@ -722,14 +740,13 @@ runProofByAsmM f asm prog =  do
         let constdict = fmap fst (consts state)
         let sc = checkSanity frVarTypeStack asm constdict
         maybe (return ()) (throwM . BigExceptAsmSanity asm) sc
-        let alreadyProven = provenSents state
         let newStepIdxPrefix = stepIdxPrefix context ++ [stepCount state]
-        let newSents = Data.Map.insert asm (newStepIdxPrefix ++ [0]) alreadyProven
+        let newSents = Data.Map.insert asm (newStepIdxPrefix ++ [0]) mempty
         let newContextFrames = contextFrames context <> [False]
         let newContext = PrfStdContext frVarTypeStack newStepIdxPrefix newContextFrames
-        let newState = PrfStdState newSents (consts state) 1
-        let preambleSteps = [PrfStdStepAsm asm]
-        (extraData,consequent,subproof,newSteps) <- lift $ runSubproofM newState newContext preambleSteps prog
+        let newState = PrfStdState newSents mempty 1
+        let preambleSteps = [PrfStdStepStep asm "ASM" []]
+        (extraData,consequent,subproof,newSteps,_) <- lift $ runSubproofM newContext state newState preambleSteps prog
         (monadifyProofStd . f) (ProofByAsmSchema asm subproof consequent)
         return (asm .->. consequent,extraData)
 
@@ -750,9 +767,9 @@ runProofByUGM tt f prog =  do
         let newContextFrames = contextFrames context <> [False]
         let newStepIdxPrefix = stepIdxPrefix context ++ [stepCount state]
         let newContext = PrfStdContext newFrVarTypStack newStepIdxPrefix newContextFrames
-        let newState = PrfStdState (provenSents state) (consts state) 1
+        let newState = PrfStdState mempty mempty 1
         let preambleSteps = [PrfStdStepFreevar (length frVarTypeStack) tt]
-        (extraData,generalizable,subproof, newSteps) <- lift $ runSubproofM newState newContext preambleSteps prog
+        (extraData,generalizable,subproof, newSteps,_) <- lift $ runSubproofM newContext state newState preambleSteps prog
         let lambda = createLambda generalizable tt (Prelude.length frVarTypeStack)
         (monadifyProofStd . f) (ProofByUGSchema lambda subproof)
         let resultSent = lType2Forall lambda         
@@ -771,6 +788,7 @@ data PropLogError s sE o tType where
     PLSimpLAdjNotProven :: s -> PropLogError s sE o tType
     PLAdjLeftNotProven :: s -> PropLogError s sE o tType
     PLAdjRightNotProven :: s -> PropLogError s sE o tType
+    PLRepOriginNotProven :: s -> PropLogError s sE o tType
     deriving(Show)
 
 
@@ -783,6 +801,7 @@ data PropLogR tType s sE o where
     PLSimpL :: s -> PropLogR tType s sE o
     PLSimpR :: s -> s ->  PropLogR tType s sE o
     PLAdj :: s -> s -> PropLogR tType s sE o
+    PLRep :: s -> PropLogR tType s sE o
     deriving(Show)
 
 
@@ -819,8 +838,10 @@ pLrunProof state context rule =
             rightIndex <- maybe ((throwError . PLAdjRightNotProven) b) return (Data.Map.lookup b (provenSents state))
             let aAndB = a .&&. b
             return (aAndB, PrfStdStepStep aAndB "ADJ" [leftIndex,rightIndex])
-
-
+        PLRep a -> do
+            originIndex <- maybe ((throwError . PLRepOriginNotProven) a) return (Data.Map.lookup a (provenSents state))
+            return (a, PrfStdStepStep a "REP" [originIndex])
+             
 
 
 
@@ -1539,8 +1560,8 @@ showIndexAsSubscript n =  Data.Text.concat (Prelude.map f (show n))
 
 
 
-showPredDeBrStep :: [Bool] -> [Int] ->Int -> Bool -> PrfStdStepPredDeBr -> Text
-showPredDeBrStep contextFrames index lineNum showSubproof step =
+showPropDeBrStep :: [Bool] -> [Int] ->Int -> Bool -> Bool -> PrfStdStepPredDeBr -> Text
+showPropDeBrStep contextFrames index lineNum notFromMonad isLastLine step =
         Data.Text.concat (Prelude.map mapBool contextFrames)
           <> showIndex index 
           <> (if (not . Prelude.null) index then "." else "")
@@ -1553,6 +1574,9 @@ showPredDeBrStep contextFrames index lineNum showSubproof step =
                                     "┃"
                                 else
                                     "│"
+        showIndices idxs = if Prelude.null idxs then "" else "[" 
+                            <> Data.Text.concat (intersperse "," (Prelude.map showIndexDepend idxs))
+                            <> "]"
         showIndexDepend i = if Prelude.null i then "?" else showIndex i 
         showIndex i = Data.Text.concat (intersperse "." (Prelude.map (pack . show) i))
         showStepInfo = 
@@ -1561,45 +1585,43 @@ showPredDeBrStep contextFrames index lineNum showSubproof step =
                   (pack . show) prop
                 <> "    "
                 <> justification
-                <> "["
-                <> Data.Text.concat (intersperse "," (Prelude.map showIndexDepend depends))
-                <> "]"
+                <> showIndices depends
+                <> qed
              PrfStdStepLemma prop mayWhereProven ->
                    (pack . show) prop
                 <> "    LEMMA"
-                <> maybe "" (("[🠥" <>) . (<> "]"). showIndexDepend) mayWhereProven
+                <> maybe "" (("[⬅ " <>) . (<> "]"). showIndexDepend) mayWhereProven
+                <> qed
              PrfStdStepConst constName _ mayWhereDefined ->
                    "Const "
-                <> constName
+                <> (pack .show) constName
                 <> "    CONSTDEF"
-                <> maybe "" (("[🠥" <>) . (<> "]"). showIndexDepend) mayWhereDefined
+                <> maybe "" (("[⬅ " <>) . (<> "]"). showIndexDepend) mayWhereDefined
              PrfStdTheorem prop steps ->
                    (pack . show) prop
                 <> "    THEOREM"
+                <> qed
                 <> showSubproofF steps True
-             PrfStdPrfByUG prop steps ->
+             PrfStdPrfBySubproof prop subproofName steps ->
                    (pack . show) prop
-                <> "    PRF_BY_UG"
-                <> showSubproofF steps False
-             PrfStdPrfByAsm prop steps ->
-                   (pack . show) prop
-                <> "    PRF_BY_ASM"
+                <> "    "
+                <> subproofName
+                <> qed
                 <> showSubproofF steps False
              PrfStdTheoremM prop  ->
                    (pack . show) prop
                 <> "    PRF_BY_THEOREM_M"
+                <> qed
              PrfStdStepFreevar index _ ->
                    "FreeVar 𝑣"
                 <> showIndexAsSubscript index
-                <> "    VARDEF"
-             PrfStdStepAsm prop ->
-                    (pack . show) prop
-                <> "    ASM"              
+                <> "    VARDEF"        
              where
                 showSubproofF steps isTheorem = 
-                    if showSubproof then
+                    if notFromMonad then
                           "\n"
-                       <> showPredDeBrSteps (contextFrames <> [isTheorem]) newIndex 0 showSubproof steps
+                       <> showPropDeBrSteps (contextFrames <> [isTheorem]) newIndex 0 notFromMonad steps
+--                       <> " ◻"
                        <> "\n"
                        <> Data.Text.concat (Prelude.map mapBool contextFrames) 
                                <> cornerFrame
@@ -1610,6 +1632,7 @@ showPredDeBrStep contextFrames index lineNum showSubproof step =
                                  "┗"
                               else
                                   "└"
+                qed = if notFromMonad && isLastLine then " ◻" else ""
 
 
 instance StdPrfPrintMonadFrame IO where
@@ -1642,41 +1665,45 @@ instance StdPrfPrintMonadFrame (Either SomeException) where
 instance StdPrfPrintMonad PropDeBr Text () IO where
   printSteps :: [Bool] -> [Int] -> Int -> [PrfStdStep PropDeBr Text ()] -> IO ()
   printSteps contextFrames idx stepStart steps = do
-    let outputTxt = showPredDeBrSteps contextFrames idx stepStart False steps
+    let outputTxt = showPropDeBrSteps contextFrames idx stepStart False steps
     (putStrLn . unpack) outputTxt
 
-  printMReturn :: [Bool] -> PropDeBr -> IO ()
-  printMReturn contextFrames s = do
+  printMReturn :: [Bool] -> PropDeBr -> [Int] -> IO ()
+  printMReturn contextFrames s index = do
+    let showIndex i = Data.Text.concat (intersperse "." (Prelude.map (pack . show) i))
     let mapBool frameBool =  if frameBool
                                 then
                                     "┃"
                                 else
                                     "│"
     let frames = Data.Text.concat (Prelude.map mapBool contextFrames)
-    let outputTxt = frames <> "MReturn: " <> (pack . show) s
+    let outputTxt = frames <> "MReturn: " <> (pack . show) s <> " [" <> showIndex index <> "]"
     (putStrLn . unpack) outputTxt
     return ()
 
 instance StdPrfPrintMonad PropDeBr Text () (Either SomeException) where
   printSteps :: [Bool] -> [Int] -> Int -> [PrfStdStep PropDeBr Text ()] -> Either SomeException ()
   printSteps _ _ _ _ = return ()
-  printMReturn :: [Bool] -> PropDeBr -> Either SomeException ()
-  printMReturn _ _ = return ()
+  printMReturn :: [Bool] -> PropDeBr -> [Int] -> Either SomeException ()
+  printMReturn _ _ _ = return ()
 
 
-showPredDeBrSteps :: [Bool] -> [Int] -> Int -> Bool -> [PrfStdStepPredDeBr] -> Text
-showPredDeBrSteps contextFrames index stepStart showSubproofs steps = fst foldResult
+showPropDeBrSteps :: [Bool] -> [Int] -> Int -> Bool -> [PrfStdStepPredDeBr] -> Text
+showPropDeBrSteps contextFrames index stepStart notFromMonad steps = fst foldResult
     where 
         foldResult = Prelude.foldl f ("", stepStart) steps
            where
              f (accumText,stepNum) step = (accumText 
-                                             <> showPredDeBrStep contextFrames index stepNum showSubproofs step <> eol,
+                                             <> showPropDeBrStep contextFrames index stepNum notFromMonad isLastLine step <> eol,
                                            stepNum + 1)
-                  where eol = if stepNum == stepStart + length steps - 1 then "" else "\n"
+                  where 
+                    isLastLine = stepNum == stepStart + length steps - 1
+                    eol = if isLastLine then "" else "\n"
 
 
-showPredDeBrStepsBase :: [PrfStdStepPredDeBr] -> Text
-showPredDeBrStepsBase = showPredDeBrSteps [] [] 0 True
+
+showPropDeBrStepsBase :: [PrfStdStepPredDeBr] -> Text
+showPropDeBrStepsBase = showPropDeBrSteps [] [] 0 True
 
 
 
@@ -1730,7 +1757,7 @@ main = do
 
 
     let zb = runProof createInitialContext proof (createInitialState [y0,y1,y2] []) 
-    either (putStrLn . show) (putStrLn . unpack . showPredDeBrStepsBase . snd) zb
+    either (putStrLn . show) (putStrLn . unpack . showPropDeBrStepsBase . snd) zb
     print "OI leave me alone"
     let z1 = Forall (((Bound 0  :<-: (Constant . pack) "N") :&&: (Bound 0 :>=: Integ 10)) :->: (Bound 0 :>=: Integ 0))
     let z2 = Forall (((Bound 0  :<-: (Constant . pack) "N") :&&: (Bound 0 :>=: Integ 0)) :->: (Bound 0 :==: Integ 0))
@@ -1769,15 +1796,15 @@ main = do
     
 
     let zb3 = runProof createInitialContext [PredProofUI (Free 0) z1] (createInitialState [z1,z2] ["N"])
-    either (putStrLn . show) (putStrLn . unpack . showPredDeBrStepsBase . snd)  zb2
-    either (putStrLn . show) (putStrLn . unpack . showPredDeBrStepsBase . snd) zb3
+    either (putStrLn . show) (putStrLn . unpack . showPropDeBrStepsBase . snd)  zb2
+    either (putStrLn . show) (putStrLn . unpack . showPropDeBrStepsBase . snd) zb3
     (a,b,c,d) <- runProofGeneratorT testprog createInitialContext (createInitialState [z1,z2] ["N"])
     print "hi wattup"
-    (putStrLn . unpack . showPredDeBrStepsBase) d
+    (putStrLn . unpack . showPropDeBrStepsBase) d
     print "YOYOYOYOYOYOYOYOYOYO"
-    (a,b,c,d) <- checkTheoremM Nothing testTheoremMSchema
+    (a,b,c,d,e) <- checkTheoremMConsistency testTheoremMSchema
     print "yo"
-    (putStrLn . unpack . showPredDeBrStepsBase) d
+    (putStrLn . unpack . showPropDeBrStepsBase) d
     return ()
 
 
@@ -1829,4 +1856,5 @@ theoremProg = do
               (s4,line_idx) <-predProofUIM (Free 0) z2
               -- (lift . print . show) line_idx
               (s5,_) <- predProofMPM s4
+              (s6,_) <- predProofSimpLM asm
               return (s5,())
