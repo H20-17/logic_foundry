@@ -346,10 +346,11 @@ assignSequentialMap base ls = Prelude.foldr f (Right (base,mempty)) ls
                                 Just _ -> Left k
 
 
-checkTheorem :: (ProofStd s eL1 r1 o tType, PropLogicSent s tType, TypedSent o tType sE s    )
-                            => TheoremSchema s r1 o tType -> Maybe (PrfStdState s o tType,PrfStdContext tType)
+checkTheoremInternal :: (ProofStd s eL1 r1 o tType, PropLogicSent s tType, TypedSent o tType sE s    )
+                            => Maybe (PrfStdState s o tType,PrfStdContext tType) -> TheoremSchema s r1 o tType 
                                        -> Either (ChkTheoremError s sE eL1 o tType) ([PrfStdStep s o tType],[Int])
-checkTheorem (TheoremSchema constdict lemmas subproof theorem) mayPrStateCxt =
+                                       
+checkTheoremInternal mayPrStateCxt (TheoremSchema constdict lemmas subproof theorem)  =
   do
        let eitherConstDictMap = assignSequentialMap 0 constdict
        (newStepCountA, newConsts) <- either (throwError . ChkTheoremErrSchemaDupConst) return eitherConstDictMap
@@ -393,12 +394,17 @@ checkTheorem (TheoremSchema constdict lemmas subproof theorem) mayPrStateCxt =
                where
                   maybeLemmaInsane = fmap (ChkTheoremErrLemmaSanity a) (checkSanity mempty a constdictPure)
 
+checkTheorem :: (ProofStd s eL1 r1 o tType, PropLogicSent s tType, TypedSent o tType sE s    )
+                            => TheoremSchema s r1 o tType
+                                       -> Either (ChkTheoremError s sE eL1 o tType) ([PrfStdStep s o tType],[Int])
+checkTheorem  = checkTheoremInternal Nothing
+
 
 establishTheorem :: (ProofStd s eL1 r1 o tType, PropLogicSent s tType, TypedSent o tType sE s    )
                             => TheoremSchema s r1 o tType -> PrfStdState s o tType -> PrfStdContext tType
                                        -> Either (ChkTheoremError s sE eL1 o tType) (PrfStdStep s o tType)
 establishTheorem schema state context = do
-    (steps,resultIndex) <- checkTheorem schema (Just (state,context))
+    (steps,resultIndex) <- checkTheoremInternal (Just (state,context)) schema
     let tm = theorem schema
     return (PrfStdTheorem tm steps)
 
@@ -492,13 +498,13 @@ monadifyProofStd p = do
 
 
 
-checkTheoremM :: (Show s, Typeable s, Monoid r1, ProofStd s eL1 r1 o tType, Monad m, MonadThrow m,
+checkTheoremMInternal :: (Show s, Typeable s, Monoid r1, ProofStd s eL1 r1 o tType, Monad m, MonadThrow m,
                       PropLogicSent s tType, TypedSent o tType sE s, Show sE, Typeable sE, Typeable tType, Show tType,
                       Show eL1, Typeable eL1,
                       Typeable o, Show o, StdPrfPrintMonad s o tType m )
                  =>  Maybe (PrfStdState s o tType,PrfStdContext tType) ->  TheoremSchemaMT tType eL1 r1 s o m x
                               -> m (s, r1, x, [PrfStdStep s o tType], Int)
-checkTheoremM mayPrStateCxt (TheoremSchemaMT lemmas prog constdict) =  do
+checkTheoremMInternal mayPrStateCxt (TheoremSchemaMT lemmas prog constdict) =  do
     let eitherConstDictMap = assignSequentialMap 0 constdict
     (newStepCountA, newConsts) <- either (throwM . BigExceptSchemaConstDup) return eitherConstDictMap
     let (newStepCountB, newProven) = assignSequentialSet newStepCountA lemmas
@@ -539,14 +545,14 @@ checkTheoremM mayPrStateCxt (TheoremSchemaMT lemmas prog constdict) =  do
                       maybeLemmaInsane = fmap (BigExceptLemmaSanityErr a) (checkSanity mempty a constdictPure)
   
 
-checkTheoremMConsistency :: (Show s, Typeable s, Monoid r1, ProofStd s eL1 r1 o tType, Monad m, MonadThrow m,
+checkTheoremM :: (Show s, Typeable s, Monoid r1, ProofStd s eL1 r1 o tType, Monad m, MonadThrow m,
                       PropLogicSent s tType, TypedSent o tType sE s, Show sE, Typeable sE, Typeable tType, Show tType,
                       Show eL1, Typeable eL1,
                       Typeable o, Show o, StdPrfPrintMonad s o tType m )
                  =>  TheoremSchemaMT tType eL1 r1 s o m x
                               -> m (s, r1, x, [PrfStdStep s o tType], Int)
-checkTheoremMConsistency schema = do
-                        (tm, prf, extra, steps, index) <- checkTheoremM Nothing schema
+checkTheoremM schema = do
+                        (tm, prf, extra, steps, index) <- checkTheoremMInternal Nothing schema
                         return (tm, prf, extra, steps, index)
 
 data EstTmMError s o tType where
@@ -565,7 +571,7 @@ establishTheoremM :: (Monoid r1, ProofStd s eL1 r1 o tType ,
                                   TheoremSchemaM tType eL1 r1 s o -> Either (EstTmMError s o tType) (s, PrfStdStep s o tType)
 establishTheoremM state context (schema :: TheoremSchemaM tType eL1 r1 s o) = 
     do
-        (tm, prf, (),_,_) <-  left EstTmMErrMExcept $ checkTheoremM  (Just (state,context)) schema
+        (tm, prf, (),_,_) <-  left EstTmMErrMExcept $ checkTheoremMInternal  (Just (state,context)) schema
         return (tm, PrfStdTheoremM tm)
 
 
@@ -582,7 +588,7 @@ expandTheoremM :: (Monoid r1, ProofStd s eL1 r1 o tType ,
                             => TheoremSchemaM tType eL1 r1 s o -> Either ExpTmMError (TheoremSchema s r1 o tType)
 expandTheoremM ((TheoremSchemaMT lemmas proofprog constdict):: TheoremSchemaM tType eL1 r1 s o) =
       do
-          (tm,r1,(),_,_) <- left ExpTmMErrMExcept (checkTheoremM Nothing (TheoremSchemaMT lemmas proofprog constdict))
+          (tm,r1,(),_,_) <- left ExpTmMErrMExcept (checkTheoremMInternal Nothing (TheoremSchemaMT lemmas proofprog constdict))
           return $ TheoremSchema constdict lemmas r1 tm
 
 
@@ -721,7 +727,7 @@ runTheoremM :: (Monoid r1, ProofStd s eL1 r1 o tType, Monad m,
 runTheoremM f (TheoremSchemaMT lemmas prog constDict) =  do
         state <- getProofState
         context <- ask
-        (tm, proof, extra, newSteps, _) <- lift $ checkTheoremM (Just (state,context)) (TheoremSchemaMT lemmas prog constDict)
+        (tm, proof, extra, newSteps, _) <- lift $ checkTheoremMInternal (Just (state,context)) (TheoremSchemaMT lemmas prog constDict)
         monadifyProofStd (f $ TheoremSchema constDict lemmas proof tm)
         return (tm, extra)
 
@@ -1802,7 +1808,7 @@ main = do
     print "hi wattup"
     (putStrLn . unpack . showPropDeBrStepsBase) d
     print "YOYOYOYOYOYOYOYOYOYO"
-    (a,b,c,d,e) <- checkTheoremMConsistency testTheoremMSchema
+    (a,b,c,d,e) <- checkTheoremM testTheoremMSchema
     print "yo"
     (putStrLn . unpack . showPropDeBrStepsBase) d
     return ()
