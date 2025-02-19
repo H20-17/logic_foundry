@@ -65,7 +65,8 @@ class (Monoid s, Monoid stpT, Monoid c) => Proof e r s c stpT | r -> s, r->e, r-
       runProofOpen :: r -> c -> s -> Either e (s , stpT)
 
 
-
+runProof :: Proof e r s c stpT => r -> Either e (s , stpT)
+runProof r = runProofOpen r mempty mempty
 
 
 data ProofGeneratorT stpT c r s m x where
@@ -78,7 +79,8 @@ runProofGeneratorTOpen ps context state = do
            (x, s, (r,stpT)) <- runRWST (runProofGenTInternal ps) context state
            return (x,s,r,stpT)
 
-
+runProofGeneratorT :: (MonadThrow m, Proof eL r s c stpT) => ProofGeneratorT stpT c r s m x -> m (x, s, r, stpT)
+runProofGeneratorT ps = runProofGeneratorTOpen ps mempty mempty
 
 instance (Monad m) => Functor (ProofGeneratorT stpT c r s m) where
      fmap :: Monad m =>
@@ -236,6 +238,7 @@ data PrfStdStep s o tType where
     PrfStdStepSubproof :: s -> Text -> [PrfStdStep s o tType] ->  PrfStdStep s o tType
     PrfStdStepTheoremM :: s -> PrfStdStep s o tType
     PrfStdStepFreevar :: Int -> tType -> PrfStdStep s o tType
+    PrfStdStepFakeConst :: o ->tType -> PrfStdStep s o tType
 
 
 
@@ -816,6 +819,7 @@ data PropLogError s sE o tType where
     PLAdjLeftNotProven :: s -> PropLogError s sE o tType
     PLAdjRightNotProven :: s -> PropLogError s sE o tType
     PLRepOriginNotProven :: s -> PropLogError s sE o tType
+    PLFakeSanityErr :: s -> sE -> PropLogError s sE o tType
     deriving(Show)
 
 
@@ -829,6 +833,7 @@ data PropLogR tType s sE o where
     PLSimpR :: s -> s ->  PropLogR tType s sE o
     PLAdj :: s -> s -> PropLogR tType s sE o
     PLRep :: s -> PropLogR tType s sE o
+    FakeProp :: s -> PropLogR tType s sE o
     deriving(Show)
 
 
@@ -868,6 +873,10 @@ pLrunProofAtomic rule context state =
         PLRep a -> do
             originIndex <- maybe ((throwError . PLRepOriginNotProven) a) return (Data.Map.lookup a (provenSents state))
             return (a, PrfStdStepStep a "REP" [originIndex])
+        FakeProp s -> do
+            maybe (return ())   (throwError . PLFakeSanityErr s) (checkSanity (freeVarTypeStack context) s (fmap fst (consts state)))
+            return (s, PrfStdStepStep s "FAKE_PROP" [])
+
              
 
 
@@ -922,6 +931,7 @@ data PredProofError s sE o t tType lType where
     PredProofErrEGTermTypeMismatch :: t -> tType -> lType -> PredProofError s sE o t tType lType
     PredProofErrUITermTypeMismatch :: t -> tType -> s -> tType -> PredProofError s sE o t tType lType
     PredProofTermSanity :: sE ->  PredProofError s sE o t tType lType
+    PredProofErrFakeConstDefined :: o -> PredProofError s sE o t tType lType
    deriving (Show)
 
 data PredLogR s sE o t tType lType where
@@ -941,6 +951,7 @@ data PredLogR s sE o t tType lType where
     PredProofTheorem :: TheoremSchema s [PredLogR s sE o t tType lType] o tType -> PredLogR s sE o t tType lType
     PredProofTheoremM :: TheoremSchemaM tType [PredLogR s sE o t tType lType] s o -> 
                              PredLogR s sE o t tType lType
+    FakeConst :: o -> tType -> PredLogR s sE o t tType lType
     deriving(Show)
 
 
@@ -959,6 +970,14 @@ mpM :: (Monad m, PropLogicSent s tType, Ord o, Show sE, Typeable sE, Show s, Typ
           => s -> ProofGenTStd tType [PropLogR tType s sE o] s o m (s,[Int])
 mpM impl = standardRuleM [MP impl]
       
+
+fakePropM :: (Monad m, PropLogicSent s tType, Ord o, Show sE, Typeable sE, Show s, Typeable s,
+       MonadThrow m, Show o, Typeable o, Show tType, Typeable tType, TypedSent o tType sE s,
+       Monoid (PrfStdState s o tType), StdPrfPrintMonad s o tType m,
+       StdPrfPrintMonad s o tType (Either SomeException), Monoid (PrfStdContext tType))
+          => s -> ProofGenTStd tType [PropLogR tType s sE o] s o m (s,[Int])
+fakePropM s = standardRuleM [FakeProp s]
+
 
 plSimpLM :: (Monad m, Monad m, PropLogicSent s tType, Ord o, Show sE, Typeable sE, Show s, Typeable s,
        MonadThrow m, Show o, Typeable o, Show tType, Typeable tType, TypedSent o tType sE s,
@@ -1029,7 +1048,24 @@ predProofAdjM :: (Monad m, PredLogicSent s t tType lType, TypeableTerm t o tType
                    => s -> s -> ProofGenTStd tType [PredLogR s sE o t tType lType] s o m (s,[Int])
 predProofAdjM a b = predProofPropM $ plAdjM a b
 
+predProofFakePropM :: (Monad m, PredLogicSent s t tType lType, TypeableTerm t o tType sE, Show s,
+                Typeable s, Show sE, Typeable sE, MonadThrow m, Show o, Typeable o, Show t, Typeable t,
+                Show tType, Typeable tType, TypedSent o tType sE s, Monoid (PrfStdState s o tType),
+                Typeable lType, Show lType, StdPrfPrintMonad s o tType m, StdPrfPrintMonad s o tType (Either SomeException), 
+                Monoid (PrfStdContext tType)        )
+                   => s -> ProofGenTStd tType  [PredLogR s sE o t tType lType] s o m (s,[Int])
+predProofFakePropM = predProofPropM . fakePropM
 
+
+fakeConstM :: (Monad m, PredLogicSent s t tType lType, TypeableTerm t o tType sE, Show s,
+                Typeable s, Show sE, Typeable sE, MonadThrow m, Show o, Typeable o, Show t, Typeable t,
+                Show tType, Typeable tType, TypedSent o tType sE s, Monoid (PrfStdState s o tType),
+                Typeable lType, Show lType, StdPrfPrintMonad s o tType m, StdPrfPrintMonad s o tType (Either SomeException), 
+                Monoid (PrfStdContext tType)        )
+                        => o -> tType -> ProofGenTStd tType  [PredLogR s sE o t tType lType] s o m [Int]
+fakeConstM name tType = do
+     (state,steps) <- monadifyProofStd [FakeConst name tType]
+     (return . snd . snd . head . assocs . consts) state
 
 
 predProofMP :: s -> PredLogR s sE o t tType lType
@@ -1037,7 +1073,8 @@ predProofMP a = PredProofProp  (MP a)
 
 
 
-
+predProofFakeProp :: s -> PredLogR s sE o t tType lType
+predProofFakeProp a = PredProofProp (FakeProp a)
 
 
 predProofSimpL :: s -> PredLogR s sE o t tType lType
@@ -1052,25 +1089,26 @@ predPrfRunProofAtomic :: (PredLogicSent s t tType lType,
                Typeable o, Show o,Typeable tType, Show tType, Show t, Typeable t,
                Typeable lType, Show lType, StdPrfPrintMonad s o tType (Either SomeException)) =>
                             PredLogR s sE o t tType lType ->
-                            PrfStdContext tType -> PrfStdState s o tType -> 
-                                    Either (PredProofError s sE o t tType lType) (s,Maybe (o,tType),PrfStdStep s o tType)
+                            PrfStdContext tType -> 
+                            PrfStdState s o tType -> 
+                            Either (PredProofError s sE o t tType lType) (Maybe s,Maybe (o,tType),PrfStdStep s o tType)
 predPrfRunProofAtomic rule context state  = 
       case rule of
           PredProofProp propR -> do
                (sent,step) <- left  PredProofErrPL (pLrunProofAtomic propR context state)
-               return (sent, Nothing, step)
+               return (Just sent, Nothing, step)
           PredProofByAsm schema -> do
                (implication,step) <- left PredProofPrfByAsmErr (proofByAsm schema context state)
-               return (implication, Nothing, step)
+               return (Just implication, Nothing, step)
           PredProofTheorem schema -> do
                step <- left PredProofErrTheorem (establishTheorem schema context state)
-               return (theorem schema, Nothing, step)
+               return (Just $ theorem schema, Nothing, step)
           PredProofTheoremM schema -> do
                (theorem,step) <- left PredProofErrTheoremM (establishTheoremM schema context state)
-               return (theorem,Nothing, step)
+               return (Just theorem,Nothing, step)
           PredProofByUG schema -> do
                (generalized,step) <- left PredProofErrUG (proofByUG schema context state)
-               return (generalized,Nothing, step)
+               return (Just generalized,Nothing, step)
           PredProofEI existsSent const -> do 
                let existsParse = parseExists existsSent
                lambda <- maybe ((throwError . PredProofErrEINotExists) existsSent) return existsParse
@@ -1081,7 +1119,7 @@ predPrfRunProofAtomic rule context state  =
                let f = lType2Func lambda
                let eIResultSent = (f . const2Term) const
                let tType = lTypeTType lambda
-               return (eIResultSent,Just (const,tType), PrfStdStepStep eIResultSent "EI" [existsSentIdx])
+               return (Just eIResultSent,Just (const,tType), PrfStdStepStep eIResultSent "EI" [existsSentIdx])
           PredProofEG term lambda -> do
                let eitherTermType = getTypeTerm term varStack constDict
                termType <- left PredProofTermSanity eitherTermType
@@ -1092,7 +1130,7 @@ predPrfRunProofAtomic rule context state  =
                let maySourceSentIdx = Data.Map.lookup sourceSent (provenSents state)
                sourceSentIdx <- maybe ((throwError . PredProofErrEGNotGeneralization term) lambda) return maySourceSentIdx
                let existsSent = lType2Exists lambda
-               return (existsSent,Nothing, PrfStdStepStep sourceSent "EG" [sourceSentIdx])
+               return (Just existsSent,Nothing, PrfStdStepStep sourceSent "EG" [sourceSentIdx])
           PredProofUI term forallSent -> do
                let mayForallSentIdx = Data.Map.lookup forallSent (provenSents state)
                forallSentIdx <- maybe ((throwError . PredProofErrUINotProven) forallSent) return mayForallSentIdx
@@ -1103,7 +1141,11 @@ predPrfRunProofAtomic rule context state  =
                let tType = lTypeTType lambda
                unless (tType == termType) ((throwError .  PredProofErrUITermTypeMismatch term termType forallSent) tType)
                let f = lType2Func lambda
-               return (f term,Nothing, PrfStdStepStep (f term) "UI" [forallSentIdx])
+               return (Just $ f term,Nothing, PrfStdStepStep (f term) "UI" [forallSentIdx])
+          FakeConst const tType -> do
+               let constNotDefined = isNothing $ Data.Map.lookup const constDict
+               unless constNotDefined ((throwError . PredProofErrFakeConstDefined) const)
+               return (Nothing,Just (const, tType), PrfStdStepFakeConst const tType)
     where
         proven = (keysSet . provenSents) state
         constDict = fmap fst (consts state)
@@ -1135,10 +1177,14 @@ instance (PredLogicSent s t tType lType, Show sE, Typeable sE, Show s, Typeable 
            f (newState,newSteps) r =  fmap g (predPrfRunProofAtomic r context (oldState <> newState))
              where
                  g ruleResult = case ruleResult of
-                    (s,Nothing,step) -> (newState <> PrfStdState (Data.Map.insert s newLineIndex mempty) mempty 1,
+                    (Just s,Nothing,step) -> (newState <> PrfStdState (Data.Map.insert s newLineIndex mempty) mempty 1,
                                          newSteps <> [step])
-                    (s,Just (newConst,tType), step) -> (newState <> 
+                    (Just s,Just (newConst,tType), step) -> (newState <> 
                             PrfStdState (Data.Map.insert s newLineIndex mempty) 
+                               (Data.Map.insert newConst (tType,newLineIndex) mempty) 1,
+                               newSteps <> [step])
+                    (Nothing,Just (newConst,tType), step) -> (newState <> 
+                            PrfStdState mempty
                                (Data.Map.insert newConst (tType,newLineIndex) mempty) 1,
                                newSteps <> [step])
                     where
@@ -1525,22 +1571,6 @@ propDeBrApplyUG prop freevarIdx boundvarIdx =
 
 
 
-assignNullIndices :: Ord s => [s] -> Map s [Int]
-assignNullIndices = Prelude.foldr f mempty
-     where f el = Data.Map.insert el []
-
-
-createInitialState :: (Ord o, Ord s) => [s] -> [o] -> PrfStdState s o ()
-createInitialState sents consts = PrfStdState (assignNullIndices sents) 
-                           (fmap (\x -> ((),x)) (assignNullIndices consts)) 0
-
-
-
-
-createInitialContext :: PrfStdContext ()
-createInitialContext = PrfStdContext [] [] [] 
-
-
 
 instance PredLogicSent PropDeBr ObjDeBr () LambdaDeBr where
     parseExists :: PropDeBr -> Maybe LambdaDeBr
@@ -1651,7 +1681,11 @@ showPropDeBrStep contextFrames index lineNum notFromMonad isLastLine step =
              PrfStdStepFreevar index _ ->
                    "FreeVar 𝑣"
                 <> showIndexAsSubscript index
-                <> "    VARDEF"        
+                <> "    VARDEF"  
+             PrfStdStepFakeConst constName _ ->
+                "Const "
+                     <> (pack .show) constName
+                <> "    FAKE_CONST" 
              where
                 showSubproofF steps isTheorem = 
                     if notFromMonad then
@@ -1777,14 +1811,17 @@ main = do
        --let z = applyUG xn () 102
 --    -- (print . show) z
     let proof = [
-                  MP y0
+                  FakeProp y0
+                , FakeProp y1
+                , FakeProp y2
+                , MP y0
                 , MP y2
                 , PLProofByAsm $ ProofByAsmSchema y1  (Integ 99 :==: Integ 99) [MP $ y1 .->. (Integ 99 :==: Integ 99)]
                 ] 
 
 
 
-    let zb = runProofOpen proof createInitialContext  (createInitialState [y0,y1,y2] [])
+    let zb = runProof proof
     either (putStrLn . show) (putStrLn . unpack . showPropDeBrStepsBase . snd) zb
     print "OI leave me alone"
     let z1 = Forall (((Bound 0  :<-: (Constant . pack) "N") :&&: (Bound 0 :>=: Integ 10)) :->: (Bound 0 :>=: Integ 0))
@@ -1793,6 +1830,9 @@ main = do
     let asm = (Free 0  :<-: (Constant . pack) "N") :&&: (Free 0 :>=: Integ 10)
     let mid = (Free 0  :<-: (Constant . pack) "N") :&&: (Free 0 :>=: Integ 0)
     let proof2 = [
+                    FakeConst "N" (),
+                    predProofFakeProp z1,
+                    predProofFakeProp z2,
                     PredProofByUG (ProofByUGSchema generalizable
                                      [
                                         PredProofByAsm (ProofByAsmSchema asm (Free 0 :==: Integ 0) [
@@ -1819,14 +1859,13 @@ main = do
                                      ]
                                   )
                  ]
-    let zb2 = runProofOpen proof2 createInitialContext (createInitialState [z1,z2] ["N"]) 
+    let zb2 = runProof proof2 
 
-    
 
-    let zb3 = runProofOpen [PredProofUI (Free 0) z1]  createInitialContext (createInitialState [z1,z2] ["N"]) 
+    let zb3 = runProof [FakeConst "N" (), predProofFakeProp z1, predProofFakeProp z2, PredProofUI (Free 0) z1]
     either (putStrLn . show) (putStrLn . unpack . showPropDeBrStepsBase . snd)  zb2
     either (putStrLn . show) (putStrLn . unpack . showPropDeBrStepsBase . snd) zb3
-    (a,b,c,d) <- runProofGeneratorTOpen testprog createInitialContext (createInitialState [z1,z2] ["N"])
+    (a,b,c,d) <- runProofGeneratorT testprog
     print "hi wattup"
     (putStrLn . unpack . showPropDeBrStepsBase) d
     print "YOYOYOYOYOYOYOYOYOYO"
@@ -1844,15 +1883,15 @@ testprog = do
       let asm = (Free 0  :<-: (Constant . pack) "N") :&&: (Free 0 :>=: Integ 10)
       let asm2 = (Free 0  :<-: (Constant . pack) "N") :&&: (Free 0 :>=: Integ 10)
       let mid = (Free 0  :<-: (Constant . pack) "N") :&&: (Free 0 :>=: Integ 0)
+      fakeConstM "N" ()
+      predProofFakePropM z1
+      predProofFakePropM z2
+      
       fux<- runProofByUGM () (\schm -> [PredProofByUG schm]) do
           runProofByAsmM (\schm -> [PredProofByAsm schm]) asm2 do
               (s1,_) <- predProofUIM (Free 0) z1
               (s2,_) <- predProofMPM s1
-              (lift . print) "Coment1"
-              (lift . print . show) s1
-
               (natAsm,_) <- predProofSimpLM asm
-              (lift . print) "COmment 2"
               (s3,_) <- predProofAdjM natAsm s2
               (s4,_) <-predProofUIM (Free 0) z2
               (s5,_) <- predProofMPM s4
