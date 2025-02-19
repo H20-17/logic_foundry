@@ -61,7 +61,7 @@ class ErrorEmbed e1 e2 where
 
 
 
-class (Monoid s, Monoid stpT) => Proof e r s c stpT | r -> s, r->e, r->c, r -> stpT  where
+class (Monoid s, Monoid stpT, Monoid c) => Proof e r s c stpT | r -> s, r->e, r->c, r -> stpT  where
       runProofOpen :: r -> c -> s -> Either e (s , stpT)
 
 
@@ -198,6 +198,26 @@ data PrfStdState s o tType where
    } -> PrfStdState s o tType
    deriving Show
 
+instance Semigroup (PrfStdContext tType) where
+     (<>) :: PrfStdContext tType -> PrfStdContext tType -> PrfStdContext tType
+     (<>) (PrfStdContext v1 prf1 frames1) (PrfStdContext v2 prf2 frames2) =
+            PrfStdContext (v1 <> v2) (prf1 <> prf2) (frames1 <> frames2)
+
+instance Monoid (PrfStdContext tType) where
+    mempty :: PrfStdContext tType
+    mempty = PrfStdContext [] [] []
+
+
+instance (Ord s, Ord o) => Semigroup (PrfStdState s o tType ) where
+    (<>) :: PrfStdState s o tType
+              -> PrfStdState s o tType -> PrfStdState s o tType
+    (<>) (PrfStdState proven1 consts1 count1) (PrfStdState proven2 consts2 count2)
+            = PrfStdState (proven1 <> proven2) (consts1 <> consts2) (count1 + count2)
+
+
+instance (Ord s, Ord o) => Monoid (PrfStdState s o tType ) where
+     mempty :: (Ord s, Ord o) => PrfStdState s o tType
+     mempty = PrfStdState mempty mempty 0
 
 
 type ProofGenTStd tType r s o m 
@@ -854,7 +874,8 @@ pLrunProofAtomic rule context state =
 
 instance (PropLogicSent s tType, Show sE, Typeable sE, Show s, Typeable s, Ord o, TypedSent o tType sE s,
           Typeable o, Show o, Typeable tType, Show tType, Monoid (PrfStdState s o tType),
-          StdPrfPrintMonad s o tType (Either SomeException))
+          StdPrfPrintMonad s o tType (Either SomeException),
+          Monoid (PrfStdContext tType))
              => Proof (PropLogError s sE o tType)
               [PropLogR tType s sE o] 
               (PrfStdState s o tType) 
@@ -932,24 +953,24 @@ standardRuleM rule = do
      (return . head . assocs . provenSents) state
 
 mpM :: (Monad m, PropLogicSent s tType, Ord o, Show sE, Typeable sE, Show s, Typeable s,
-       MonadThrow m, Show o, Typeable o, Show tType, Typeable tType, TypedSent o tType sE s, 
-       Monoid (PrfStdState s o tType), StdPrfPrintMonad s o tType m, 
-       StdPrfPrintMonad s o tType (Either SomeException))
+       MonadThrow m, Show o, Typeable o, Show tType, Typeable tType, TypedSent o tType sE s,
+       Monoid (PrfStdState s o tType), StdPrfPrintMonad s o tType m,
+       StdPrfPrintMonad s o tType (Either SomeException), Monoid (PrfStdContext tType))
           => s -> ProofGenTStd tType [PropLogR tType s sE o] s o m (s,[Int])
 mpM impl = standardRuleM [MP impl]
       
 
 plSimpLM :: (Monad m, Monad m, PropLogicSent s tType, Ord o, Show sE, Typeable sE, Show s, Typeable s,
-       MonadThrow m, Show o, Typeable o, Show tType, Typeable tType, TypedSent o tType sE s, 
-       Monoid (PrfStdState s o tType), StdPrfPrintMonad s o tType m, 
-       StdPrfPrintMonad s o tType (Either SomeException)) =>
+       MonadThrow m, Show o, Typeable o, Show tType, Typeable tType, TypedSent o tType sE s,
+       Monoid (PrfStdState s o tType), StdPrfPrintMonad s o tType m,
+       StdPrfPrintMonad s o tType (Either SomeException), Monoid (PrfStdContext tType) ) =>
             s -> ProofGenTStd tType [PropLogR tType s sE o] s o m (s,[Int])
 plSimpLM aAndB = standardRuleM [PLSimpL aAndB]
 
 
 plAdjM :: (Monad m, Monad m, PropLogicSent s tType, Ord o, Show sE, Typeable sE, Show s, Typeable s,
-       MonadThrow m, Show o, Typeable o, Show tType, Typeable tType, TypedSent o tType sE s, Monoid (PrfStdState s o tType), StdPrfPrintMonad s o tType m, 
-       StdPrfPrintMonad s o tType (Either SomeException))
+       MonadThrow m, Show o, Typeable o, Show tType, Typeable tType, TypedSent o tType sE s, Monoid (PrfStdState s o tType), StdPrfPrintMonad s o tType m,
+       StdPrfPrintMonad s o tType (Either SomeException), Monoid (PrfStdContext tType))
          => s -> s-> ProofGenTStd tType [PropLogR tType s sE o] s o m (s,[Int])
 plAdjM a b = standardRuleM [PLAdj a b]
 
@@ -957,7 +978,8 @@ plAdjM a b = standardRuleM [PLAdj a b]
 predProofUIM :: (Monad m, PredLogicSent s t tType lType, TypeableTerm t o tType sE, Show s,
                 Typeable s, Show sE, Typeable sE, MonadThrow m, Show o, Typeable o, Show t, Typeable t,
                 Show tType, Typeable tType, TypedSent o tType sE s, Monoid (PrfStdState s o tType), Typeable lType,
-                Show lType, StdPrfPrintMonad s o tType m, StdPrfPrintMonad s o tType (Either SomeException))
+                Show lType, StdPrfPrintMonad s o tType m, StdPrfPrintMonad s o tType (Either SomeException), 
+                Monoid (PrfStdContext tType)        )
                    => t -> s -> ProofGenTStd tType [PredLogR s sE o t tType lType] s o m (s,[Int])
 predProofUIM term sent = standardRuleM [PredProofUI term sent]
 
@@ -967,8 +989,8 @@ predProofUIM term sent = standardRuleM [PredProofUI term sent]
 predProofEIM :: (Monad m, PredLogicSent s t tType lType, TypeableTerm t o tType sE, Show s,
                 Typeable s, Show sE, Typeable sE, MonadThrow m, Show o, Typeable o, Show t, Typeable t,
                 Show tType, Typeable tType, TypedSent o tType sE s, Monoid (PrfStdState s o tType),
-                Typeable lType, Show lType, StdPrfPrintMonad s o tType m, 
-                StdPrfPrintMonad s o tType (Either SomeException))
+                Typeable lType, Show lType, StdPrfPrintMonad s o tType m,
+                StdPrfPrintMonad s o tType (Either SomeException), Monoid (PrfStdContext tType)        )
                    => s -> o -> ProofGenTStd tType [PredLogR s sE o t tType lType] s o m (s,[Int])
 predProofEIM sent const = standardRuleM [PredProofEI sent const]
 
@@ -976,7 +998,8 @@ predProofEIM sent const = standardRuleM [PredProofEI sent const]
 predProofPropM :: (Monad m, PredLogicSent s t tType lType, TypeableTerm t o tType sE, Show s,
                 Typeable s, Show sE, Typeable sE, MonadThrow m, Show o, Typeable o, Show t, Typeable t,
                 Show tType, Typeable tType, TypedSent o tType sE s, Monoid (PrfStdState s o tType),
-                Typeable lType, Show lType, StdPrfPrintMonad s o tType (Either SomeException))
+                Typeable lType, Show lType, StdPrfPrintMonad s o tType (Either SomeException), 
+                Monoid (PrfStdContext tType)        )
                     => ProofGenTStd tType  [PropLogR tType s sE o] s o m x ->
                      ProofGenTStd tType  [PredLogR s sE o t tType lType] s o m x
 predProofPropM = modifyPS (fmap PredProofProp)         
@@ -984,22 +1007,25 @@ predProofPropM = modifyPS (fmap PredProofProp)
 predProofMPM :: (Monad m, PredLogicSent s t tType lType, TypeableTerm t o tType sE, Show s,
                 Typeable s, Show sE, Typeable sE, MonadThrow m, Show o, Typeable o, Show t, Typeable t,
                 Show tType, Typeable tType, TypedSent o tType sE s, Monoid (PrfStdState s o tType),
-                Typeable lType, Show lType, StdPrfPrintMonad s o tType m, StdPrfPrintMonad s o tType (Either SomeException))
+                Typeable lType, Show lType, StdPrfPrintMonad s o tType m, StdPrfPrintMonad s o tType (Either SomeException), 
+                Monoid (PrfStdContext tType)        )
                    => s -> ProofGenTStd tType  [PredLogR s sE o t tType lType] s o m (s,[Int])
 predProofMPM = predProofPropM . mpM
 
 predProofSimpLM :: (Monad m, PredLogicSent s t tType lType, TypeableTerm t o tType sE, Show s,
                 Typeable s, Show sE, Typeable sE, MonadThrow m, Show o, Typeable o, Show t, Typeable t,
                 Show tType, Typeable tType, TypedSent o tType sE s, Monoid (PrfStdState s o tType),
-                Typeable lType, Show lType, StdPrfPrintMonad s o tType m, StdPrfPrintMonad s o tType (Either SomeException))
+                Typeable lType, Show lType, StdPrfPrintMonad s o tType m, StdPrfPrintMonad s o tType (Either SomeException),
+                 Monoid (PrfStdContext tType)        )
                    => s -> ProofGenTStd tType [PredLogR s sE o t tType lType] s o m (s,[Int])
 predProofSimpLM = predProofPropM . plSimpLM
 
 predProofAdjM :: (Monad m, PredLogicSent s t tType lType, TypeableTerm t o tType sE, Show s,
                 Typeable s, Show sE, Typeable sE, MonadThrow m, Show o, Typeable o, Show t, Typeable t,
                 Show tType, Typeable tType, TypedSent o tType sE s, Monoid (PrfStdState s o tType),
-                Typeable lType, Show lType, StdPrfPrintMonad s o tType m, 
-                StdPrfPrintMonad s o tType (Either SomeException))
+                Typeable lType, Show lType, StdPrfPrintMonad s o tType m,
+                StdPrfPrintMonad s o tType (Either SomeException), 
+                Monoid (PrfStdContext tType)        )
                    => s -> s -> ProofGenTStd tType [PredLogR s sE o t tType lType] s o m (s,[Int])
 predProofAdjM a b = predProofPropM $ plAdjM a b
 
@@ -1089,7 +1115,8 @@ predPrfRunProofAtomic rule context state  =
 instance (PredLogicSent s t tType lType, Show sE, Typeable sE, Show s, Typeable s, TypedSent o tType sE s,
              TypeableTerm t o tType sE, Typeable o, Show o, Typeable tType, Show tType,
              Monoid (PrfStdState s o tType), Show t, Typeable t, Typeable lType, Show lType,
-             StdPrfPrintMonad s o tType (Either SomeException)) 
+             StdPrfPrintMonad s o tType (Either SomeException),
+             Monoid (PrfStdContext tType)) 
           => Proof (PredProofError s sE o t tType lType) 
              [PredLogR s sE o t tType lType] 
              (PrfStdState s o tType) 
@@ -1719,14 +1746,6 @@ showPropDeBrStepsBase = showPropDeBrSteps [] [] 0 True
 
 
 
-instance Semigroup (PrfStdState PropDeBr Text ()) where
-    (<>) :: PrfStdState PropDeBr Text () -> PrfStdState PropDeBr Text () -> PrfStdState PropDeBr Text ()
-    (<>) (PrfStdState provenSentsA constsA stepCountA) (PrfStdState provenSentsB constsB stepCountB)
-           = PrfStdState (provenSentsA <> provenSentsB) (constsA <> constsB) (stepCountA + stepCountB)
-
-instance Monoid (PrfStdState PropDeBr Text ()) where
-  mempty :: PrfStdState PropDeBr Text ()
-  mempty = PrfStdState mempty mempty 0
 
 testTheoremMSchema :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) => TheoremSchemaMT () [PredRuleDeBr] PropDeBr Text m ()
 testTheoremMSchema = TheoremSchemaMT  [("N",())] [z1,z2] theoremProg 
