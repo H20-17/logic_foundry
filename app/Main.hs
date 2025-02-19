@@ -68,78 +68,76 @@ class (Monoid s, Monoid stpT) => Proof e r s c stpT | r -> s, r->e, r->c, r -> s
 
 
 
-data ProofGeneratorT stpT eL c r s m x where
+data ProofGeneratorT stpT c r s m x where
   ProofGenInternalT  :: {runProofGenTInternal :: RWST c (r,stpT) s m x}
-                   -> ProofGeneratorT stpT eL c r s m x
+                   -> ProofGeneratorT stpT c r s m x
 
 
-runProofGeneratorTOpen ::  (Monad m, MonadThrow m, Proof eL r s c stpT) => ProofGeneratorT stpT eL c r s m x -> c -> s -> m (x,s, r,stpT)
+runProofGeneratorTOpen ::  (Monad m, MonadThrow m, Proof eL r s c stpT) => ProofGeneratorT stpT c r s m x -> c -> s -> m (x,s, r,stpT)
 runProofGeneratorTOpen ps context state = do
            (x, s, (r,stpT)) <- runRWST (runProofGenTInternal ps) context state
            return (x,s,r,stpT)
 
 
 
-
-
-instance (Monad m) => Functor (ProofGeneratorT stpT eL c r s m) where
+instance (Monad m) => Functor (ProofGeneratorT stpT c r s m) where
      fmap :: Monad m =>
-              (a -> b) -> ProofGeneratorT stpT eL c r s m a -> ProofGeneratorT stpT eL c r s m b
+              (a -> b) -> ProofGeneratorT stpT c r s m a -> ProofGeneratorT stpT c r s m b
      fmap f (ProofGenInternalT  g) = ProofGenInternalT  $ fmap f g
 
 
 
 
 
-instance (Monoid r, Monad m, Proof eL r s c stpT) => Applicative (ProofGeneratorT stpT eL c r s m) where
-   pure :: (Monad m, Proof eL r s c stpT) => a -> ProofGeneratorT stpT eL c r s m a
-   (<*>) :: (Monad m, Proof eL r s c stpT) => ProofGeneratorT stpT eL c r s m (a -> b)
-                                        -> ProofGeneratorT stpT eL c r s m a -> ProofGeneratorT stpT eL c r s m b
+instance (Monoid r, Monad m, Proof eL r s c stpT) => Applicative (ProofGeneratorT stpT c r s m) where
+   pure :: (Monad m, Proof eL r s c stpT) => a -> ProofGeneratorT stpT c r s m a
+   (<*>) :: (Monad m, Proof eL r s c stpT) => ProofGeneratorT stpT c r s m (a -> b)
+                                        -> ProofGeneratorT stpT c r s m a -> ProofGeneratorT stpT c r s m b
    ProofGenInternalT  a <*> ProofGenInternalT  b = ProofGenInternalT  $ a <*> b
    pure x = ProofGenInternalT  $ pure x
 
 
 
-instance (Monoid r,Proof eL r s c stpT, Monad m) => Monad (ProofGeneratorT stpT eL c r s m) where
-   (>>=) :: (Proof eL r s c stpT, Monad m) => ProofGeneratorT stpT eL c r s m a
-                                         -> (a -> ProofGeneratorT stpT eL c r s m b)
-                                     -> ProofGeneratorT stpT eL c r s m b
+instance (Monoid r,Proof eL r s c stpT, Monad m) => Monad (ProofGeneratorT stpT c r s m) where
+   (>>=) :: (Proof eL r s c stpT, Monad m) => ProofGeneratorT stpT c r s m a
+                                         -> (a -> ProofGeneratorT stpT c r s m b)
+                                     -> ProofGeneratorT stpT c r s m b
    ProofGenInternalT  y >>= g = ProofGenInternalT  (y >>= runProofGenTInternal . g)
 
 
 
-instance (Monoid r,Proof eL r s c stpT) =>  MonadTrans (ProofGeneratorT stpT eL c r s) where
-      lift :: (Monoid r, Monad m) => m a -> ProofGeneratorT stpT eL c r s m a
+instance (Monoid r,Proof eL r s c stpT) =>  MonadTrans (ProofGeneratorT stpT c r s) where
+      lift :: (Monoid r, Monad m) => m a -> ProofGeneratorT stpT c r s m a
       lift = ProofGenInternalT  . lift
 
 
-getProofState :: (Monoid r, Proof eL r s c stpT, Monad m) => ProofGeneratorT stpT eL c r s m s
+getProofState :: (Monoid r, Proof eL r s c stpT, Monad m) => ProofGeneratorT stpT c r s m s
 getProofState = ProofGenInternalT  get
 
 
 
 
-instance (Monoid r,Proof eL r s c stpT, Monad m, MonadThrow m) => MonadThrow (ProofGeneratorT stpT eL c r s m) where
+instance (Monoid r,Proof eL r s c stpT, Monad m, MonadThrow m) => MonadThrow (ProofGeneratorT stpT c r s m) where
   throwM :: (Monoid r, Proof eL r s c stpT, Monad m, MonadThrow m, GHC.Stack.Types.HasCallStack, Exception e) =>
-                 e -> ProofGeneratorT stpT eL c r s m a
+                 e -> ProofGeneratorT stpT c r s m a
   throwM = ProofGenInternalT  . lift . throwM
 
 instance (Proof eL r s c stpT, Monoid r, MonadThrow m, MonadCatch m) 
-                   => MonadCatch (ProofGeneratorT stpT eL c r s m) where
+                   => MonadCatch (ProofGeneratorT stpT c r s m) where
        catch :: (Proof eL r s c stpT, GHC.Stack.Types.HasCallStack, MonadThrow m, MonadCatch m,Exception e) =>
-            ProofGeneratorT stpT eL c r s m a -> (e -> ProofGeneratorT stpT eL c r s m a) 
-                   -> ProofGeneratorT stpT eL c r s m a
+            ProofGeneratorT stpT c r s m a -> (e -> ProofGeneratorT stpT c r s m a) 
+                   -> ProofGeneratorT stpT c r s m a
        catch z errhandler = ProofGenInternalT  (RWST \c s -> do
             (a,b,c,d)<-catch (runProofGeneratorTOpen z c s) (\err -> runProofGeneratorTOpen (errhandler err) c s)
             return (a,b,(c,d))
             )
 
 
-instance (Monad m, Monoid r, Monad (ProofGeneratorT stpT eL c r s m), Monoid stpT) 
-            => MonadReader c (ProofGeneratorT stpT eL c r s m) where
-   ask ::  ProofGeneratorT stpT eL c r s m c
+instance (Monad m, Monoid r, Monad (ProofGeneratorT stpT c r s m), Monoid stpT) 
+            => MonadReader c (ProofGeneratorT stpT c r s m) where
+   ask ::  ProofGeneratorT stpT c r s m c
    ask = ProofGenInternalT  ask
-   local :: (c->c) -> ProofGeneratorT stpT eL c r s m a -> ProofGeneratorT stpT eL c r s m a
+   local :: (c->c) -> ProofGeneratorT stpT c r s m a -> ProofGeneratorT stpT c r s m a
    local f (ProofGenInternalT  g) = ProofGenInternalT  $ local f g
 
 data MonadifyProofException eL where
@@ -149,7 +147,7 @@ data MonadifyProofException eL where
 
 instance (Show eL,Typeable eL) => Exception (MonadifyProofException eL)
 monadifyProof :: (Monoid r, Proof eL r s c stpT, Monad m,  MonadThrow m, 
-                 Show eL, Typeable eL) => r -> ProofGeneratorT stpT eL c r s m (s,stpT)
+                 Show eL, Typeable eL) => r -> ProofGeneratorT stpT c r s m (s,stpT)
 monadifyProof p = ProofGenInternalT  $ do
                         c <- ask
                         u <- get
@@ -162,8 +160,8 @@ monadifyProof p = ProofGenInternalT  $ do
 
 modifyPS :: (Monad m, Monoid r1, Monoid r2,Proof eL1 r1 s c stpT, 
              Proof eL2 r2 s c stpT,  MonadThrow m, Typeable eL2, Show eL2)
-             =>  (r1 -> r2) -> ProofGeneratorT stpT eL1 c r1 s m a
-                       -> ProofGeneratorT stpT eL2 c r2 s m a
+             =>  (r1 -> r2) -> ProofGeneratorT stpT c r1 s m a
+                       -> ProofGeneratorT stpT c r2 s m a
 modifyPS g m1 = do
     c <- ask
     ps <- getProofState
@@ -202,8 +200,8 @@ data PrfStdState s o tType where
 
 
 
-type ProofGenTStd tType eL r s o m 
-               = ProofGeneratorT [PrfStdStep s o tType] eL (PrfStdContext tType) r (PrfStdState s o tType) m
+type ProofGenTStd tType r s o m 
+               = ProofGeneratorT [PrfStdStep s o tType] (PrfStdContext tType) r (PrfStdState s o tType) m
 
 
 
@@ -408,24 +406,24 @@ establishTheorem schema context state = do
 
 
 
-data TheoremSchemaMT tType eL r s o m x where
+data TheoremSchemaMT tType r s o m x where
    TheoremSchemaMT :: {
                        constDictM :: [(o,tType)],
                        lemmasM :: [s],
-                       proofM :: ProofGenTStd tType eL r s o m (s,x)
+                       proofM :: ProofGenTStd tType r s o m (s,x)
 
-                     } -> TheoremSchemaMT tType eL r s o m x
+                     } -> TheoremSchemaMT tType r s o m x
 
 
-instance (Show s, Show o, Show tType) => Show (TheoremSchemaMT tType eL r s o m x) where
-    show :: (Show s, Show o, Show tType) => TheoremSchemaMT tType eL r s o m x -> String
+instance (Show s, Show o, Show tType) => Show (TheoremSchemaMT tType r s o m x) where
+    show :: (Show s, Show o, Show tType) => TheoremSchemaMT tType r s o m x -> String
     show (TheoremSchemaMT constDict ls prog) =
         "TheoremSchemaMT " <> show ls <> " <<Monadic subproof>> " <> show constDict
 
 
 
 
-type TheoremSchemaM tType eL r s o = TheoremSchemaMT tType eL r s o (Either SomeException) ()
+type TheoremSchemaM tType r s o = TheoremSchemaMT tType r s o (Either SomeException) ()
 
 data BigException s sE o tType where
    BigExceptLemmaSanityErr :: s -> sE -> BigException s sE o tType
@@ -462,8 +460,8 @@ class (Monad m, StdPrfPrintMonadFrame m) => StdPrfPrintMonad s o tType m |  s ->
 
 
 instance (ProofStd s eL r o tType, Monoid r, Monad m, StdPrfPrintMonadFrame m) 
-          => StdPrfPrintMonadFrame (ProofGenTStd tType eL r s o m) where
-    printStartFrame :: [Bool] -> ProofGenTStd tType eL r s o m ()
+          => StdPrfPrintMonadFrame (ProofGenTStd tType r s o m) where
+    printStartFrame :: [Bool] -> ProofGenTStd tType r s o m ()
     printStartFrame contextFrames = lift $ printStartFrame contextFrames
 
 
@@ -471,11 +469,11 @@ instance (ProofStd s eL r o tType, Monoid r, Monad m, StdPrfPrintMonadFrame m)
 instance (StdPrfPrintMonad s o tType m, 
           ProofStd s eL r o tType, 
           Monoid r, 
-          StdPrfPrintMonadFrame (ProofGenTStd tType eL r s o m))
-             => StdPrfPrintMonad s o tType (ProofGenTStd tType eL r s o m) where
-  printSteps :: [Bool] -> [Int] -> Int -> [PrfStdStep s o tType] -> ProofGenTStd tType eL r s o m ()
+          StdPrfPrintMonadFrame (ProofGenTStd tType r s o m))
+             => StdPrfPrintMonad s o tType (ProofGenTStd tType r s o m) where
+  printSteps :: [Bool] -> [Int] -> Int -> [PrfStdStep s o tType] -> ProofGenTStd tType r s o m ()
   printSteps contextFrames idx stepStart steps = lift $ printSteps contextFrames idx stepStart steps
-  printMReturn :: [Bool] -> s -> [Int] -> ProofGenTStd tType eL r s o m ()
+  printMReturn :: [Bool] -> s -> [Int] -> ProofGenTStd tType r s o m ()
   printMReturn contextFrames returnSent idx = lift $ printMReturn contextFrames returnSent idx
 
 
@@ -485,7 +483,7 @@ instance (StdPrfPrintMonad s o tType m,
 
 monadifyProofStd :: (MonadThrow m, ProofStd s eL r o tType, Monoid r,
                     Show eL, Typeable eL, StdPrfPrintMonad s o tType m) 
-           => r -> ProofGenTStd tType eL r s o m (PrfStdState s o tType,[PrfStdStep s o tType])
+           => r -> ProofGenTStd tType r s o m (PrfStdState s o tType,[PrfStdStep s o tType])
 monadifyProofStd p = do
      PrfStdContext fvStack idx contextFrames <- ask
      state <- getProofState
@@ -500,7 +498,7 @@ checkTheoremMOpen :: (Show s, Typeable s, Monoid r1, ProofStd s eL1 r1 o tType, 
                       PropLogicSent s tType, TypedSent o tType sE s, Show sE, Typeable sE, Typeable tType, Show tType,
                       Show eL1, Typeable eL1,
                       Typeable o, Show o, StdPrfPrintMonad s o tType m )
-                 =>  Maybe (PrfStdState s o tType,PrfStdContext tType) ->  TheoremSchemaMT tType eL1 r1 s o m x
+                 =>  Maybe (PrfStdState s o tType,PrfStdContext tType) ->  TheoremSchemaMT tType r1 s o m x
                               -> m (s, r1, x, [PrfStdStep s o tType], Int)
 checkTheoremMOpen mayPrStateCxt (TheoremSchemaMT constdict lemmas prog) =  do
     let eitherConstDictMap = assignSequentialMap 0 constdict
@@ -547,7 +545,7 @@ checkTheoremM :: (Show s, Typeable s, Monoid r1, ProofStd s eL1 r1 o tType, Mona
                       PropLogicSent s tType, TypedSent o tType sE s, Show sE, Typeable sE, Typeable tType, Show tType,
                       Show eL1, Typeable eL1,
                       Typeable o, Show o, StdPrfPrintMonad s o tType m )
-                 =>  TheoremSchemaMT tType eL1 r1 s o m x
+                 =>  TheoremSchemaMT tType r1 s o m x
                               -> m (s, r1, x, [PrfStdStep s o tType], Int)
 checkTheoremM = checkTheoremMOpen Nothing
 
@@ -564,11 +562,11 @@ establishTheoremM :: (Monoid r1, ProofStd s eL1 r1 o tType ,
                      PropLogicSent s tType,
                      Show s, Typeable s, Ord o, TypedSent o tType sE s, Show sE, Typeable sE, Typeable tType, Show tType, Typeable o,
                      Show o, Show eL1, Typeable eL1, StdPrfPrintMonad s o tType (Either SomeException))
-                            =>  TheoremSchemaM tType eL1 r1 s o -> 
+                            =>  TheoremSchemaM tType r1 s o -> 
                                 PrfStdContext tType ->
                                 PrfStdState s o tType -> 
                                     Either (EstTmMError s o tType) (s, PrfStdStep s o tType)
-establishTheoremM (schema :: TheoremSchemaM tType eL1 r1 s o) context state = 
+establishTheoremM (schema :: TheoremSchemaM tType r1 s o) context state = 
     do
         (tm, prf, (),_,_) <-  left EstTmMErrMExcept $ checkTheoremMOpen  (Just (state,context)) schema
         return (tm, PrfStdStepTheoremM tm)
@@ -584,8 +582,8 @@ expandTheoremM :: (Monoid r1, ProofStd s eL1 r1 o tType ,
                      PropLogicSent s tType, Show s, Typeable s, TypedSent o tType sE s, Show sE, Typeable sE,
                      Show eL1, Typeable eL1,
                      Typeable tType, Show tType, Typeable o, Show o, StdPrfPrintMonad s o tType (Either SomeException))
-                            => TheoremSchemaM tType eL1 r1 s o -> Either ExpTmMError (TheoremSchema s r1 o tType)
-expandTheoremM ((TheoremSchemaMT constdict lemmas proofprog):: TheoremSchemaM tType eL1 r1 s o) =
+                            => TheoremSchemaM tType r1 s o -> Either ExpTmMError (TheoremSchema s r1 o tType)
+expandTheoremM ((TheoremSchemaMT constdict lemmas proofprog):: TheoremSchemaM tType r1 s o) =
       do
           (tm,r1,(),_,_) <- left ExpTmMErrMExcept (checkTheoremMOpen Nothing (TheoremSchemaMT constdict lemmas proofprog))
           return $ TheoremSchema constdict lemmas tm r1
@@ -698,7 +696,7 @@ runSubproofM :: ( Monoid r1, ProofStd s eL1 r1 o tType, Monad m,
                         PropLogicSent s tType, Show eL1, Typeable eL1, Show s, Typeable s,
                         MonadThrow m, TypedSent o tType sE s, Show sE, Typeable sE, StdPrfPrintMonad s o tType m )
                  =>    PrfStdContext tType -> PrfStdState s o tType -> PrfStdState s o tType
-                          -> [PrfStdStep s o tType] -> ProofGenTStd tType eL1 r1 s o m (s, x) ->
+                          -> [PrfStdStep s o tType] -> ProofGenTStd tType r1 s o m (s, x) ->
                           m (x,s,r1,[PrfStdStep s o tType],[Int])
 runSubproofM context baseState preambleState preambleSteps prog =  do
           printStartFrame (contextFrames context)
@@ -725,8 +723,8 @@ runTheoremM :: (Monoid r1, ProofStd s eL1 r1 o tType, Monad m,
                       Show o, Typeable o, Show s, Typeable s,
                       Show eL1, Typeable eL1, Ord o, TypedSent o tType sE s, Show sE, Typeable sE,
                       StdPrfPrintMonad s o tType m)
-                 =>   (TheoremSchema s r1 o tType -> r1) -> TheoremSchemaMT tType eL1 r1 s o m x ->
-                               ProofGenTStd tType eL1 r1 s o m (s, x)
+                 =>   (TheoremSchema s r1 o tType -> r1) -> TheoremSchemaMT tType r1 s o m x ->
+                               ProofGenTStd tType r1 s o m (s, x)
 runTheoremM f (TheoremSchemaMT constDict lemmas prog) =  do
         state <- getProofState
         context <- ask
@@ -740,8 +738,8 @@ runProofByAsmM :: (Monoid r1, ProofStd s eL1 r1 o tType, Monad m,
                        Show s, Typeable s,
                        Show eL1, Typeable eL1, TypedSent o tType sE s, Show sE, Typeable sE, 
                        StdPrfPrintMonad s o tType m )
-                 =>   (ProofByAsmSchema s r1 -> r1) -> s -> ProofGenTStd tType eL1 r1 s o m (s, x)
-                            -> ProofGenTStd tType eL1 r1 s o m (s, x)
+                 =>   (ProofByAsmSchema s r1 -> r1) -> s -> ProofGenTStd tType r1 s o m (s, x)
+                            -> ProofGenTStd tType r1 s o m (s, x)
 runProofByAsmM f asm prog =  do
         state <- getProofState
         context <- ask
@@ -766,8 +764,8 @@ runProofByUGM :: (Monoid r1, ProofStd s eL1 r1 o tType, Monad m,
                     Show s, Typeable s,
                        MonadThrow m, TypedSent o tType sE s, Show sE, Typeable sE, 
                        StdPrfPrintMonad s o tType m )
-                 =>  tType -> (ProofByUGSchema lType r1 -> r1) -> ProofGenTStd tType eL1 r1 s o m (s, x)
-                            -> ProofGenTStd tType eL1 r1 s o m (s, x)
+                 =>  tType -> (ProofByUGSchema lType r1 -> r1) -> ProofGenTStd tType r1 s o m (s, x)
+                            -> ProofGenTStd tType r1 s o m (s, x)
 runProofByUGM tt f prog =  do
         state <- getProofState
         context <- ask
@@ -805,7 +803,7 @@ data PropLogR tType s sE o where
     MP :: s -> PropLogR tType s sE o
     PLProofByAsm :: ProofByAsmSchema s [PropLogR tType s sE o]-> PropLogR tType s sE o
     PLTheorem :: TheoremSchema s [PropLogR tType s sE o] o tType -> PropLogR tType s sE o
-    PLTheoremM :: TheoremSchemaM tType (PropLogError s sE o tType ) [PropLogR tType s sE o] s o -> PropLogR tType s sE o
+    PLTheoremM :: TheoremSchemaM tType [PropLogR tType s sE o] s o -> PropLogR tType s sE o
     PLExclMid :: s -> PropLogR tType s sE o
     PLSimpL :: s -> PropLogR tType s sE o
     PLSimpR :: s -> s ->  PropLogR tType s sE o
@@ -920,7 +918,7 @@ data PredLogR s sE o t tType lType where
     PredProofUI :: t -> s -> PredLogR s sE o t tType lType
 
     PredProofTheorem :: TheoremSchema s [PredLogR s sE o t tType lType] o tType -> PredLogR s sE o t tType lType
-    PredProofTheoremM :: TheoremSchemaM tType (PredProofError s sE o t tType lType) [PredLogR s sE o t tType lType] s o -> 
+    PredProofTheoremM :: TheoremSchemaM tType [PredLogR s sE o t tType lType] s o -> 
                              PredLogR s sE o t tType lType
     deriving(Show)
 
@@ -928,7 +926,7 @@ data PredLogR s sE o t tType lType where
 standardRuleM :: (Monoid r,Monad m, Ord o, Show sE, Typeable sE, Show s, Typeable s, Show eL, Typeable eL,
        MonadThrow m, Show o, Typeable o, Show tType, Typeable tType, TypedSent o tType sE s,
        Monoid (PrfStdState s o tType), ProofStd s eL r o tType, StdPrfPrintMonad s o tType m    )
-       => r -> ProofGenTStd tType eL r s o m (s,[Int])
+       => r -> ProofGenTStd tType r s o m (s,[Int])
 standardRuleM rule = do
      (state,steps) <- monadifyProofStd rule
      (return . head . assocs . provenSents) state
@@ -937,7 +935,7 @@ mpM :: (Monad m, PropLogicSent s tType, Ord o, Show sE, Typeable sE, Show s, Typ
        MonadThrow m, Show o, Typeable o, Show tType, Typeable tType, TypedSent o tType sE s, 
        Monoid (PrfStdState s o tType), StdPrfPrintMonad s o tType m, 
        StdPrfPrintMonad s o tType (Either SomeException))
-          => s -> ProofGenTStd tType (PropLogError s sE o tType) [PropLogR tType s sE o] s o m (s,[Int])
+          => s -> ProofGenTStd tType [PropLogR tType s sE o] s o m (s,[Int])
 mpM impl = standardRuleM [MP impl]
       
 
@@ -945,14 +943,14 @@ plSimpLM :: (Monad m, Monad m, PropLogicSent s tType, Ord o, Show sE, Typeable s
        MonadThrow m, Show o, Typeable o, Show tType, Typeable tType, TypedSent o tType sE s, 
        Monoid (PrfStdState s o tType), StdPrfPrintMonad s o tType m, 
        StdPrfPrintMonad s o tType (Either SomeException)) =>
-            s -> ProofGenTStd tType (PropLogError s sE o tType) [PropLogR tType s sE o] s o m (s,[Int])
+            s -> ProofGenTStd tType [PropLogR tType s sE o] s o m (s,[Int])
 plSimpLM aAndB = standardRuleM [PLSimpL aAndB]
 
 
 plAdjM :: (Monad m, Monad m, PropLogicSent s tType, Ord o, Show sE, Typeable sE, Show s, Typeable s,
        MonadThrow m, Show o, Typeable o, Show tType, Typeable tType, TypedSent o tType sE s, Monoid (PrfStdState s o tType), StdPrfPrintMonad s o tType m, 
        StdPrfPrintMonad s o tType (Either SomeException))
-         => s -> s-> ProofGenTStd tType (PropLogError s sE o tType) [PropLogR tType s sE o] s o m (s,[Int])
+         => s -> s-> ProofGenTStd tType [PropLogR tType s sE o] s o m (s,[Int])
 plAdjM a b = standardRuleM [PLAdj a b]
 
 
@@ -960,7 +958,7 @@ predProofUIM :: (Monad m, PredLogicSent s t tType lType, TypeableTerm t o tType 
                 Typeable s, Show sE, Typeable sE, MonadThrow m, Show o, Typeable o, Show t, Typeable t,
                 Show tType, Typeable tType, TypedSent o tType sE s, Monoid (PrfStdState s o tType), Typeable lType,
                 Show lType, StdPrfPrintMonad s o tType m, StdPrfPrintMonad s o tType (Either SomeException))
-                   => t -> s -> ProofGenTStd tType (PredProofError s sE o t tType lType) [PredLogR s sE o t tType lType] s o m (s,[Int])
+                   => t -> s -> ProofGenTStd tType [PredLogR s sE o t tType lType] s o m (s,[Int])
 predProofUIM term sent = standardRuleM [PredProofUI term sent]
 
 
@@ -971,7 +969,7 @@ predProofEIM :: (Monad m, PredLogicSent s t tType lType, TypeableTerm t o tType 
                 Show tType, Typeable tType, TypedSent o tType sE s, Monoid (PrfStdState s o tType),
                 Typeable lType, Show lType, StdPrfPrintMonad s o tType m, 
                 StdPrfPrintMonad s o tType (Either SomeException))
-                   => s -> o -> ProofGenTStd tType (PredProofError s sE o t tType lType) [PredLogR s sE o t tType lType] s o m (s,[Int])
+                   => s -> o -> ProofGenTStd tType [PredLogR s sE o t tType lType] s o m (s,[Int])
 predProofEIM sent const = standardRuleM [PredProofEI sent const]
 
 
@@ -979,22 +977,22 @@ predProofPropM :: (Monad m, PredLogicSent s t tType lType, TypeableTerm t o tTyp
                 Typeable s, Show sE, Typeable sE, MonadThrow m, Show o, Typeable o, Show t, Typeable t,
                 Show tType, Typeable tType, TypedSent o tType sE s, Monoid (PrfStdState s o tType),
                 Typeable lType, Show lType, StdPrfPrintMonad s o tType (Either SomeException))
-                    => ProofGenTStd tType (PropLogError s sE o tType) [PropLogR tType s sE o] s o m x ->
-                     ProofGenTStd tType (PredProofError s sE o t tType lType) [PredLogR s sE o t tType lType] s o m x
+                    => ProofGenTStd tType  [PropLogR tType s sE o] s o m x ->
+                     ProofGenTStd tType  [PredLogR s sE o t tType lType] s o m x
 predProofPropM = modifyPS (fmap PredProofProp)         
 
 predProofMPM :: (Monad m, PredLogicSent s t tType lType, TypeableTerm t o tType sE, Show s,
                 Typeable s, Show sE, Typeable sE, MonadThrow m, Show o, Typeable o, Show t, Typeable t,
                 Show tType, Typeable tType, TypedSent o tType sE s, Monoid (PrfStdState s o tType),
                 Typeable lType, Show lType, StdPrfPrintMonad s o tType m, StdPrfPrintMonad s o tType (Either SomeException))
-                   => s -> ProofGenTStd tType  (PredProofError s sE o t tType lType) [PredLogR s sE o t tType lType] s o m (s,[Int])
+                   => s -> ProofGenTStd tType  [PredLogR s sE o t tType lType] s o m (s,[Int])
 predProofMPM = predProofPropM . mpM
 
 predProofSimpLM :: (Monad m, PredLogicSent s t tType lType, TypeableTerm t o tType sE, Show s,
                 Typeable s, Show sE, Typeable sE, MonadThrow m, Show o, Typeable o, Show t, Typeable t,
                 Show tType, Typeable tType, TypedSent o tType sE s, Monoid (PrfStdState s o tType),
                 Typeable lType, Show lType, StdPrfPrintMonad s o tType m, StdPrfPrintMonad s o tType (Either SomeException))
-                   => s -> ProofGenTStd tType (PredProofError s sE o t tType lType) [PredLogR s sE o t tType lType] s o m (s,[Int])
+                   => s -> ProofGenTStd tType [PredLogR s sE o t tType lType] s o m (s,[Int])
 predProofSimpLM = predProofPropM . plSimpLM
 
 predProofAdjM :: (Monad m, PredLogicSent s t tType lType, TypeableTerm t o tType sE, Show s,
@@ -1002,7 +1000,7 @@ predProofAdjM :: (Monad m, PredLogicSent s t tType lType, TypeableTerm t o tType
                 Show tType, Typeable tType, TypedSent o tType sE s, Monoid (PrfStdState s o tType),
                 Typeable lType, Show lType, StdPrfPrintMonad s o tType m, 
                 StdPrfPrintMonad s o tType (Either SomeException))
-                   => s -> s -> ProofGenTStd tType (PredProofError s sE o t tType lType) [PredLogR s sE o t tType lType] s o m (s,[Int])
+                   => s -> s -> ProofGenTStd tType [PredLogR s sE o t tType lType] s o m (s,[Int])
 predProofAdjM a b = predProofPropM $ plAdjM a b
 
 
@@ -1730,7 +1728,7 @@ instance Monoid (PrfStdState PropDeBr Text ()) where
   mempty :: PrfStdState PropDeBr Text ()
   mempty = PrfStdState mempty mempty 0
 
-testTheoremMSchema :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) => TheoremSchemaMT () PredErrDeBr [PredRuleDeBr] PropDeBr Text m ()
+testTheoremMSchema :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) => TheoremSchemaMT () [PredRuleDeBr] PropDeBr Text m ()
 testTheoremMSchema = TheoremSchemaMT  [("N",())] [z1,z2] theoremProg 
   where
     z1 = Forall (Bound 0  :<-: (Constant . pack) "N" :&&: Bound 0 :>=: Integ 10 :->: Bound 0 :>=: Integ 0)
@@ -1819,7 +1817,7 @@ main = do
     return ()
 
 
-testprog::ProofGenTStd () PredErrDeBr [PredRuleDeBr] PropDeBr Text IO ()
+testprog::ProofGenTStd () [PredRuleDeBr] PropDeBr Text IO ()
 testprog = do
       let z1 = Forall (((Bound 0  :<-: (Constant . pack) "N") :&&: (Bound 0 :>=: Integ 10))  :->: (Bound 0 :>=: Integ 0))
       let z2 = Forall (((Bound 0  :<-: (Constant . pack) "N") :&&: (Bound 0 :>=: Integ 0)) :->: (Bound 0 :==: Integ 0))
@@ -1846,7 +1844,7 @@ testprog = do
  
       return ()
 
-theoremProg::(MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) => ProofGenTStd () PredErrDeBr [PredRuleDeBr] PropDeBr Text m (PropDeBr,())
+theoremProg::(MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) => ProofGenTStd () [PredRuleDeBr] PropDeBr Text m (PropDeBr,())
 theoremProg = do
     let z1 = Forall (((Bound 0  :<-: (Constant . pack) "N") :&&: (Bound 0 :>=: Integ 10))  :->: (Bound 0 :>=: Integ 0))
     let z2 = Forall (((Bound 0  :<-: (Constant . pack) "N") :&&: (Bound 0 :>=: Integ 0)) :->: (Bound 0 :==: Integ 0))
