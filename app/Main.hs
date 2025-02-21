@@ -639,7 +639,7 @@ proofByAsm (ProofByAsmSchema assumption consequent subproof) context state  =
       do
          let frVarTypeStack = freeVarTypeStack context
          let constdict = fmap fst (consts state)
-         let sc = checkSanity frVarTypeStack consequent constdict
+         let sc = checkSanity frVarTypeStack assumption constdict
          maybe (return ()) (throwError .  ProofByAsmErrAsmNotSane assumption) sc
          let alreadyProven = provenSents state
          let newStepIdxPrefix = stepIdxPrefix context ++ [stepCount state]
@@ -652,6 +652,43 @@ proofByAsm (ProofByAsmSchema assumption consequent subproof) context state  =
          (finalSteps,resultIndex) <- either (throwError . ProofByAsmErrSubproofFailedOnErr) return eitherTestResult
          let implication = assumption .->. consequent
          return (implication, PrfStdStepSubproof implication "PRF_BY_ASM" finalSteps)
+
+
+data ProofBySubArgSchema s r where
+   ProofBySubArgSchema :: {
+                       argPrfConsequent :: s,
+                       argPrfProof :: r
+                    } -> ProofBySubArgSchema s r
+    deriving Show
+
+
+
+data ProofBySubArgError senttype sanityerrtype logcicerrtype where
+   ProofBySubArgErrSubproofFailedOnErr :: TestSubproofErr senttype sanityerrtype logcicerrtype 
+                                    -> ProofBySubArgError senttype sanityerrtype logcicerrtype
+    deriving(Show)
+
+
+proofBySubArg :: (ProofStd s eL1 r1 o tType, PropLogicSent s tType, TypedSent o tType sE s) => 
+                       ProofBySubArgSchema s r1 ->  
+                        PrfStdContext tType -> 
+                        PrfStdState s o tType ->
+                        Either (ProofBySubArgError s sE eL1) (PrfStdStep s o tType)
+proofBySubArg (ProofBySubArgSchema consequent subproof) context state  =
+      do
+         let frVarTypeStack = freeVarTypeStack context
+         let constdict = fmap fst (consts state)
+         let alreadyProven = provenSents state
+         let newStepIdxPrefix = stepIdxPrefix context ++ [stepCount state]
+         let newContextFrames = contextFrames context <> [False]
+         let newContext = PrfStdContext frVarTypeStack newStepIdxPrefix newContextFrames
+         let newState = PrfStdState mempty mempty 0
+         let preambleSteps = []
+         let eitherTestResult = testSubproof newContext state newState preambleSteps consequent subproof
+         (finalSteps,resultIndex) <- either (throwError . ProofBySubArgErrSubproofFailedOnErr) return eitherTestResult
+         return (PrfStdStepSubproof consequent "PRF_BY_SUBARG" finalSteps)
+
+
 
 
 data ProofByUGSchema lType r where
@@ -723,7 +760,7 @@ runSubproofM :: ( Monoid r1, ProofStd s eL1 r1 o tType, Monad m,
                           m (x,s,r1,[PrfStdStep s o tType],[Int])
 runSubproofM context baseState preambleState preambleSteps prog =  do
           printStartFrame (contextFrames context)
-          printSteps (contextFrames context) (stepIdxPrefix context) 0 preambleSteps
+          unless (Prelude.null preambleSteps) (printSteps (contextFrames context) (stepIdxPrefix context) 0 preambleSteps)
           let baseStateZero = PrfStdState (provenSents baseState) (consts baseState) 0
           let startState = baseStateZero <> preambleState
           ((prfResult,extraData),newState,r,newSteps) <- runProofGeneratorTOpen prog context startState
@@ -781,6 +818,30 @@ runProofByAsmM f asm prog =  do
         return (asm .->. consequent,extraData)
 
 
+runProofBySubArgM :: (Monoid r1, ProofStd s eL1 r1 o tType, Monad m,
+                       PropLogicSent s tType, MonadThrow m,
+                       Show s, Typeable s,
+                       Show eL1, Typeable eL1, TypedSent o tType sE s, Show sE, Typeable sE, 
+                       StdPrfPrintMonad s o tType m )
+                 =>   (ProofBySubArgSchema s r1 -> r1) -> ProofGenTStd tType r1 s o m (s, x)
+                            -> ProofGenTStd tType r1 s o m (s, x)
+runProofBySubArgM f prog =  do
+        state <- getProofState
+        context <- ask
+        let frVarTypeStack = freeVarTypeStack context
+        let constdict = fmap fst (consts state)
+        let newStepIdxPrefix = stepIdxPrefix context ++ [stepCount state]
+        let newContextFrames = contextFrames context <> [False]
+        let newContext = PrfStdContext frVarTypeStack newStepIdxPrefix newContextFrames
+        let newState = PrfStdState mempty mempty 0
+        let preambleSteps = []
+        (extraData,consequent,subproof,newSteps,_) <- lift $ runSubproofM newContext state newState preambleSteps prog
+        (monadifyProofStd . f) (ProofBySubArgSchema consequent subproof)
+        return (consequent,extraData)
+
+
+
+
 
 runProofByUGM :: (Monoid r1, ProofStd s eL1 r1 o tType, Monad m,
                        PredLogicSent s t tType lType, Show eL1, Typeable eL1,
@@ -812,8 +873,7 @@ data PropLogError s sE o tType where
     PLErrSentenceNotImp :: s -> PropLogError s sE o tType
     PLErrSentenceNotAdj :: s -> PropLogError s sE o tType
     PLErrPrfByAsmErr :: ProofByAsmError s sE (PropLogError s sE o tType) -> PropLogError s sE o tType
-    PLErrTheorem :: ChkTheoremError s sE (PropLogError s sE o tType) o tType -> PropLogError s sE o tType
-    PLErrTheoremM :: EstTmMError s o tType -> PropLogError s sE o tType
+    PLErrPrfBySubArgErr :: ProofBySubArgError s sE (PropLogError s sE o tType) -> PropLogError s sE o tType
     PLExclMidSanityErr :: s -> sE -> PropLogError s sE o tType
     PLSimpLAdjNotProven :: s -> PropLogError s sE o tType
     PLAdjLeftNotProven :: s -> PropLogError s sE o tType
@@ -826,8 +886,7 @@ data PropLogError s sE o tType where
 data PropLogR tType s sE o where
     MP :: s -> PropLogR tType s sE o
     PLProofByAsm :: ProofByAsmSchema s [PropLogR tType s sE o]-> PropLogR tType s sE o
-    PLTheorem :: TheoremSchema s [PropLogR tType s sE o] o tType -> PropLogR tType s sE o
-    PLTheoremM :: TheoremSchemaM tType [PropLogR tType s sE o] s o -> PropLogR tType s sE o
+    PLProofBySubArg :: ProofBySubArgSchema s [PropLogR tType s sE o]-> PropLogR tType s sE o
     PLExclMid :: s -> PropLogR tType s sE o
     PLSimpL :: s -> PropLogR tType s sE o
     PLSimpR :: s -> s ->  PropLogR tType s sE o
@@ -852,11 +911,9 @@ pLrunProofAtomic rule context state =
              return (conseq, PrfStdStepStep conseq "MP" [impIndex,anteIndex])
         PLProofByAsm schema ->
              left PLErrPrfByAsmErr (proofByAsm schema context state)
-        PLTheorem schema -> do
-              step <- left PLErrTheorem (establishTheorem schema context state)
-              return (theorem schema,step)
-        PLTheoremM schema ->
-            left PLErrTheoremM (establishTheoremM schema context state)
+        PLProofBySubArg schema -> do
+             step <- left PLErrPrfBySubArgErr (proofBySubArg schema context state)
+             return (argPrfConsequent schema, step)
         PLExclMid s -> do
              maybe (return ())   (throwError . PLExclMidSanityErr s) (checkSanity (freeVarTypeStack context) s (fmap fst (consts state)))
              let prop = s .||. neg s
@@ -916,6 +973,7 @@ instance (PropLogicSent s tType, Show sE, Typeable sE, Show s, Typeable s, Ord o
 
 data PredProofError s sE o t tType lType where
     PredProofPrfByAsmErr :: ProofByAsmError s sE (PredProofError s sE o t tType lType) -> PredProofError s sE o t tType lType
+    PredProofPrfBySubArgErr :: ProofBySubArgError s sE (PredProofError s sE o t tType lType) -> PredProofError s sE o t tType lType
     PredProofErrTheorem :: ChkTheoremError s sE (PredProofError s sE o t tType lType) o tType -> PredProofError s sE o t tType lType
     PredProofErrTheoremM :: EstTmMError s o tType -> PredProofError s sE o t tType lType
     PredProofErrPL ::  PropLogError s sE o tType -> PredProofError s sE o t tType lType
@@ -938,6 +996,7 @@ data PredLogR s sE o t tType lType where
    -- t is a term
     PredProofProp :: PropLogR tType s sE o -> PredLogR s sE o t tType lType
     PredProofByAsm :: ProofByAsmSchema s [PredLogR s sE o t tType lType] -> PredLogR s sE o t tType lType
+    PredProofBySubArg :: ProofBySubArgSchema s [PredLogR s sE o t tType lType] -> PredLogR s sE o t tType lType
     PredProofByUG :: ProofByUGSchema lType [PredLogR s sE o t tType lType] -> PredLogR s sE o t tType lType
     PredProofEI :: s -> o -> PredLogR s sE o t tType lType
        -- sentence of form E x . P, and a constant
@@ -1100,6 +1159,9 @@ predPrfRunProofAtomic rule context state  =
           PredProofByAsm schema -> do
                (implication,step) <- left PredProofPrfByAsmErr (proofByAsm schema context state)
                return (Just implication, Nothing, step)
+          PredProofBySubArg schema -> do
+               step <- left PredProofPrfBySubArgErr (proofBySubArg schema context state)
+               return (Just $ argPrfConsequent schema, Nothing, step)
           PredProofTheorem schema -> do
                step <- left PredProofErrTheorem (establishTheorem schema context state)
                return (Just $ theorem schema, Nothing, step)
@@ -1822,7 +1884,7 @@ main = do
 
 
     let zb = runProof proof
-    either (putStrLn . show) (putStrLn . unpack . showPropDeBrStepsBase . snd) zb
+    -- either (putStrLn . show) (putStrLn . unpack . showPropDeBrStepsBase . snd) zb
     print "OI leave me alone"
     let z1 = Forall (((Bound 0  :<-: (Constant . pack) "N") :&&: (Bound 0 :>=: Integ 10)) :->: (Bound 0 :>=: Integ 0))
     let z2 = Forall (((Bound 0  :<-: (Constant . pack) "N") :&&: (Bound 0 :>=: Integ 0)) :->: (Bound 0 :==: Integ 0))
@@ -1863,16 +1925,17 @@ main = do
 
 
     let zb3 = runProof [FakeConst "N" (), predProofFakeProp z1, predProofFakeProp z2, PredProofUI (Free 0) z1]
-    either (putStrLn . show) (putStrLn . unpack . showPropDeBrStepsBase . snd)  zb2
-    either (putStrLn . show) (putStrLn . unpack . showPropDeBrStepsBase . snd) zb3
+    --either (putStrLn . show) (putStrLn . unpack . showPropDeBrStepsBase . snd)  zb2
+    --either (putStrLn . show) (putStrLn . unpack . showPropDeBrStepsBase . snd) zb3
     (a,b,c,d) <- runProofGeneratorT testprog
     print "hi wattup"
     (putStrLn . unpack . showPropDeBrStepsBase) d
     print "YOYOYOYOYOYOYOYOYOYO"
-    (a,b,c,d,e) <- checkTheoremM testTheoremMSchema
+    --(a,b,c,d,e) <- checkTheoremM testTheoremMSchema
     print "yo"
-    (putStrLn . unpack . showPropDeBrStepsBase) d
+    --(putStrLn . unpack . showPropDeBrStepsBase) d
     return ()
+
 
 
 testprog::ProofGenTStd () [PredRuleDeBr] PropDeBr Text IO ()
@@ -1889,13 +1952,15 @@ testprog = do
       
       fux<- runProofByUGM () (\schm -> [PredProofByUG schm]) do
           runProofByAsmM (\schm -> [PredProofByAsm schm]) asm2 do
-              (s1,_) <- predProofUIM (Free 0) z1
-              (s2,_) <- predProofMPM s1
-              (natAsm,_) <- predProofSimpLM asm
-              (s3,_) <- predProofAdjM natAsm s2
-              (s4,_) <-predProofUIM (Free 0) z2
-              (s5,_) <- predProofMPM s4
-              runTheoremM (\schm -> [PredProofTheorem schm]) testTheoremMSchema
+              (s5,())<- runProofBySubArgM (\schm -> [PredProofBySubArg schm]) do
+                 (s1,_) <- predProofUIM (Free 0) z1
+                 (s2,_) <- predProofMPM s1
+                 (natAsm,_) <- predProofSimpLM asm
+                 (s3,_) <- predProofAdjM natAsm s2
+                 (s4,_) <-predProofUIM (Free 0) z2
+                 (s5,_) <- predProofMPM s4
+                 return (s5,())
+--              runTheoremM (\schm -> [PredProofTheorem schm]) testTheoremMSchema
               return (s5,())
      
       runTheoremM (\schm -> [PredProofTheorem schm]) testTheoremMSchema
