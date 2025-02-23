@@ -450,9 +450,9 @@ instance (Show s, Show o, Show tType) => Show (TheoremSchemaMT tType r s o m x) 
         "TheoremSchemaMT " <> show ls <> " <<Monadic subproof>> " <> show constDict
 
 
+-- TheoremSchemaM
 
-
-type TheoremSchemaM tType r s o = TheoremSchemaMT tType r s o (Either SomeException) ()
+type TmSchemaSilentM tType r s o x = TheoremSchemaMT tType r s o (Either SomeException) x
 
 data BigException s sE o tType where
    BigExceptLemmaSanityErr :: s -> sE -> BigException s sE o tType
@@ -592,15 +592,15 @@ data EstTmMError s o tType where
 
 
 
-establishTheoremM :: (Monoid r1, ProofStd s eL1 r1 o tType ,
+establishTmSilentM :: (Monoid r1, ProofStd s eL1 r1 o tType ,
                      PropLogicSent s tType,
                      Show s, Typeable s, Ord o, TypedSent o tType sE s, Show sE, Typeable sE, Typeable tType, Show tType, Typeable o,
                      Show o, Show eL1, Typeable eL1, StdPrfPrintMonad s o tType (Either SomeException))
-                            =>  TheoremSchemaM tType r1 s o -> 
+                            =>  TmSchemaSilentM tType r1 s o () -> 
                                 PrfStdContext tType ->
                                 PrfStdState s o tType -> 
                                     Either (EstTmMError s o tType) (s, PrfStdStep s o tType)
-establishTheoremM (schema :: TheoremSchemaM tType r1 s o) context state = 
+establishTmSilentM (schema :: TmSchemaSilentM tType r1 s o ()) context state = 
     do
         (tm, prf, (),_) <-  left EstTmMErrMExcept $ checkTheoremMOpen  (Just (state,context)) schema
         return (tm, PrfStdStepTheoremM tm)
@@ -616,8 +616,8 @@ expandTheoremM :: (Monoid r1, ProofStd s eL1 r1 o tType ,
                      PropLogicSent s tType, Show s, Typeable s, TypedSent o tType sE s, Show sE, Typeable sE,
                      Show eL1, Typeable eL1,
                      Typeable tType, Show tType, Typeable o, Show o, StdPrfPrintMonad s o tType (Either SomeException))
-                            => TheoremSchemaM tType r1 s o -> Either ExpTmMError (TheoremSchema s r1 o tType)
-expandTheoremM ((TheoremSchemaMT constdict lemmas proofprog):: TheoremSchemaM tType r1 s o) =
+                            => TmSchemaSilentM tType r1 s o () -> Either ExpTmMError (TheoremSchema s r1 o tType)
+expandTheoremM ((TheoremSchemaMT constdict lemmas proofprog):: TmSchemaSilentM tType r1 s o ()) =
       do
           (tm,r1,(),_) <- left ExpTmMErrMExcept (checkTheoremMOpen Nothing (TheoremSchemaMT constdict lemmas proofprog))
           return $ TheoremSchema constdict lemmas tm r1
@@ -800,6 +800,30 @@ runTheoremM f (TheoremSchemaMT constDict lemmas prog) =  do
         (tm, proof, extra, newSteps) <- lift $ checkTheoremMOpen (Just (state,context)) (TheoremSchemaMT constDict lemmas prog)
         monadifyProofStd (f $ TheoremSchema constDict lemmas tm proof)
         return (tm, extra)
+
+
+runTmSilentM :: (Monoid r1, ProofStd s eL1 r1 o tType, Monad m,
+                      PropLogicSent s tType, MonadThrow m, Show tType, Typeable tType,
+                      Show o, Typeable o, Show s, Typeable s,
+                      Show eL1, Typeable eL1, Ord o, TypedSent o tType sE s, Show sE, Typeable sE,
+                      StdPrfPrintMonad s o tType m, StdPrfPrintMonad s o tType (Either SomeException))
+                 =>   (TmSchemaSilentM tType r1 s o () -> r1) -> TmSchemaSilentM tType r1 s o x ->
+                               ProofGenTStd tType r1 s o m (s, x)
+-- runTmSilentM f (TheoremSchemaMT constDict lemmas prog) =  do
+runTmSilentM f (TheoremSchemaMT constDict lemmas prog) =  do
+        state <- getProofState
+        context <- ask
+        let eitherResult = checkTheoremMOpen 
+                     (Just (state,context)) 
+                     (TheoremSchemaMT constDict lemmas prog)
+        (tm, proof, extra, newSteps) <- either throwM return eitherResult
+        monadifyProofStd (f $ TheoremSchemaMT constDict lemmas newProg)
+        return (tm, extra)
+    where
+        newProg = do
+             prog
+             return ()
+
 
 
 runProofByAsmM :: (Monoid r1, ProofStd s eL1 r1 o tType, Monad m,
@@ -1022,7 +1046,7 @@ data PredLogR s sE o t tType lType where
     PredProofUI :: t -> s -> PredLogR s sE o t tType lType
 
     PredProofTheorem :: TheoremSchema s [PredLogR s sE o t tType lType] o tType -> PredLogR s sE o t tType lType
-    PredProofTheoremM :: TheoremSchemaM tType [PredLogR s sE o t tType lType] s o -> 
+    PredProofTheoremM :: TmSchemaSilentM tType [PredLogR s sE o t tType lType] s o () -> 
                              PredLogR s sE o t tType lType
     FakeConst :: o -> tType -> PredLogR s sE o t tType lType
     deriving(Show)
@@ -1182,7 +1206,7 @@ predPrfRunProofAtomic rule context state  =
                step <- left PredProofErrTheorem (establishTheorem schema context state)
                return (Just $ theorem schema, Nothing, step)
           PredProofTheoremM schema -> do
-               (theorem,step) <- left PredProofErrTheoremM (establishTheoremM schema context state)
+               (theorem,step) <- left PredProofErrTheoremM (establishTmSilentM schema context state)
                return (Just theorem,Nothing, step)
           PredProofByUG schema -> do
                (generalized,step) <- left PredProofErrUG (proofByUG schema context state)
@@ -1756,7 +1780,7 @@ showPropDeBrStep contextFrames index lineNum notFromMonad isLastLine step =
                 <> showSubproofF steps False
              PrfStdStepTheoremM prop  ->
                    (pack . show) prop
-                <> "    PRF_BY_THEOREM_M"
+                <> "    ALGORITHMIC_THEOREM"
                 <> qed
              PrfStdStepFreevar index _ ->
                    "FreeVar 𝑣"
@@ -1970,7 +1994,7 @@ testprog = do
               return ()
      
       runTheoremM (\schm -> [PredProofTheorem schm]) testTheoremMSchema
- 
+      runTmSilentM (\schm -> [PredProofTheoremM schm]) testTheoremMSchema
       return ()
 
 theoremProg::(MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) => ProofGenTStd () [PredRuleDeBr] PropDeBr Text m ()
