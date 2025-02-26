@@ -1,5 +1,5 @@
 cabal-version:      3.12
-name:               nothing
+name:               Nothing
 version:            0.1.0.0
 
 -- A short (one-line) description of the package.
@@ -25,15 +25,27 @@ version:            0.1.0.0
 -- category:
 extra-source-files: CHANGELOG.md
 
+library
+   default-extensions: GADTs, FunctionalDependencies, FlexibleContexts, FlexibleInstances, InstanceSigs, ScopedTypeVariables, OverloadedStrings, ExtendedDefaultRules, UnicodeSyntax, ConstraintKinds
+   build-depends: base,mtl>=2.3.1,containers,text,Cabal,transformers,xhtml, exceptions
+   other-modules: Internal.StdPattern,RuleSets.Internal.PropLogic,RuleSets.Internal.PredLogic
+   hs-source-dirs: src
+   exposed-modules: Kernel,StdPattern,StdPatternDevel,RuleSets.PropLogic,RuleSets.PredLogic, RuleSets.PropLogicDevel,RuleSets.PredLogicDevel, Langs.BasicUntyped
+
+
+
 executable nothing
     main-is:          Main.hs
 
     -- Modules included in this executable, other than Main.
     -- other-modules:
+    --    Internal.Kernel
 
     -- LANGUAGE extensions used by modules in this package.
-    -- other-extensions:
+    default-extensions: GADTs, FunctionalDependencies, FlexibleContexts, FlexibleInstances, InstanceSigs, ScopedTypeVariables, OverloadedStrings, ExtendedDefaultRules, UnicodeSyntax, ConstraintKinds
+
+    
     -- build-depends:    base ^>=4.16.4.0,mtl>=2.3.1,containers,text,Cabal,transformers,xhtml, exceptions
-    build-depends: base,mtl>=2.3.1,containers,text,Cabal,transformers,xhtml, exceptions
+    build-depends: Nothing, base,mtl>=2.3.1,containers,text,Cabal,transformers,xhtml, exceptions
     hs-source-dirs:   app
 --    default-language: Haskell2010
