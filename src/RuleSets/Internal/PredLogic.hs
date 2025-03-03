@@ -259,7 +259,7 @@ runProofByAsmM :: (ProofStd s (LogicError s sE o t tType lType) [LogicRule s sE 
                        StdPrfPrintMonad s o tType m, Typeable tType, Show tType, Show o, Typeable o,
                        Show lType, Typeable lType, Typeable t, Show t)
                  =>   s -> ProofGenTStd tType [LogicRule s sE o t tType lType] s o m x
-                            -> ProofGenTStd tType [LogicRule s sE o t tType lType] s o m (s, x)
+                            -> ProofGenTStd tType [LogicRule s sE o t tType lType] s o m (s, [Int], x)
 runProofByAsmM = StdP.runProofByAsmM (\schm -> [ProofByAsm schm])
 
 
@@ -269,7 +269,7 @@ runProofBySubArgM :: (ProofStd s (LogicError s sE o t tType lType) [LogicRule s 
                        StdPrfPrintMonad s o tType m, Typeable tType, Show tType, Show o, Typeable o,
                        Show lType, Typeable lType, Typeable t, Show t)
                  =>   ProofGenTStd tType [LogicRule s sE o t tType lType] s o m x
-                            -> ProofGenTStd tType [LogicRule s sE o t tType lType] s o m (s, x)
+                            -> ProofGenTStd tType [LogicRule s sE o t tType lType] s o m (s, [Int], x)
 runProofBySubArgM = StdP.runProofBySubArgM (\schm -> [ProofBySubArg schm])
 
 runTheoremM :: (ProofStd s (LogicError s sE o t tType lType) [LogicRule s sE o t tType lType] o tType, Monad m,
@@ -278,7 +278,7 @@ runTheoremM :: (ProofStd s (LogicError s sE o t tType lType) [LogicRule s sE o t
                        StdPrfPrintMonad s o tType m, Typeable tType, Show tType, Show o, Typeable o,
                        Show lType, Typeable lType, Typeable t, Show t)
                  =>   TheoremSchemaMT tType [LogicRule s sE o t tType lType] s o m x
-                            -> ProofGenTStd tType [LogicRule s sE o t tType lType] s o m (s, x)
+                            -> ProofGenTStd tType [LogicRule s sE o t tType lType] s o m (s, [Int], x)
 runTheoremM = StdP.runTheoremM (\schm -> [Theorem schm])
 
 runTmSilentM :: (ProofStd s (LogicError s sE o t tType lType) [LogicRule s sE o t tType lType] o tType, Monad m,
@@ -287,7 +287,7 @@ runTmSilentM :: (ProofStd s (LogicError s sE o t tType lType) [LogicRule s sE o 
                        StdPrfPrintMonad s o tType m, Typeable tType, Show tType, Show o, Typeable o,
                        Show lType, Typeable lType, Typeable t, Show t, StdPrfPrintMonad s o tType (Either SomeException))
                  =>   TmSchemaSilentM tType [LogicRule s sE o t tType lType] s o x
-                            -> ProofGenTStd tType [LogicRule s sE o t tType lType] s o m (s,x)
+                            -> ProofGenTStd tType [LogicRule s sE o t tType lType] s o m (s, [Int], x)
 runTmSilentM = StdP.runTmSilentM (\schm -> [TheoremM schm])
 
 runProofByUGM :: (ProofStd s (LogicError s sE o t tType lType) [LogicRule s sE o t tType lType] o tType, Monad m,
@@ -296,7 +296,7 @@ runProofByUGM :: (ProofStd s (LogicError s sE o t tType lType) [LogicRule s sE o
                        StdPrfPrintMonad s o tType m, Typeable tType, Show tType, Show o, Typeable o,
                        Show lType, Typeable lType, Typeable t, Show t)
                  =>   tType -> ProofGenTStd tType [LogicRule s sE o t tType lType] s o m x
-                            -> ProofGenTStd tType [LogicRule s sE o t tType lType] s o m (s, x)
+                            -> ProofGenTStd tType [LogicRule s sE o t tType lType] s o m (s, [Int], x)
 runProofByUGM tt = StdP.runProofByUGM tt (\schm -> [ProofByUG schm])   
 
 

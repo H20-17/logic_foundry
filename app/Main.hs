@@ -172,7 +172,7 @@ testprog = do
       
       fux<- runProofByUGM do
           runProofByAsmM  asm2 do
-              (s5,())<- runProofBySubArgM  do
+              (s5,_,())<- runProofBySubArgM  do
                  newFreeVar <- getTopFreeVar
                  (s1,_) <- uiM newFreeVar z1
                  (s2,_) <- mpM s1
@@ -196,8 +196,8 @@ theoremProg = do
     let asm = (Free 0  :<-: (Constant . pack) "N") :&&: (Free 0 :>=: Integ 10)
     let asm2 = (Free 0  :<-: (Constant . pack) "N") :&&: (Free 0 :>=: Integ 10)
     let mid = (Free 0  :<-: (Constant . pack) "N") :&&: (Free 0 :>=: Integ 0)
-    (generalized, ()) <- runProofByUGM do
-          (imp,()) <- runProofByAsmM asm2 do
+    (generalized, _, ()) <- runProofByUGM do
+          (imp,_,()) <- runProofByAsmM asm2 do
               newFreeVar <- getTopFreeVar
               (s1,_) <- uiM newFreeVar z1
               (s2,_) <- mpM s1

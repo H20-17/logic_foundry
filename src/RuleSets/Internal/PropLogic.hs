@@ -151,7 +151,7 @@ runProofByAsmM :: (ProofStd s (LogicError s sE o tType) [LogicRule tType s sE o]
                        Show s, Typeable s, TypedSent o tType sE s, Show sE, Typeable sE, 
                        StdPrfPrintMonad s o tType m, Typeable tType, Show tType, Show o, Typeable o)
                  =>   s -> ProofGenTStd tType [LogicRule tType s sE o] s o m x
-                            -> ProofGenTStd tType [LogicRule tType s sE o] s o m (s, x)
+                            -> ProofGenTStd tType [LogicRule tType s sE o] s o m (s, [Int], x)
 runProofByAsmM = StdP.runProofByAsmM (\schm -> [ProofByAsm schm])
 
 
@@ -160,7 +160,7 @@ runProofBySubArgM :: (ProofStd s (LogicError s sE o tType) [LogicRule tType s sE
                        Show s, Typeable s, TypedSent o tType sE s, Show sE, Typeable sE, 
                        StdPrfPrintMonad s o tType m, Typeable tType, Show tType, Show o, Typeable o)
                  =>   ProofGenTStd tType [LogicRule tType s sE o] s o m x
-                            -> ProofGenTStd tType [LogicRule tType s sE o] s o m (s, x)
+                            -> ProofGenTStd tType [LogicRule tType s sE o] s o m (s, [Int], x)
 runProofBySubArgM = StdP.runProofBySubArgM (\schm -> [ProofBySubArg schm])  
 
 

@@ -22,5 +22,5 @@ runProofByUGM :: (ProofStd s (LogicError s sE o t () lType) [LogicRule s sE o t 
                        StdPrfPrintMonad s o () m, Show o, Typeable o,
                        Show lType, Typeable lType, Typeable t, Show t, TypedSent o () sE s)
                  =>   ProofGenTStd () [LogicRule s sE o t () lType] s o m x
-                            -> ProofGenTStd () [LogicRule s sE o t () lType] s o m (s, x)
+                            -> ProofGenTStd () [LogicRule s sE o t () lType] s o m (s, [Int], x)
 runProofByUGM = PLI.runProofByUGM ()
