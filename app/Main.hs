@@ -48,7 +48,8 @@ import StdPattern
       TypeableTerm(..),
       PrfStdStep(..),
       ProofGenTStd,
-      getTopFreeVar
+      getTopFreeVar,
+      checkTheoremM
  )
 import qualified RuleSets.PropLogic as PL
 import RuleSets.PredLogicUntyped
@@ -148,12 +149,14 @@ main = do
     --either (putStrLn . show) (putStrLn . unpack . showPropDeBrStepsBase . snd)  zb2
     --either (putStrLn . show) (putStrLn . unpack . showPropDeBrStepsBase . snd) zb3
     (a,b,c,d) <- runProofGeneratorT testprog
-    print "hi wattup"
+    print "hi wattup 2"
     (putStrLn . unpack . showPropDeBrStepsBase) c
---    print "YOYOYOYOYOYOYOYOYOYO"
---    --(a,b,c,d,e) <- checkTheoremM testTheoremMSchema
---    print "yo"
---    --(putStrLn . unpack . showPropDeBrStepsBase) d
+    print "YOYOYOYOYOYOYOYOYOYO CHECK THEOREM"
+    print "YOYOYOYOYOYOYOYOYOYO CHECK THEOREM"
+    print "YOYOYOYOYOYOYOYOYOYO CHECK THEOREM"
+    (a,b,c,d) <- checkTheoremM testTheoremMSchema
+--   print "yo"
+    (putStrLn . unpack . showPropDeBrStepsBase) d
 --    return ()
 
 
