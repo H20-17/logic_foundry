@@ -5,7 +5,7 @@ module StdPattern(
     TypeableTerm(..), TypedSent(..), PropLogicSent(..), PredLogicSent(..), StdPrfPrintMonadFrame(..), StdPrfPrintMonad(..),
     checkTheorem, establishTheorem, constDictTest, testSubproof, monadifyProofStd,
     checkTheoremM, establishTmSilentM, expandTheoremM, proofByAsm, proofBySubArg, proofByUG,
-    getProofState, runProofGeneratorT, Proof, runProof, ProofGeneratorT, modifyPS
+    getProofState, runProofGeneratorT, Proof, runProof, ProofGeneratorT, modifyPS, getTopFreeVar
 
 ) where
 import Kernel
@@ -51,4 +51,5 @@ import Internal.StdPattern
       expandTheoremM,
       proofByAsm,
       proofBySubArg,
-      proofByUG )
+      proofByUG,
+      getTopFreeVar )

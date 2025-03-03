@@ -8,7 +8,7 @@ module Internal.StdPattern(
     TypeableTerm(..), TypedSent(..), PropLogicSent(..), PredLogicSent(..), StdPrfPrintMonadFrame(..), StdPrfPrintMonad(..),
     checkTheorem, establishTheorem, constDictTest, testSubproof, monadifyProofStd,
     checkTheoremM, establishTmSilentM, expandTheoremM, proofByAsm, proofBySubArg, proofByUG,
-    runTheoremM, runTmSilentM, runProofByAsmM, runProofBySubArgM, runProofByUGM
+    runTheoremM, runTmSilentM, runProofByAsmM, runProofBySubArgM, runProofByUGM,getTopFreeVar
 
 ) where
 
@@ -116,9 +116,10 @@ data PrfStdStep s o tType where
 
 class (Eq tType, Ord o) => TypeableTerm t o tType sE | t -> o, t ->tType, t -> sE where
     getTypeTerm :: t -> [tType] -> Map o tType -> Either sE tType
+    -- get term type using a varstack and a const dictionary
     const2Term :: o -> t
     free2Term :: Int -> t
-        -- get term type using a varstack and a const dictionary
+        
 
 
 
@@ -326,6 +327,7 @@ data BigException s sE o tType where
    BigExceptAsmSanity :: s -> sE -> BigException s sE o tType
    BigExceptSchemaConstDup :: o -> BigException s sE o tType
    BigExceptNothingProved :: BigException s sE o tType
+   BigExceptEmptyVarStack :: BigException s sE o tType
 
 
    deriving(Show)
@@ -764,3 +766,16 @@ runProofByUGM tt f prog =  do
         (monadifyProofStd . f) (ProofByUGSchema lambda subproof)
         let resultSent = lType2Forall lambda         
         return (resultSent,extraData)
+
+
+getTopFreeVar :: (Monoid r1, ProofStd s eL1 r1 o tType, Monad m,
+                       PredLogicSent s t tType lType, Show eL1, Typeable eL1,
+                    Show s, Typeable s,
+                       MonadThrow m, TypedSent o tType sE s, Show sE, Typeable sE,
+                       StdPrfPrintMonad s o tType m, TypeableTerm t Text tType sE)
+                 =>  ProofGenTStd tType r1 s o m t
+getTopFreeVar =  do
+        context <- ask
+        let frVarTypeStack = freeVarTypeStack context
+        if null frVarTypeStack then throwM BigExceptEmptyVarStack
+            else return (free2Term $ length frVarTypeStack - 1)

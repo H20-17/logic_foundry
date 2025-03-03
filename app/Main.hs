@@ -48,6 +48,7 @@ import StdPattern
       TypeableTerm(..),
       PrfStdStep(..),
       ProofGenTStd,
+      getTopFreeVar
  )
 import qualified RuleSets.PropLogic as PL
 import RuleSets.PredLogicUntyped
@@ -172,11 +173,12 @@ testprog = do
       fux<- runProofByUGM do
           runProofByAsmM  asm2 do
               (s5,())<- runProofBySubArgM  do
-                 (s1,_) <- uiM (Free 0) z1
+                 newFreeVar <- getTopFreeVar
+                 (s1,_) <- uiM newFreeVar z1
                  (s2,_) <- mpM s1
                  (natAsm,_) <- simpLM asm
                  (s3,_) <- adjM natAsm s2
-                 (s4,_) <- uiM (Free 0) z2
+                 (s4,_) <- uiM newFreeVar z2
                  (s5,_) <- mpM s4
                  return ()
 --              runTheoremM (\schm -> [PredProofTheorem schm]) testTheoremMSchema
@@ -196,7 +198,8 @@ theoremProg = do
     let mid = (Free 0  :<-: (Constant . pack) "N") :&&: (Free 0 :>=: Integ 0)
     (generalized, ()) <- runProofByUGM do
           (imp,()) <- runProofByAsmM asm2 do
-              (s1,_) <- uiM (Free 0) z1
+              newFreeVar <- getTopFreeVar
+              (s1,_) <- uiM newFreeVar z1
               (s2,_) <- mpM s1
               --(lift . print) "Coment1"
               --(lift . print . show) s1
@@ -204,7 +207,7 @@ theoremProg = do
               (natAsm,_) <- simpLM asm
               --(lift . print) "COmment 2"
               (s3,_) <- adjM natAsm s2
-              (s4,line_idx) <- uiM (Free 0) z2
+              (s4,line_idx) <- uiM newFreeVar z2
               -- (lift . print . show) line_idx
               (s5,_) <- mpM s4
               (s6,_) <- simpLM asm
