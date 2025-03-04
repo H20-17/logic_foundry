@@ -10,8 +10,6 @@ module Kernel (
   getProofState,
   monadifyProof,
   modifyPS,
-  Commentable(..),
-  writeComment
 ) where
 import Data.Text (Text)
 import Control.Monad.RWS
@@ -146,12 +144,3 @@ modifyPS g m1 = do
     monadifyProof $ g rules
     return datum
 
-
-class Commentable stpT where
-   buildCommentStep :: Text -> stpT
-
-writeComment :: (Monad m,Commentable stpT, Monoid r, Monoid stpT) 
-            => Text -> ProofGeneratorT resultT stpT c r s m ()
-writeComment comment = ProofGenInternalT $ do
-     let writeStep = buildCommentStep comment
-     tell (mempty,writeStep,mempty)

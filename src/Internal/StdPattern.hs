@@ -35,8 +35,7 @@ import Kernel
       runProof,
       Proof(..),
       ProofGeneratorT,
-      modifyPS,
-      Commentable(..) )
+      modifyPS )
 import Control.Arrow ( left )
 import Control.Monad.Trans ( MonadTrans(lift) )
 import Control.Monad.Reader ( MonadReader(ask) )
@@ -109,12 +108,7 @@ data PrfStdStep s o tType where
     PrfStdStepTheoremM :: s -> PrfStdStep s o tType
     PrfStdStepFreevar :: Int -> tType -> PrfStdStep s o tType
     PrfStdStepFakeConst :: o ->tType -> PrfStdStep s o tType
-    PrfStdStepComment :: Text -> PrfStdStep s o tType
-
-
-instance Commentable [PrfStdStep s o tType] where
-    buildCommentStep :: Text -> [PrfStdStep s o tType]
-    buildCommentStep comment = [PrfStdStepComment comment]
+    PrfStdStepRemark :: Text -> PrfStdStep s o tType
 
 
 

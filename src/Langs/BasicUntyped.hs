@@ -459,17 +459,12 @@ showIndexAsSubscript n =  Data.Text.concat (Prelude.map f (show n))
 showPropDeBrStep :: [Bool] -> [Int] ->Int -> Bool -> Bool -> PrfStdStepPredDeBr -> Text
 showPropDeBrStep contextFrames index lineNum notFromMonad isLastLine step =
         Data.Text.concat (Prelude.map mapBool contextFrames)
-          <> stepPrefix
-          <> showStepInfo
-      where
-        stepPrefix = case step of
-            PrfStdStepComment _ -> "-- "
-            _ ->
-                  showIndex index
+          <> showIndex index
                 <> (if (not . Prelude.null) index then "." else "")
                 <> (pack . show) lineNum
                 <> ": "
-            
+          <> showStepInfo
+      where
         mapBool frameBool =  if frameBool
                                 then
                                     "┃"
@@ -521,7 +516,7 @@ showPropDeBrStep contextFrames index lineNum notFromMonad isLastLine step =
                 "Const "
                      <> (pack .show) constName
                 <> "    FAKE_CONST"
-             PrfStdStepComment text -> text
+             PrfStdStepRemark text -> text
              where
                 showSubproofF steps isTheorem = 
                     if notFromMonad then
@@ -589,11 +584,8 @@ showPropDeBrSteps contextFrames index stepStart notFromMonad steps = fst foldRes
            where
              f (accumText,stepNum) step = (accumText 
                                              <> showPropDeBrStep contextFrames index stepNum notFromMonad isLastLine step <> eol,
-                                           newStepNum)
+                                           stepNum+1)
                   where
-                    newStepNum = case step of
-                        PrfStdStepComment text -> stepNum
-                        _ -> stepNum + 1
                     isLastLine = stepNum == stepStart + length steps - 1
                     eol = if isLastLine then "" else "\n"
 
