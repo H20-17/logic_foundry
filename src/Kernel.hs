@@ -9,7 +9,9 @@ module Kernel (
   runProofGeneratorT,
   getProofState,
   monadifyProof,
-  modifyPS
+  modifyPS,
+  Commentable(..),
+  writeComment
 ) where
 import Data.Text (Text)
 import Control.Monad.RWS
@@ -31,10 +33,10 @@ class (Monoid s, Monoid stpT, Monoid c) => Proof e r s c stpT resultT | r -> s, 
       runProofOpen :: r -> c -> s -> Either e (s , stpT, Last resultT)
 
 
-runProof :: Proof e r s c stpT resultT => r -> Either e (stpT, Maybe resultT)
+runProof :: Proof e r s c stpT resultT => r -> Either e (stpT, s)
 runProof r = do
                 (state, steps, lastRes) <- runProofOpen r mempty mempty
-                return (steps, getLast lastRes)
+                return (steps, state)
 
 
 data ProofGeneratorT resultT stpT c r s m x where
@@ -47,10 +49,10 @@ runProofGeneratorTOpen ps context state = do
            (x, s, (r,stpT, resultT)) <- runRWST (runProofGenTInternal ps) context state
            return (x,s,r,stpT, resultT)
 
-runProofGeneratorT :: (MonadThrow m, Proof eL r s c stpT resultT) => ProofGeneratorT resultT stpT c r s m x -> m (x, r, stpT, Maybe resultT)
+runProofGeneratorT :: (MonadThrow m, Proof eL r s c stpT resultT) => ProofGeneratorT resultT stpT c r s m x -> m (x, r, stpT, s)
 runProofGeneratorT ps = do
                       (extra, state, proof, steps, prfResult) <- runProofGeneratorTOpen ps mempty mempty
-                      return (extra, proof, steps, getLast prfResult)
+                      return (extra, proof, steps, state)
 
 instance (Monad m) => Functor (ProofGeneratorT resultT stpT c r s m) where
      fmap :: Monad m =>
@@ -143,3 +145,13 @@ modifyPS g m1 = do
     (datum,_,rules,steps, prfResult) <- lift $ runProofGeneratorTOpen m1 c ps
     monadifyProof $ g rules
     return datum
+
+
+class Commentable stpT where
+   buildCommentStep :: Text -> stpT
+
+writeComment :: (Monad m,Commentable stpT, Monoid r, Monoid stpT) 
+            => Text -> ProofGeneratorT resultT stpT c r s m ()
+writeComment comment = ProofGenInternalT $ do
+     let writeStep = buildCommentStep comment
+     tell (mempty,writeStep,mempty)

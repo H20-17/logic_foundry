@@ -35,7 +35,8 @@ import Kernel
       runProof,
       Proof(..),
       ProofGeneratorT,
-      modifyPS )
+      modifyPS,
+      Commentable(..) )
 import Control.Arrow ( left )
 import Control.Monad.Trans ( MonadTrans(lift) )
 import Control.Monad.Reader ( MonadReader(ask) )
@@ -108,8 +109,12 @@ data PrfStdStep s o tType where
     PrfStdStepTheoremM :: s -> PrfStdStep s o tType
     PrfStdStepFreevar :: Int -> tType -> PrfStdStep s o tType
     PrfStdStepFakeConst :: o ->tType -> PrfStdStep s o tType
+    PrfStdStepComment :: Text -> PrfStdStep s o tType
 
 
+instance Commentable [PrfStdStep s o tType] where
+    buildCommentStep :: Text -> [PrfStdStep s o tType]
+    buildCommentStep comment = [PrfStdStepComment comment]
 
 
 
@@ -357,7 +362,7 @@ instance (ProofStd s eL r o tType, Monoid r, Monad m, StdPrfPrintMonadFrame m)
           => StdPrfPrintMonadFrame (ProofGenTStd tType r s o m) where
     printStartFrame :: [Bool] -> ProofGenTStd tType r s o m ()
     printStartFrame contextFrames = lift $ printStartFrame contextFrames
-
+    
 
 
 instance (StdPrfPrintMonad s o tType m, 
@@ -387,7 +392,7 @@ monadifyProofStd p = do
    where
        f state prop = Just (prop, provenSents state!prop )
           
-
+       
 
 checkTheoremMOpen :: (Show s, Typeable s, Monoid r1, ProofStd s eL1 r1 o tType, Monad m, MonadThrow m,
                       PropLogicSent s tType, TypedSent o tType sE s, Show sE, Typeable sE, Typeable tType, Show tType,

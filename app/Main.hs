@@ -49,7 +49,8 @@ import StdPattern
       PrfStdStep(..),
       ProofGenTStd,
       getTopFreeVar,
-      checkTheoremM
+      checkTheoremM,
+      writeComment
  )
 import qualified RuleSets.PropLogic as PL
 import RuleSets.PredLogicUntyped
@@ -153,7 +154,7 @@ main = do
     (putStrLn . unpack . showPropDeBrStepsBase) c
     print "YOYOYOYOYOYOYOYOYOYO CHECK THEOREM"
     print "YOYOYOYOYOYOYOYOYOYO CHECK THEOREM"
-    print "YOYOYOYOYOYOYOYOYOYO CHECK THEOREM"
+    print "YOYOYOYOYOYOYOYOYOYO CHECK THEOREM3"
     (a,b,c,d) <- checkTheoremM testTheoremMSchema
 --   print "yo"
     (putStrLn . unpack . showPropDeBrStepsBase) d
@@ -178,11 +179,14 @@ testprog = do
               (s5,_,())<- runProofBySubArgM  do
                  newFreeVar <- getTopFreeVar
                  (s1,_) <- uiM newFreeVar z1
-                 (s2,_) <- mpM s1
+                 (s2,idx) <- mpM s1
+                 writeComment ((pack . show) idx <> " was the index")
                  (natAsm,_) <- simpLM asm
                  (s3,_) <- adjM natAsm s2
                  (s4,_) <- uiM newFreeVar z2
-                 (s5,_) <- mpM s4
+                 (s5,idx) <- mpM s4
+                 (lift . print) "what happened?"
+                 writeComment ((pack . show) idx <> " was the index")
                  return ()
 --              runTheoremM (\schm -> [PredProofTheorem schm]) testTheoremMSchema
               return ()
