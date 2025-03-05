@@ -206,6 +206,7 @@ theoremProg = do
               (s1,_) <- uiM newFreeVar z1
               (s2,_) <- mpM s1
               remarkIdx <- remarkM "Yeah baby"
+              remarkM "" --empty remark
               --(lift . print) "Coment1"
               --(lift . print . show) s1
               remarkM $ (pack . show) remarkIdx <> " was the index of the remark above/"
@@ -213,7 +214,8 @@ theoremProg = do
               --(lift . print) "COmment 2"
               (s3,_) <- adjM natAsm s2
               (s4,line_idx) <- uiM newFreeVar z2
-              remarkM ((pack . show) s4 <> " is the sentence. It was proven in line " <> (pack . show) line_idx)
+              remarkM ((pack . show) s4 <> " is the sentence. It was proven in line " <> (pack . show) line_idx
+                       <> "\nThis is the next line of this remark.")
               -- (lift . print . show) line_idx
               (s5,_) <- mpM s4
               (s6,_) <- simpLM asm

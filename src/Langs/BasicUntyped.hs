@@ -13,14 +13,21 @@ module Langs.BasicUntyped (
 ) where
 import Control.Monad ( unless )
 import Data.List (intersperse)
-import Data.Text (Text, pack, unpack,concat)
+import Data.Text (Text, pack, unpack,concat, lines,intercalate)
 import GHC.Generics (Associativity (NotAssociative, RightAssociative, LeftAssociative))
 import Data.Map
     ( (!), foldrWithKey, fromList, insert, keysSet, lookup, map, Map )
 import Data.Set(Set)
 import qualified Data.Set as Set (fromList,insert,member)
 import Control.Applicative ( Alternative((<|>)) )
-import StdPattern
+import Internal.StdPattern
+    ( PredLogicSent(..),
+      PrfStdStep(..),
+      PropLogicSent(..),
+      StdPrfPrintMonad(..),
+      StdPrfPrintMonadFrame(..),
+      TypeableTerm(..),
+      TypedSent(..) )
 import Control.Exception (SomeException)
 import Control.Monad.Except ( MonadError(throwError) )
 import qualified RuleSets.PropLogic as PL
@@ -458,13 +465,14 @@ showIndexAsSubscript n =  Data.Text.concat (Prelude.map f (show n))
 
 showPropDeBrStep :: [Bool] -> [Int] ->Int -> Bool -> Bool -> PrfStdStepPredDeBr -> Text
 showPropDeBrStep contextFrames index lineNum notFromMonad isLastLine step =
-        Data.Text.concat (Prelude.map mapBool contextFrames)
+        contextFramesShown
           <> showIndex index
                 <> (if (not . Prelude.null) index then "." else "")
                 <> (pack . show) lineNum
                 <> ": "
           <> showStepInfo
       where
+        contextFramesShown = Data.Text.concat (Prelude.map mapBool contextFrames)
         mapBool frameBool =  if frameBool
                                 then
                                     "┃"
@@ -516,8 +524,15 @@ showPropDeBrStep contextFrames index lineNum notFromMonad isLastLine step =
                 "Const "
                      <> (pack .show) constName
                 <> "    FAKE_CONST"
-             PrfStdStepRemark text -> text
+             PrfStdStepRemark text ->   "REMARK"
+                                      <> qed
+                                      <> (if text == "" then "" else "\n" <> contextFramesShown <> "║") 
+                                      <> intercalate ("\n" <> contextFramesShown <> "║") (Data.Text.lines text)
+                                      <> "\n"
+                                      <> contextFramesShown
+                                      <> "╚"
              where
+ 
                 showSubproofF steps isTheorem = 
                     if notFromMonad then
                           "\n"
