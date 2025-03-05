@@ -93,8 +93,9 @@ runProofAtomic rule context state =
              impIndex <- maybe ((throwError . LogicErrMPImplNotProven) implication) return (Data.Map.lookup implication (provenSents state))
              anteIndex <- maybe ((throwError . LogicErrMPAnteNotProven) antecedant) return (Data.Map.lookup antecedant (provenSents state))
              return (Just conseq, PrfStdStepStep conseq "MP" [impIndex,anteIndex])
-        ProofByAsm schema ->
-             fmap (\(x,y) -> (Just x,y)) (left LogicErrPrfByAsmErr (proofByAsm schema context state))
+        ProofByAsm schema -> do
+             (imp, step) <- left LogicErrPrfByAsmErr (proofByAsm schema context state)
+             return (Just imp, step)
         ProofBySubArg schema -> do
              step <- left LogicErrPrfBySubArgErr (proofBySubArg schema context state)
              return (Just $ argPrfConsequent schema, step)
@@ -149,7 +150,7 @@ instance (PropLogicSent s tType, Show sE, Typeable sE, Show s, Typeable s, Ord o
                    g (mayS, step) = (newState <> PrfStdState newSentDict mempty 1,
                                     newSteps <> [step], Last mayS )
                       where
-                        newSentDict = maybe mempty (\s -> (Data.Map.insert s newLineIndex mempty)) mayS
+                        newSentDict = maybe mempty (\s -> Data.Map.insert s newLineIndex mempty) mayS
                         newStepCount = stepCount newState + 1
                         newLineIndex = stepIdxPrefix context <> [stepCount oldState + newStepCount-1]
 
@@ -218,6 +219,6 @@ remarkM :: (Monad m,  Monad m, PropLogicSent s tType, Ord o, Show sE, Typeable s
        MonadThrow m, Show o, Typeable o, Show tType, Typeable tType, TypedSent o tType sE s, Monoid (PrfStdState s o tType), StdPrfPrintMonad s o tType m,
        StdPrfPrintMonad s o tType (Either SomeException), Monoid (PrfStdContext tType) )
                     => 
-                     Text -> ProofGenTStd tType  [LogicRule tType s sE o] s o m ()
-remarkM = (modifyPS (fmap PropRemark)) . REM.remarkM      
+                     Text -> ProofGenTStd tType  [LogicRule tType s sE o] s o m [Int]
+remarkM = modifyPS (fmap PropRemark) . REM.remarkM      
 

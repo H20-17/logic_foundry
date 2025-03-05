@@ -384,5 +384,5 @@ remarkM :: (Monad m, PredLogicSent s t tType lType, TypeableTerm t o tType sE, S
                 Show tType, Typeable tType, TypedSent o tType sE s, Monoid (PrfStdState s o tType),
                 Typeable lType, Show lType, StdPrfPrintMonad s o tType m, StdPrfPrintMonad s o tType (Either SomeException), 
                 Monoid (PrfStdContext tType)        )
-                   => Text -> ProofGenTStd tType  [LogicRule s sE o t tType lType] s o m ()
+                   => Text -> ProofGenTStd tType  [LogicRule s sE o t tType lType] s o m [Int]
 remarkM = propRuleM . PL.remarkM

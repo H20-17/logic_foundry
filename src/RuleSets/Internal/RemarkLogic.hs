@@ -25,8 +25,10 @@ import StdPattern
       ProofGenTStd,
       monadifyProofStd,
       proofByAsm,
-      proofBySubArg)
+      proofBySubArg,
+      getProofState)
 import StdPatternDevel as StdP (runProofOpen )
+import Control.Monad.RWS (MonadReader(ask))
 
 
 data LogicRule tType s sE o where
@@ -75,23 +77,19 @@ instance ( Show s, Typeable s, Ord o, TypedSent o tType sE s,
 
 
 
-standardRuleM :: (Monoid r,Monad m, Ord o, Show sE, Typeable sE, Show s, Typeable s, Show eL, Typeable eL,
-       MonadThrow m, Show o, Typeable o, Show tType, Typeable tType, TypedSent o tType sE s,
-       Monoid (PrfStdState s o tType), ProofStd s eL r o tType, StdPrfPrintMonad s o tType m    )
-       => r -> ProofGenTStd tType r s o m (s,[Int])
-standardRuleM rule = do
-    -- function is unsafe and used for rules that generate one or more sentence.
-    -- probably should not be externally facing.
-     mayPropIndex <- monadifyProofStd rule
-     maybe (error "Critical failure: No index looking up sentence.") return mayPropIndex
-
 
 remarkM :: (Monad m, Ord o, Show sE, Typeable sE, Show s, Typeable s,
        MonadThrow m, Show o, Typeable o, Show tType, Typeable tType, TypedSent o tType sE s,
        Monoid (PrfStdState s o tType), StdPrfPrintMonad s o tType m,
        StdPrfPrintMonad s o tType (Either SomeException), Monoid (PrfStdContext tType))
-          => Text -> ProofGenTStd tType [LogicRule tType s sE o] s o m ()
+          => Text -> ProofGenTStd tType [LogicRule tType s sE o] s o m [Int]
           
 remarkM txt = do
     monadifyProofStd [Remark txt]
-    return ()  
+    -- The index will be that of the last step generated.
+    state <- getProofState
+    context <- ask
+    let stepCnt = stepCount state
+    let idxPrefix = stepIdxPrefix context
+    let finalIdx = idxPrefix <> [stepCnt-1]
+    return finalIdx  
