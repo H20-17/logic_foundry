@@ -205,6 +205,7 @@ theoremProg = do
               newFreeVar <- getTopFreeVar
               (s1,_) <- uiM newFreeVar z1
               (s2,_) <- mpM s1
+              remarkM "Yeah baby"
               --(lift . print) "Coment1"
               --(lift . print . show) s1
 

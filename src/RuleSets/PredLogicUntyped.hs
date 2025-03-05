@@ -1,12 +1,13 @@
 module RuleSets.PredLogicUntyped
 (
     simpL, adj, uiM, eiM, LogicError(..), LogicRule(..), fakePropM, fakeConstM, mp, fakeProp,
-    propRuleM, mpM, simpLM, adjM, runProofBySubArgM, runProofByAsmM, runTheoremM, runTmSilentM, runProofByUGM
+    propRuleM, mpM, simpLM, adjM, runProofBySubArgM, runProofByAsmM, runTheoremM, runTmSilentM, runProofByUGM,
+    remarkM
 ) where
 
 import RuleSets.Internal.PredLogic(LogicError(..), LogicRule(..), fakePropM, fakeConstM, mp, fakeProp,
     simpL, adj, uiM, eiM,
-    propRuleM, mpM, simpLM, adjM, runProofBySubArgM, runProofByAsmM, runTheoremM, runTmSilentM)
+    propRuleM, mpM, simpLM, adjM, runProofBySubArgM, runProofByAsmM, runTheoremM, runTmSilentM, remarkM)
 
 
 import qualified RuleSets.Internal.PredLogic as PLI (runProofByUGM)

@@ -2,7 +2,8 @@ module RuleSets.Internal.PredLogic
 (
     LogicError(..), LogicRule(..), fakePropM, fakeConstM, mp, fakeProp,
     simpL, adj, runProofAtomic, uiM, eiM,
-    propRuleM, mpM, simpLM, adjM, runProofBySubArgM, runProofByAsmM, runTheoremM, runTmSilentM, runProofByUGM
+    propRuleM, mpM, simpLM, adjM, runProofBySubArgM, runProofByAsmM, runTheoremM, runTmSilentM, runProofByUGM,
+    remarkM
 ) where
 
 
@@ -148,8 +149,8 @@ runProofAtomic :: (PredLogicSent s t tType lType,
 runProofAtomic rule context state  = 
       case rule of
           PropRule propR -> do
-               (sent,step) <- left  LogicErrPL (PL.runProofAtomic propR context state)
-               return (Just sent, Nothing, step)
+               (maySent,step) <- left  LogicErrPL (PL.runProofAtomic propR context state)
+               return (maySent, Nothing, step)
           ProofByAsm schema -> do
                (implication,step) <- left LogicErrPrfByAsm (proofByAsm schema context state)
                return (Just implication, Nothing, step)
@@ -244,6 +245,9 @@ instance (PredLogicSent s t tType lType, Show sE, Typeable sE, Show s, Typeable 
                     (Nothing,Just (newConst,tType), step) -> (newState <> 
                             PrfStdState mempty
                                (Data.Map.insert newConst (tType,newLineIndex) mempty) 1,
+                               newSteps <> [step], mayLastProp)
+                    (Nothing,Nothing, step) -> (newState <>
+                            PrfStdState mempty mempty 1,
                                newSteps <> [step], mayLastProp)
                     where
                         newStepCount = stepCount newState + 1
@@ -374,3 +378,11 @@ fakePropM :: (Monad m, PredLogicSent s t tType lType, TypeableTerm t o tType sE,
                 Monoid (PrfStdContext tType)        )
                    => s -> ProofGenTStd tType  [LogicRule s sE o t tType lType] s o m (s,[Int])
 fakePropM = propRuleM . PL.fakePropM
+
+remarkM :: (Monad m, PredLogicSent s t tType lType, TypeableTerm t o tType sE, Show s,
+                Typeable s, Show sE, Typeable sE, MonadThrow m, Show o, Typeable o, Show t, Typeable t,
+                Show tType, Typeable tType, TypedSent o tType sE s, Monoid (PrfStdState s o tType),
+                Typeable lType, Show lType, StdPrfPrintMonad s o tType m, StdPrfPrintMonad s o tType (Either SomeException), 
+                Monoid (PrfStdContext tType)        )
+                   => Text -> ProofGenTStd tType  [LogicRule s sE o t tType lType] s o m ()
+remarkM = propRuleM . PL.remarkM

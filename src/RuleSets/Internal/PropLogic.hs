@@ -1,7 +1,8 @@
 module RuleSets.Internal.PropLogic 
 (
     LogicError, LogicRule(..), runProofAtomic, mpM, fakePropM, simpLM, adjM,
-    RuleSets.Internal.PropLogic.runProofByAsmM, RuleSets.Internal.PropLogic.runProofBySubArgM
+    runProofByAsmM, runProofBySubArgM, remarkM
+
 ) where
 
 import Data.Monoid ( Last(..) )
@@ -41,8 +42,11 @@ import StdPattern
       ProofGenTStd,
       monadifyProofStd,
       proofByAsm,
-      proofBySubArg)
-import StdPatternDevel as StdP ( runProofByAsmM, runProofBySubArgM, runProofOpen )
+      proofBySubArg,
+      modifyPS)
+import qualified StdPatternDevel as StdP ( runProofByAsmM, runProofBySubArgM, runProofOpen )
+import qualified RuleSets.RemarkLogic as REM (LogicRule(..),remarkM)
+import qualified RuleSets.RemarkLogicDevel as REM(runProofAtomic)
 
 
 
@@ -71,6 +75,7 @@ data LogicRule tType s sE o where
     SimpR :: s -> s ->  LogicRule tType s sE o
     Adj :: s -> s -> LogicRule tType s sE o
     Rep :: s -> LogicRule tType s sE o
+    PropRemark :: REM.LogicRule tType s sE o -> LogicRule tType s sE o
     FakeProp :: s -> LogicRule tType s sE o
     deriving(Show)
 
@@ -80,38 +85,40 @@ runProofAtomic :: (ProofStd s (LogicError s sE o tType) [LogicRule tType s sE o]
                PropLogicSent s tType, Show sE, Typeable sE, Show s, Typeable s, Ord o, TypedSent o tType sE s,
                Show o, Typeable o, Typeable tType, Show tType, StdPrfPrintMonad s o tType (Either SomeException)) =>
                             LogicRule tType s sE o -> PrfStdContext tType -> PrfStdState s o tType 
-                                      -> Either (LogicError s sE o tType) (s,PrfStdStep s o tType)
+                                      -> Either (LogicError s sE o tType) (Maybe s,PrfStdStep s o tType)
 runProofAtomic rule context state = 
       case rule of
         MP implication -> do
              (antecedant, conseq) <- maybe ((throwError . LogicErrSentenceNotImp) implication) return (parse_implication implication)
              impIndex <- maybe ((throwError . LogicErrMPImplNotProven) implication) return (Data.Map.lookup implication (provenSents state))
              anteIndex <- maybe ((throwError . LogicErrMPAnteNotProven) antecedant) return (Data.Map.lookup antecedant (provenSents state))
-             return (conseq, PrfStdStepStep conseq "MP" [impIndex,anteIndex])
+             return (Just conseq, PrfStdStepStep conseq "MP" [impIndex,anteIndex])
         ProofByAsm schema ->
-             left LogicErrPrfByAsmErr (proofByAsm schema context state)
+             fmap (\(x,y) -> (Just x,y)) (left LogicErrPrfByAsmErr (proofByAsm schema context state))
         ProofBySubArg schema -> do
              step <- left LogicErrPrfBySubArgErr (proofBySubArg schema context state)
-             return (argPrfConsequent schema, step)
+             return (Just $ argPrfConsequent schema, step)
         ExclMid s -> do
              maybe (return ())   (throwError . LogicErrExclMidSanityErr s) (checkSanity (freeVarTypeStack context) s (fmap fst (consts state)))
              let prop = s .||. neg s
-             return (prop,PrfStdStepStep prop "EXMID" [])
+             return (Just prop,PrfStdStepStep prop "EXMID" [])
         SimpL aAndB -> do
             (a,b) <- maybe ((throwError . LogicErrSentenceNotAdj) aAndB) return (parseAdj aAndB)
             aAndBIndex <- maybe ((throwError . LogicErrSimpLAdjNotProven) aAndB) return (Data.Map.lookup aAndB (provenSents state))
-            return (a, PrfStdStepStep a "SIMP_L" [aAndBIndex])
+            return (Just a, PrfStdStepStep a "SIMP_L" [aAndBIndex])
         Adj a b -> do
             leftIndex <- maybe ((throwError . LogicErrAdjLeftNotProven) a) return (Data.Map.lookup a (provenSents state))
             rightIndex <- maybe ((throwError . LogicErrAdjRightNotProven) b) return (Data.Map.lookup b (provenSents state))
             let aAndB = a .&&. b
-            return (aAndB, PrfStdStepStep aAndB "ADJ" [leftIndex,rightIndex])
+            return (Just aAndB, PrfStdStepStep aAndB "ADJ" [leftIndex,rightIndex])
         Rep a -> do
             originIndex <- maybe ((throwError . LogicErrRepOriginNotProven) a) return (Data.Map.lookup a (provenSents state))
-            return (a, PrfStdStepStep a "REP" [originIndex])
+            return (Just a, PrfStdStepStep a "REP" [originIndex])
         FakeProp s -> do
             maybe (return ())   (throwError . LogicErrFakeSanityErr s) (checkSanity (freeVarTypeStack context) s (fmap fst (consts state)))
-            return (s, PrfStdStepStep s "FAKE_PROP" [])
+            return (Just s, PrfStdStepStep s "FAKE_PROP" [])
+        PropRemark rem -> do
+            return (Nothing, REM.runProofAtomic rem)
 
              
 instance (PropLogicSent s tType, Show sE, Typeable sE, Show s, Typeable s, Ord o, TypedSent o tType sE s,
@@ -139,9 +146,10 @@ instance (PropLogicSent s tType, Show sE, Typeable sE, Show s, Typeable s, Ord o
             f (newState,newSteps, mayLastProp) r 
                        =  fmap g (runProofAtomic r context (oldState <> newState))
                where
-                   g (s, step) = (newState <> PrfStdState (Data.Map.insert s newLineIndex mempty) mempty 1,
-                                    newSteps <> [step], (Last . Just) s )
+                   g (mayS, step) = (newState <> PrfStdState newSentDict mempty 1,
+                                    newSteps <> [step], Last mayS )
                       where
+                        newSentDict = maybe mempty (\s -> (Data.Map.insert s newLineIndex mempty)) mayS
                         newStepCount = stepCount newState + 1
                         newLineIndex = stepIdxPrefix context <> [stepCount oldState + newStepCount-1]
 
@@ -205,4 +213,11 @@ adjM :: (Monad m, Monad m, PropLogicSent s tType, Ord o, Show sE, Typeable sE, S
        StdPrfPrintMonad s o tType (Either SomeException), Monoid (PrfStdContext tType))
          => s -> s-> ProofGenTStd tType [LogicRule tType s sE o] s o m (s,[Int])
 adjM a b = standardRuleM [Adj a b]
+
+remarkM :: (Monad m,  Monad m, PropLogicSent s tType, Ord o, Show sE, Typeable sE, Show s, Typeable s,
+       MonadThrow m, Show o, Typeable o, Show tType, Typeable tType, TypedSent o tType sE s, Monoid (PrfStdState s o tType), StdPrfPrintMonad s o tType m,
+       StdPrfPrintMonad s o tType (Either SomeException), Monoid (PrfStdContext tType) )
+                    => 
+                     Text -> ProofGenTStd tType  [LogicRule tType s sE o] s o m ()
+remarkM = (modifyPS (fmap PropRemark)) . REM.remarkM      
 

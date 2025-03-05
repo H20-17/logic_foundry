@@ -1,7 +1,7 @@
 module RuleSets.PropLogic
 (LogicError, LogicRule(..), mpM, fakePropM, simpLM, adjM,
-    runProofByAsmM, runProofBySubArgM
+    runProofByAsmM, runProofBySubArgM, remarkM
 ) where
 
 import RuleSets.Internal.PropLogic(mpM, fakePropM, simpLM, adjM,
-             runProofByAsmM, runProofBySubArgM, LogicError, LogicRule(..))
+             runProofByAsmM, runProofBySubArgM, LogicError, LogicRule(..), remarkM)
