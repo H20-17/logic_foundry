@@ -1,7 +1,6 @@
 module Langs.BasicUntyped (
     ObjDeBr(..),
     PropDeBr(..),
-    LambdaDeBr(..),
     DeBrSe(..),
     SubexpDeBr(..),
     PrfStdStepPredDeBr,
@@ -175,16 +174,10 @@ data ObjDeBr where
    deriving (Eq, Ord)
 
 
-data LambdaDeBr where
-    Lambda :: PropDeBr -> LambdaDeBr
 
 
 
 
-instance Show LambdaDeBr where
-    show :: LambdaDeBr -> String
-    show (Lambda p) = "λ𝑥" <> (unpack . showIndexAsSubscript . boundDepthPropDeBr) p 
-                           <>"(" <> show p <> ")"
 
 
 data DeBrSe where
@@ -406,49 +399,43 @@ propDeBrApplyUG prop freevarIdx boundvarIdx =
         (:>=:) o1 o2 -> (:>=:) (objDeBrApplyUG o1 freevarIdx boundvarIdx) (objDeBrApplyUG o2 freevarIdx boundvarIdx)
 
 
-
-
-
-instance PredLogicSent PropDeBr ObjDeBr () LambdaDeBr where
-    parseExists :: PropDeBr -> Maybe LambdaDeBr
-    parseExists prop =
-      case prop of
-          Exists p -> Just $ Lambda p
-          _ -> Nothing
-    parseForall :: PropDeBr -> Maybe LambdaDeBr
-    parseForall prop =
-        case prop of
-           Forall p -> Just $ Lambda p
-           _ -> Nothing
-
-    createLambda :: PropDeBr -> () -> Int -> LambdaDeBr
-    createLambda prop () idx = Lambda (propDeBrApplyUG prop idx (boundDepthPropDeBr prop))
-
-    lType2Func :: LambdaDeBr -> (ObjDeBr -> PropDeBr)
-    lType2Func (Lambda p) = propDeBrSub (boundVarIdx p) (calcBVOThreshold p) p
+boundExpToFunc :: PropDeBr -> ObjDeBr -> PropDeBr
+boundExpToFunc p = propDeBrSub (boundVarIdx p) (calcBVOThreshold p) p
            where boundVarIdx = boundDepthPropDeBr
                  calcBVOThreshold p = if propDeBrBoundVarInside p (boundVarIdx p) then
                                       boundDepthPropDeBr p
                                   else 
-                                      boundDepthPropDeBr p + 1 
-    lType2Forall :: LambdaDeBr -> PropDeBr
-    lType2Forall (Lambda p)= Forall p
+                                      boundDepthPropDeBr p + 1
 
-    lType2Exists :: LambdaDeBr -> PropDeBr
-    lType2Exists (Lambda p)= Forall p
 
-    lTypeTType :: LambdaDeBr -> ()
-    lTypeTType l = ()
-        
+instance PredLogicSent PropDeBr ObjDeBr ()  where
+    parseExists :: PropDeBr -> Maybe (ObjDeBr -> PropDeBr, ())
+    parseExists prop =
+      case prop of
+          Exists p -> Just $ (boundExpToFunc p,())
+          _ -> Nothing
+
+          
+    parseForall :: PropDeBr -> Maybe (ObjDeBr -> PropDeBr, ())
+    parseForall prop = 
+        case prop of
+           Forall p -> Just $ (boundExpToFunc p,())
+           _ -> Nothing
+    createForall :: PropDeBr -> () -> Int -> PropDeBr
+    createForall prop () idx = Forall (propDeBrApplyUG prop idx (boundDepthPropDeBr prop))
+
+
+
+    
+
 
 
 
 type PropErrDeBr = PL.LogicError PropDeBr DeBrSe Text ObjDeBr
 type PropRuleDeBr = PL.LogicRule () PropDeBr DeBrSe Text
 
-type PredErrDeBr = LogicError PropDeBr DeBrSe Text ObjDeBr () LambdaDeBr
-type PredRuleDeBr = LogicRule PropDeBr DeBrSe Text ObjDeBr () LambdaDeBr
-
+type PredErrDeBr = LogicError PropDeBr DeBrSe Text ObjDeBr () 
+type PredRuleDeBr = LogicRule PropDeBr DeBrSe Text ObjDeBr ()
 
 type PrfStdStepPredDeBr = PrfStdStep PropDeBr Text ()
 

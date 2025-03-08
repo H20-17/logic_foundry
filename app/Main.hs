@@ -86,9 +86,9 @@ main = do
     (print . show) x1
     let f = parseForall x1
     case f of
-        Just l -> do
+        Just (f,()) -> do
             let term1 = Hilbert (Integ 0 :<-: Integ 0)
-            let fNew = lType2Func l term1
+            let fNew = f term1
             (print.show) fNew
         Nothing -> print "parse failed!"
        --let z = applyUG xn () 102
@@ -109,14 +109,14 @@ main = do
     print "OI leave me alone"
     let z1 = Forall (((Bound 0  :<-: (Constant . pack) "N") :&&: (Bound 0 :>=: Integ 10)) :->: (Bound 0 :>=: Integ 0))
     let z2 = Forall (((Bound 0  :<-: (Constant . pack) "N") :&&: (Bound 0 :>=: Integ 0)) :->: (Bound 0 :==: Integ 0))
-    let generalizable = Lambda (((Bound 0  :<-: (Constant . pack) "N") :&&: (Bound 0 :>=: Integ 10)) :->: (Bound 0 :==: Integ 0))
+    let generalized = Forall (((Bound 0  :<-: (Constant . pack) "N") :&&: (Bound 0 :>=: Integ 10)) :->: (Bound 0 :==: Integ 0))
     let asm = (Free 0  :<-: (Constant . pack) "N") :&&: (Free 0 :>=: Integ 10)
     let mid = (Free 0  :<-: (Constant . pack) "N") :&&: (Free 0 :>=: Integ 0)
     let proof2 = [
                     FakeConst "N" (),
                     fakeProp z1,
                     fakeProp z2,
-                    ProofByUG (ProofByUGSchema generalizable
+                    ProofByUG (ProofByUGSchema generalized
                                      [
                                         ProofByAsm (ProofByAsmSchema asm (Free 0 :==: Integ 0) [
                                              UI (Free 0) z1,
@@ -131,7 +131,7 @@ main = do
                  ]
 
     let proof3 = [
-                    ProofByUG (ProofByUGSchema generalizable
+                    ProofByUG (ProofByUGSchema generalized
                                      [
                                         ProofByAsm (ProofByAsmSchema asm z1 [
                                              UI (Free 0) z1,
@@ -206,10 +206,10 @@ theoremProg = do
               (s1,_) <- uiM newFreeVar z1
               (s2,_) <- mpM s1
               remarkIdx <- remarkM "Yeah baby"
-              remarkM "" --empty remark
+              remarkIdx2<-remarkM "" --empty remark
               --(lift . print) "Coment1"
               --(lift . print . show) s1
-              remarkM $ (pack . show) remarkIdx <> " was the index of the remark above/"
+              remarkM $ (pack . show) remarkIdx2 <> " was the index of the remark above/"
               (natAsm,_) <- simpLM asm
               --(lift . print) "COmment 2"
               (s3,_) <- adjM natAsm s2

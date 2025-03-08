@@ -566,23 +566,20 @@ proofBySubArg (ProofBySubArgSchema consequent subproof) context state  =
 
 
 
-data ProofByUGSchema lType r where
+data ProofByUGSchema s r where
    ProofByUGSchema :: {
-                       ugPrfLambda :: lType,
+                       ugGeneralization :: s,
                        ugPrfProof :: r
-                    } -> ProofByUGSchema lType r
+                    } -> ProofByUGSchema s r
     deriving (Show)
 
 
-class (PropLogicSent s tType) => PredLogicSent s t tType lType | lType -> s, lType->tType, lType->t, s->t, s-> lType where
-    parseExists :: s -> Maybe lType
-    parseForall :: s -> Maybe lType
+class (PropLogicSent s tType) => PredLogicSent s t tType | s ->tType, s ->t, s->t where
+    parseExists :: s -> Maybe (t->s,tType)
+    parseForall :: s -> Maybe (t->s,tType)
     -- create generalization from sentence, var type, and free var index.
-    createLambda ::s -> tType -> Int -> lType
-    lType2Func :: lType -> (t -> s)
-    lType2Forall :: lType -> s
-    lType2Exists :: lType -> s
-    lTypeTType :: lType -> tType
+    createForall ::s -> tType -> Int -> s
+ 
 
 
 
@@ -594,19 +591,24 @@ class (PropLogicSent s tType) => PredLogicSent s t tType lType | lType -> s, lTy
 data ProofByUGError senttype sanityerrtype logicerrtype where
    ProofByUGErrSubproofFailedOnErr :: TestSubproofErr senttype sanityerrtype logicerrtype 
                                     -> ProofByUGError senttype sanityerrtype logicerrtype
+   ProofByUGErrGenNotForall :: senttype -> ProofByUGError senttype sanityerrtype logicerrtype
+
+
  
      deriving(Show)
 
-proofByUG :: ( ProofStd s eL1 r1 o tType, PredLogicSent s t tType lType, TypedSent o tType sE s,
+proofByUG :: ( ProofStd s eL1 r1 o tType, PredLogicSent s t tType, TypedSent o tType sE s,
                   TypeableTerm t o tType sE)
-                        => ProofByUGSchema lType r1
+                        => ProofByUGSchema s r1
                             -> PrfStdContext tType 
                             -> PrfStdState s o tType
                           -> Either (ProofByUGError s sE eL1) (s, PrfStdStep s o tType)
-proofByUG (ProofByUGSchema lambda subproof) context state =
+proofByUG (ProofByUGSchema generalization subproof) context state =
       do
          let varstack = freeVarTypeStack context
-         let newVarstack = lTypeTType lambda : varstack
+         let mayParse = parseForall generalization
+         (f,tType) <- maybe ((throwError . ProofByUGErrGenNotForall) generalization) return mayParse
+         let newVarstack = tType : varstack
          let newStepIdxPrefix = stepIdxPrefix context ++ [stepCount state]
 
          let newContext = PrfStdContext newVarstack
@@ -614,12 +616,11 @@ proofByUG (ProofByUGSchema lambda subproof) context state =
          let newContext = PrfStdContext newVarstack newStepIdxPrefix newContextFrames
          let newState = PrfStdState mempty mempty 1
          let newFreeTerm = free2Term $ length varstack
-         let generalizable = lType2Func lambda newFreeTerm
-         let preambleSteps = [PrfStdStepFreevar (length varstack) (lTypeTType lambda)]
+         let generalizable = f newFreeTerm
+         let preambleSteps = [PrfStdStepFreevar (length varstack) tType]
          let eitherTestResult = testSubproof newContext state newState preambleSteps (Last Nothing) generalizable subproof
          finalSteps <- either (throwError . ProofByUGErrSubproofFailedOnErr) return eitherTestResult
-         let generalized = lType2Forall lambda
-         return  (generalized, PrfStdStepSubproof generalized "PRF_BY_UG" finalSteps)
+         return  (generalization, PrfStdStepSubproof generalization "PRF_BY_UG" finalSteps)
 
 
 
@@ -747,11 +748,11 @@ runProofBySubArgM f prog =  do
 
 
 runProofByUGM :: (Monoid r1, ProofStd s eL1 r1 o tType, Monad m,
-                       PredLogicSent s t tType lType, Show eL1, Typeable eL1,
+                       PredLogicSent s t tType, Show eL1, Typeable eL1,
                     Show s, Typeable s,
                        MonadThrow m, TypedSent o tType sE s, Show sE, Typeable sE, 
                        StdPrfPrintMonad s o tType m )
-                 =>  tType -> (ProofByUGSchema lType r1 -> r1) -> ProofGenTStd tType r1 s o m x
+                 =>  tType -> (ProofByUGSchema s r1 -> r1) -> ProofGenTStd tType r1 s o m x
                             -> ProofGenTStd tType r1 s o m (s, [Int], x)
 runProofByUGM tt f prog =  do
         state <- getProofState
@@ -765,15 +766,14 @@ runProofByUGM tt f prog =  do
         let preambleSteps = [PrfStdStepFreevar (length frVarTypeStack) tt]
         (extraData,generalizable,subproof, newSteps) 
                  <- lift $ runSubproofM newContext state newState preambleSteps (Last Nothing) prog
-        let lambda = createLambda generalizable tt (Prelude.length frVarTypeStack)
-        mayMonadifyRes <- (monadifyProofStd . f) (ProofByUGSchema lambda subproof)
-        idx <- maybe (error "No theorem returned by monadifyProofStd on ug schema. This shouldn't happen") (return . snd) mayMonadifyRes
-        let resultSent = lType2Forall lambda         
+        let resultSent = createForall generalizable tt (Prelude.length frVarTypeStack)
+        mayMonadifyRes <- (monadifyProofStd . f) (ProofByUGSchema resultSent subproof)
+        idx <- maybe (error "No theorem returned by monadifyProofStd on ug schema. This shouldn't happen") (return . snd) mayMonadifyRes       
         return (resultSent,idx,extraData)
 
 
 getTopFreeVar :: (Monoid r1, ProofStd s eL1 r1 o tType, Monad m,
-                       PredLogicSent s t tType lType, Show eL1, Typeable eL1,
+                       PredLogicSent s t tType, Show eL1, Typeable eL1,
                     Show s, Typeable s,
                        MonadThrow m, TypedSent o tType sE s, Show sE, Typeable sE,
                        StdPrfPrintMonad s o tType m, TypeableTerm t Text tType sE)
