@@ -1,7 +1,7 @@
 {-# LANGUAGE UndecidableInstances #-}
 module RuleSets.Internal.RemarkLogic 
 (
-    LogicRule(..), runProofAtomic, remarkM,
+    LogicRule(..), runProofAtomic, remarkM, RemarkRule(..)
 ) where
 
 import Data.Monoid ( Last(..) )
@@ -74,18 +74,25 @@ instance ( Show s, Typeable s, Ord o, TypedSent o tType sE s,
                         newLineIndex = stepIdxPrefix context <> [stepCount oldState + newStepCount-1]
 
 
+class RemarkRule r where
+    remark :: Text -> r
 
+
+instance RemarkRule [LogicRule tType s sE o] where
+    remark :: Text -> [LogicRule tType s sE o]
+    remark text = [Remark text]
 
 
 
 remarkM :: (Monad m, Ord o, Show sE, Typeable sE, Show s, Typeable s,
        MonadThrow m, Show o, Typeable o, Show tType, Typeable tType, TypedSent o tType sE s,
        Monoid (PrfStdState s o tType), StdPrfPrintMonad s o tType m,
-       StdPrfPrintMonad s o tType (Either SomeException), Monoid (PrfStdContext tType))
-          => Text -> ProofGenTStd tType [LogicRule tType s sE o] s o m [Int]
+       StdPrfPrintMonad s o tType (Either SomeException), Monoid (PrfStdContext tType), RemarkRule r, ProofStd s eL r o tType,
+       Monoid r, Show eL, Typeable eL)
+          => Text -> ProofGenTStd tType r s o m [Int]
           
 remarkM txt = do
-    monadifyProofStd [Remark txt]
+    monadifyProofStd (remark txt)
     -- The index will be that of the last step generated.
     state <- getProofState
     context <- ask

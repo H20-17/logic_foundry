@@ -30,7 +30,7 @@ library
    build-depends: base,mtl>=2.3.1,containers,text,Cabal,transformers,xhtml, exceptions
    other-modules: Internal.StdPattern,RuleSets.Internal.PropLogic,RuleSets.Internal.PredLogic, RuleSets.Internal.RemarkLogic
    hs-source-dirs: src
-   exposed-modules: Kernel,StdPattern,StdPatternDevel,RuleSets.PropLogic,RuleSets.PredLogic, RuleSets.PropLogicDevel,RuleSets.PredLogicDevel, Langs.BasicUntyped,RuleSets.PredLogicUntyped,RuleSets.RemarkLogic,RuleSets.RemarkLogicDevel
+   exposed-modules: Kernel,StdPattern,StdPatternDevel,RuleSets.PropLogic,RuleSets.PredLogic, RuleSets.PropLogicDevel,RuleSets.PredLogicDevel, Langs.BasicUntyped,RuleSets.RemarkLogic,RuleSets.RemarkLogicDevel
 
 
 

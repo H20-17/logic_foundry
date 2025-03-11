@@ -1,9 +1,8 @@
 module RuleSets.PredLogic
 (
-    simpL, adj, uiM, eiM, LogicError(..), LogicRule(..), fakePropM, fakeConstM, mp, fakeProp,
-    propRuleM, mpM, simpLM, adjM, runProofBySubArgM, runProofByAsmM, runTheoremM, runTmSilentM, runProofByUGM
+    uiM, eiM, LogicError(..), PredLogicRule(..),
+    runProofBySubArgM, runProofByAsmM, runTheoremM, runTmSilentM, runProofByUGM, fakeConstM
 ) where
 
-import RuleSets.Internal.PredLogic(LogicError(..), LogicRule(..), fakePropM, fakeConstM, mp, fakeProp,
-    simpL, adj, uiM, eiM,
-    propRuleM, mpM, simpLM, adjM, runProofBySubArgM, runProofByAsmM, runTheoremM, runTmSilentM, runProofByUGM)
+import RuleSets.Internal.PredLogic(LogicError(..), LogicRule(..),  fakeConstM, PredLogicRule(..),
+    runProofBySubArgM, runProofByAsmM, runTheoremM, runTmSilentM, runProofByUGM, uiM, eiM)

@@ -29,8 +29,10 @@ import Internal.StdPattern
       TypedSent(..) )
 import Control.Exception (SomeException)
 import Control.Monad.Except ( MonadError(throwError) )
+import qualified RuleSets.PropLogicDevel as PL
 import qualified RuleSets.PropLogic as PL
 import RuleSets.PredLogic
+import RuleSets.PredLogicDevel
 
 
 data PropDeBr where
@@ -412,14 +414,14 @@ instance PredLogicSent PropDeBr ObjDeBr ()  where
     parseExists :: PropDeBr -> Maybe (ObjDeBr -> PropDeBr, ())
     parseExists prop =
       case prop of
-          Exists p -> Just $ (boundExpToFunc p,())
+          Exists p -> Just (boundExpToFunc p,())
           _ -> Nothing
 
           
     parseForall :: PropDeBr -> Maybe (ObjDeBr -> PropDeBr, ())
     parseForall prop = 
         case prop of
-           Forall p -> Just $ (boundExpToFunc p,())
+           Forall p -> Just (boundExpToFunc p,())
            _ -> Nothing
     createForall :: PropDeBr -> () -> Int -> PropDeBr
     createForall prop () idx = Forall (propDeBrApplyUG prop idx (boundDepthPropDeBr prop))

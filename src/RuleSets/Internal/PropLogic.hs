@@ -1,7 +1,7 @@
 module RuleSets.Internal.PropLogic 
 (
     LogicError, LogicRule(..), runProofAtomic, mpM, fakePropM, simpLM, adjM,
-    runProofByAsmM, runProofBySubArgM, remarkM
+    runProofByAsmM, runProofBySubArgM, PropLogicRule(..)
 
 ) where
 
@@ -45,8 +45,9 @@ import StdPattern
       proofBySubArg,
       modifyPS)
 import qualified StdPatternDevel as StdP ( runProofByAsmM, runProofBySubArgM, runProofOpen )
-import qualified RuleSets.RemarkLogic as REM (LogicRule(..),remarkM)
-import qualified RuleSets.RemarkLogicDevel as REM(runProofAtomic)
+
+import RuleSets.RemarkLogic (remarkM, RemarkRule(..))
+import qualified RuleSets.RemarkLogicDevel as REM(runProofAtomic, LogicRule(..))
 
 
 
@@ -121,7 +122,11 @@ runProofAtomic rule context state =
         PropRemark rem -> do
             return (Nothing, REM.runProofAtomic rem)
 
-             
+
+
+
+
+
 instance (PropLogicSent s tType, Show sE, Typeable sE, Show s, Typeable s, Ord o, TypedSent o tType sE s,
           Typeable o, Show o, Typeable tType, Show tType, Monoid (PrfStdState s o tType),
           StdPrfPrintMonad s o tType (Either SomeException),
@@ -153,6 +158,46 @@ instance (PropLogicSent s tType, Show sE, Typeable sE, Show s, Typeable s, Ord o
                         newSentDict = maybe mempty (\s -> Data.Map.insert s newLineIndex mempty) mayS
                         newStepCount = stepCount newState + 1
                         newLineIndex = stepIdxPrefix context <> [stepCount oldState + newStepCount-1]
+
+
+
+instance RemarkRule [LogicRule tType s sE o] where
+    remark :: Text -> [LogicRule tType s sE o]
+    remark rem = [(PropRemark . REM.Remark) rem]
+
+
+
+class PropLogicRule r s tType sE o | r-> s, r->tType, r->sE, r->o where
+    propLogInject :: [LogicRule tType s sE o] -> r
+    mp :: s -> r
+    propLogProofByAsm :: ProofByAsmSchema s [LogicRule tType s sE o] -> r
+    propLogProofBySubArg :: ProofBySubArgSchema s [LogicRule tType s sE o] -> r
+    exclMid :: s -> r
+    simpL :: s -> r
+    adj :: s -> s -> r
+    rep :: s -> r
+    fakeProp :: s -> r
+
+instance PropLogicRule [LogicRule tType s sE o] s tType sE o where
+    propLogInject :: [LogicRule tType s sE o] -> [LogicRule tType s sE o]
+    propLogInject = id  
+    mp :: s -> [LogicRule tType s sE o]
+    mp s = [MP s]
+    propLogProofByAsm :: ProofByAsmSchema s [LogicRule tType s sE o] -> [LogicRule tType s sE o]
+    propLogProofByAsm = return . ProofByAsm
+    propLogProofBySubArg :: ProofBySubArgSchema s [LogicRule tType s sE o] -> [LogicRule tType s sE o]
+    propLogProofBySubArg = return . ProofBySubArg
+    exclMid :: s -> [LogicRule tType s sE o]
+    exclMid s = [ExclMid s]
+    simpL :: s -> [LogicRule tType s sE o]
+    simpL s = [SimpL s]
+    adj :: s -> s -> [LogicRule tType s sE o]
+    adj a b = [Adj a b]
+    rep :: s -> [LogicRule tType s sE o]
+    rep s = [Rep s]
+    fakeProp :: s -> [LogicRule tType s sE o]
+    fakeProp s = [FakeProp s]
+
 
 
 runProofByAsmM :: (ProofStd s (LogicError s sE o tType) [LogicRule tType s sE o] o tType, Monad m,
@@ -188,37 +233,37 @@ standardRuleM rule = do
 mpM :: (Monad m, PropLogicSent s tType, Ord o, Show sE, Typeable sE, Show s, Typeable s,
        MonadThrow m, Show o, Typeable o, Show tType, Typeable tType, TypedSent o tType sE s,
        Monoid (PrfStdState s o tType), StdPrfPrintMonad s o tType m,
-       StdPrfPrintMonad s o tType (Either SomeException), Monoid (PrfStdContext tType))
-          => s -> ProofGenTStd tType [LogicRule tType s sE o] s o m (s,[Int])
-mpM impl = standardRuleM [MP impl]
+       StdPrfPrintMonad s o tType (Either SomeException), Monoid (PrfStdContext tType),
+       PropLogicRule r s tType sE o, Monoid r,
+       ProofStd s eL r o tType, Typeable eL, Show eL )
+          => s -> ProofGenTStd tType r s o m (s,[Int])
+mpM impl = standardRuleM (mp impl)
       
 
 fakePropM :: (Monad m, PropLogicSent s tType, Ord o, Show sE, Typeable sE, Show s, Typeable s,
        MonadThrow m, Show o, Typeable o, Show tType, Typeable tType, TypedSent o tType sE s,
        Monoid (PrfStdState s o tType), StdPrfPrintMonad s o tType m,
-       StdPrfPrintMonad s o tType (Either SomeException), Monoid (PrfStdContext tType))
-          => s -> ProofGenTStd tType [LogicRule tType s sE o] s o m (s,[Int])
-fakePropM s = standardRuleM [FakeProp s]
+       StdPrfPrintMonad s o tType (Either SomeException), Monoid (PrfStdContext tType),
+       PropLogicRule r s tType sE o, Monoid r, ProofStd s eL r o tType, Typeable eL, Show eL )
+          => s -> ProofGenTStd tType r s o m (s,[Int])
+fakePropM s = standardRuleM (fakeProp s)
 
 
 simpLM :: (Monad m, Monad m, PropLogicSent s tType, Ord o, Show sE, Typeable sE, Show s, Typeable s,
        MonadThrow m, Show o, Typeable o, Show tType, Typeable tType, TypedSent o tType sE s,
        Monoid (PrfStdState s o tType), StdPrfPrintMonad s o tType m,
-       StdPrfPrintMonad s o tType (Either SomeException), Monoid (PrfStdContext tType) ) =>
-            s -> ProofGenTStd tType [LogicRule tType s sE o] s o m (s,[Int])
-simpLM aAndB = standardRuleM [SimpL aAndB]
+       StdPrfPrintMonad s o tType (Either SomeException), Monoid (PrfStdContext tType),
+         PropLogicRule r s tType sE o, Monoid r, ProofStd s eL r o tType, Typeable eL, Show eL) =>
+            s -> ProofGenTStd tType r s o m (s,[Int])
+simpLM aAndB = standardRuleM (simpL aAndB)
 
 
 adjM :: (Monad m, Monad m, PropLogicSent s tType, Ord o, Show sE, Typeable sE, Show s, Typeable s,
        MonadThrow m, Show o, Typeable o, Show tType, Typeable tType, TypedSent o tType sE s, Monoid (PrfStdState s o tType), StdPrfPrintMonad s o tType m,
-       StdPrfPrintMonad s o tType (Either SomeException), Monoid (PrfStdContext tType))
-         => s -> s-> ProofGenTStd tType [LogicRule tType s sE o] s o m (s,[Int])
-adjM a b = standardRuleM [Adj a b]
+       StdPrfPrintMonad s o tType (Either SomeException), Monoid (PrfStdContext tType),
+         PropLogicRule r s  tType sE o, Monoid r, ProofStd s eL r o tType, Typeable eL, Show eL)
+         => s -> s-> ProofGenTStd tType r s o m (s,[Int])
+adjM a b = standardRuleM (adj a b)
 
-remarkM :: (Monad m,  Monad m, PropLogicSent s tType, Ord o, Show sE, Typeable sE, Show s, Typeable s,
-       MonadThrow m, Show o, Typeable o, Show tType, Typeable tType, TypedSent o tType sE s, Monoid (PrfStdState s o tType), StdPrfPrintMonad s o tType m,
-       StdPrfPrintMonad s o tType (Either SomeException), Monoid (PrfStdContext tType) )
-                    => 
-                     Text -> ProofGenTStd tType  [LogicRule tType s sE o] s o m [Int]
-remarkM = modifyPS (fmap PropRemark) . REM.remarkM      
+ 
 

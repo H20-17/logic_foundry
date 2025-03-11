@@ -1,6 +1,6 @@
 module RuleSets.PropLogicDevel
 (
-    runProofAtomic
+    runProofAtomic, LogicRule(..)
 ) where
 
-import RuleSets.Internal.PropLogic(runProofAtomic)
+import RuleSets.Internal.PropLogic(runProofAtomic, LogicRule(..))

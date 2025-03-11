@@ -1,6 +1,6 @@
 module RuleSets.RemarkLogicDevel
 (
-    runProofAtomic
+    runProofAtomic,LogicRule(..)
 ) where
 
-import RuleSets.Internal.RemarkLogic(runProofAtomic)
+import RuleSets.Internal.RemarkLogic(runProofAtomic,LogicRule(..))

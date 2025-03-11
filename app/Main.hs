@@ -52,12 +52,11 @@ import StdPattern
       checkTheoremM,
  )
 import qualified RuleSets.PropLogic as PL
-import RuleSets.PredLogicUntyped
+import RuleSets.PropLogic(PropLogicRule(..),fakePropM,mpM,adjM,simpLM)
+import RuleSets.PredLogic
 import Langs.BasicUntyped
+import RuleSets.RemarkLogic ( remarkM )
 default(Text)
-
-
-
 
 
 
@@ -93,18 +92,15 @@ main = do
         Nothing -> print "parse failed!"
        --let z = applyUG xn () 102
 --    -- (print . show) z
-    let proof = [
-                  PL.FakeProp y0
-                , PL.FakeProp y1
-                , PL.FakeProp y2
-                , PL.MP y0
-                , PL.MP y2
-                , PL.ProofByAsm $ ProofByAsmSchema y1  (Integ 99 :==: Integ 99) [PL.MP $ y1 .->. (Integ 99 :==: Integ 99)]
-                ] 
-
-
-
+    let proof = (   fakeProp y0
+                <> fakeProp y1 
+                <> fakeProp y2
+                <> mp y0
+                <> mp y2
+                <> propLogProofByAsm (ProofByAsmSchema y1 (Integ 99 :==: Integ 99) (mp $ y1 .->. (Integ 99 :==: Integ 99))))
+                  ::[PropRuleDeBr]
     let zb = runProof proof
+
     -- either (putStrLn . show) (putStrLn . unpack . showPropDeBrStepsBase . snd) zb
     print "OI leave me alone"
     let z1 = Forall (((Bound 0  :<-: (Constant . pack) "N") :&&: (Bound 0 :>=: Integ 10)) :->: (Bound 0 :>=: Integ 0))
@@ -112,40 +108,42 @@ main = do
     let generalized = Forall (((Bound 0  :<-: (Constant . pack) "N") :&&: (Bound 0 :>=: Integ 10)) :->: (Bound 0 :==: Integ 0))
     let asm = (Free 0  :<-: (Constant . pack) "N") :&&: (Free 0 :>=: Integ 10)
     let mid = (Free 0  :<-: (Constant . pack) "N") :&&: (Free 0 :>=: Integ 0)
-    let proof2 = [
-                    FakeConst "N" (),
-                    fakeProp z1,
-                    fakeProp z2,
-                    ProofByUG (ProofByUGSchema generalized
-                                     [
-                                        ProofByAsm (ProofByAsmSchema asm (Free 0 :==: Integ 0) [
-                                             UI (Free 0) z1,
-                                             mp $ asm .->. (Free 0 :>=: Integ 0),
-                                             simpL $ (:&&:) (Free 0  :<-: (Constant . pack) "N") (Free 0 :>=: Integ 10),
-                                             adj (Free 0  :<-: (Constant . pack) "N") (Free 0 :>=: Integ 0),
-                                             UI (Free 0) z2,
-                                             mp $ mid .->. (Free 0 :==: Integ 0)
-                                        ] )
-                                     ]
-                                  )
-                 ]
 
-    let proof3 = [
-                    ProofByUG (ProofByUGSchema generalized
-                                     [
-                                        ProofByAsm (ProofByAsmSchema asm z1 [
-                                             UI (Free 0) z1,
-                                              
-                                             mp $ asm .->. (Free 0 :>=: Integ 0)
+
+
+    let proof2 =    fakeConst "N" ()
+                 <> fakeProp z1
+                 <> fakeProp z2
+                 <> predLogProofByUG (ProofByUGSchema generalized
+                                        (
+                                            predLogProofByAsm (ProofByAsmSchema asm z1 (
+                                                    ui (Free 0) z1
+                                                <> mp ( asm .->. (Free 0 :>=: Integ 0))
+                                                <> simpL ((:&&:) (Free 0  :<-: (Constant . pack) "N") (Free 0 :>=: Integ 10))
+                                                <> adj (Free 0  :<-: (Constant . pack) "N") (Free 0 :>=: Integ 0)
+                                                <> ui (Free 0) z2
+                                                <> mp ( mid .->. (Free 0 :==: Integ 0)  )
+                                            )  )
+                                        )
+                                    )::[PredRuleDeBr]
+
+
+
+
+    let proof3 = predLogProofByUG (ProofByUGSchema generalized
+                                     (
+                                        predLogProofByAsm (ProofByAsmSchema asm z1 (
+                                                ui (Free 0) z1
+                                             <> mp ( asm .->. (Free 0 :>=: Integ 0))
                                       
-                                        ]  )
-                                     ]
-                                  )
-                 ]
+                                          )  )
+                                     )
+                                  )::[PredRuleDeBr]
+                 
     let zb2 = runProof proof2 
 
 
-    let zb3 = runProof [FakeConst "N" (), fakeProp z1, fakeProp z2, UI (Free 0) z1]
+    let zb3 = runProof ((fakeConst "N" () <> fakeProp z1 <> fakeProp z2 <> ui (Free 0) z1)::[PredRuleDeBr])
     --either (putStrLn . show) (putStrLn . unpack . showPropDeBrStepsBase . snd)  zb2
     --either (putStrLn . show) (putStrLn . unpack . showPropDeBrStepsBase . snd) zb3
     (a,b,c,d) <- runProofGeneratorT testprog
@@ -173,7 +171,7 @@ testprog = do
       fakePropM z1
       fakePropM z2
       
-      fux<- runProofByUGM do
+      fux<- runProofByUGM () do
           runProofByAsmM  asm2 do
               (s5,_,())<- runProofBySubArgM  do
                  newFreeVar <- getTopFreeVar
@@ -200,7 +198,7 @@ theoremProg = do
     let asm = (Free 0  :<-: (Constant . pack) "N") :&&: (Free 0 :>=: Integ 10)
     let asm2 = (Free 0  :<-: (Constant . pack) "N") :&&: (Free 0 :>=: Integ 10)
     let mid = (Free 0  :<-: (Constant . pack) "N") :&&: (Free 0 :>=: Integ 0)
-    (generalized, _, ()) <- runProofByUGM do
+    (generalized, _, ()) <- runProofByUGM () do
           (imp,_,()) <- runProofByAsmM asm2 do
               newFreeVar <- getTopFreeVar
               (s1,_) <- uiM newFreeVar z1
