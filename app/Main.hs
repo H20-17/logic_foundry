@@ -50,12 +50,17 @@ import StdPattern
       ProofGenTStd,
       getTopFreeVar,
       checkTheoremM,
+      runTheoremM,
+      runTmSilentM,
+      runProofByUGM,
+      runProofBySubArgM,
+      runProofByAsmM
  )
 import qualified RuleSets.PropLogic as PL
-import RuleSets.PropLogic(PropLogicRule(..),fakePropM,mpM,adjM,simpLM)
+import RuleSets.PropLogic(PropLogicRule(..),mpM,adjM,simpLM)
 import RuleSets.PredLogic
 import Langs.BasicUntyped
-import RuleSets.RemarkLogic ( remarkM )
+import RuleSets.BaseLogic (remarkM,fakePropM,fakeConstM,BaseLogRule(..))
 default(Text)
 
 

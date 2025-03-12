@@ -8,7 +8,8 @@ module Internal.StdPattern(
     TypeableTerm(..), TypedSent(..), PropLogicSent(..), PredLogicSent(..), StdPrfPrintMonadFrame(..), StdPrfPrintMonad(..),
     checkTheorem, establishTheorem, constDictTest, testSubproof, monadifyProofStd,
     checkTheoremM, establishTmSilentM, expandTheoremM, proofByAsm, proofBySubArg, proofByUG,
-    runTheoremM, runTmSilentM, runProofByAsmM, runProofBySubArgM, runProofByUGM,getTopFreeVar
+    runTheoremM, runTmSilentM, runProofByAsmM, runProofBySubArgM, runProofByUGM,getTopFreeVar,
+    PredLogSchemaRule (..), BaseLogSchemaRule(..), PropLogSchemaRule(..)
 
 ) where
 
@@ -154,7 +155,7 @@ data TestSubproofErr senttype sanityerrtype logicerrtype where
    deriving(Show)
 
 
-testSubproof :: (ProofStd s eL1 r1 o tType, PropLogicSent s tType, TypedSent o tType sE s    )
+testSubproof :: (ProofStd s eL1 r1 o tType, TypedSent o tType sE s    )
                        => PrfStdContext tType -> PrfStdState s o tType -> PrfStdState s o tType -> 
                           [PrfStdStep s o tType] -> Last s -> s -> r1 
                              -> Either (TestSubproofErr s sE eL1) [PrfStdStep s o tType]
@@ -544,7 +545,7 @@ data ProofBySubArgError senttype sanityerrtype logcicerrtype where
     deriving(Show)
 
 
-proofBySubArg :: (ProofStd s eL1 r1 o tType, PropLogicSent s tType, TypedSent o tType sE s) => 
+proofBySubArg :: (ProofStd s eL1 r1 o tType,  TypedSent o tType sE s) => 
                        ProofBySubArgSchema s r1 ->  
                         PrfStdContext tType -> 
                         PrfStdState s o tType ->
@@ -651,18 +652,26 @@ runSubproofM context baseState preambleState preambleSteps mayPreambleLastProp p
 
 
 
+class PredLogSchemaRule r s o tType | r->o, r -> tType where
+   theoremSchemaRule :: TheoremSchema s r o tType -> r
+   theoremSchemaSilentMRule :: TmSchemaSilentM tType r s o () -> r
+   proofByUGSchemaRule :: ProofByUGSchema s r -> r
+
+
+
+
 runTheoremM :: (Monoid r1, ProofStd s eL1 r1 o tType, Monad m,
                       PropLogicSent s tType, MonadThrow m, Show tType, Typeable tType,
                       Show o, Typeable o, Show s, Typeable s,
                       Show eL1, Typeable eL1, Ord o, TypedSent o tType sE s, Show sE, Typeable sE,
-                      StdPrfPrintMonad s o tType m)
-                 =>   (TheoremSchema s r1 o tType -> r1) -> TheoremSchemaMT tType r1 s o m x ->
+                      StdPrfPrintMonad s o tType m, PredLogSchemaRule r1 s o tType)
+                 =>   TheoremSchemaMT tType r1 s o m x ->
                                ProofGenTStd tType r1 s o m (s, [Int], x)
-runTheoremM f (TheoremSchemaMT constDict lemmas prog) =  do
+runTheoremM (TheoremSchemaMT constDict lemmas prog) =  do
         state <- getProofState
         context <- ask
         (tm, proof, extra, newSteps) <- lift $ checkTheoremMOpen (Just (state,context)) (TheoremSchemaMT constDict lemmas prog)
-        mayMonadifyRes <- monadifyProofStd (f $ TheoremSchema constDict lemmas tm proof)
+        mayMonadifyRes <- monadifyProofStd (theoremSchemaRule $ TheoremSchema constDict lemmas tm proof)
         idx <- maybe (error "No theorem returned by monadifyProofStd on theorem schema. This shouldn't happen") (return . snd) mayMonadifyRes
         return (tm, idx, extra)
 
@@ -671,18 +680,19 @@ runTmSilentM :: (Monoid r1, ProofStd s eL1 r1 o tType, Monad m,
                       PropLogicSent s tType, MonadThrow m, Show tType, Typeable tType,
                       Show o, Typeable o, Show s, Typeable s,
                       Show eL1, Typeable eL1, Ord o, TypedSent o tType sE s, Show sE, Typeable sE,
-                      StdPrfPrintMonad s o tType m, StdPrfPrintMonad s o tType (Either SomeException))
-                 =>   (TmSchemaSilentM tType r1 s o () -> r1) -> TmSchemaSilentM tType r1 s o x ->
+                      StdPrfPrintMonad s o tType m, StdPrfPrintMonad s o tType (Either SomeException),
+                      PredLogSchemaRule r1 s o tType)
+                 =>   TmSchemaSilentM tType r1 s o x ->
                                ProofGenTStd tType r1 s o m (s, [Int], x)
 -- runTmSilentM f (TheoremSchemaMT constDict lemmas prog) =  do
-runTmSilentM f (TheoremSchemaMT constDict lemmas prog) =  do
+runTmSilentM (TheoremSchemaMT constDict lemmas prog) =  do
         state <- getProofState
         context <- ask
         let eitherResult = checkTheoremMOpen 
                      (Just (state,context)) 
                      (TheoremSchemaMT constDict lemmas prog)
         (tm, proof, extra, newSteps) <- either throwM return eitherResult
-        mayMonadifyRes <- monadifyProofStd (f $ TheoremSchemaMT constDict lemmas newProg)
+        mayMonadifyRes <- monadifyProofStd (theoremSchemaSilentMRule $ TheoremSchemaMT constDict lemmas newProg)
         idx <- maybe (error "No theorem returned by monadifyProofStd on theorem schema. This shouldn't happen") (return . snd) mayMonadifyRes
         return (tm, idx, extra)
     where
@@ -690,16 +700,17 @@ runTmSilentM f (TheoremSchemaMT constDict lemmas prog) =  do
              prog
              return ()
 
-
+class PropLogSchemaRule r s  where
+   proofByAsmSchemaRule :: ProofByAsmSchema s r -> r
 
 runProofByAsmM :: (Monoid r1, ProofStd s eL1 r1 o tType, Monad m,
                        PropLogicSent s tType, MonadThrow m,
                        Show s, Typeable s,
                        Show eL1, Typeable eL1, TypedSent o tType sE s, Show sE, Typeable sE, 
-                       StdPrfPrintMonad s o tType m )
-                 =>   (ProofByAsmSchema s r1 -> r1) -> s -> ProofGenTStd tType r1 s o m x
+                       StdPrfPrintMonad s o tType m, PropLogSchemaRule r1 s )
+                 =>   s -> ProofGenTStd tType r1 s o m x
                             -> ProofGenTStd tType r1 s o m (s, [Int], x)
-runProofByAsmM f asm prog =  do
+runProofByAsmM asm prog =  do
         state <- getProofState
         context <- ask
         let frVarTypeStack = freeVarTypeStack context
@@ -715,19 +726,25 @@ runProofByAsmM f asm prog =  do
         let mayPreambleLastProp = (Last . Just) asm
         (extraData,consequent,subproof,newSteps) 
                  <- lift $ runSubproofM newContext state newState preambleSteps mayPreambleLastProp prog
-        mayMonadifyRes <- (monadifyProofStd . f) (ProofByAsmSchema asm consequent subproof)
+        mayMonadifyRes <- (monadifyProofStd . proofByAsmSchemaRule) (ProofByAsmSchema asm consequent subproof)
         idx <- maybe (error "No theorem returned by monadifyProofStd on asm schema. This shouldn't happen") (return . snd) mayMonadifyRes
         return (asm .->. consequent,idx,extraData)
+
+
+class BaseLogSchemaRule r s where
+   proofBySubArgSchemaRule :: ProofBySubArgSchema s r -> r
+
+
 
 
 runProofBySubArgM :: (Monoid r1, ProofStd s eL1 r1 o tType, Monad m,
                        PropLogicSent s tType, MonadThrow m,
                        Show s, Typeable s,
-                       Show eL1, Typeable eL1, TypedSent o tType sE s, Show sE, Typeable sE, 
-                       StdPrfPrintMonad s o tType m )
-                 =>   (ProofBySubArgSchema s r1 -> r1) -> ProofGenTStd tType r1 s o m x
+                       Show eL1, Typeable eL1, TypedSent o tType sE s, Show sE, Typeable sE,
+                       StdPrfPrintMonad s o tType m, BaseLogSchemaRule r1 s )
+                 =>   ProofGenTStd tType r1 s o m x
                             -> ProofGenTStd tType r1 s o m (s, [Int], x)
-runProofBySubArgM f prog =  do
+runProofBySubArgM prog =  do
         state <- getProofState
         context <- ask
         let frVarTypeStack = freeVarTypeStack context
@@ -739,7 +756,7 @@ runProofBySubArgM f prog =  do
         let preambleSteps = []
         (extraData,consequent,subproof,newSteps) 
             <- lift $ runSubproofM newContext state newState preambleSteps (Last Nothing) prog
-        mayMonadifyRes <- (monadifyProofStd . f) (ProofBySubArgSchema consequent subproof)
+        mayMonadifyRes <- (monadifyProofStd . proofBySubArgSchemaRule) (ProofBySubArgSchema consequent subproof)
         idx <- maybe (error "No theorem returned by monadifyProofStd on subarg schema. This shouldn't happen") (return . snd) mayMonadifyRes
         return (consequent, idx, extraData)
 
@@ -751,10 +768,10 @@ runProofByUGM :: (Monoid r1, ProofStd s eL1 r1 o tType, Monad m,
                        PredLogicSent s t tType, Show eL1, Typeable eL1,
                     Show s, Typeable s,
                        MonadThrow m, TypedSent o tType sE s, Show sE, Typeable sE, 
-                       StdPrfPrintMonad s o tType m )
-                 =>  tType -> (ProofByUGSchema s r1 -> r1) -> ProofGenTStd tType r1 s o m x
+                       StdPrfPrintMonad s o tType m,PredLogSchemaRule r1 s o tType)
+                 =>  tType -> ProofGenTStd tType r1 s o m x
                             -> ProofGenTStd tType r1 s o m (s, [Int], x)
-runProofByUGM tt f prog =  do
+runProofByUGM tt prog =  do
         state <- getProofState
         context <- ask
         let frVarTypeStack = freeVarTypeStack context
@@ -767,7 +784,7 @@ runProofByUGM tt f prog =  do
         (extraData,generalizable,subproof, newSteps) 
                  <- lift $ runSubproofM newContext state newState preambleSteps (Last Nothing) prog
         let resultSent = createForall generalizable tt (Prelude.length frVarTypeStack)
-        mayMonadifyRes <- (monadifyProofStd . f) (ProofByUGSchema resultSent subproof)
+        mayMonadifyRes <- (monadifyProofStd . proofByUGSchemaRule) (ProofByUGSchema resultSent subproof)
         idx <- maybe (error "No theorem returned by monadifyProofStd on ug schema. This shouldn't happen") (return . snd) mayMonadifyRes       
         return (resultSent,idx,extraData)
 
