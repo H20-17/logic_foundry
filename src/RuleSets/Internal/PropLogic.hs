@@ -1,7 +1,7 @@
 module RuleSets.Internal.PropLogic 
 (
     LogicError, LogicRule(..), runProofAtomic, mpM, simpLM, adjM, PropLogicRule(..)
-
+ 
 ) where
 
 import Data.Monoid ( Last(..) )
@@ -29,8 +29,7 @@ import StdPattern
     ( PrfStdState(..),
       PrfStdContext(stepIdxPrefix, freeVarTypeStack),
       Proof,
-      ProofBySubArgError,
-      ProofBySubArgSchema(argPrfConsequent),
+      
       ProofByAsmError,
       ProofByAsmSchema,
       StdPrfPrintMonad,
@@ -41,14 +40,15 @@ import StdPattern
       ProofGenTStd,
       monadifyProofStd,
       proofByAsm,
-      proofBySubArg,
       modifyPS)
 import qualified StdPatternDevel as StdP ( runProofOpen )
-import StdPatternDevel(BaseLogSchemaRule(..),PropLogSchemaRule(..))
-import RuleSets.BaseLogic (remarkM, BaseLogRule(..))
+import StdPatternDevel(PropLogSchemaRule(..))
+import RuleSets.BaseLogic (remarkM, BaseLogRule(..), ProofBySubArgError(..), 
+                           ProofBySubArgSchema(argPrfConsequent),
+                           proofBySubArg)
 import qualified RuleSets.BaseLogic as REM (LogicError(..))
 import qualified RuleSets.BaseLogicDevel as REM(runProofAtomic, LogicRule(..))
-
+import RuleSets.BaseLogicDevel( BaseLogSchemaRule(..))
 
 
 data LogicError s sE o tType where

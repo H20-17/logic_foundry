@@ -3,13 +3,13 @@
 
 module Internal.StdPattern(
     PrfStdContext(..), PrfStdState(..), PrfStdStep(..), TestSubproofErr, TheoremSchema(..), TheoremSchemaMT(..), BigException, ChkTheoremError, EstTmMError, ExpTmMError,
-    ProofByAsmSchema(..), ProofByAsmError, ProofBySubArgSchema(..), ProofBySubArgError, ProofByUGSchema(..), ProofByUGError,
+    ProofByAsmSchema(..), ProofByAsmError,  ProofByUGSchema(..), ProofByUGError,
     ProofGenTStd, ProofStd, TmSchemaSilentM,
     TypeableTerm(..), TypedSent(..), PropLogicSent(..), PredLogicSent(..), StdPrfPrintMonadFrame(..), StdPrfPrintMonad(..),
     checkTheorem, establishTheorem, constDictTest, testSubproof, monadifyProofStd,
-    checkTheoremM, establishTmSilentM, expandTheoremM, proofByAsm, proofBySubArg, proofByUG,
-    runTheoremM, runTmSilentM, runProofByAsmM, runProofBySubArgM, runProofByUGM,getTopFreeVar,
-    PredLogSchemaRule (..), BaseLogSchemaRule(..), PropLogSchemaRule(..)
+    checkTheoremM, establishTmSilentM, expandTheoremM, proofByAsm, proofByUG,
+    runTheoremM, runTmSilentM, runProofByAsmM,  runProofByUGM,getTopFreeVar,
+    PredLogSchemaRule (..), PropLogSchemaRule(..), runSubproofM
 
 ) where
 
@@ -529,39 +529,7 @@ proofByAsm (ProofByAsmSchema assumption consequent subproof) context state  =
          return (implication, PrfStdStepSubproof implication "PRF_BY_ASM" finalSteps)
 
 
-data ProofBySubArgSchema s r where
-   ProofBySubArgSchema :: {
-                       argPrfConsequent :: s,
-                       argPrfProof :: r
-                    } -> ProofBySubArgSchema s r
-    deriving Show
 
-
-
-data ProofBySubArgError senttype sanityerrtype logcicerrtype where
-   ProofBySubArgErrSubproofFailedOnErr :: TestSubproofErr senttype sanityerrtype logcicerrtype 
-                                    -> ProofBySubArgError senttype sanityerrtype logcicerrtype
-    deriving(Show)
-
-
-proofBySubArg :: (ProofStd s eL1 r1 o tType,  TypedSent o tType sE s) => 
-                       ProofBySubArgSchema s r1 ->  
-                        PrfStdContext tType -> 
-                        PrfStdState s o tType ->
-                        Either (ProofBySubArgError s sE eL1) (PrfStdStep s o tType)
-proofBySubArg (ProofBySubArgSchema consequent subproof) context state  =
-      do
-         let frVarTypeStack = freeVarTypeStack context
-         let constdict = fmap fst (consts state)
-         let alreadyProven = provenSents state
-         let newStepIdxPrefix = stepIdxPrefix context ++ [stepCount state]
-         let newContextFrames = contextFrames context <> [False]
-         let newContext = PrfStdContext frVarTypeStack newStepIdxPrefix newContextFrames
-         let newState = PrfStdState mempty mempty 0
-         let preambleSteps = []
-         let eitherTestResult = testSubproof newContext state newState preambleSteps (Last Nothing) consequent subproof
-         finalSteps <- either (throwError . ProofBySubArgErrSubproofFailedOnErr) return eitherTestResult
-         return (PrfStdStepSubproof consequent "PRF_BY_SUBARG" finalSteps)
 
 
 
@@ -728,36 +696,6 @@ runProofByAsmM asm prog =  do
         mayMonadifyRes <- (monadifyProofStd . proofByAsmSchemaRule) (ProofByAsmSchema asm consequent subproof)
         idx <- maybe (error "No theorem returned by monadifyProofStd on asm schema. This shouldn't happen") (return . snd) mayMonadifyRes
         return (asm .->. consequent,idx,extraData)
-
-
-class BaseLogSchemaRule r s where
-   proofBySubArgSchemaRule :: ProofBySubArgSchema s r -> r
-
-
-
-
-runProofBySubArgM :: (Monoid r1, ProofStd s eL1 r1 o tType, Monad m,
-                        MonadThrow m,
-                       Show s, Typeable s,
-                       Show eL1, Typeable eL1, TypedSent o tType sE s, Show sE, Typeable sE,
-                       StdPrfPrintMonad s o tType m, BaseLogSchemaRule r1 s )
-                 =>   ProofGenTStd tType r1 s o m x
-                            -> ProofGenTStd tType r1 s o m (s, [Int], x)
-runProofBySubArgM prog =  do
-        state <- getProofState
-        context <- ask
-        let frVarTypeStack = freeVarTypeStack context
-        let constdict = fmap fst (consts state)
-        let newStepIdxPrefix = stepIdxPrefix context ++ [stepCount state]
-        let newContextFrames = contextFrames context <> [False]
-        let newContext = PrfStdContext frVarTypeStack newStepIdxPrefix newContextFrames
-        let newState = PrfStdState mempty mempty 0
-        let preambleSteps = []
-        (extraData,consequent,subproof,newSteps) 
-            <- lift $ runSubproofM newContext state newState preambleSteps (Last Nothing) prog
-        mayMonadifyRes <- (monadifyProofStd . proofBySubArgSchemaRule) (ProofBySubArgSchema consequent subproof)
-        idx <- maybe (error "No theorem returned by monadifyProofStd on subarg schema. This shouldn't happen") (return . snd) mayMonadifyRes
-        return (consequent, idx, extraData)
 
 
 

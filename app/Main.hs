@@ -53,14 +53,14 @@ import StdPattern
       runTheoremM,
       runTmSilentM,
       runProofByUGM,
-      runProofBySubArgM,
       runProofByAsmM
  )
 import qualified RuleSets.PropLogic as PL
 import RuleSets.PropLogic(PropLogicRule(..),mpM,adjM,simpLM)
 import RuleSets.PredLogic
 import Langs.BasicUntyped
-import RuleSets.BaseLogic (remarkM,fakePropM,fakeConstM,BaseLogRule(..))
+import RuleSets.BaseLogic (remarkM,fakePropM,fakeConstM,BaseLogRule(..),ProofBySubArgError(..),
+                        runProofBySubArgM)
 default(Text)
 
 

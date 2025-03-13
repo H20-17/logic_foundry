@@ -36,8 +36,6 @@ import StdPattern
       ProofByUGError,
       PredLogicSent(..),
       ProofByUGSchema,
-      ProofBySubArgError,
-      ProofBySubArgSchema(argPrfConsequent),
       ProofByAsmError,
       ProofByAsmSchema,
       EstTmMError,
@@ -54,14 +52,20 @@ import StdPattern
       monadifyProofStd,
       establishTmSilentM,
       proofByAsm,
-      proofBySubArg,
       proofByUG, TheoremSchemaMT,
+      runProofByAsmM
       )
-import qualified StdPatternDevel as StdP(runProofByAsmM, 
+import qualified StdPatternDevel as StdP( 
                                         runProofOpen)
-import StdPatternDevel (PredLogSchemaRule(..), BaseLogSchemaRule(..), PropLogSchemaRule(..))
-import RuleSets.BaseLogic (remarkM, BaseLogRule(..))
-import qualified RuleSets.BaseLogicDevel as REM (LogicRule(..))
+import StdPatternDevel (PredLogSchemaRule(..), PropLogSchemaRule(..))
+import RuleSets.BaseLogic (remarkM, BaseLogRule(..),
+                           ProofBySubArgError,
+                           ProofBySubArgSchema(argPrfConsequent),
+                           proofBySubArg,
+                           ProofBySubArgError(..),
+                           ProofBySubArgSchema(argPrfConsequent))
+import qualified RuleSets.BaseLogicDevel as REM (LogicRule(..), BaseLogSchemaRule(..))
+import RuleSets.BaseLogicDevel(BaseLogSchemaRule(..))
 import qualified RuleSets.PropLogic as PL
 import RuleSets.PropLogic (PropLogicRule(..),mpM, simpLM, adjM)
 import qualified RuleSets.PropLogicDevel as PL

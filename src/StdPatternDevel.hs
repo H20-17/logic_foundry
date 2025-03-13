@@ -1,13 +1,12 @@
 module StdPatternDevel(
-    runProofByAsmM, runProofOpen, PredLogSchemaRule(..), BaseLogSchemaRule(..), PropLogSchemaRule(..)
+    runProofOpen, PredLogSchemaRule(..), PropLogSchemaRule(..), runSubproofM
 ) where
 
 import Internal.StdPattern
     ( 
+      runSubproofM,        
 
-      runProofByAsmM,
       PredLogSchemaRule(..),
-      BaseLogSchemaRule(..),
       PropLogSchemaRule(..) )
 
 import Kernel(runProofOpen)
