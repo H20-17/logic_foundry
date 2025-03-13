@@ -234,7 +234,7 @@ assignSequentialMap base ls = Prelude.foldr f (Right (base,mempty)) ls
                                 Just _ -> Left k
 
 
-checkTheoremOpen :: (ProofStd s eL1 r1 o tType, PropLogicSent s tType, TypedSent o tType sE s    )
+checkTheoremOpen :: (ProofStd s eL1 r1 o tType, TypedSent o tType sE s    )
                             => Maybe (PrfStdState s o tType,PrfStdContext tType) -> TheoremSchema s r1 o tType 
                                        -> Either (ChkTheoremError s sE eL1 o tType) [PrfStdStep s o tType]
                                        
@@ -281,13 +281,13 @@ checkTheoremOpen mayPrStateCxt (TheoremSchema constdict lemmas theorem subproof)
                where
                   maybeLemmaInsane = fmap (ChkTheoremErrLemmaSanity a) (checkSanity mempty a constdictPure)
 
-checkTheorem :: (ProofStd s eL1 r1 o tType, PropLogicSent s tType, TypedSent o tType sE s    )
+checkTheorem :: (ProofStd s eL1 r1 o tType, TypedSent o tType sE s    )
                             => TheoremSchema s r1 o tType
                                        -> Either (ChkTheoremError s sE eL1 o tType) [PrfStdStep s o tType]
 checkTheorem  = checkTheoremOpen Nothing
 
 
-establishTheorem :: (ProofStd s eL1 r1 o tType, PropLogicSent s tType, TypedSent o tType sE s    )
+establishTheorem :: (ProofStd s eL1 r1 o tType,  TypedSent o tType sE s    )
                             => TheoremSchema s r1 o tType -> PrfStdContext tType -> PrfStdState s o tType 
                                        -> Either (ChkTheoremError s sE eL1 o tType) (PrfStdStep s o tType)
 establishTheorem schema context state = do
@@ -390,7 +390,7 @@ monadifyProofStd p = do
        
 
 checkTheoremMOpen :: (Show s, Typeable s, Monoid r1, ProofStd s eL1 r1 o tType, Monad m, MonadThrow m,
-                      PropLogicSent s tType, TypedSent o tType sE s, Show sE, Typeable sE, Typeable tType, Show tType,
+                      TypedSent o tType sE s, Show sE, Typeable sE, Typeable tType, Show tType,
                       Show eL1, Typeable eL1,
                       Typeable o, Show o, StdPrfPrintMonad s o tType m )
                  =>  Maybe (PrfStdState s o tType,PrfStdContext tType) ->  TheoremSchemaMT tType r1 s o m x
@@ -440,7 +440,7 @@ checkTheoremMOpen mayPrStateCxt (TheoremSchemaMT constdict lemmas prog) =  do
 
 
 checkTheoremM :: (Show s, Typeable s, Monoid r1, ProofStd s eL1 r1 o tType, Monad m, MonadThrow m,
-                      PropLogicSent s tType, TypedSent o tType sE s, Show sE, Typeable sE, Typeable tType, Show tType,
+                      TypedSent o tType sE s, Show sE, Typeable sE, Typeable tType, Show tType,
                       Show eL1, Typeable eL1,
                       Typeable o, Show o, StdPrfPrintMonad s o tType m )
                  =>  TheoremSchemaMT tType r1 s o m x
@@ -457,7 +457,6 @@ data EstTmMError s o tType where
 
 
 establishTmSilentM :: (Monoid r1, ProofStd s eL1 r1 o tType ,
-                     PropLogicSent s tType,
                      Show s, Typeable s, Ord o, TypedSent o tType sE s, Show sE, Typeable sE, Typeable tType, Show tType, Typeable o,
                      Show o, Show eL1, Typeable eL1, StdPrfPrintMonad s o tType (Either SomeException))
                             =>  TmSchemaSilentM tType r1 s o () -> 
@@ -477,7 +476,7 @@ data ExpTmMError where
 
 
 expandTheoremM :: (Monoid r1, ProofStd s eL1 r1 o tType ,
-                     PropLogicSent s tType, Show s, Typeable s, TypedSent o tType sE s, Show sE, Typeable sE,
+                     Show s, Typeable s, TypedSent o tType sE s, Show sE, Typeable sE,
                      Show eL1, Typeable eL1,
                      Typeable tType, Show tType, Typeable o, Show o, StdPrfPrintMonad s o tType (Either SomeException))
                             => TmSchemaSilentM tType r1 s o () -> Either ExpTmMError (TheoremSchema s r1 o tType)
@@ -630,7 +629,7 @@ proofByUG (ProofByUGSchema generalization subproof) context state =
 
 
 runSubproofM :: ( Monoid r1, ProofStd s eL1 r1 o tType, Monad m,
-                        PropLogicSent s tType, Show eL1, Typeable eL1, Show s, Typeable s,
+                        Show eL1, Typeable eL1, Show s, Typeable s,
                         MonadThrow m, TypedSent o tType sE s, Show sE, Typeable sE, StdPrfPrintMonad s o tType m )
                  =>    PrfStdContext tType -> PrfStdState s o tType -> PrfStdState s o tType
                           -> [PrfStdStep s o tType] -> Last s -> ProofGenTStd tType r1 s o m x
@@ -661,7 +660,7 @@ class PredLogSchemaRule r s o tType | r->o, r -> tType where
 
 
 runTheoremM :: (Monoid r1, ProofStd s eL1 r1 o tType, Monad m,
-                      PropLogicSent s tType, MonadThrow m, Show tType, Typeable tType,
+                      MonadThrow m, Show tType, Typeable tType,
                       Show o, Typeable o, Show s, Typeable s,
                       Show eL1, Typeable eL1, Ord o, TypedSent o tType sE s, Show sE, Typeable sE,
                       StdPrfPrintMonad s o tType m, PredLogSchemaRule r1 s o tType)
@@ -677,7 +676,7 @@ runTheoremM (TheoremSchemaMT constDict lemmas prog) =  do
 
 
 runTmSilentM :: (Monoid r1, ProofStd s eL1 r1 o tType, Monad m,
-                      PropLogicSent s tType, MonadThrow m, Show tType, Typeable tType,
+                      MonadThrow m, Show tType, Typeable tType,
                       Show o, Typeable o, Show s, Typeable s,
                       Show eL1, Typeable eL1, Ord o, TypedSent o tType sE s, Show sE, Typeable sE,
                       StdPrfPrintMonad s o tType m, StdPrfPrintMonad s o tType (Either SomeException),
@@ -738,7 +737,7 @@ class BaseLogSchemaRule r s where
 
 
 runProofBySubArgM :: (Monoid r1, ProofStd s eL1 r1 o tType, Monad m,
-                       PropLogicSent s tType, MonadThrow m,
+                        MonadThrow m,
                        Show s, Typeable s,
                        Show eL1, Typeable eL1, TypedSent o tType sE s, Show sE, Typeable sE,
                        StdPrfPrintMonad s o tType m, BaseLogSchemaRule r1 s )
