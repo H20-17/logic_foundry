@@ -3,13 +3,15 @@
 
 module Internal.StdPattern(
     PrfStdContext(..), PrfStdState(..), PrfStdStep(..), TestSubproofErr, TheoremSchema(..), TheoremSchemaMT(..), BigException, ChkTheoremError, EstTmMError, ExpTmMError,
-    ProofByAsmSchema(..), ProofByAsmError,  ProofByUGSchema(..), ProofByUGError,
+    ProofByUGSchema(..), ProofByUGError,
     ProofGenTStd, ProofStd, TmSchemaSilentM,
     TypeableTerm(..), TypedSent(..), PropLogicSent(..), PredLogicSent(..), StdPrfPrintMonadFrame(..), StdPrfPrintMonad(..),
     checkTheorem, establishTheorem, constDictTest, testSubproof, monadifyProofStd,
-    checkTheoremM, establishTmSilentM, expandTheoremM, proofByAsm, proofByUG,
-    runTheoremM, runTmSilentM, runProofByAsmM,  runProofByUGM,getTopFreeVar,
-    PredLogSchemaRule (..), PropLogSchemaRule(..), runSubproofM, RuleInject(..)
+    checkTheoremM, establishTmSilentM, expandTheoremM, proofByUG,
+    runTheoremM, runTmSilentM, runProofByUGM,getTopFreeVar,
+    PredLogSchemaRule (..), runSubproofM, RuleInject(..)
+
+
 
 ) where
 
@@ -43,6 +45,9 @@ import Control.Monad.Reader ( MonadReader(ask) )
 import Control.Monad.State ( MonadState(get) )
 import Control.Monad.Writer ( MonadWriter(tell) )
 import Data.Monoid ( Monoid(mempty, mappend),Last(..) )
+
+
+
 
 default(Text)
 
@@ -120,30 +125,8 @@ class (Eq tType, Ord o) => TypeableTerm t o tType sE | t -> o, t ->tType, t -> s
     const2Term :: o -> t
     free2Term :: Int -> t
         
-
-
-
 class (Ord s, Eq tType, Ord o) => TypedSent o tType sE s | s-> tType, s-> sE, s -> o where
     checkSanity :: [tType] -> s -> Map o tType -> Maybe sE
-
-class (Ord s, Eq tType) 
-              => PropLogicSent s tType | s -> tType where
-     (.&&.) :: s -> s -> s
-     parseAdj :: s -> Maybe(s,s)
-     (.->.) :: s->s->s
-     parse_implication:: s -> Maybe (s,s)
-     neg :: s -> s
-     parseNeg :: s -> Maybe s
-     (.||.) :: s -> s -> s
-     parseDis :: s -> Maybe (s,s)
-
-infixr 3 .&&.
-infixr 2 .||.
-infixr 0 .->.
---infixr 0 .<->.
---infix  4 .==.
---infix  4 .<-.
---infix  4 .>=.
 
 
 data TestSubproofErr senttype sanityerrtype logicerrtype where
@@ -486,54 +469,6 @@ expandTheoremM ((TheoremSchemaMT constdict lemmas proofprog):: TmSchemaSilentM t
           return $ TheoremSchema constdict lemmas tm r1
 
 
-
-data ProofByAsmSchema s r where
-   ProofByAsmSchema :: {
-                       asmPrfAsm :: s,
-                       asmPrfConsequent :: s,
-                       asmPrfProof :: r
-                    } -> ProofByAsmSchema s r
-    deriving Show
-
-
-
-data ProofByAsmError senttype sanityerrtype logcicerrtype where
-   ProofByAsmErrAsmNotSane :: senttype -> sanityerrtype -> ProofByAsmError senttype sanityerrtype logcicerrtype
-   ProofByAsmErrSubproofFailedOnErr :: TestSubproofErr senttype sanityerrtype logcicerrtype 
-                                    -> ProofByAsmError senttype sanityerrtype logcicerrtype
-    deriving(Show)
-
-
-proofByAsm :: (ProofStd s eL1 r1 o tType, PropLogicSent s tType, TypedSent o tType sE s) => 
-                       ProofByAsmSchema s r1 ->  
-                        PrfStdContext tType -> 
-                        PrfStdState s o tType ->
-                        Either (ProofByAsmError s sE eL1) (s,PrfStdStep s o tType)
-proofByAsm (ProofByAsmSchema assumption consequent subproof) context state  =
-      do
-         let frVarTypeStack = freeVarTypeStack context
-         let constdict = fmap fst (consts state)
-         let sc = checkSanity frVarTypeStack assumption constdict
-         maybe (return ()) (throwError .  ProofByAsmErrAsmNotSane assumption) sc
-         let alreadyProven = provenSents state
-         let newStepIdxPrefix = stepIdxPrefix context ++ [stepCount state]
-         let newSents = Data.Map.insert assumption (newStepIdxPrefix ++ [0]) mempty
-         let newContextFrames = contextFrames context <> [False]
-         let newContext = PrfStdContext frVarTypeStack newStepIdxPrefix newContextFrames
-         let newState = PrfStdState newSents mempty 1
-         let preambleSteps = [PrfStdStepStep assumption "ASM" []]
-         let mayPreambleLastProp = (Last . Just) assumption
-         let eitherTestResult = testSubproof newContext state newState preambleSteps mayPreambleLastProp consequent subproof
-         finalSteps <- either (throwError . ProofByAsmErrSubproofFailedOnErr) return eitherTestResult
-         let implication = assumption .->. consequent
-         return (implication, PrfStdStepSubproof implication "PRF_BY_ASM" finalSteps)
-
-
-
-
-
-
-
 data ProofByUGSchema s r where
    ProofByUGSchema :: {
                        ugGeneralization :: s,
@@ -666,38 +601,6 @@ runTmSilentM (TheoremSchemaMT constDict lemmas prog) =  do
         newProg = do
              prog
              return ()
-
-class PropLogSchemaRule r s  where
-   proofByAsmSchemaRule :: ProofByAsmSchema s r -> r
-
-runProofByAsmM :: (Monoid r1, ProofStd s eL1 r1 o tType, Monad m,
-                       PropLogicSent s tType, MonadThrow m,
-                       Show s, Typeable s,
-                       Show eL1, Typeable eL1, TypedSent o tType sE s, Show sE, Typeable sE, 
-                       StdPrfPrintMonad s o tType m, PropLogSchemaRule r1 s )
-                 =>   s -> ProofGenTStd tType r1 s o m x
-                            -> ProofGenTStd tType r1 s o m (s, [Int], x)
-runProofByAsmM asm prog =  do
-        state <- getProofState
-        context <- ask
-        let frVarTypeStack = freeVarTypeStack context
-        let constdict = fmap fst (consts state)
-        let sc = checkSanity frVarTypeStack asm constdict
-        maybe (return ()) (throwM . BigExceptAsmSanity asm) sc
-        let newStepIdxPrefix = stepIdxPrefix context ++ [stepCount state]
-        let newSents = Data.Map.insert asm (newStepIdxPrefix ++ [0]) mempty
-        let newContextFrames = contextFrames context <> [False]
-        let newContext = PrfStdContext frVarTypeStack newStepIdxPrefix newContextFrames
-        let newState = PrfStdState newSents mempty 1
-        let preambleSteps = [PrfStdStepStep asm "ASM" []]
-        let mayPreambleLastProp = (Last . Just) asm
-        (extraData,consequent,subproof,newSteps) 
-                 <- lift $ runSubproofM newContext state newState preambleSteps mayPreambleLastProp prog
-        mayMonadifyRes <- (monadifyProofStd . proofByAsmSchemaRule) (ProofByAsmSchema asm consequent subproof)
-        idx <- maybe (error "No theorem returned by monadifyProofStd on asm schema. This shouldn't happen") (return . snd) mayMonadifyRes
-        return (asm .->. consequent,idx,extraData)
-
-
 
 
 

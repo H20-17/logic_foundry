@@ -1,12 +1,12 @@
 module StdPattern(
     PrfStdContext(..), PrfStdState(..), PrfStdStep(..), TestSubproofErr, TheoremSchema(..), TheoremSchemaMT(..), BigException, ChkTheoremError, EstTmMError, ExpTmMError,
-    ProofByAsmSchema(..), ProofByAsmError, ProofByUGSchema(..), ProofByUGError,
+    ProofByUGSchema(..), ProofByUGError,
     ProofGenTStd, ProofStd, TmSchemaSilentM,
     TypeableTerm(..), TypedSent(..), PropLogicSent(..), PredLogicSent(..), StdPrfPrintMonadFrame(..), StdPrfPrintMonad(..),
     checkTheorem, establishTheorem, constDictTest, testSubproof, monadifyProofStd,
-    checkTheoremM, establishTmSilentM, expandTheoremM, proofByAsm, proofByUG,
+    checkTheoremM, establishTmSilentM, expandTheoremM, proofByUG,
     getProofState, runProofGeneratorT, Proof, runProof, ProofGeneratorT, modifyPS, getTopFreeVar, runTheoremM,
-    runTmSilentM, runProofByUGM, runProofByAsmM, RuleInject(..)
+    runTmSilentM, runProofByUGM,  RuleInject(..) 
 
 ) where
 import Kernel
@@ -20,8 +20,6 @@ import Internal.StdPattern
     ( ProofByUGError,
       PredLogicSent(..),
       ProofByUGSchema(..),
-      ProofByAsmError,
-      ProofByAsmSchema(..),
       ExpTmMError,
       EstTmMError,
       StdPrfPrintMonad(..),
@@ -48,10 +46,9 @@ import Internal.StdPattern
       checkTheoremM,
       establishTmSilentM,
       expandTheoremM,
-      proofByAsm,
       proofByUG,
       getTopFreeVar,
       runTheoremM,
       runTmSilentM,
       runProofByUGM,
-      runProofByAsmM, RuleInject(..))
+      RuleInject(..))

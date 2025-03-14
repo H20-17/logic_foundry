@@ -29,7 +29,6 @@ import StdPattern
       ProofStd,
       ProofGenTStd,
       monadifyProofStd,
-      proofByAsm,
       getProofState,
       freeVarTypeStack,
       checkSanity,

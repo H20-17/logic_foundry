@@ -1,7 +1,7 @@
 module RuleSets.Internal.PropLogic 
 (
-    LogicError, LogicRule(..), runProofAtomic, mpM, simpLM, adjM, PropLogicRule(..), PropLogSchemaRule(..)
- 
+    LogicError, LogicRule(..), runProofAtomic, mpM, simpLM, adjM, PropLogicRule(..), PropLogSchemaRule(..),
+    ProofByAsmSchema(..), ProofByAsmError, proofByAsm, runProofByAsmM
 ) where
 
 import Data.Monoid ( Last(..) )
@@ -27,11 +27,9 @@ import Control.Monad.State ( MonadState(get) )
 import Control.Monad.Writer ( MonadWriter(tell) )
 import StdPattern
     ( PrfStdState(..),
-      PrfStdContext(stepIdxPrefix, freeVarTypeStack),
+      PrfStdContext(..),
       Proof,
-      
-      ProofByAsmError,
-      ProofByAsmSchema,
+      TestSubproofErr(..),
       StdPrfPrintMonad,
       PropLogicSent((.&&.), parse_implication, neg, (.||.), parseAdj),
       TypedSent(..),
@@ -39,11 +37,10 @@ import StdPattern
       ProofStd,
       ProofGenTStd,
       monadifyProofStd,
-      proofByAsm,
       modifyPS,
-      RuleInject(..))
+      RuleInject(..),
+      testSubproof)
 import qualified StdPatternDevel as StdP ( runProofOpen )
-import StdPatternDevel(PropLogSchemaRule(..))
 import RuleSets.BaseLogic (remarkM, BaseLogRule(..), ProofBySubArgError(..), 
                            ProofBySubArgSchema(argPrfConsequent),
                            proofBySubArg, BaseLogSchemaRule(..))
@@ -250,4 +247,97 @@ adjM :: (Monad m, Monad m, PropLogicSent s tType, Ord o, Show sE, Typeable sE, S
 adjM a b = standardRuleM (adj a b)
 
  
+data ProofByAsmSchema s r where
+   ProofByAsmSchema :: {
+                       asmPrfAsm :: s,
+                       asmPrfConsequent :: s,
+                       asmPrfProof :: r
+                    } -> ProofByAsmSchema s r
+    deriving Show
 
+
+
+data ProofByAsmError senttype sanityerrtype logcicerrtype where
+   ProofByAsmErrAsmNotSane :: senttype -> sanityerrtype -> ProofByAsmError senttype sanityerrtype logcicerrtype
+   ProofByAsmErrSubproofFailedOnErr :: TestSubproofErr senttype sanityerrtype logcicerrtype 
+                                    -> ProofByAsmError senttype sanityerrtype logcicerrtype
+    deriving(Show)
+
+
+proofByAsm :: (ProofStd s eL1 r1 o tType, PropLogicSent s tType, TypedSent o tType sE s) => 
+                       ProofByAsmSchema s r1 ->  
+                        PrfStdContext tType -> 
+                        PrfStdState s o tType ->
+                        Either (ProofByAsmError s sE eL1) (s,PrfStdStep s o tType)
+proofByAsm (ProofByAsmSchema assumption consequent subproof) context state  =
+      do
+         let frVarTypeStack = freeVarTypeStack context
+         let constdict = fmap fst (consts state)
+         let sc = checkSanity frVarTypeStack assumption constdict
+         maybe (return ()) (throwError .  ProofByAsmErrAsmNotSane assumption) sc
+         let alreadyProven = provenSents state
+         let newStepIdxPrefix = stepIdxPrefix context ++ [stepCount state]
+         let newSents = Data.Map.insert assumption (newStepIdxPrefix ++ [0]) mempty
+         let newContextFrames = contextFrames context <> [False]
+         let newContext = PrfStdContext frVarTypeStack newStepIdxPrefix newContextFrames
+         let newState = PrfStdState newSents mempty 1
+         let preambleSteps = [PrfStdStepStep assumption "ASM" []]
+         let mayPreambleLastProp = (Last . Just) assumption
+         let eitherTestResult = testSubproof newContext state newState preambleSteps mayPreambleLastProp consequent subproof
+         finalSteps <- either (throwError . ProofByAsmErrSubproofFailedOnErr) return eitherTestResult
+         let implication = assumption .->. consequent
+         return (implication, PrfStdStepSubproof implication "PRF_BY_ASM" finalSteps)
+
+
+
+class PropLogSchemaRule r s  where
+   proofByAsmSchemaRule :: ProofByAsmSchema s r -> r
+
+runProofByAsmM :: (Monoid r1, ProofStd s eL1 r1 o tType, Monad m,
+                       PropLogicSent s tType, MonadThrow m,
+                       Show s, Typeable s,
+                       Show eL1, Typeable eL1, TypedSent o tType sE s, Show sE, Typeable sE, 
+                       StdPrfPrintMonad s o tType m, PropLogSchemaRule r1 s )
+                 =>   s -> ProofGenTStd tType r1 s o m x
+                            -> ProofGenTStd tType r1 s o m (s, [Int], x)
+runProofByAsmM asm prog =  do
+        state <- getProofState
+        context <- ask
+        let frVarTypeStack = freeVarTypeStack context
+        let constdict = fmap fst (consts state)
+        let sc = checkSanity frVarTypeStack asm constdict
+        maybe (return ()) (throwM . BigExceptAsmSanity asm) sc
+        let newStepIdxPrefix = stepIdxPrefix context ++ [stepCount state]
+        let newSents = Data.Map.insert asm (newStepIdxPrefix ++ [0]) mempty
+        let newContextFrames = contextFrames context <> [False]
+        let newContext = PrfStdContext frVarTypeStack newStepIdxPrefix newContextFrames
+        let newState = PrfStdState newSents mempty 1
+        let preambleSteps = [PrfStdStepStep asm "ASM" []]
+        let mayPreambleLastProp = (Last . Just) asm
+        (extraData,consequent,subproof,newSteps) 
+                 <- lift $ runSubproofM newContext state newState preambleSteps mayPreambleLastProp prog
+        mayMonadifyRes <- (monadifyProofStd . proofByAsmSchemaRule) (ProofByAsmSchema asm consequent subproof)
+        idx <- maybe (error "No theorem returned by monadifyProofStd on asm schema. This shouldn't happen") (return . snd) mayMonadifyRes
+        return (asm .->. consequent,idx,extraData)
+
+
+
+
+class (Ord s, Eq tType) 
+              => PropLogicSent s tType | s -> tType where
+     (.&&.) :: s -> s -> s
+     parseAdj :: s -> Maybe(s,s)
+     (.->.) :: s->s->s
+     parse_implication:: s -> Maybe (s,s)
+     neg :: s -> s
+     parseNeg :: s -> Maybe s
+     (.||.) :: s -> s -> s
+     parseDis :: s -> Maybe (s,s)
+
+infixr 3 .&&.
+infixr 2 .||.
+infixr 0 .->.
+--infixr 0 .<->.
+--infix  4 .==.
+--infix  4 .<-.
+--infix  4 .>=.
