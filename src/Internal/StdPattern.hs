@@ -2,15 +2,15 @@
 
 
 module Internal.StdPattern(
-    PrfStdContext(..), PrfStdState(..), PrfStdStep(..), TestSubproofErr, TheoremSchema(..), TheoremSchemaMT(..), BigException, ChkTheoremError, EstTmMError, ExpTmMError,
-    ProofByUGSchema(..), ProofByUGError,
-    ProofGenTStd, ProofStd, TmSchemaSilentM,
-    TypeableTerm(..), TypedSent(..), PropLogicSent(..), PredLogicSent(..), StdPrfPrintMonadFrame(..), StdPrfPrintMonad(..),
-    checkTheorem, establishTheorem, constDictTest, testSubproof, monadifyProofStd,
-    checkTheoremM, establishTmSilentM, expandTheoremM, proofByUG,
-    runTheoremM, runTmSilentM, runProofByUGM,getTopFreeVar,
-    PredLogSchemaRule (..), runSubproofM, RuleInject(..)
-
+    PrfStdContext(..), PrfStdState(..), PrfStdStep(..), TestSubproofErr,
+    BigException(..), 
+    ProofStd,
+    TypeableTerm(..), TypedSent(..), StdPrfPrintMonadFrame(..), StdPrfPrintMonad(..),
+    getTopFreeVar, RuleInject(..),
+    testSubproof, monadifyProofStd,
+    runSubproofM,
+    ProofGenTStd
+    
 
 
 ) where
@@ -161,144 +161,6 @@ testSubproof context baseState preambleState preambleSteps mayPreambleLastProp t
              return finalSteps
 
 
-data TheoremSchema s r o tType where
-   TheoremSchema :: {
-                       constDict :: [(o,tType)],
-                       lemmas :: [s],
-                       theorem :: s,
-                       theoremProof :: r               
-                    } -> TheoremSchema s r o tType
-    deriving Show
-
-
-
-
-
-constDictTest :: (Ord o, Eq tType) => Map o tType -> Map o tType ->  Maybe (o, Maybe (tType,tType))
-constDictTest envDict = Data.Map.foldrWithKey f Nothing
-     where         
-         f k aVal Nothing = case Data.Map.lookup k envDict of
-                                              Just bVal -> if 
-                                                              aVal /= bVal 
-                                                           then
-                                                              Just (k,Just (aVal,bVal))
-                                                           else
-                                                               Nothing -- we good
-                                              Nothing -> Just (k,Nothing)
-         f k aVal (Just x) = Just x
-
-
-
-data ChkTheoremError senttype sanityerrtype logcicerrtype o tType where
-   ChkTheoremErrLemmaNotEstablished :: senttype -> ChkTheoremError senttype sanityerrtype logcicerrtype o tType
-   ChkTheoremErrLemmaSanity :: senttype -> sanityerrtype -> ChkTheoremError senttype sanityerrtype logcicerrtype o tType
-   --The lemma is insane or not closed
-   ChkTheoremErrSubproofErr :: TestSubproofErr senttype sanityerrtype logcicerrtype -> ChkTheoremError senttype sanityerrtype logcicerrtype o tType
-   ChkTheoremErrConstNotDefd :: o -> ChkTheoremError senttype sanityerrtype logcicerrtype o tType
-   ChkTheoremErrConstTypeConflict :: o -> tType -> tType -> ChkTheoremError senttype sanityerrtype logcicerrtype o tType
-   ChkTheoremErrSchemaDupConst :: o -> ChkTheoremError senttype sanityerrtype logcicerrtype o tType
-   deriving(Show)
-
-
-assignSequentialSet :: Ord s => Int -> [s] -> (Int, Map s [Int])
-assignSequentialSet base ls = Prelude.foldr (\el (i, m) -> 
-    (i + 1, Data.Map.insert el [length ls + base - i] m)) (base, mempty) ls
-
-
-
-assignSequentialMap :: Ord o => Int -> [(o,tType)] -> Either o (Int,Map o (tType,[Int]))
-assignSequentialMap base ls = Prelude.foldr f (Right (base,mempty)) ls
-   where 
-      f (k, v) foldObj = case foldObj of
-                           Left o -> Left o
-                           Right (count,m) ->
-                             case Data.Map.lookup k m of
-                                Nothing -> Right (count+1, Data.Map.insert k (v,[length ls + base - count]) m)
-                                Just _ -> Left k
-
-
-checkTheoremOpen :: (ProofStd s eL1 r1 o tType, TypedSent o tType sE s    )
-                            => Maybe (PrfStdState s o tType,PrfStdContext tType) -> TheoremSchema s r1 o tType 
-                                       -> Either (ChkTheoremError s sE eL1 o tType) [PrfStdStep s o tType]
-                                       
-checkTheoremOpen mayPrStateCxt (TheoremSchema constdict lemmas theorem subproof)  =
-  do
-       let eitherConstDictMap = assignSequentialMap 0 constdict
-       (newStepCountA, newConsts) <- either (throwError . ChkTheoremErrSchemaDupConst) return eitherConstDictMap
-       let (newStepCountB, newProven) = assignSequentialSet newStepCountA lemmas
-       let constdictPure = Data.Map.map fst newConsts
-       maybe (return ()) throwError (maybe (g1 constdictPure) (g2 constdictPure) mayPrStateCxt)
-       let newContext = PrfStdContext [] [] (maybe []  ((<>[True]) . contextFrames . snd) mayPrStateCxt)
-       let newState = PrfStdState newProven newConsts newStepCountB
-       let preambleSteps = conststeps <> lemmasteps
-       let mayPreambleLastProp = if Prelude.null lemmas then Last Nothing else (Last . Just . last) lemmas  
-       left ChkTheoremErrSubproofErr (
-                                      testSubproof newContext mempty newState preambleSteps mayPreambleLastProp theorem subproof)
-      where
-         conststeps = Prelude.foldr h1 [] constdict
-         lemmasteps = Prelude.foldr h2 [] lemmas
-         h1 (const,constType) accumList =  PrfStdStepConst const constType (q mayPrStateCxt) : accumList
-            where
-                 q Nothing = Nothing
-                 q (Just (state,_)) = fmap snd (Data.Map.lookup const (consts state)) 
-         h2 lemma accumList = PrfStdStepLemma lemma (q mayPrStateCxt) : accumList
-            where
-                 q Nothing = Nothing
-                 q (Just (state,_)) = Data.Map.lookup lemma (provenSents state) 
-
-         g2 constdictPure (PrfStdState alreadyProven alreadyDefinedConsts stepCount, 
-                 PrfStdContext freeVarTypeStack stepIdfPrefix contextDepth) 
-               = fmap constDictErr (constDictTest (fmap fst alreadyDefinedConsts) constdictPure)
-                                               <|> Prelude.foldr f1 Nothing lemmas
-           where
-             constDictErr (k,Nothing) = ChkTheoremErrConstNotDefd k
-             constDictErr (k, Just (a,b)) = ChkTheoremErrConstTypeConflict k a b
-             f1 a = maybe (maybeLemmaMissing <|> maybeLemmaInsane) Just 
-               where
-                  maybeLemmaMissing = if not (a `Set.member` Data.Map.keysSet alreadyProven)
-                                          then (Just . ChkTheoremErrLemmaNotEstablished) a else Nothing
-                  maybeLemmaInsane = fmap (ChkTheoremErrLemmaSanity a) (checkSanity mempty a constdictPure)
-         g1 constdictPure = Prelude.foldr f1 Nothing lemmas
-           where
-             f1 a = maybe maybeLemmaInsane Just 
-               where
-                  maybeLemmaInsane = fmap (ChkTheoremErrLemmaSanity a) (checkSanity mempty a constdictPure)
-
-checkTheorem :: (ProofStd s eL1 r1 o tType, TypedSent o tType sE s    )
-                            => TheoremSchema s r1 o tType
-                                       -> Either (ChkTheoremError s sE eL1 o tType) [PrfStdStep s o tType]
-checkTheorem  = checkTheoremOpen Nothing
-
-
-establishTheorem :: (ProofStd s eL1 r1 o tType,  TypedSent o tType sE s    )
-                            => TheoremSchema s r1 o tType -> PrfStdContext tType -> PrfStdState s o tType 
-                                       -> Either (ChkTheoremError s sE eL1 o tType) (PrfStdStep s o tType)
-establishTheorem schema context state = do
-    steps <- checkTheoremOpen (Just (state,context)) schema
-    let tm = theorem schema
-    return (PrfStdStepTheorem tm steps)
-
-
-
-
-data TheoremSchemaMT tType r s o m x where
-   TheoremSchemaMT :: {
-                       constDictM :: [(o,tType)],
-                       lemmasM :: [s],
-                       proofM :: ProofGenTStd tType r s o m x
-
-                     } -> TheoremSchemaMT tType r s o m x
-
-
-instance (Show s, Show o, Show tType) => Show (TheoremSchemaMT tType r s o m x) where
-    show :: (Show s, Show o, Show tType) => TheoremSchemaMT tType r s o m x -> String
-    show (TheoremSchemaMT constDict ls prog) =
-        "TheoremSchemaMT " <> show ls <> " <<Monadic subproof>> " <> show constDict
-
-
--- TheoremSchemaM
-
-type TmSchemaSilentM tType r s o x = TheoremSchemaMT tType r s o (Either SomeException) x
 
 data BigException s sE o tType where
    BigExceptLemmaSanityErr :: s -> sE -> BigException s sE o tType
@@ -372,162 +234,23 @@ monadifyProofStd p = do
           
        
 
-checkTheoremMOpen :: (Show s, Typeable s, Monoid r1, ProofStd s eL1 r1 o tType, Monad m, MonadThrow m,
-                      TypedSent o tType sE s, Show sE, Typeable sE, Typeable tType, Show tType,
-                      Show eL1, Typeable eL1,
-                      Typeable o, Show o, StdPrfPrintMonad s o tType m )
-                 =>  Maybe (PrfStdState s o tType,PrfStdContext tType) ->  TheoremSchemaMT tType r1 s o m x
-                              -> m (s, r1, x, [PrfStdStep s o tType])
-checkTheoremMOpen mayPrStateCxt (TheoremSchemaMT constdict lemmas prog) =  do
-    let eitherConstDictMap = assignSequentialMap 0 constdict
-    (newStepCountA, newConsts) <- either (throwM . BigExceptSchemaConstDup) return eitherConstDictMap
-    let (newStepCountB, newProven) = assignSequentialSet newStepCountA lemmas
-    let constdictPure = Data.Map.map fst newConsts
-    maybe (maybe (return ()) throwM (g1 constdictPure)) (maybe (return ()) throwM . g2 constdictPure) mayPrStateCxt
-    let newContext = PrfStdContext [] [] (maybe []  ((<>[True]) . contextFrames . snd) mayPrStateCxt)
-    let preambleSteps = conststeps <> lemmasteps
-    let newState = PrfStdState newProven newConsts newStepCountB
-    let mayPreambleLastProp = if Prelude.null lemmas then Last Nothing else (Last . Just . last) lemmas
-    (extra,tm,proof,newSteps) 
-               <- runSubproofM newContext mempty newState preambleSteps mayPreambleLastProp prog
-    return (tm,proof,extra,newSteps) 
-       where
-            conststeps = Prelude.foldr h1 [] constdict
-            lemmasteps = Prelude.foldr h2 [] lemmas
-            h1 (const,constType) accumList = PrfStdStepConst const constType (q mayPrStateCxt) : accumList
-              where
-                 q Nothing = Nothing
-                 q (Just (state,_)) = fmap snd (Data.Map.lookup const (consts state)) 
-            h2 lemma accumList = PrfStdStepLemma lemma (q mayPrStateCxt) : accumList
-              where
-                 q Nothing = Nothing
-                 q (Just (state,_)) = Data.Map.lookup lemma (provenSents state) 
-
-            g2 constdictPure (PrfStdState alreadyProven alreadyDefinedConsts stepCount, PrfStdContext freeVarTypeStack stepIdfPrefix contextDepth) 
-                 = fmap constDictErr (constDictTest (fmap fst alreadyDefinedConsts) constdictPure)
-                                               <|> Prelude.foldr f1 Nothing lemmas
-             where
-                constDictErr (k,Nothing) = BigExceptConstNotDefd k
-                constDictErr (k, Just (a,b)) = BigExceptConstTypeConflict k a b
-                f1 a = maybe (maybeLemmaInsane <|> maybeLemmaMissing) Just 
-                  where
-                     maybeLemmaMissing = if not (a `Set.member` Data.Map.keysSet alreadyProven)
-                                          then (Just . BigExceptLemmaNotEstablished) a else Nothing
-                     maybeLemmaInsane = fmap (BigExceptLemmaSanityErr a) (checkSanity mempty a constdictPure)
-            g1 constdictPure = Prelude.foldr f1 Nothing lemmas
-              where
-                 f1 a = maybe maybeLemmaInsane Just 
-                   where
-                      maybeLemmaInsane = fmap (BigExceptLemmaSanityErr a) (checkSanity mempty a constdictPure)
-  
 
 
-checkTheoremM :: (Show s, Typeable s, Monoid r1, ProofStd s eL1 r1 o tType, Monad m, MonadThrow m,
-                      TypedSent o tType sE s, Show sE, Typeable sE, Typeable tType, Show tType,
-                      Show eL1, Typeable eL1,
-                      Typeable o, Show o, StdPrfPrintMonad s o tType m )
-                 =>  TheoremSchemaMT tType r1 s o m x
-                              -> m (s, r1, x, [PrfStdStep s o tType])
-checkTheoremM = checkTheoremMOpen Nothing
+getTopFreeVar :: (Monoid r1, ProofStd s eL1 r1 o tType, Monad m,
+                       Show eL1, Typeable eL1,
+                    Show s, Typeable s,
+                       MonadThrow m, TypedSent o tType sE s, Show sE, Typeable sE,
+                       StdPrfPrintMonad s o tType m, TypeableTerm t Text tType sE)
+                 =>  ProofGenTStd tType r1 s o m t
+getTopFreeVar =  do
+        context <- ask
+        let frVarTypeStack = freeVarTypeStack context
+        if null frVarTypeStack then throwM BigExceptEmptyVarStack
+            else return (free2Term $ length frVarTypeStack - 1)
 
 
-data EstTmMError s o tType where
-    EstTmMErrMExcept :: SomeException -> EstTmMError s o tType
-    deriving (Show)
-   
-
-
-
-
-establishTmSilentM :: (Monoid r1, ProofStd s eL1 r1 o tType ,
-                     Show s, Typeable s, Ord o, TypedSent o tType sE s, Show sE, Typeable sE, Typeable tType, Show tType, Typeable o,
-                     Show o, Show eL1, Typeable eL1, StdPrfPrintMonad s o tType (Either SomeException))
-                            =>  TmSchemaSilentM tType r1 s o () -> 
-                                PrfStdContext tType ->
-                                PrfStdState s o tType -> 
-                                    Either (EstTmMError s o tType) (s, PrfStdStep s o tType)
-establishTmSilentM (schema :: TmSchemaSilentM tType r1 s o ()) context state = 
-    do
-        (tm, prf, (),_) <-  left EstTmMErrMExcept $ checkTheoremMOpen  (Just (state,context)) schema
-        return (tm, PrfStdStepTheoremM tm)
-
-
-
-data ExpTmMError where
-    ExpTmMErrMExcept :: SomeException -> ExpTmMError
-    deriving (Show)
-
-
-expandTheoremM :: (Monoid r1, ProofStd s eL1 r1 o tType ,
-                     Show s, Typeable s, TypedSent o tType sE s, Show sE, Typeable sE,
-                     Show eL1, Typeable eL1,
-                     Typeable tType, Show tType, Typeable o, Show o, StdPrfPrintMonad s o tType (Either SomeException))
-                            => TmSchemaSilentM tType r1 s o () -> Either ExpTmMError (TheoremSchema s r1 o tType)
-expandTheoremM ((TheoremSchemaMT constdict lemmas proofprog):: TmSchemaSilentM tType r1 s o ()) =
-      do
-          (tm,r1,(),_) <- left ExpTmMErrMExcept (checkTheoremMOpen Nothing (TheoremSchemaMT constdict lemmas proofprog))
-          return $ TheoremSchema constdict lemmas tm r1
-
-
-data ProofByUGSchema s r where
-   ProofByUGSchema :: {
-                       ugGeneralization :: s,
-                       ugPrfProof :: r
-                    } -> ProofByUGSchema s r
-    deriving (Show)
-
-
-class (PropLogicSent s tType) => PredLogicSent s t tType | s ->tType, s ->t, s->t where
-    parseExists :: s -> Maybe (t->s,tType)
-    parseForall :: s -> Maybe (t->s,tType)
-    -- create generalization from sentence, var type, and free var index.
-    createForall ::s -> tType -> Int -> s
- 
-
-
-
-
-
-
-
-
-data ProofByUGError senttype sanityerrtype logicerrtype where
-   ProofByUGErrSubproofFailedOnErr :: TestSubproofErr senttype sanityerrtype logicerrtype 
-                                    -> ProofByUGError senttype sanityerrtype logicerrtype
-   ProofByUGErrGenNotForall :: senttype -> ProofByUGError senttype sanityerrtype logicerrtype
-
-
- 
-     deriving(Show)
-
-proofByUG :: ( ProofStd s eL1 r1 o tType, PredLogicSent s t tType, TypedSent o tType sE s,
-                  TypeableTerm t o tType sE)
-                        => ProofByUGSchema s r1
-                            -> PrfStdContext tType 
-                            -> PrfStdState s o tType
-                          -> Either (ProofByUGError s sE eL1) (s, PrfStdStep s o tType)
-proofByUG (ProofByUGSchema generalization subproof) context state =
-      do
-         let varstack = freeVarTypeStack context
-         let mayParse = parseForall generalization
-         (f,tType) <- maybe ((throwError . ProofByUGErrGenNotForall) generalization) return mayParse
-         let newVarstack = tType : varstack
-         let newStepIdxPrefix = stepIdxPrefix context ++ [stepCount state]
-
-         let newContext = PrfStdContext newVarstack
-         let newContextFrames = contextFrames context <> [False]
-         let newContext = PrfStdContext newVarstack newStepIdxPrefix newContextFrames
-         let newState = PrfStdState mempty mempty 1
-         let newFreeTerm = free2Term $ length varstack
-         let generalizable = f newFreeTerm
-         let preambleSteps = [PrfStdStepFreevar (length varstack) tType]
-         let eitherTestResult = testSubproof newContext state newState preambleSteps (Last Nothing) generalizable subproof
-         finalSteps <- either (throwError . ProofByUGErrSubproofFailedOnErr) return eitherTestResult
-         return  (generalization, PrfStdStepSubproof generalization "PRF_BY_UG" finalSteps)
-
-
-
-
+class RuleInject r1 r2 where
+    injectRule :: r1 -> r2
 
 
 
@@ -551,96 +274,3 @@ runSubproofM context baseState preambleState preambleSteps mayPreambleLastProp p
           let endState = preambleState <> newState
           let finalSteps = preambleSteps <> newSteps
           return (extraData, prfResult, r,finalSteps)
-
-
-
-class PredLogSchemaRule r s o tType | r->o, r -> tType where
-   theoremSchemaRule :: TheoremSchema s r o tType -> r
-   theoremSchemaSilentMRule :: TmSchemaSilentM tType r s o () -> r
-   proofByUGSchemaRule :: ProofByUGSchema s r -> r
-
-
-
-
-runTheoremM :: (Monoid r1, ProofStd s eL1 r1 o tType, Monad m,
-                      MonadThrow m, Show tType, Typeable tType,
-                      Show o, Typeable o, Show s, Typeable s,
-                      Show eL1, Typeable eL1, Ord o, TypedSent o tType sE s, Show sE, Typeable sE,
-                      StdPrfPrintMonad s o tType m, PredLogSchemaRule r1 s o tType)
-                 =>   TheoremSchemaMT tType r1 s o m x ->
-                               ProofGenTStd tType r1 s o m (s, [Int], x)
-runTheoremM (TheoremSchemaMT constDict lemmas prog) =  do
-        state <- getProofState
-        context <- ask
-        (tm, proof, extra, newSteps) <- lift $ checkTheoremMOpen (Just (state,context)) (TheoremSchemaMT constDict lemmas prog)
-        mayMonadifyRes <- monadifyProofStd (theoremSchemaRule $ TheoremSchema constDict lemmas tm proof)
-        idx <- maybe (error "No theorem returned by monadifyProofStd on theorem schema. This shouldn't happen") (return . snd) mayMonadifyRes
-        return (tm, idx, extra)
-
-
-runTmSilentM :: (Monoid r1, ProofStd s eL1 r1 o tType, Monad m,
-                      MonadThrow m, Show tType, Typeable tType,
-                      Show o, Typeable o, Show s, Typeable s,
-                      Show eL1, Typeable eL1, Ord o, TypedSent o tType sE s, Show sE, Typeable sE,
-                      StdPrfPrintMonad s o tType m, StdPrfPrintMonad s o tType (Either SomeException),
-                      PredLogSchemaRule r1 s o tType)
-                 =>   TmSchemaSilentM tType r1 s o x ->
-                               ProofGenTStd tType r1 s o m (s, [Int], x)
--- runTmSilentM f (TheoremSchemaMT constDict lemmas prog) =  do
-runTmSilentM (TheoremSchemaMT constDict lemmas prog) =  do
-        state <- getProofState
-        context <- ask
-        let eitherResult = checkTheoremMOpen 
-                     (Just (state,context)) 
-                     (TheoremSchemaMT constDict lemmas prog)
-        (tm, proof, extra, newSteps) <- either throwM return eitherResult
-        mayMonadifyRes <- monadifyProofStd (theoremSchemaSilentMRule $ TheoremSchemaMT constDict lemmas newProg)
-        idx <- maybe (error "No theorem returned by monadifyProofStd on theorem schema. This shouldn't happen") (return . snd) mayMonadifyRes
-        return (tm, idx, extra)
-    where
-        newProg = do
-             prog
-             return ()
-
-
-
-runProofByUGM :: (Monoid r1, ProofStd s eL1 r1 o tType, Monad m,
-                       PredLogicSent s t tType, Show eL1, Typeable eL1,
-                    Show s, Typeable s,
-                       MonadThrow m, TypedSent o tType sE s, Show sE, Typeable sE, 
-                       StdPrfPrintMonad s o tType m,PredLogSchemaRule r1 s o tType)
-                 =>  tType -> ProofGenTStd tType r1 s o m x
-                            -> ProofGenTStd tType r1 s o m (s, [Int], x)
-runProofByUGM tt prog =  do
-        state <- getProofState
-        context <- ask
-        let frVarTypeStack = freeVarTypeStack context
-        let newFrVarTypStack = tt : frVarTypeStack
-        let newContextFrames = contextFrames context <> [False]
-        let newStepIdxPrefix = stepIdxPrefix context ++ [stepCount state]
-        let newContext = PrfStdContext newFrVarTypStack newStepIdxPrefix newContextFrames
-        let newState = PrfStdState mempty mempty 1
-        let preambleSteps = [PrfStdStepFreevar (length frVarTypeStack) tt]
-        (extraData,generalizable,subproof, newSteps) 
-                 <- lift $ runSubproofM newContext state newState preambleSteps (Last Nothing) prog
-        let resultSent = createForall generalizable tt (Prelude.length frVarTypeStack)
-        mayMonadifyRes <- (monadifyProofStd . proofByUGSchemaRule) (ProofByUGSchema resultSent subproof)
-        idx <- maybe (error "No theorem returned by monadifyProofStd on ug schema. This shouldn't happen") (return . snd) mayMonadifyRes       
-        return (resultSent,idx,extraData)
-
-
-getTopFreeVar :: (Monoid r1, ProofStd s eL1 r1 o tType, Monad m,
-                       PredLogicSent s t tType, Show eL1, Typeable eL1,
-                    Show s, Typeable s,
-                       MonadThrow m, TypedSent o tType sE s, Show sE, Typeable sE,
-                       StdPrfPrintMonad s o tType m, TypeableTerm t Text tType sE)
-                 =>  ProofGenTStd tType r1 s o m t
-getTopFreeVar =  do
-        context <- ask
-        let frVarTypeStack = freeVarTypeStack context
-        if null frVarTypeStack then throwM BigExceptEmptyVarStack
-            else return (free2Term $ length frVarTypeStack - 1)
-
-
-class RuleInject r1 r2 where
-    injectRule :: r1 -> r2

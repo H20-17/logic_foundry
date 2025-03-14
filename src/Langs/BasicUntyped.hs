@@ -20,9 +20,8 @@ import Data.Set(Set)
 import qualified Data.Set as Set (fromList,insert,member)
 import Control.Applicative ( Alternative((<|>)) )
 import Internal.StdPattern
-    ( PredLogicSent(..),
+    ( 
       PrfStdStep(..),
-      PropLogicSent(..),
       StdPrfPrintMonad(..),
       StdPrfPrintMonadFrame(..),
       TypeableTerm(..),
@@ -278,7 +277,7 @@ instance TypedSent  Text () DeBrSe PropDeBr where
 
 
 
-instance PropLogicSent PropDeBr () where
+instance PL.PropLogicSent PropDeBr () where
   
   (.&&.) :: PropDeBr -> PropDeBr -> PropDeBr
   (.&&.) = (:&&:)

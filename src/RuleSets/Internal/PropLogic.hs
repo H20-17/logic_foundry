@@ -1,7 +1,7 @@
 module RuleSets.Internal.PropLogic 
 (
     LogicError, LogicRule(..), runProofAtomic, mpM, simpLM, adjM, PropLogicRule(..), PropLogSchemaRule(..),
-    ProofByAsmSchema(..), ProofByAsmError, proofByAsm, runProofByAsmM
+    ProofByAsmSchema(..), ProofByAsmError, proofByAsm, runProofByAsmM, PropLogicSent(..)
 ) where
 
 import Data.Monoid ( Last(..) )
@@ -31,16 +31,18 @@ import StdPattern
       Proof,
       TestSubproofErr(..),
       StdPrfPrintMonad,
-      PropLogicSent((.&&.), parse_implication, neg, (.||.), parseAdj),
       TypedSent(..),
-      PrfStdStep(PrfStdStepStep),
+      PrfStdStep(PrfStdStepStep,PrfStdStepSubproof),
       ProofStd,
       ProofGenTStd,
       monadifyProofStd,
       modifyPS,
       RuleInject(..),
-      testSubproof)
-import qualified StdPatternDevel as StdP ( runProofOpen )
+      getProofState,
+      BigException(..)
+      )
+import qualified StdPatternDevel as StdP ( runProofOpen)
+import StdPatternDevel(testSubproof, runSubproofM)
 import RuleSets.BaseLogic (remarkM, BaseLogRule(..), ProofBySubArgError(..), 
                            ProofBySubArgSchema(argPrfConsequent),
                            proofBySubArg, BaseLogSchemaRule(..))

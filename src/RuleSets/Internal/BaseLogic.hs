@@ -23,7 +23,6 @@ import StdPattern
       PrfStdContext(..),
       Proof,
       StdPrfPrintMonad,
-      PropLogicSent((.&&.), parse_implication, neg, (.||.), parseAdj),
       TypedSent(..),
       PrfStdStep(..),
       ProofStd,
@@ -33,9 +32,8 @@ import StdPattern
       freeVarTypeStack,
       checkSanity,
       TestSubproofErr,
-      testSubproof,
       RuleInject (..))
-import StdPatternDevel (runProofOpen, runSubproofM )
+import StdPatternDevel (runProofOpen, runSubproofM, testSubproof )
 import Control.Monad.RWS (MonadReader(ask))
 import Data.Maybe ( isNothing )
 import Control.Arrow (left)

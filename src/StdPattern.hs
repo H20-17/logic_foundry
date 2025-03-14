@@ -1,13 +1,12 @@
 module StdPattern(
-    PrfStdContext(..), PrfStdState(..), PrfStdStep(..), TestSubproofErr, TheoremSchema(..), TheoremSchemaMT(..), BigException, ChkTheoremError, EstTmMError, ExpTmMError,
-    ProofByUGSchema(..), ProofByUGError,
-    ProofGenTStd, ProofStd, TmSchemaSilentM,
-    TypeableTerm(..), TypedSent(..), PropLogicSent(..), PredLogicSent(..), StdPrfPrintMonadFrame(..), StdPrfPrintMonad(..),
-    checkTheorem, establishTheorem, constDictTest, testSubproof, monadifyProofStd,
-    checkTheoremM, establishTmSilentM, expandTheoremM, proofByUG,
-    getProofState, runProofGeneratorT, Proof, runProof, ProofGeneratorT, modifyPS, getTopFreeVar, runTheoremM,
-    runTmSilentM, runProofByUGM,  RuleInject(..) 
-
+    PrfStdContext(..), PrfStdState(..), PrfStdStep(..), TestSubproofErr, BigException(..), 
+    RuleInject(..), ProofGenTStd, ProofStd,
+    TypeableTerm(..),
+    StdPrfPrintMonadFrame(..), StdPrfPrintMonad(..),
+    monadifyProofStd,
+    getProofState, runProofGeneratorT, Proof, runProof, ProofGeneratorT, modifyPS, getTopFreeVar, 
+    TypedSent(..)
+    
 ) where
 import Kernel
     ( Proof,
@@ -17,38 +16,18 @@ import Kernel
       runProof,
       modifyPS)
 import Internal.StdPattern
-    ( ProofByUGError,
-      PredLogicSent(..),
-      ProofByUGSchema(..),
-      ExpTmMError,
-      EstTmMError,
+    ( 
       StdPrfPrintMonad(..),
       StdPrfPrintMonadFrame(..),
-      BigException,
-      TmSchemaSilentM,
-      TheoremSchemaMT(..),
-      ChkTheoremError,
-      TheoremSchema(..),
+      BigException(..),
       TestSubproofErr,
-      PropLogicSent(..),
-      TypedSent(..),
       TypeableTerm(..),
       PrfStdStep(..),
       ProofStd,
       ProofGenTStd,
       PrfStdState(..),
       PrfStdContext(..),
-      testSubproof,
-      constDictTest,
-      checkTheorem,
-      establishTheorem,
       monadifyProofStd,
-      checkTheoremM,
-      establishTmSilentM,
-      expandTheoremM,
-      proofByUG,
       getTopFreeVar,
-      runTheoremM,
-      runTmSilentM,
-      runProofByUGM,
-      RuleInject(..))
+      RuleInject(..),
+      TypedSent(..))

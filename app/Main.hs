@@ -37,27 +37,26 @@ import GHC.Generics (Associativity (NotAssociative, RightAssociative, LeftAssoci
 import StdPattern
     ( runProof,
       runProofGeneratorT,
-      PredLogicSent(..),
-      ProofByUGSchema(ProofByUGSchema),
-      ProofByAsmSchema(ProofByAsmSchema),
+
+      
       StdPrfPrintMonad(..),
       StdPrfPrintMonadFrame(..),
-      TheoremSchemaMT(TheoremSchemaMT),
-      PropLogicSent(..),
       TypedSent(..),
       TypeableTerm(..),
       PrfStdStep(..),
       ProofGenTStd,
-      getTopFreeVar,
+      getTopFreeVar
+ )
+import qualified RuleSets.PropLogic as PL
+import RuleSets.PropLogic(PropLogicRule(..),mpM,adjM,simpLM,PropLogSchemaRule(..), ProofByAsmSchema(ProofByAsmSchema),
+                          PropLogicSent(..), runProofByAsmM)
+import RuleSets.PredLogic(PredLogicSent(..),  ProofByUGSchema(..) , TheoremSchemaMT(..),
       checkTheoremM,
       runTheoremM,
       runTmSilentM,
       runProofByUGM,
-      runProofByAsmM
- )
-import qualified RuleSets.PropLogic as PL
-import RuleSets.PropLogic(PropLogicRule(..),mpM,adjM,simpLM,PropLogSchemaRule(..))
-import RuleSets.PredLogic
+      PredLogSchemaRule(..),
+      PredLogicRule(..), uiM)
 import Langs.BasicUntyped
 import RuleSets.BaseLogic (remarkM,fakePropM,fakeConstM,BaseLogRule(..),ProofBySubArgError(..),
                         runProofBySubArgM)
