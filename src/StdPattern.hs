@@ -6,7 +6,7 @@ module StdPattern(
     checkTheorem, establishTheorem, constDictTest, testSubproof, monadifyProofStd,
     checkTheoremM, establishTmSilentM, expandTheoremM, proofByAsm, proofByUG,
     getProofState, runProofGeneratorT, Proof, runProof, ProofGeneratorT, modifyPS, getTopFreeVar, runTheoremM,
-    runTmSilentM, runProofByUGM, runProofByAsmM
+    runTmSilentM, runProofByUGM, runProofByAsmM, RuleInject(..)
 
 ) where
 import Kernel
@@ -54,4 +54,4 @@ import Internal.StdPattern
       runTheoremM,
       runTmSilentM,
       runProofByUGM,
-      runProofByAsmM)
+      runProofByAsmM, RuleInject(..))

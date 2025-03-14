@@ -2,7 +2,7 @@ module RuleSets.Internal.PredLogic
 (
     LogicError(..), LogicRule(..),
     runProofAtomic, uiM, eiM,
-    PredLogicRule(..)
+    PredLogicRule(..), PredLogSchemaRule(..)
 ) where
 
 
@@ -53,7 +53,8 @@ import StdPattern
       establishTmSilentM,
       proofByAsm,
       proofByUG, TheoremSchemaMT,
-      runProofByAsmM
+      runProofByAsmM,
+      RuleInject(..)
       )
 import qualified StdPatternDevel as StdP( 
                                         runProofOpen)
@@ -63,9 +64,9 @@ import RuleSets.BaseLogic (remarkM, BaseLogRule(..),
                            ProofBySubArgSchema(argPrfConsequent),
                            proofBySubArg,
                            ProofBySubArgError(..),
-                           ProofBySubArgSchema(argPrfConsequent))
-import qualified RuleSets.BaseLogicDevel as REM (LogicRule(..), BaseLogSchemaRule(..))
-import RuleSets.BaseLogicDevel(BaseLogSchemaRule(..))
+                           ProofBySubArgSchema(argPrfConsequent),
+                           BaseLogSchemaRule(..))
+import qualified RuleSets.BaseLogicDevel as REM (LogicRule(..))
 import qualified RuleSets.PropLogic as PL
 import RuleSets.PropLogic (PropLogicRule(..),mpM, simpLM, adjM)
 import qualified RuleSets.PropLogicDevel as PL
@@ -114,27 +115,17 @@ data LogicRule s sE o t tType  where
 
 instance BaseLogRule [LogicRule s sE o t tType ] s o tType sE where
      remark:: Text -> [LogicRule s sE o t tType ]
-     remark rem = [(PropRule . PL.BaseLogRule . REM.Remark) rem]
+     remark rem = [(PropRule . PL.BaseRule . REM.Remark) rem]
      rep :: s -> [LogicRule s sE o t tType ]
-     rep s = [(PropRule . PL.BaseLogRule . REM.Rep) s]
+     rep s = [(PropRule . PL.BaseRule . REM.Rep) s]
      fakeProp:: s -> [LogicRule s sE o t tType ]
-     fakeProp s = [(PropRule . PL.BaseLogRule . REM.FakeProp) s]
+     fakeProp s = [(PropRule . PL.BaseRule . REM.FakeProp) s]
      fakeConst:: o -> tType -> [LogicRule s sE o t tType ]
-     fakeConst o t = [PropRule $ PL.BaseLogRule $ REM.FakeConst o t]
-     baseLogProofBySubArg:: ProofBySubArgSchema s [REM.LogicRule tType s sE o ] -> [LogicRule s sE o t tType ]
-     baseLogProofBySubArg schema = [(PropRule . PL.BaseLogRule . REM.ProofBySubArg) schema]
-
+     fakeConst o t = [PropRule $ PL.BaseRule $ REM.FakeConst o t]
 
 instance PropLogicRule [LogicRule s sE o t tType ] s tType sE o where
-     propLogInject:: [PL.LogicRule tType s sE o]  -> [LogicRule s sE o t tType ]
-     propLogInject = Prelude.map PropRule
-
      mp:: s -> [LogicRule s sE o t tType ]
-     mp a = [PropRule  (PL.MP a)]
-     propLogProofByAsm:: ProofByAsmSchema s [PL.LogicRule tType s sE o] -> [LogicRule s sE o t tType ]
-     propLogProofByAsm schema = [(PropRule . PL.ProofByAsm) schema]
-     propLogProofBySubArg:: ProofBySubArgSchema s [PL.LogicRule tType s sE o] -> [LogicRule s sE o t tType]
-     propLogProofBySubArg schema = [(PropRule . PL.ProofBySubArg) schema]      
+     mp a = [PropRule  (PL.MP a)]     
      exclMid:: s -> [LogicRule s sE o t tType ]
      exclMid a = [PropRule  (PL.ExclMid a)]
      simpL:: s -> [LogicRule s sE o t tType ]
@@ -145,36 +136,20 @@ instance PropLogicRule [LogicRule s sE o t tType ] s tType sE o where
  
 
 class PredLogicRule r s t tType sE o | r->s, r->o, r->tType, r->sE, r->t where
-     predLogInject:: [LogicRule s sE o t tType ] -> r
-     predLogProofByAsm:: ProofByAsmSchema s [LogicRule s sE o t tType ] -> r
-     predLogProofBySubArg:: ProofBySubArgSchema s [LogicRule s sE o t tType ] -> r
-     predLogProofByUG:: ProofByUGSchema s [LogicRule s sE o t tType ] -> r
      ei :: s -> o -> r
      eg :: t -> s -> r
      ui :: t -> s -> r
-     predLogTheorem:: TheoremSchema s [LogicRule s sE o t tType ] o tType -> r
-     predLogTheoremM:: TmSchemaSilentM tType [LogicRule s sE o t tType ] s o () -> r
+
 
 
 instance PredLogicRule [LogicRule s sE o t tType ] s t tType sE o where
-     predLogInject:: [LogicRule s sE o t tType ] -> [LogicRule s sE o t tType ]
-     predLogInject = id
-     predLogProofByAsm:: ProofByAsmSchema s [LogicRule s sE o t tType ] -> [LogicRule s sE o t tType ]
-     predLogProofByAsm schema = [ProofByAsm schema]
-     predLogProofBySubArg:: ProofBySubArgSchema s [LogicRule s sE o t tType ] -> [LogicRule s sE o t tType ]
-     predLogProofBySubArg schema = [ProofBySubArg schema]
-     predLogProofByUG:: ProofByUGSchema s [LogicRule s sE o t tType ] -> [LogicRule s sE o t tType ]
-     predLogProofByUG schema = [ProofByUG schema]
      ei:: s -> o -> [LogicRule s sE o t tType ]
      ei s o = [EI s o]
      eg:: t -> s -> [LogicRule s sE o t tType ]
      eg t s = [EG t s]
      ui:: t -> s -> [LogicRule s sE o t tType ]
      ui t s = [UI t s]
-     predLogTheorem:: TheoremSchema s [LogicRule s sE o t tType ] o tType -> [LogicRule s sE o t tType ]
-     predLogTheorem schema = [Theorem schema]
-     predLogTheoremM:: TmSchemaSilentM tType [LogicRule s sE o t tType ] s o () -> [LogicRule s sE o t tType ]
-     predLogTheoremM schema = [TheoremM schema]
+
 
 
 
@@ -347,8 +322,13 @@ eiM :: (Monad m, PredLogicSent s t tType , TypeableTerm t o tType sE, Show s,
                    => s -> o -> ProofGenTStd tType r s o m (s,[Int])
 eiM sent const = standardRuleM (ei sent const)
 
+instance RuleInject [PL.LogicRule tType s sE o] [LogicRule s sE o t tType ] where
+    injectRule:: [PL.LogicRule tType s sE o] -> [LogicRule s sE o t tType ]
+    injectRule = Prelude.map PropRule
 
-
+instance RuleInject [REM.LogicRule tType s sE o] [LogicRule s sE o t tType ] where
+    injectRule:: [REM.LogicRule tType s sE o] -> [LogicRule s sE o t tType ]
+    injectRule = injectRule . Prelude.map PL.BaseRule
 
 
 

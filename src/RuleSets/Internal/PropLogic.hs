@@ -1,6 +1,6 @@
 module RuleSets.Internal.PropLogic 
 (
-    LogicError, LogicRule(..), runProofAtomic, mpM, simpLM, adjM, PropLogicRule(..)
+    LogicError, LogicRule(..), runProofAtomic, mpM, simpLM, adjM, PropLogicRule(..), PropLogSchemaRule(..)
  
 ) where
 
@@ -40,15 +40,15 @@ import StdPattern
       ProofGenTStd,
       monadifyProofStd,
       proofByAsm,
-      modifyPS)
+      modifyPS,
+      RuleInject(..))
 import qualified StdPatternDevel as StdP ( runProofOpen )
 import StdPatternDevel(PropLogSchemaRule(..))
 import RuleSets.BaseLogic (remarkM, BaseLogRule(..), ProofBySubArgError(..), 
                            ProofBySubArgSchema(argPrfConsequent),
-                           proofBySubArg)
+                           proofBySubArg, BaseLogSchemaRule(..))
 import qualified RuleSets.BaseLogic as REM (LogicError(..))
 import qualified RuleSets.BaseLogicDevel as REM(runProofAtomic, LogicRule(..))
-import RuleSets.BaseLogicDevel( BaseLogSchemaRule(..))
 
 
 data LogicError s sE o tType where
@@ -69,7 +69,7 @@ data LogicError s sE o tType where
 
 
 data LogicRule tType s sE o where
-    BaseLogRule :: REM.LogicRule tType s sE o -> LogicRule tType s sE o
+    BaseRule :: REM.LogicRule tType s sE o -> LogicRule tType s sE o
     MP :: s -> LogicRule tType s sE o
     ProofByAsm :: ProofByAsmSchema s [LogicRule tType s sE o]-> LogicRule tType s sE o
     ProofBySubArg :: ProofBySubArgSchema s [LogicRule tType s sE o]-> LogicRule tType s sE o
@@ -112,7 +112,7 @@ runProofAtomic rule context state =
             rightIndex <- maybe ((throwError . LogicErrAdjRightNotProven) b) return (Data.Map.lookup b (provenSents state))
             let aAndB = a .&&. b
             return (Just aAndB, Nothing, PrfStdStepStep aAndB "ADJ" [leftIndex,rightIndex])
-        BaseLogRule r -> do
+        BaseRule r -> do
             either (throwError . LogicErrBasic) return (REM.runProofAtomic r context state)
 
 
@@ -164,38 +164,32 @@ instance (PropLogicSent s tType, Show sE, Typeable sE, Show s, Typeable s, Ord o
 
 instance BaseLogRule [LogicRule tType s sE o] s o tType sE where
     remark :: Text -> [LogicRule tType s sE o]
-    remark rem = [(BaseLogRule . REM.Remark) rem]
+    remark rem = [(BaseRule . REM.Remark) rem]
     rep :: s -> [LogicRule tType s sE o]
-    rep s = [BaseLogRule . REM.Rep $ s]
+    rep s = [BaseRule . REM.Rep $ s]
     fakeProp :: s -> [LogicRule tType s sE o]
-    fakeProp s = [BaseLogRule . REM.FakeProp $ s]
+    fakeProp s = [BaseRule . REM.FakeProp $ s]
     fakeConst:: o -> tType -> [LogicRule tType s sE o]
-    fakeConst o t = [BaseLogRule $ REM.FakeConst o t]
-    baseLogProofBySubArg :: ProofBySubArgSchema s [REM.LogicRule tType s sE o] -> [LogicRule tType s sE o]
-    baseLogProofBySubArg schema = [(BaseLogRule . REM.ProofBySubArg) schema]
+    fakeConst o t = [BaseRule $ REM.FakeConst o t]
+
         --   return . PropRemark . REM.ProofBySubArg  
 
 
+instance RuleInject [REM.LogicRule tType s sE o] [LogicRule tType s sE o] where
+    injectRule :: [REM.LogicRule tType s sE o] -> [LogicRule tType s sE o]
+    injectRule = Prelude.map BaseRule
+
 
 class PropLogicRule r s tType sE o | r-> s, r->tType, r->sE, r->o where
-    propLogInject :: [LogicRule tType s sE o] -> r
     mp :: s -> r
-    propLogProofByAsm :: ProofByAsmSchema s [LogicRule tType s sE o] -> r
-    propLogProofBySubArg :: ProofBySubArgSchema s [LogicRule tType s sE o] -> r
     exclMid :: s -> r
     simpL :: s -> r
     adj :: s -> s -> r
 
 
 instance PropLogicRule [LogicRule tType s sE o] s tType sE o where
-    propLogInject :: [LogicRule tType s sE o] -> [LogicRule tType s sE o]
-    propLogInject = id  
     mp :: s -> [LogicRule tType s sE o]
     mp s = [MP s]
-    propLogProofByAsm :: ProofByAsmSchema s [LogicRule tType s sE o] -> [LogicRule tType s sE o]
-    propLogProofByAsm = return . ProofByAsm
-    propLogProofBySubArg :: ProofBySubArgSchema s [LogicRule tType s sE o] -> [LogicRule tType s sE o]
-    propLogProofBySubArg = return . ProofBySubArg
     exclMid :: s -> [LogicRule tType s sE o]
     exclMid s = [ExclMid s]
     simpL :: s -> [LogicRule tType s sE o]

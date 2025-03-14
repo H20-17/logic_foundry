@@ -1,4 +1,7 @@
 {-# LANGUAGE UndecidableInstances #-}
+
+
+
 module RuleSets.Internal.BaseLogic 
 (
     LogicRule(..), runProofAtomic, remarkM, BaseLogRule(..), LogicError(..), fakePropM, fakeConstM,
@@ -31,7 +34,8 @@ import StdPattern
       freeVarTypeStack,
       checkSanity,
       TestSubproofErr,
-      testSubproof)
+      testSubproof,
+      RuleInject (..))
 import StdPatternDevel (runProofOpen, runSubproofM )
 import Control.Monad.RWS (MonadReader(ask))
 import Data.Maybe ( isNothing )
@@ -124,12 +128,18 @@ instance ( Show s, Typeable s, Ord o, TypedSent o tType sE s,
                         newStepCount = stepCount newState + 1
                         newLineIndex = stepIdxPrefix context <> [stepCount oldState + newStepCount-1]
 
+instance RuleInject [LogicRule tType s sE o] [LogicRule tType s sE o] where
+    injectRule = id
+
+
+
+
 class BaseLogRule r s o tType sE | r -> s, r->o, r->tType, r -> sE where
     remark :: Text -> r
     rep :: s -> r
     fakeProp :: s -> r
     fakeConst:: o -> tType -> r
-    baseLogProofBySubArg :: ProofBySubArgSchema s [LogicRule tType s sE o] -> r
+   
 
 instance BaseLogRule [LogicRule tType s sE o] s o tType sE where
     remark :: Text -> [LogicRule tType s sE o]
@@ -140,8 +150,8 @@ instance BaseLogRule [LogicRule tType s sE o] s o tType sE where
     fakeProp s = [FakeProp s]
     fakeConst :: o -> tType -> [LogicRule tType s sE o]
     fakeConst o t = [FakeConst o t]
-    baseLogProofBySubArg :: ProofBySubArgSchema s [LogicRule tType s sE o] -> [LogicRule tType s sE o]
-    baseLogProofBySubArg schema = [ProofBySubArg schema]
+
+
 
 
 
@@ -184,6 +194,14 @@ proofBySubArg (ProofBySubArgSchema consequent subproof) context state  =
          let eitherTestResult = testSubproof newContext state newState preambleSteps (Last Nothing) consequent subproof
          finalSteps <- either (throwError . ProofBySubArgErrSubproofFailedOnErr) return eitherTestResult
          return (PrfStdStepSubproof consequent "PRF_BY_SUBARG" finalSteps)
+
+
+
+
+
+
+
+
 
 class BaseLogSchemaRule r s where
    proofBySubArgSchemaRule :: ProofBySubArgSchema s r -> r

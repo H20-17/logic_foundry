@@ -1,6 +1,6 @@
 module RuleSets.BaseLogicDevel
 (
-    runProofAtomic,LogicRule(..), BaseLogSchemaRule(..)
+    runProofAtomic,LogicRule(..)
 ) where
 
 import RuleSets.Internal.BaseLogic(runProofAtomic,LogicRule(..),

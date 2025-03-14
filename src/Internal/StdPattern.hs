@@ -9,7 +9,7 @@ module Internal.StdPattern(
     checkTheorem, establishTheorem, constDictTest, testSubproof, monadifyProofStd,
     checkTheoremM, establishTmSilentM, expandTheoremM, proofByAsm, proofByUG,
     runTheoremM, runTmSilentM, runProofByAsmM,  runProofByUGM,getTopFreeVar,
-    PredLogSchemaRule (..), PropLogSchemaRule(..), runSubproofM
+    PredLogSchemaRule (..), PropLogSchemaRule(..), runSubproofM, RuleInject(..)
 
 ) where
 
@@ -737,3 +737,7 @@ getTopFreeVar =  do
         let frVarTypeStack = freeVarTypeStack context
         if null frVarTypeStack then throwM BigExceptEmptyVarStack
             else return (free2Term $ length frVarTypeStack - 1)
+
+
+class RuleInject r1 r2 where
+    injectRule :: r1 -> r2

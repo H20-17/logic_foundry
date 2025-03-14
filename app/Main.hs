@@ -56,7 +56,7 @@ import StdPattern
       runProofByAsmM
  )
 import qualified RuleSets.PropLogic as PL
-import RuleSets.PropLogic(PropLogicRule(..),mpM,adjM,simpLM)
+import RuleSets.PropLogic(PropLogicRule(..),mpM,adjM,simpLM,PropLogSchemaRule(..))
 import RuleSets.PredLogic
 import Langs.BasicUntyped
 import RuleSets.BaseLogic (remarkM,fakePropM,fakeConstM,BaseLogRule(..),ProofBySubArgError(..),
@@ -102,7 +102,8 @@ main = do
                 <> fakeProp y2
                 <> mp y0
                 <> mp y2
-                <> propLogProofByAsm (ProofByAsmSchema y1 (Integ 99 :==: Integ 99) (mp $ y1 .->. (Integ 99 :==: Integ 99))))
+                -- <> propLogProofByAsm (ProofByAsmSchema y1 (Integ 99 :==: Integ 99) (mp $ y1 .->. (Integ 99 :==: Integ 99))))
+                <> proofByAsmSchemaRule (ProofByAsmSchema y1 (Integ 99 :==: Integ 99) (mp $ y1 .->. (Integ 99 :==: Integ 99))))
                   ::[PropRuleDeBr]
     let zb = runProof proof
 
@@ -119,9 +120,9 @@ main = do
     let proof2 =    fakeConst "N" ()
                  <> fakeProp z1
                  <> fakeProp z2
-                 <> predLogProofByUG (ProofByUGSchema generalized
+                 <> proofByUGSchemaRule (ProofByUGSchema generalized
                                         (
-                                            predLogProofByAsm (ProofByAsmSchema asm z1 (
+                                            proofByAsmSchemaRule (ProofByAsmSchema asm z1 (
                                                     ui (Free 0) z1
                                                 <> mp ( asm .->. (Free 0 :>=: Integ 0))
                                                 <> simpL ((:&&:) (Free 0  :<-: (Constant . pack) "N") (Free 0 :>=: Integ 10))
@@ -135,9 +136,9 @@ main = do
 
 
 
-    let proof3 = predLogProofByUG (ProofByUGSchema generalized
+    let proof3 = proofByUGSchemaRule (ProofByUGSchema generalized
                                      (
-                                        predLogProofByAsm (ProofByAsmSchema asm z1 (
+                                        proofByAsmSchemaRule (ProofByAsmSchema asm z1 (
                                                 ui (Free 0) z1
                                              <> mp ( asm .->. (Free 0 :>=: Integ 0))
                                       
