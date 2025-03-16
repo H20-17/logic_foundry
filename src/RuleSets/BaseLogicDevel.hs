@@ -1,7 +1,7 @@
 module RuleSets.BaseLogicDevel
 (
-    runProofAtomic,LogicRule(..)
+    runProofAtomic,LogicRule(..),runProofBySubArg
 ) where
 
-import RuleSets.Internal.BaseLogic(runProofAtomic,LogicRule(..),
+import RuleSets.Internal.BaseLogic(runProofAtomic,LogicRule(..),runProofBySubArg,
    BaseLogSchemaRule(..))

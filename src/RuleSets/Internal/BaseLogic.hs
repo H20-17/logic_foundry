@@ -4,8 +4,8 @@
 
 module RuleSets.Internal.BaseLogic 
 (
-    LogicRule(..), runProofAtomic, remarkM, BaseLogRule(..), LogicError(..), fakePropM, fakeConstM,
-    ProofBySubArgSchema(..), ProofBySubArgError(..), proofBySubArg, runProofBySubArgM,
+    LogicRule(..), runProofAtomic, remarkM, LogicRuleClass(..), LogicError(..), fakePropM, fakeConstM,
+    ProofBySubArgSchema(..), SubproofError(..), runProofBySubArg, runProofBySubArgM,
     BaseLogSchemaRule(..)
 ) where
 
@@ -43,7 +43,7 @@ data LogicError s sE o where
     LogicErrRepOriginNotProven :: s -> LogicError s sE o
     LogicErrFakeSanityErr :: s -> sE -> LogicError s sE o
     LogicErrFakeConstDefined :: o -> LogicError s sE o
-    LogicErrPrfBySubArgErr :: ProofBySubArgError s sE (LogicError s sE o) -> LogicError s sE o
+    LogicErrPrfBySubArgErr :: SubproofError s sE (LogicError s sE o) -> LogicError s sE o
     deriving (Show)
 
 data LogicRule tType s sE o where
@@ -76,7 +76,7 @@ runProofAtomic rule context state =
                unless constNotDefined ((throwError . LogicErrFakeConstDefined) const)
                return (Nothing,Just (const, tType), PrfStdStepFakeConst const tType)
         ProofBySubArg schema -> do
-             step <- left LogicErrPrfBySubArgErr (proofBySubArg schema context state)
+             step <- left LogicErrPrfBySubArgErr (runProofBySubArg schema context state)
              return (Just $ argPrfConsequent schema, Nothing, step)
     where
         constDict = fmap fst (consts state)
@@ -131,14 +131,14 @@ instance RuleInject [LogicRule tType s sE o] [LogicRule tType s sE o] where
 
 
 
-class BaseLogRule r s o tType sE | r -> s, r->o, r->tType, r -> sE where
+class LogicRuleClass r s o tType sE | r -> s, r->o, r->tType, r -> sE where
     remark :: Text -> r
     rep :: s -> r
     fakeProp :: s -> r
     fakeConst:: o -> tType -> r
    
 
-instance BaseLogRule [LogicRule tType s sE o] s o tType sE where
+instance LogicRuleClass [LogicRule tType s sE o] s o tType sE where
     remark :: Text -> [LogicRule tType s sE o]
     remark text = [Remark text]
     rep :: s -> [LogicRule tType s sE o]
@@ -153,8 +153,8 @@ instance BaseLogRule [LogicRule tType s sE o] s o tType sE where
 
 
 instance BaseLogSchemaRule [LogicRule tType s sE o] s where
-    proofBySubArgSchemaRule :: ProofBySubArgSchema s [LogicRule tType s sE o] -> [LogicRule tType s sE o]
-    proofBySubArgSchemaRule schema = [ProofBySubArg schema]
+    proofBySubArgSchemaRule :: s -> [LogicRule tType s sE o] -> [LogicRule tType s sE o]
+    proofBySubArgSchemaRule s r = [ProofBySubArg $ ProofBySubArgSchema s r]
 
 
 
@@ -167,18 +167,18 @@ data ProofBySubArgSchema s r where
 
 
 
-data ProofBySubArgError senttype sanityerrtype logcicerrtype where
+data SubproofError senttype sanityerrtype logcicerrtype where
    ProofBySubArgErrSubproofFailedOnErr :: TestSubproofErr senttype sanityerrtype logcicerrtype 
-                                    -> ProofBySubArgError senttype sanityerrtype logcicerrtype
+                                    -> SubproofError senttype sanityerrtype logcicerrtype
     deriving(Show)
 
 
-proofBySubArg :: (ProofStd s eL1 r1 o tType,  TypedSent o tType sE s) => 
+runProofBySubArg :: (ProofStd s eL1 r1 o tType,  TypedSent o tType sE s) => 
                        ProofBySubArgSchema s r1 ->  
                         PrfStdContext tType -> 
                         PrfStdState s o tType ->
-                        Either (ProofBySubArgError s sE eL1) (PrfStdStep s o tType)
-proofBySubArg (ProofBySubArgSchema consequent subproof) context state  =
+                        Either (SubproofError s sE eL1) (PrfStdStep s o tType)
+runProofBySubArg (ProofBySubArgSchema consequent subproof) context state  =
       do
          let frVarTypeStack = freeVarTypeStack context
          let constdict = fmap fst (consts state)
@@ -201,7 +201,7 @@ proofBySubArg (ProofBySubArgSchema consequent subproof) context state  =
 
 
 class BaseLogSchemaRule r s where
-   proofBySubArgSchemaRule :: ProofBySubArgSchema s r -> r
+   proofBySubArgSchemaRule :: s -> r -> r
 
 
 
@@ -225,7 +225,7 @@ runProofBySubArgM prog =  do
         let preambleSteps = []
         (extraData,consequent,subproof,newSteps) 
             <- lift $ runSubproofM newContext state newState preambleSteps (Last Nothing) prog
-        mayMonadifyRes <- (monadifyProofStd . proofBySubArgSchemaRule) (ProofBySubArgSchema consequent subproof)
+        mayMonadifyRes <- monadifyProofStd $ proofBySubArgSchemaRule consequent subproof
         idx <- maybe (error "No theorem returned by monadifyProofStd on subarg schema. This shouldn't happen") (return . snd) mayMonadifyRes
         return (consequent, idx, extraData)
 
@@ -234,7 +234,7 @@ runProofBySubArgM prog =  do
 remarkM :: (Monad m, Ord o, Show sE, Typeable sE, Show s, Typeable s,
        MonadThrow m, Show o, Typeable o, Show tType, Typeable tType, TypedSent o tType sE s,
        Monoid (PrfStdState s o tType), StdPrfPrintMonad s o tType m,
-       StdPrfPrintMonad s o tType (Either SomeException), Monoid (PrfStdContext tType), BaseLogRule r s o tType sE, ProofStd s eL r o tType,
+       StdPrfPrintMonad s o tType (Either SomeException), Monoid (PrfStdContext tType), LogicRuleClass r s o tType sE, ProofStd s eL r o tType,
        Monoid r, Show eL, Typeable eL)
           => Text -> ProofGenTStd tType r s o m [Int]
           
@@ -263,7 +263,7 @@ standardRuleM rule = do
 fakePropM :: (Monad m, Ord o, Show sE, Typeable sE, Show s, Typeable s,
        MonadThrow m, Show o, Typeable o, Show tType, Typeable tType, TypedSent o tType sE s,
        Monoid (PrfStdState s o tType), StdPrfPrintMonad s o tType m,
-       StdPrfPrintMonad s o tType (Either SomeException), Monoid (PrfStdContext tType), BaseLogRule r s o tType sE, ProofStd s eL r o tType,
+       StdPrfPrintMonad s o tType (Either SomeException), Monoid (PrfStdContext tType), LogicRuleClass r s o tType sE, ProofStd s eL r o tType,
        Monoid r, Show eL, Typeable eL)
           => s -> ProofGenTStd tType r s o m (s,[Int])
 fakePropM s = standardRuleM (fakeProp s)
@@ -272,7 +272,7 @@ fakePropM s = standardRuleM (fakeProp s)
 fakeConstM :: (Monad m, Ord o, Show sE, Typeable sE, Show s, Typeable s,
        MonadThrow m, Show o, Typeable o, Show tType, Typeable tType, TypedSent o tType sE s,
        Monoid (PrfStdState s o tType), StdPrfPrintMonad s o tType m,
-       StdPrfPrintMonad s o tType (Either SomeException), Monoid (PrfStdContext tType), BaseLogRule r s o tType sE, ProofStd s eL r o tType,
+       StdPrfPrintMonad s o tType (Either SomeException), Monoid (PrfStdContext tType), LogicRuleClass r s o tType sE, ProofStd s eL r o tType,
        Monoid r, Show eL, Typeable eL)
           => o -> tType -> ProofGenTStd tType  r s o m ()
 fakeConstM name tType = do

@@ -1,5 +1,5 @@
 module StdPattern(
-    PrfStdContext(..), PrfStdState(..), PrfStdStep(..), TestSubproofErr, BigException(..), 
+    PrfStdContext(..), PrfStdState(..), PrfStdStep(..), TestSubproofErr, TestSubproofMException(..), 
     RuleInject(..), ProofGenTStd, ProofStd,
     TypeableTerm(..),
     StdPrfPrintMonadFrame(..), StdPrfPrintMonad(..),
@@ -19,7 +19,7 @@ import Internal.StdPattern
     ( 
       StdPrfPrintMonad(..),
       StdPrfPrintMonadFrame(..),
-      BigException(..),
+      TestSubproofMException(..),
       TestSubproofErr,
       TypeableTerm(..),
       PrfStdStep(..),

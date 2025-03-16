@@ -3,7 +3,7 @@
 
 module Internal.StdPattern(
     PrfStdContext(..), PrfStdState(..), PrfStdStep(..), TestSubproofErr,
-    BigException(..), 
+    TestSubproofMException(..), 
     ProofStd,
     TypeableTerm(..), TypedSent(..), StdPrfPrintMonadFrame(..), StdPrfPrintMonad(..),
     getTopFreeVar, RuleInject(..),
@@ -129,12 +129,12 @@ class (Ord s, Eq tType, Ord o) => TypedSent o tType sE s | s-> tType, s-> sE, s 
     checkSanity :: [tType] -> s -> Map o tType -> Maybe sE
 
 
-data TestSubproofErr senttype sanityerrtype logicerrtype where
-   TestSubproofErrResultNotSane :: senttype -> sanityerrtype -> TestSubproofErr senttype sanityerrtype logicerrtype
-   TestSubproofErrorSubproofFailedOnErr :: logicerrtype
-                                    -> TestSubproofErr senttype sanityerrtype logicerrtype
-   TestSubproofErrorNothingProved :: TestSubproofErr senttype sanityerrtype logicerrtype                          
-   TestSubproofErrorResultNotProved :: senttype -> TestSubproofErr senttype sanityerrtype logicerrtype
+data TestSubproofErr s sE eL where
+   TestSubproofErrResultNotSane :: s -> sE -> TestSubproofErr s sE eL
+   TestSubproofErrorSubproofFailedOnErr :: eL
+                                    -> TestSubproofErr s sE eL
+   TestSubproofErrorNothingProved :: TestSubproofErr s sE eL                    
+   TestSubproofErrorResultNotProved :: s -> TestSubproofErr s sE eL
    deriving(Show)
 
 
@@ -162,17 +162,16 @@ testSubproof context baseState preambleState preambleSteps mayPreambleLastProp t
 
 
 
-data BigException s sE o tType where
-   BigExceptLemmaSanityErr :: s -> sE -> BigException s sE o tType
-   BigExceptResNotProven :: s -> BigException s sE o tType
-   BigExceptResultSanity :: s -> sE -> BigException s sE o tType
-   BigExceptConstNotDefd :: o ->  BigException s sE o tType
-   BigExceptConstTypeConflict :: o -> tType -> tType -> BigException s sE o tType
-   BigExceptLemmaNotEstablished :: s -> BigException s sE o tType
-   BigExceptAsmSanity :: s -> sE -> BigException s sE o tType
-   BigExceptSchemaConstDup :: o -> BigException s sE o tType
-   BigExceptNothingProved :: BigException s sE o tType
-   BigExceptEmptyVarStack :: BigException s sE o tType
+data TestSubproofMException s sE o tType where
+   BigExceptLemmaSanityErr :: s -> sE -> TestSubproofMException s sE o tType
+   BigExceptResNotProven :: s -> TestSubproofMException s sE o tType
+   BigExceptResultSanity :: s -> sE -> TestSubproofMException s sE o tType
+   BigExceptConstNotDefd :: o ->  TestSubproofMException s sE o tType
+   BigExceptConstTypeConflict :: o -> tType -> tType -> TestSubproofMException s sE o tType
+   BigExceptLemmaNotEstablished :: s -> TestSubproofMException s sE o tType
+   BigExceptSchemaConstDup :: o -> TestSubproofMException s sE o tType
+   BigExceptNothingProved :: TestSubproofMException s sE o tType
+   BigExceptEmptyVarStack :: TestSubproofMException s sE o tType
 
 
    deriving(Show)
@@ -183,7 +182,7 @@ instance (
               Show s, Typeable s,
               Show o, Typeable o,
               Show tType, Typeable tType)
-           => Exception (BigException s sE o tType)
+           => Exception (TestSubproofMException s sE o tType)
 
 
 

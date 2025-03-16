@@ -1,6 +1,15 @@
 module RuleSets.PredLogicDevel
 (
-    runProofAtomic, LogicRule(), PredLogSchemaRule(..)
+    runProofAtomic, 
+    establishTmSilentM,
+    runProofByUG,
+    LogicRule(..)
 ) where
 
-import RuleSets.Internal.PredLogic(runProofAtomic,LogicRule(..), PredLogSchemaRule(..))
+import RuleSets.Internal.PredLogic(
+    runProofAtomic,
+    LogicRule(..), 
+    PredLogSchemaRule(..),
+    establishTmSilentM,
+    runProofByUG
+  )

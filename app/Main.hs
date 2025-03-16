@@ -48,18 +48,25 @@ import StdPattern
       getTopFreeVar
  )
 import qualified RuleSets.PropLogic as PL
-import RuleSets.PropLogic(PropLogicRule(..),mpM,adjM,simpLM,PropLogSchemaRule(..), ProofByAsmSchema(ProofByAsmSchema),
+import RuleSets.PropLogic(mp,simpL,adj,
+                          mpM,adjM,simpLM,PropLogSchemaRule(..), ProofByAsmSchema(ProofByAsmSchema),
                           PropLogicSent(..), runProofByAsmM)
-import RuleSets.PredLogic(PredLogicSent(..),  ProofByUGSchema(..) , TheoremSchemaMT(..),
+import RuleSets.PredLogic (PredLogicSent(..),  ProofByUGSchema(..) , TheoremSchemaMT(..),
       checkTheoremM,
       runTheoremM,
       runTmSilentM,
       runProofByUGM,
       PredLogSchemaRule(..),
-      PredLogicRule(..), uiM)
+      LogicRuleClass(..), uiM) 
+
 import Langs.BasicUntyped
-import RuleSets.BaseLogic (remarkM,fakePropM,fakeConstM,BaseLogRule(..),ProofBySubArgError(..),
-                        runProofBySubArgM)
+import RuleSets.BaseLogic
+    ( runProofBySubArgM,
+      remarkM,
+      fakePropM,
+      fakeConstM,
+      fakeProp,
+      fakeConst)
 default(Text)
 
 
@@ -101,8 +108,8 @@ main = do
                 <> fakeProp y2
                 <> mp y0
                 <> mp y2
-                -- <> propLogProofByAsm (ProofByAsmSchema y1 (Integ 99 :==: Integ 99) (mp $ y1 .->. (Integ 99 :==: Integ 99))))
-                <> proofByAsmSchemaRule (ProofByAsmSchema y1 (Integ 99 :==: Integ 99) (mp $ y1 .->. (Integ 99 :==: Integ 99))))
+                <> proofByAsmSchemaRule y1 (Integ 99 :==: Integ 99) (mp $ y1 .->. (Integ 99 :==: Integ 99))
+                )
                   ::[PropRuleDeBr]
     let zb = runProof proof
 
@@ -119,31 +126,31 @@ main = do
     let proof2 =    fakeConst "N" ()
                  <> fakeProp z1
                  <> fakeProp z2
-                 <> proofByUGSchemaRule (ProofByUGSchema generalized
+                 <> proofByUGSchemaRule generalized
                                         (
-                                            proofByAsmSchemaRule (ProofByAsmSchema asm z1 (
+                                            proofByAsmSchemaRule asm z1 (
                                                     ui (Free 0) z1
                                                 <> mp ( asm .->. (Free 0 :>=: Integ 0))
                                                 <> simpL ((:&&:) (Free 0  :<-: (Constant . pack) "N") (Free 0 :>=: Integ 10))
                                                 <> adj (Free 0  :<-: (Constant . pack) "N") (Free 0 :>=: Integ 0)
                                                 <> ui (Free 0) z2
                                                 <> mp ( mid .->. (Free 0 :==: Integ 0)  )
-                                            )  )
+                                            )  
                                         )
-                                    )::[PredRuleDeBr]
+                                    ::[PredRuleDeBr]
 
 
 
 
-    let proof3 = proofByUGSchemaRule (ProofByUGSchema generalized
+    let proof3 = proofByUGSchemaRule generalized
                                      (
-                                        proofByAsmSchemaRule (ProofByAsmSchema asm z1 (
+                                        proofByAsmSchemaRule asm z1 (
                                                 ui (Free 0) z1
                                              <> mp ( asm .->. (Free 0 :>=: Integ 0))
                                       
-                                          )  )
+                                            )
                                      )
-                                  )::[PredRuleDeBr]
+                                  ::[PredRuleDeBr]
                  
     let zb2 = runProof proof2 
 
@@ -226,5 +233,4 @@ theoremProg = do
           return ()
     return ()
 --              return (s5,())
-
 
