@@ -10,6 +10,7 @@ module Kernel (
   getProofState,
   monadifyProof,
   modifyPS,
+  RuleInject(..)
 ) where
 import Data.Text (Text)
 import Control.Monad.RWS
@@ -133,14 +134,19 @@ monadifyProof p = ProofGenInternalT  $ do
                         return (resultState,newSteps, getLast prfResult)
 
 
+class RuleInject r1 r2 where
+    injectRule :: r1 -> r2
+
+
 modifyPS :: (Monad m, Monoid r1, Monoid r2,Proof eL1 r1 s c stpT resultT, 
-             Proof eL2 r2 s c stpT resultT,  MonadThrow m, Typeable eL2, Show eL2)
-             =>  (r1 -> r2) -> ProofGeneratorT resultT stpT c r1 s m a
+             Proof eL2 r2 s c stpT resultT,  MonadThrow m, Typeable eL2, Show eL2,
+             RuleInject r1 r2)
+             =>  ProofGeneratorT resultT stpT c r1 s m a
                        -> ProofGeneratorT resultT stpT c r2 s m a
-modifyPS g m1 = do
+modifyPS m1 = do
     c <- ask
     ps <- getProofState
     (datum,_,rules,steps, prfResult) <- lift $ runProofGeneratorTOpen m1 c ps
-    monadifyProof $ g rules
+    monadifyProof $ injectRule rules
     return datum
 

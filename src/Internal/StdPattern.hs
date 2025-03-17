@@ -6,7 +6,7 @@ module Internal.StdPattern(
     TestSubproofMException(..), 
     ProofStd,
     TypeableTerm(..), TypedSent(..), StdPrfPrintMonadFrame(..), StdPrfPrintMonad(..),
-    getTopFreeVar, RuleInject(..),
+    getTopFreeVar,
     testSubproof, monadifyProofStd,
     runSubproofM,
     ProofGenTStd
@@ -239,11 +239,6 @@ getTopFreeVar =  do
         let frVarTypeStack = freeVarTypeStack context
         if null frVarTypeStack then throwM BigExceptEmptyVarStack
             else return (free2Term $ length frVarTypeStack - 1)
-
-
-class RuleInject r1 r2 where
-    injectRule :: r1 -> r2
-
 
 
 runSubproofM :: ( Monoid r1, ProofStd s eL1 r1 o tType, Monad m,

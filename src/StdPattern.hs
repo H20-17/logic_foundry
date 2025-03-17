@@ -14,7 +14,8 @@ import Kernel
       getProofState,
       runProofGeneratorT,
       runProof,
-      modifyPS)
+      modifyPS,
+      RuleInject(..))
 import Internal.StdPattern
     ( 
       StdPrfPrintMonad(..),
@@ -29,5 +30,4 @@ import Internal.StdPattern
       PrfStdContext(..),
       monadifyProofStd,
       getTopFreeVar,
-      RuleInject(..),
       TypedSent(..))
