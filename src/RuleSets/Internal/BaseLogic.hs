@@ -4,8 +4,10 @@
 
 module RuleSets.Internal.BaseLogic 
 (
-    LogicRule(..), runProofAtomic, remarkM, LogicRuleClass(..), LogicError(..), fakePropM, fakeConstM,
-    ProofBySubArgSchema(..), SubproofError(..), runProofBySubArg, runProofBySubArgM,
+    LogicRule(..), runProofAtomic, remarkM, LogicRuleClass(..), 
+    LogicError(..), fakePropM, fakeConstM,
+    ProofBySubArgSchema(..), SubproofError(..), runProofBySubArg, 
+    runProofBySubArgM,
     SubproofRule(..)
 ) where
 
@@ -143,8 +145,8 @@ instance LogicRuleClass [LogicRule tType s sE o] s o tType sE where
 
 
 instance SubproofRule [LogicRule tType s sE o] s where
-    proofBySubArgSchemaRule :: s -> [LogicRule tType s sE o] -> [LogicRule tType s sE o]
-    proofBySubArgSchemaRule s r = [ProofBySubArg $ ProofBySubArgSchema s r]
+    proofBySubArg :: s -> [LogicRule tType s sE o] -> [LogicRule tType s sE o]
+    proofBySubArg s r = [ProofBySubArg $ ProofBySubArgSchema s r]
 
 
 
@@ -191,7 +193,7 @@ runProofBySubArg (ProofBySubArgSchema consequent subproof) context state  =
 
 
 class SubproofRule r s where
-   proofBySubArgSchemaRule :: s -> r -> r
+   proofBySubArg :: s -> r -> r
 
 
 
@@ -215,7 +217,7 @@ runProofBySubArgM prog =  do
         let preambleSteps = []
         (extraData,consequent,subproof,newSteps) 
             <- lift $ runSubproofM newContext state newState preambleSteps (Last Nothing) prog
-        mayMonadifyRes <- monadifyProofStd $ proofBySubArgSchemaRule consequent subproof
+        mayMonadifyRes <- monadifyProofStd $ proofBySubArg consequent subproof
         idx <- maybe (error "No theorem returned by monadifyProofStd on subarg schema. This shouldn't happen") (return . snd) mayMonadifyRes
         return (consequent, idx, extraData)
 

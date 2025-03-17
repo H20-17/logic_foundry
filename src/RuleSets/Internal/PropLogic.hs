@@ -207,13 +207,13 @@ instance LogicRuleClass [LogicRule tType s sE o] s tType sE o where
 
 
 instance REM.SubproofRule [LogicRule tType s sE o] s where
-    proofBySubArgSchemaRule :: s -> [LogicRule tType s sE o] -> [LogicRule tType s sE o]
-    proofBySubArgSchemaRule s r = [ProofBySubArg $ ProofBySubArgSchema s r]
+    proofBySubArg :: s -> [LogicRule tType s sE o] -> [LogicRule tType s sE o]
+    proofBySubArg s r = [ProofBySubArg $ ProofBySubArgSchema s r]
  
 
 instance SubproofRule [LogicRule tType s sE o] s where
-    proofByAsmSchemaRule :: s -> s -> [LogicRule tType s sE o] -> [LogicRule tType s sE o]
-    proofByAsmSchemaRule asm cons subproof = [ProofByAsm $ ProofByAsmSchema asm cons subproof]
+    proofByAsm :: s -> s -> [LogicRule tType s sE o] -> [LogicRule tType s sE o]
+    proofByAsm asm cons subproof = [ProofByAsm $ ProofByAsmSchema asm cons subproof]
 
 
 
@@ -311,7 +311,7 @@ instance (
            => Exception (SubproofMException s sE)
 
 class SubproofRule r s  where
-   proofByAsmSchemaRule :: s -> s -> r -> r
+   proofByAsm :: s -> s -> r -> r
 
 runProofByAsmM :: (Monoid r1, ProofStd s eL1 r1 o tType, Monad m,
                        LogicSent s tType, MonadThrow m,
@@ -336,7 +336,7 @@ runProofByAsmM asm prog =  do
         let mayPreambleLastProp = (Last . Just) asm
         (extraData,consequent,subproof,newSteps) 
                  <- lift $ runSubproofM newContext state newState preambleSteps mayPreambleLastProp prog
-        mayMonadifyRes <- monadifyProofStd $ proofByAsmSchemaRule asm consequent subproof
+        mayMonadifyRes <- monadifyProofStd $ proofByAsm asm consequent subproof
         idx <- maybe (error "No theorem returned by monadifyProofStd on asm schema. This shouldn't happen") (return . snd) mayMonadifyRes
         return (asm .->. consequent,idx,extraData)
 

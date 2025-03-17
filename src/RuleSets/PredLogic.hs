@@ -7,7 +7,7 @@ module RuleSets.PredLogic
     runTheoremM,
     runTmSilentM, runProofByUGM, SubproofError(..),
     TheoremSchemaMT(..),SubproofMException(..),
-    TmSchemaSilentM,
+    TheoremAlgSchema,
     TheoremSchema
 
 
@@ -20,6 +20,6 @@ import RuleSets.Internal.PredLogic(LogicError(..), LogicRuleClass(..), SubproofR
     runTheoremM,
     runTmSilentM, runProofByUGM, SubproofError(..), TheoremSchemaMT(..)
     ,SubproofMException(..),
-    TmSchemaSilentM,
+    TheoremAlgSchema,
     TheoremSchema
     )

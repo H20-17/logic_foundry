@@ -8,7 +8,7 @@ module RuleSets.Internal.PredLogic
     ProofByUGSchema(..),
     LogicSent(..), 
     TheoremSchemaMT(..),
-    TmSchemaSilentM,
+    TheoremAlgSchema,
     TheoremSchema
 ) where
 
@@ -99,7 +99,7 @@ data LogicRule s sE o t tType  where
     UI :: t -> s -> LogicRule s sE o t tType 
 
     Theorem :: TheoremSchema s [LogicRule s sE o t tType ] o tType -> LogicRule s sE o t tType 
-    TheoremM :: TmSchemaSilentM tType [LogicRule s sE o t tType ] s o () -> 
+    TheoremM :: TheoremAlgSchema tType [LogicRule s sE o t tType ] s o () -> 
                              LogicRule s sE o t tType 
     deriving(Show)
 
@@ -261,24 +261,24 @@ instance (LogicSent s t tType, Show sE, Typeable sE, Show s, Typeable s, TypedSe
 
 
 instance REM.SubproofRule [LogicRule s sE o t tType ] s where
-     proofBySubArgSchemaRule:: s -> [LogicRule s sE o t tType ] -> [LogicRule s sE o t tType ]
-     proofBySubArgSchemaRule s r = [ProofBySubArg $ ProofBySubArgSchema s r]
+     proofBySubArg:: s -> [LogicRule s sE o t tType ] -> [LogicRule s sE o t tType ]
+     proofBySubArg s r = [ProofBySubArg $ ProofBySubArgSchema s r]
 
 
 
 instance PL.SubproofRule [LogicRule s sE o t tType] s where
-     proofByAsmSchemaRule:: s -> s -> [LogicRule s sE o t tType ] -> [LogicRule s sE o t tType ]
-     proofByAsmSchemaRule asm cons subproof = [ProofByAsm $ ProofByAsmSchema asm cons subproof]
+     proofByAsm:: s -> s -> [LogicRule s sE o t tType ] -> [LogicRule s sE o t tType ]
+     proofByAsm asm cons subproof = [ProofByAsm $ ProofByAsmSchema asm cons subproof]
 
 
 instance SubproofRule [LogicRule s sE o t tType ] s o tType where
-     theoremSchemaRule:: TheoremSchema s [LogicRule s sE o t tType ] o tType -> [LogicRule s sE o t tType ]
-     theoremSchemaRule schema = [Theorem schema]
-     theoremSchemaSilentMRule:: TmSchemaSilentM tType [LogicRule s sE o t tType ] s o () -> [LogicRule s sE o t tType ]
-     theoremSchemaSilentMRule schema = [TheoremM schema]
+     theoremSchema:: TheoremSchema s [LogicRule s sE o t tType ] o tType -> [LogicRule s sE o t tType ]
+     theoremSchema schema = [Theorem schema]
+     theoremAlgSchema:: TheoremAlgSchema tType [LogicRule s sE o t tType ] s o () -> [LogicRule s sE o t tType ]
+     theoremAlgSchema schema = [TheoremM schema]
 
-     proofByUGSchemaRule:: s -> [LogicRule s sE o t tType ] -> [LogicRule s sE o t tType ]
-     proofByUGSchemaRule s r  = [ProofByUG $ ProofByUGSchema s r]
+     proofByUG:: s -> [LogicRule s sE o t tType ] -> [LogicRule s sE o t tType ]
+     proofByUG s r  = [ProofByUG $ ProofByUGSchema s r]
 
 standardRuleM :: (Monoid r,Monad m, Ord o, Show sE, Typeable sE, Show s, Typeable s, Show eL, Typeable eL,
        MonadThrow m, Show o, Typeable o, Show tType, Typeable tType, TypedSent o tType sE s,
@@ -467,7 +467,7 @@ instance (
 
 
 
-type TmSchemaSilentM tType r s o x = TheoremSchemaMT tType r s o (Either SomeException) x
+type TheoremAlgSchema tType r s o x = TheoremSchemaMT tType r s o (Either SomeException) x
 
 checkTheoremMOpen :: (Show s, Typeable s, Monoid r1, ProofStd s eL1 r1 o tType, Monad m, MonadThrow m,
                       TypedSent o tType sE s, Show sE, Typeable sE, Typeable tType, Show tType,
@@ -535,11 +535,11 @@ checkTheoremM = checkTheoremMOpen Nothing
 establishTmSilentM :: (Monoid r1, ProofStd s eL1 r1 o tType ,
                      Show s, Typeable s, Ord o, TypedSent o tType sE s, Show sE, Typeable sE, Typeable tType, Show tType, Typeable o,
                      Show o, Show eL1, Typeable eL1, StdPrfPrintMonad s o tType (Either SomeException))
-                            =>  TmSchemaSilentM tType r1 s o () -> 
+                            =>  TheoremAlgSchema tType r1 s o () -> 
                                 PrfStdContext tType ->
                                 PrfStdState s o tType -> 
                                     Either SomeException (s, PrfStdStep s o tType)
-establishTmSilentM (schema :: TmSchemaSilentM tType r1 s o ()) context state = 
+establishTmSilentM (schema :: TheoremAlgSchema tType r1 s o ()) context state = 
     do
         (tm, prf, (),_) <-  checkTheoremMOpen  (Just (state,context)) schema
         return (tm, PrfStdStepTheoremM tm)
@@ -550,8 +550,8 @@ expandTheoremM :: (Monoid r1, ProofStd s eL1 r1 o tType ,
                      Show s, Typeable s, TypedSent o tType sE s, Show sE, Typeable sE,
                      Show eL1, Typeable eL1,
                      Typeable tType, Show tType, Typeable o, Show o, StdPrfPrintMonad s o tType (Either SomeException))
-                            => TmSchemaSilentM tType r1 s o () -> Either  SomeException (TheoremSchema s r1 o tType)
-expandTheoremM ((TheoremSchemaMT constdict lemmas proofprog):: TmSchemaSilentM tType r1 s o ()) =
+                            => TheoremAlgSchema tType r1 s o () -> Either  SomeException (TheoremSchema s r1 o tType)
+expandTheoremM ((TheoremSchemaMT constdict lemmas proofprog):: TheoremAlgSchema tType r1 s o ()) =
       do
           (tm,r1,(),_) <- checkTheoremMOpen Nothing (TheoremSchemaMT constdict lemmas proofprog)
           return $ TheoremSchema constdict lemmas tm r1
@@ -618,9 +618,9 @@ runProofByUG (ProofByUGSchema generalization subproof) context state =
 
 
 class SubproofRule r s o tType | r->o, r -> tType where
-   theoremSchemaRule :: TheoremSchema s r o tType -> r
-   theoremSchemaSilentMRule :: TmSchemaSilentM tType r s o () -> r
-   proofByUGSchemaRule :: s -> r -> r
+   theoremSchema :: TheoremSchema s r o tType -> r
+   theoremAlgSchema :: TheoremAlgSchema tType r s o () -> r
+   proofByUG :: s -> r -> r
 
 
 
@@ -636,7 +636,7 @@ runTheoremM (TheoremSchemaMT constDict lemmas prog) =  do
         state <- getProofState
         context <- ask
         (tm, proof, extra, newSteps) <- lift $ checkTheoremMOpen (Just (state,context)) (TheoremSchemaMT constDict lemmas prog)
-        mayMonadifyRes <- monadifyProofStd (theoremSchemaRule $ TheoremSchema constDict lemmas tm proof)
+        mayMonadifyRes <- monadifyProofStd (theoremSchema $ TheoremSchema constDict lemmas tm proof)
         idx <- maybe (error "No theorem returned by monadifyProofStd on theorem schema. This shouldn't happen") (return . snd) mayMonadifyRes
         return (tm, idx, extra)
 
@@ -647,7 +647,7 @@ runTmSilentM :: (Monoid r1, ProofStd s eL1 r1 o tType, Monad m,
                       Show eL1, Typeable eL1, Ord o, TypedSent o tType sE s, Show sE, Typeable sE,
                       StdPrfPrintMonad s o tType m, StdPrfPrintMonad s o tType (Either SomeException),
                       SubproofRule r1 s o tType)
-                 =>   TmSchemaSilentM tType r1 s o x ->
+                 =>   TheoremAlgSchema tType r1 s o x ->
                                ProofGenTStd tType r1 s o m (s, [Int], x)
 -- runTmSilentM f (TheoremSchemaMT constDict lemmas prog) =  do
 runTmSilentM (TheoremSchemaMT constDict lemmas prog) =  do
@@ -657,7 +657,7 @@ runTmSilentM (TheoremSchemaMT constDict lemmas prog) =  do
                      (Just (state,context)) 
                      (TheoremSchemaMT constDict lemmas prog)
         (tm, proof, extra, newSteps) <- either throwM return eitherResult
-        mayMonadifyRes <- monadifyProofStd (theoremSchemaSilentMRule $ TheoremSchemaMT constDict lemmas newProg)
+        mayMonadifyRes <- monadifyProofStd (theoremAlgSchema $ TheoremSchemaMT constDict lemmas newProg)
         idx <- maybe (error "No theorem returned by monadifyProofStd on theorem schema. This shouldn't happen") (return . snd) mayMonadifyRes
         return (tm, idx, extra)
     where
@@ -687,7 +687,7 @@ runProofByUGM tt prog =  do
         (extraData,generalizable,subproof, newSteps) 
                  <- lift $ runSubproofM newContext state newState preambleSteps (Last Nothing) prog
         let resultSent = createForall generalizable tt (Prelude.length frVarTypeStack)
-        mayMonadifyRes <- monadifyProofStd $ proofByUGSchemaRule resultSent subproof
+        mayMonadifyRes <- monadifyProofStd $ proofByUG resultSent subproof
         idx <- maybe (error "No theorem returned by monadifyProofStd on ug schema. This shouldn't happen") (return . snd) mayMonadifyRes       
         return (resultSent,idx,extraData)
 

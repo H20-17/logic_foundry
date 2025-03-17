@@ -111,7 +111,7 @@ main = do
                 <> fakeProp y2
                 <> mp y0
                 <> mp y2
-                <> proofByAsmSchemaRule y1 (Integ 99 :==: Integ 99) (mp $ y1 .->. (Integ 99 :==: Integ 99))
+                <> proofByAsm y1 (Integ 99 :==: Integ 99) (mp $ y1 .->. (Integ 99 :==: Integ 99))
                 )
                   ::[PropRuleDeBr]
     let zb = runProof proof
@@ -129,9 +129,9 @@ main = do
     let proof2 =    fakeConst "N" ()
                  <> fakeProp z1
                  <> fakeProp z2
-                 <> proofByUGSchemaRule generalized
+                 <> proofByUG generalized
                                         (
-                                            proofByAsmSchemaRule asm z1 (
+                                            proofByAsm asm z1 (
                                                     ui (Free 0) z1
                                                 <> mp ( asm .->. (Free 0 :>=: Integ 0))
                                                 <> simpL ((:&&:) (Free 0  :<-: (Constant . pack) "N") (Free 0 :>=: Integ 10))
@@ -145,9 +145,9 @@ main = do
 
 
 
-    let proof3 = proofByUGSchemaRule generalized
+    let proof3 = proofByUG generalized
                                      (
-                                        proofByAsmSchemaRule asm z1 (
+                                        proofByAsm asm z1 (
                                                 ui (Free 0) z1
                                              <> mp ( asm .->. (Free 0 :>=: Integ 0))
                                       
