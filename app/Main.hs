@@ -34,19 +34,6 @@ import Control.Monad.Catch
 import GHC.Stack.Types ( HasCallStack )
 import Data.Data (Typeable)
 import GHC.Generics (Associativity (NotAssociative, RightAssociative, LeftAssociative))
-import StdPattern
-    ( runProof,
-      runProofGeneratorT,
-
-      
-      StdPrfPrintMonad(..),
-      StdPrfPrintMonadFrame(..),
-      TypedSent(..),
-      TypeableTerm(..),
-      PrfStdStep(..),
-      ProofGenTStd,
-      getTopFreeVar
- )
 
 
 import StdPattern
@@ -72,7 +59,6 @@ import RuleSets.PredLogic hiding
    LogicError(..),
    SubproofError(..),
    LogicError(..),
-   runProofAtomic,
    LogicSent,
    SubproofMException(..))
 import qualified RuleSets.PredLogic as PRED
