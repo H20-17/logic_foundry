@@ -47,27 +47,44 @@ import StdPattern
       ProofGenTStd,
       getTopFreeVar
  )
+
+
+import StdPattern
+import RuleSets.BaseLogic hiding
+   (LogicRuleClass,
+   SubproofRule,
+   LogicError(..),
+   SubproofError(..),
+   LogicError(..))
+import qualified RuleSets.BaseLogic as BASE
+import RuleSets.PropLogic hiding
+    (LogicRuleClass,
+   SubproofRule,
+   LogicError(..),
+   SubproofError(..),
+   LogicError(..),
+   LogicSent,
+   SubproofMException(..))
 import qualified RuleSets.PropLogic as PL
-import RuleSets.PropLogic(mp,simpL,adj,
-                          mpM,adjM,simpLM,PropLogSchemaRule(..), ProofByAsmSchema(ProofByAsmSchema),
-                          PropLogicSent(..), runProofByAsmM)
-import RuleSets.PredLogic (PredLogicSent(..),  ProofByUGSchema(..) , TheoremSchemaMT(..),
-      checkTheoremM,
-      runTheoremM,
-      runTmSilentM,
-      runProofByUGM,
-      PredLogSchemaRule(..),
-      LogicRuleClass(..), uiM) 
+import RuleSets.PredLogic hiding
+    (LogicRuleClass,
+   SubproofRule,
+   LogicError(..),
+   SubproofError(..),
+   LogicError(..),
+   runProofAtomic,
+   LogicSent,
+   SubproofMException(..))
+import qualified RuleSets.PredLogic as PRED
 
 import Langs.BasicUntyped
-import RuleSets.BaseLogic
-    ( runProofBySubArgM,
-      remarkM,
-      fakePropM,
-      fakeConstM,
-      fakeProp,
-      fakeConst)
-default(Text)
+    ( showPropDeBrStepsBase,
+      ObjDeBr(Integ, Hilbert, Bound, Constant, Free),
+      PredRuleDeBr,
+      PropDeBr((:&&:), (:||:), Exists, Forall, (:==:), (:->:), (:<-:),
+               (:>=:)),
+      PropRuleDeBr )
+
 
 
 

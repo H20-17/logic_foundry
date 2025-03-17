@@ -162,16 +162,11 @@ testSubproof context baseState preambleState preambleSteps mayPreambleLastProp t
 
 
 
-data TestSubproofMException s sE o tType where
-   BigExceptLemmaSanityErr :: s -> sE -> TestSubproofMException s sE o tType
-   BigExceptResNotProven :: s -> TestSubproofMException s sE o tType
-   BigExceptResultSanity :: s -> sE -> TestSubproofMException s sE o tType
-   BigExceptConstNotDefd :: o ->  TestSubproofMException s sE o tType
-   BigExceptConstTypeConflict :: o -> tType -> tType -> TestSubproofMException s sE o tType
-   BigExceptLemmaNotEstablished :: s -> TestSubproofMException s sE o tType
-   BigExceptSchemaConstDup :: o -> TestSubproofMException s sE o tType
-   BigExceptNothingProved :: TestSubproofMException s sE o tType
-   BigExceptEmptyVarStack :: TestSubproofMException s sE o tType
+data TestSubproofMException s sE where
+   BigExceptResNotProven :: s -> TestSubproofMException s sE
+   BigExceptResultSanity :: s -> sE -> TestSubproofMException s sE
+   BigExceptNothingProved :: TestSubproofMException s sE
+   BigExceptEmptyVarStack :: TestSubproofMException s sE
 
 
    deriving(Show)
@@ -179,10 +174,8 @@ data TestSubproofMException s sE o tType where
 
 instance (
               Show sE, Typeable sE, 
-              Show s, Typeable s,
-              Show o, Typeable o,
-              Show tType, Typeable tType)
-           => Exception (TestSubproofMException s sE o tType)
+              Show s, Typeable s)
+           => Exception (TestSubproofMException s sE)
 
 
 

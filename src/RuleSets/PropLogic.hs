@@ -1,12 +1,12 @@
 module RuleSets.PropLogic
 (LogicError, mpM, simpLM, adjM,
-    LogicRuleClass(..),PropLogSchemaRule(.. ),
-    ProofByAsmSchema(..), SubproofError, runProofByAsmM,  PropLogicSent(..)
+    LogicRuleClass(..),SubproofRule(.. ),
+    ProofByAsmSchema(..), SubproofError(..), runProofByAsmM,  LogicSent(..)
 ) where
 
 import RuleSets.Internal.PropLogic(mpM, simpLM, adjM,
-              LogicError, LogicRuleClass(..), PropLogSchemaRule(..),
+              LogicError, LogicRuleClass(..), SubproofRule(..),
               
-              ProofByAsmSchema(..), SubproofError, runProofByAsmM,  PropLogicSent(..),
+              ProofByAsmSchema(..), SubproofError(..), runProofByAsmM,  LogicSent(..),
               SubproofMException(..)
               )

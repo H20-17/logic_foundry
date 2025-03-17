@@ -6,7 +6,7 @@ module RuleSets.Internal.BaseLogic
 (
     LogicRule(..), runProofAtomic, remarkM, LogicRuleClass(..), LogicError(..), fakePropM, fakeConstM,
     ProofBySubArgSchema(..), SubproofError(..), runProofBySubArg, runProofBySubArgM,
-    BaseLogSchemaRule(..)
+    SubproofRule(..)
 ) where
 
 import Data.Monoid ( Last(..) )
@@ -18,26 +18,15 @@ import Control.Monad.Catch
     ( SomeException, MonadThrow(..), Exception )
 import Data.Data (Typeable)
 import Data.Map(lookup,insert)
-import StdPattern
-    ( PrfStdState(..),
-      PrfStdContext(..),
-      Proof,
-      StdPrfPrintMonad,
-      TypedSent(..),
-      PrfStdStep(..),
-      ProofStd,
-      ProofGenTStd,
-      monadifyProofStd,
-      getProofState,
-      freeVarTypeStack,
-      checkSanity,
-      TestSubproofErr,
-      RuleInject (..))
-import StdPatternDevel (runProofOpen, runSubproofM, testSubproof )
+
 import Control.Monad.RWS (MonadReader(ask))
 import Data.Maybe ( isNothing )
 import Control.Arrow (left)
 import Control.Monad.Trans ( MonadTrans(lift) )
+import Internal.StdPattern
+import Kernel
+
+
 
 data LogicError s sE o where
     LogicErrRepOriginNotProven :: s -> LogicError s sE o
@@ -126,6 +115,7 @@ instance ( Show s, Typeable s, Ord o, TypedSent o tType sE s,
                         newLineIndex = stepIdxPrefix context <> [stepCount oldState + newStepCount-1]
 
 instance RuleInject [LogicRule tType s sE o] [LogicRule tType s sE o] where
+    injectRule :: [LogicRule tType s sE o] -> [LogicRule tType s sE o]
     injectRule = id
 
 
@@ -152,7 +142,7 @@ instance LogicRuleClass [LogicRule tType s sE o] s o tType sE where
 
 
 
-instance BaseLogSchemaRule [LogicRule tType s sE o] s where
+instance SubproofRule [LogicRule tType s sE o] s where
     proofBySubArgSchemaRule :: s -> [LogicRule tType s sE o] -> [LogicRule tType s sE o]
     proofBySubArgSchemaRule s r = [ProofBySubArg $ ProofBySubArgSchema s r]
 
@@ -200,7 +190,7 @@ runProofBySubArg (ProofBySubArgSchema consequent subproof) context state  =
 
 
 
-class BaseLogSchemaRule r s where
+class SubproofRule r s where
    proofBySubArgSchemaRule :: s -> r -> r
 
 
@@ -210,7 +200,7 @@ runProofBySubArgM :: (Monoid r1, ProofStd s eL1 r1 o tType, Monad m,
                         MonadThrow m,
                        Show s, Typeable s,
                        Show eL1, Typeable eL1, TypedSent o tType sE s, Show sE, Typeable sE,
-                       StdPrfPrintMonad s o tType m, BaseLogSchemaRule r1 s )
+                       StdPrfPrintMonad s o tType m, SubproofRule r1 s )
                  =>   ProofGenTStd tType r1 s o m x
                             -> ProofGenTStd tType r1 s o m (s, [Int], x)
 runProofBySubArgM prog =  do

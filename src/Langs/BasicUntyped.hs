@@ -19,6 +19,9 @@ import Data.Map
 import Data.Set(Set)
 import qualified Data.Set as Set (fromList,insert,member)
 import Control.Applicative ( Alternative((<|>)) )
+
+import Control.Monad.Except ( MonadError(throwError) )
+
 import Internal.StdPattern
     ( 
       PrfStdStep(..),
@@ -27,11 +30,8 @@ import Internal.StdPattern
       TypeableTerm(..),
       TypedSent(..) )
 import Control.Exception (SomeException)
-import Control.Monad.Except ( MonadError(throwError) )
-import qualified RuleSets.PropLogicDevel as PL
-import qualified RuleSets.PropLogic as PL
-import RuleSets.PredLogic
-import RuleSets.PredLogicDevel
+import qualified RuleSets.Internal.PropLogic as PL
+import qualified RuleSets.Internal.PredLogic as PREDL
 
 
 data PropDeBr where
@@ -277,7 +277,7 @@ instance TypedSent  Text () DeBrSe PropDeBr where
 
 
 
-instance PL.PropLogicSent PropDeBr () where
+instance PL.LogicSent PropDeBr () where
   
   (.&&.) :: PropDeBr -> PropDeBr -> PropDeBr
   (.&&.) = (:&&:)
@@ -409,7 +409,7 @@ boundExpToFunc p = propDeBrSub (boundVarIdx p) (calcBVOThreshold p) p
                                       boundDepthPropDeBr p + 1
 
 
-instance PredLogicSent PropDeBr ObjDeBr ()  where
+instance PREDL.LogicSent PropDeBr ObjDeBr ()  where
     parseExists :: PropDeBr -> Maybe (ObjDeBr -> PropDeBr, ())
     parseExists prop =
       case prop of
@@ -435,8 +435,8 @@ instance PredLogicSent PropDeBr ObjDeBr ()  where
 type PropErrDeBr = PL.LogicError PropDeBr DeBrSe Text ObjDeBr
 type PropRuleDeBr = PL.LogicRule () PropDeBr DeBrSe Text
 
-type PredErrDeBr = LogicError PropDeBr DeBrSe Text ObjDeBr () 
-type PredRuleDeBr = LogicRule PropDeBr DeBrSe Text ObjDeBr ()
+type PredErrDeBr = PREDL.LogicError PropDeBr DeBrSe Text ObjDeBr () 
+type PredRuleDeBr = PREDL.LogicRule PropDeBr DeBrSe Text ObjDeBr ()
 
 type PrfStdStepPredDeBr = PrfStdStep PropDeBr Text ()
 

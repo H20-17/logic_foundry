@@ -1,8 +1,8 @@
 module RuleSets.Internal.PropLogic 
 (
     LogicError, LogicRule(..), runProofAtomic, mpM, simpLM, adjM, 
-    LogicRuleClass(..), PropLogSchemaRule(..),
-    ProofByAsmSchema(..), SubproofError, runProofByAsm, runProofByAsmM, PropLogicSent(..),
+    LogicRuleClass(..), SubproofRule(..),
+    ProofByAsmSchema(..), SubproofError, runProofByAsm, runProofByAsmM, LogicSent(..),
     SubproofMException(..)
 ) where
 
@@ -42,14 +42,20 @@ import StdPattern
       RuleInject(..),
       getProofState
       )
-import qualified StdPatternDevel as StdP ( runProofOpen)
-import StdPatternDevel(testSubproof, runSubproofM)
-import RuleSets.BaseLogic (remarkM, 
-                           ProofBySubArgSchema(..),
-                           BaseLogSchemaRule(..))
-import qualified RuleSets.BaseLogic as REM
-import qualified RuleSets.BaseLogicDevel as REM(runProofAtomic, LogicRule(..))
-import RuleSets.BaseLogicDevel(runProofBySubArg)
+
+import Kernel
+import Internal.StdPattern
+
+import RuleSets.Internal.BaseLogic hiding 
+   (LogicRuleClass,
+   SubproofRule,
+   LogicError,
+   SubproofError,
+   LogicRule(..),
+   LogicError(..),
+   runProofAtomic)
+import qualified RuleSets.Internal.BaseLogic as REM
+
 
 
 data LogicError s sE o tType where
@@ -83,7 +89,7 @@ data LogicRule tType s sE o where
 
 
 runProofAtomic :: (ProofStd s (LogicError s sE o tType) [LogicRule tType s sE o] o tType,
-               PropLogicSent s tType, Show sE, Typeable sE, Show s, Typeable s, Ord o, TypedSent o tType sE s,
+               LogicSent s tType, Show sE, Typeable sE, Show s, Typeable s, Ord o, TypedSent o tType sE s,
                Show o, Typeable o, Typeable tType, Show tType, StdPrfPrintMonad s o tType (Either SomeException)) =>
                             LogicRule tType s sE o -> PrfStdContext tType -> PrfStdState s o tType 
                                       -> Either (LogicError s sE o tType) (Maybe s,Maybe (o,tType),PrfStdStep s o tType)
@@ -122,7 +128,7 @@ runProofAtomic rule context state =
 
 
 
-instance (PropLogicSent s tType, Show sE, Typeable sE, Show s, Typeable s, Ord o, TypedSent o tType sE s,
+instance (LogicSent s tType, Show sE, Typeable sE, Show s, Typeable s, Ord o, TypedSent o tType sE s,
           Typeable o, Show o, Typeable tType, Show tType, Monoid (PrfStdState s o tType),
           StdPrfPrintMonad s o tType (Either SomeException),
           Monoid (PrfStdContext tType))
@@ -133,7 +139,7 @@ instance (PropLogicSent s tType, Show sE, Typeable sE, Show s, Typeable s, Ord o
                  [PrfStdStep s o tType]
                  s
                     where
-  runProofOpen :: (PropLogicSent s tType, Show sE, Typeable sE, Show s, Typeable s,
+  runProofOpen :: (LogicSent s tType, Show sE, Typeable sE, Show s, Typeable s,
                Ord o, TypedSent o tType sE s, Typeable o, Show o, Typeable tType,
                Show tType, Monoid (PrfStdState s o tType)) =>
                  [LogicRule tType s sE o] -> 
@@ -200,12 +206,12 @@ instance LogicRuleClass [LogicRule tType s sE o] s tType sE o where
 
 
 
-instance BaseLogSchemaRule [LogicRule tType s sE o] s where
+instance REM.SubproofRule [LogicRule tType s sE o] s where
     proofBySubArgSchemaRule :: s -> [LogicRule tType s sE o] -> [LogicRule tType s sE o]
     proofBySubArgSchemaRule s r = [ProofBySubArg $ ProofBySubArgSchema s r]
  
 
-instance PropLogSchemaRule [LogicRule tType s sE o] s where
+instance SubproofRule [LogicRule tType s sE o] s where
     proofByAsmSchemaRule :: s -> s -> [LogicRule tType s sE o] -> [LogicRule tType s sE o]
     proofByAsmSchemaRule asm cons subproof = [ProofByAsm $ ProofByAsmSchema asm cons subproof]
 
@@ -223,7 +229,7 @@ standardRuleM rule = do
      maybe (error "Critical failure: No index looking up sentence.") return mayPropIndex
 
 
-mpM :: (Monad m, PropLogicSent s tType, Ord o, Show sE, Typeable sE, Show s, Typeable s,
+mpM :: (Monad m, LogicSent s tType, Ord o, Show sE, Typeable sE, Show s, Typeable s,
        MonadThrow m, Show o, Typeable o, Show tType, Typeable tType, TypedSent o tType sE s,
        Monoid (PrfStdState s o tType), StdPrfPrintMonad s o tType m,
        StdPrfPrintMonad s o tType (Either SomeException), Monoid (PrfStdContext tType),
@@ -234,7 +240,7 @@ mpM impl = standardRuleM (mp impl)
       
 
 
-simpLM :: (Monad m, Monad m, PropLogicSent s tType, Ord o, Show sE, Typeable sE, Show s, Typeable s,
+simpLM :: (Monad m, Monad m, LogicSent s tType, Ord o, Show sE, Typeable sE, Show s, Typeable s,
        MonadThrow m, Show o, Typeable o, Show tType, Typeable tType, TypedSent o tType sE s,
        Monoid (PrfStdState s o tType), StdPrfPrintMonad s o tType m,
        StdPrfPrintMonad s o tType (Either SomeException), Monoid (PrfStdContext tType),
@@ -243,7 +249,7 @@ simpLM :: (Monad m, Monad m, PropLogicSent s tType, Ord o, Show sE, Typeable sE,
 simpLM aAndB = standardRuleM (simpL aAndB)
 
 
-adjM :: (Monad m, Monad m, PropLogicSent s tType, Ord o, Show sE, Typeable sE, Show s, Typeable s,
+adjM :: (Monad m, Monad m, LogicSent s tType, Ord o, Show sE, Typeable sE, Show s, Typeable s,
        MonadThrow m, Show o, Typeable o, Show tType, Typeable tType, TypedSent o tType sE s, Monoid (PrfStdState s o tType), StdPrfPrintMonad s o tType m,
        StdPrfPrintMonad s o tType (Either SomeException), Monoid (PrfStdContext tType),
          LogicRuleClass r s  tType sE o, Monoid r, ProofStd s eL r o tType, Typeable eL, Show eL)
@@ -268,7 +274,7 @@ data SubproofError senttype sanityerrtype logcicerrtype where
     deriving(Show)
 
 
-runProofByAsm :: (ProofStd s eL1 r1 o tType, PropLogicSent s tType, TypedSent o tType sE s) => 
+runProofByAsm :: (ProofStd s eL1 r1 o tType, LogicSent s tType, TypedSent o tType sE s) => 
                        ProofByAsmSchema s r1 ->  
                         PrfStdContext tType -> 
                         PrfStdState s o tType ->
@@ -304,14 +310,14 @@ instance (
               Show s, Typeable s)
            => Exception (SubproofMException s sE)
 
-class PropLogSchemaRule r s  where
+class SubproofRule r s  where
    proofByAsmSchemaRule :: s -> s -> r -> r
 
 runProofByAsmM :: (Monoid r1, ProofStd s eL1 r1 o tType, Monad m,
-                       PropLogicSent s tType, MonadThrow m,
+                       LogicSent s tType, MonadThrow m,
                        Show s, Typeable s,
                        Show eL1, Typeable eL1, TypedSent o tType sE s, Show sE, Typeable sE, 
-                       StdPrfPrintMonad s o tType m, PropLogSchemaRule r1 s )
+                       StdPrfPrintMonad s o tType m, SubproofRule r1 s )
                  =>   s -> ProofGenTStd tType r1 s o m x
                             -> ProofGenTStd tType r1 s o m (s, [Int], x)
 runProofByAsmM asm prog =  do
@@ -338,7 +344,7 @@ runProofByAsmM asm prog =  do
 
 
 class (Ord s, Eq tType) 
-              => PropLogicSent s tType | s -> tType where
+              => LogicSent s tType | s -> tType where
      (.&&.) :: s -> s -> s
      parseAdj :: s -> Maybe(s,s)
      (.->.) :: s->s->s

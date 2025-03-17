@@ -1,21 +1,25 @@
 module RuleSets.PredLogic
 (
-    uiM, eiM, LogicError(..), LogicRuleClass(..), PredLogSchemaRule(..),
+    uiM, eiM, LogicError(..), LogicRuleClass(..), SubproofRule(..),
     ProofByUGSchema(..),
-    PredLogicSent(..), 
+    LogicSent(..), 
     checkTheoremM,  expandTheoremM,
     runTheoremM,
     runTmSilentM, runProofByUGM, SubproofError(..),
-    TheoremSchemaMT(..),SubproofMException(..)
+    TheoremSchemaMT(..),SubproofMException(..),
+    TmSchemaSilentM,
+    TheoremSchema
 
 
 ) where
 
-import RuleSets.Internal.PredLogic(LogicError(..), LogicRuleClass(..), PredLogSchemaRule(..),
+import RuleSets.Internal.PredLogic(LogicError(..), LogicRuleClass(..), SubproofRule(..),
     uiM, eiM,     ProofByUGSchema(..),
-    PredLogicSent(..), 
+    LogicSent(..), 
     checkTheoremM, expandTheoremM, 
     runTheoremM,
     runTmSilentM, runProofByUGM, SubproofError(..), TheoremSchemaMT(..)
-    ,SubproofMException(..)
+    ,SubproofMException(..),
+    TmSchemaSilentM,
+    TheoremSchema
     )
