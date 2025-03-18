@@ -124,9 +124,9 @@ main = do
 
     -- either (putStrLn . show) (putStrLn . unpack . showPropDeBrStepsBase . snd) zb
     print "OI leave me alone"
-    let z1 = (c $ Ax 0 ((X 0 :<-: Const "N") :&&: (X 0 :>=: IntNum 10) :->: (X 0 :>=: IntNum 0)))::PropDeBr
+    let z1 = (c $ Ax 0 ((X 0 :<-: Const "N") :&&: (X 0 :>=: IntNum 10) :->: (X 0 :>=: IntNum 0)))
     let z2 = c $ Ax 0 ((X 0 :<-: Const "N") :&&: (X 0 :>=: IntNum 0) :->: (X 0 :==: IntNum 0))
-    let generalized = (c $ Ax 0 ((X 0 :<-: Const "N") :&&: (X 0 :>=: IntNum 10) :->: (X 0 :==: IntNum 0)))::PropDeBr
+    let generalized = (c $ Ax 0 ((X 0 :<-: Const "N") :&&: (X 0 :>=: IntNum 10) :->: (X 0 :==: IntNum 0))) ::PropDeBr
     let asm = c $ (V 0 :<-: Const "N") :&&: (V 0 :>=: IntNum 10)
     let mid = (c $ (V 0 :<-: Const "N") :&&: (V 0 :>=: IntNum 0))
 
