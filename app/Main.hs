@@ -67,9 +67,12 @@ import Langs.BasicUntyped
     ( showPropDeBrStepsBase,
       ObjDeBr(Integ, Hilbert, Bound, Constant, Free),
       PredRuleDeBr,
-      PropDeBr((:&&:), (:||:), Exists, Forall, (:==:), (:->:), (:<-:),
-               (:>=:)),
-      PropRuleDeBr )
+      PropDeBr((:||.), (:||.), Exists, Forall, (:==.), (:->.), (:<-.),
+               (:>=.)),
+      PropRuleDeBr,
+      PropConv(..),
+      ObjConv(..),
+      HumanToDeBruijn(..) )
 
 
 
@@ -80,27 +83,34 @@ import Langs.BasicUntyped
 testTheoremMSchema :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) => TheoremSchemaMT () [PredRuleDeBr] PropDeBr Text m ()
 testTheoremMSchema = TheoremSchemaMT  [("N",())] [z1,z2] theoremProg 
   where
-    z1 = Forall (Bound 0  :<-: (Constant . pack) "N" :&&: Bound 0 :>=: Integ 10 :->: Bound 0 :>=: Integ 0)
-    z2 = Forall (((Bound 0  :<-: (Constant . pack) "N") :&&: (Bound 0 :>=: Integ 0)) :->: (Bound 0 :==: Integ 0))
-    z3 = (Integ 0 :>=: Integ 0) :||: ((Integ 0 :>=: Integ 0) :||: (Integ 0 :>=: Integ 0))
-    z4 = ((Integ 0 :>=: Integ 0) :||: (Integ 0 :>=: Integ 0)) :||: (Integ 0 :>=: Integ 21)
-    z5 = (Integ 0 :>=: Integ 0) :->: ((Integ 0 :>=: Integ 0) :->: (Integ 0 :>=: Integ 88))
+    z1 = Forall (Bound 0  :<-. (Constant . pack) "N" :||. Bound 0 :>=. Integ 10 :->. Bound 0 :>=. Integ 0)
+    z2 = Forall (((Bound 0  :<-. (Constant . pack) "N") :||. (Bound 0 :>=. Integ 0)) :->. (Bound 0 :==. Integ 0))
+    z3 = (Integ 0 :>=. Integ 0) :||. ((Integ 0 :>=. Integ 0) :||. (Integ 0 :>=. Integ 0))
+    z4 = ((Integ 0 :>=. Integ 0) :||. (Integ 0 :>=. Integ 0)) :||. (Integ 0 :>=. Integ 21)
+    z5 = (Integ 0 :>=. Integ 0) :->. ((Integ 0 :>=. Integ 0) :->. (Integ 0 :>=. Integ 88))
 
 
 main :: IO ()
 main = do
-    let y0 =  (Integ 0 :==: Integ 0) :->: (Integ 99 :==: Integ 99)
-    let y1 = Integ 0 :==: Integ 0
-    let y2= (Integ 99 :==: Integ 99) :->: (Integ 1001 :==: Integ 1001)
-    let x0 = Exists (Forall ((Integ 0 :==: Free 102) 
-              :&&: (Bound 0 :<-: Bound 1)) :&&: (Bound 1 :<-: Bound 1))
-    let x1 = Forall (Forall (Forall ((Bound 3 :==: Bound 2) :&&: Forall (Bound 0 :==: Bound 1))))
+    let y0 =  (Integ 0 :==. Integ 0) :->. (Integ 99 :==. Integ 99)
+    let y1 = Integ 0 :==. Integ 0
+    let y2= (Integ 99 :==. Integ 99) :->. (Integ 1001 :==. Integ 1001)
+    let x0 = Exists (Forall ((Integ 0 :==. Free 102) 
+              :||. (Bound 0 :<-. Bound 1)) :||. (Bound 1 :<-. Bound 1))
+    let x1 = Forall (Forall (Forall ((Bound 3 :==. Bound 2) :||. Forall (Bound 0 :==. Bound 1))))
     (print . show) (checkSanity [(),()] x0 mempty)
-    (print . show) x1
+    print "X1" 
+ 
+
+    (putStrLn . show) x1
+    let xv = Ax 10 (Ax 21 (Ax 1(X 10 :==: X 21 :||: Ax 0 (X 0 :==: X 1))))
+    -- ∀𝑥₃(∀𝑥₂(∀𝑥₁(𝑥₃ = 𝑥₂ ∨ ∀𝑥₀(𝑥₀ = 𝑥₁))))
+    let cxv = (c xv)::PropDeBr
+    (putStrLn . show) cxv
     let f = parseForall x1
     case f of
         Just (f,()) -> do
-            let term1 = Hilbert (Integ 0 :<-: Integ 0)
+            let term1 = Hilbert (Integ 0 :<-. Integ 0)
             let fNew = f term1
             (print.show) fNew
         Nothing -> print "parse failed!"
@@ -111,18 +121,18 @@ main = do
                 <> fakeProp y2
                 <> mp y0
                 <> mp y2
-                <> proofByAsm y1 (Integ 99 :==: Integ 99) (mp $ y1 .->. (Integ 99 :==: Integ 99))
+                <> proofByAsm y1 (Integ 99 :==. Integ 99) (mp $ y1 .->. (Integ 99 :==. Integ 99))
                 )
                   ::[PropRuleDeBr]
     let zb = runProof proof
 
     -- either (putStrLn . show) (putStrLn . unpack . showPropDeBrStepsBase . snd) zb
     print "OI leave me alone"
-    let z1 = Forall (((Bound 0  :<-: (Constant . pack) "N") :&&: (Bound 0 :>=: Integ 10)) :->: (Bound 0 :>=: Integ 0))
-    let z2 = Forall (((Bound 0  :<-: (Constant . pack) "N") :&&: (Bound 0 :>=: Integ 0)) :->: (Bound 0 :==: Integ 0))
-    let generalized = Forall (((Bound 0  :<-: (Constant . pack) "N") :&&: (Bound 0 :>=: Integ 10)) :->: (Bound 0 :==: Integ 0))
-    let asm = (Free 0  :<-: (Constant . pack) "N") :&&: (Free 0 :>=: Integ 10)
-    let mid = (Free 0  :<-: (Constant . pack) "N") :&&: (Free 0 :>=: Integ 0)
+    let z1 = Forall (((Bound 0  :<-. (Constant . pack) "N") :||. (Bound 0 :>=. Integ 10)) :->. (Bound 0 :>=. Integ 0))
+    let z2 = Forall (((Bound 0  :<-. (Constant . pack) "N") :||. (Bound 0 :>=. Integ 0)) :->. (Bound 0 :==. Integ 0))
+    let generalized = Forall (((Bound 0  :<-. (Constant . pack) "N") :||. (Bound 0 :>=. Integ 10)) :->. (Bound 0 :==. Integ 0))
+    let asm = (Free 0  :<-. (Constant . pack) "N") :||. (Free 0 :>=. Integ 10)
+    let mid = (Free 0  :<-. (Constant . pack) "N") :||. (Free 0 :>=. Integ 0)
 
 
 
@@ -133,11 +143,11 @@ main = do
                                         (
                                             proofByAsm asm z1 (
                                                     ui (Free 0) z1
-                                                <> mp ( asm .->. (Free 0 :>=: Integ 0))
-                                                <> simpL ((:&&:) (Free 0  :<-: (Constant . pack) "N") (Free 0 :>=: Integ 10))
-                                                <> adj (Free 0  :<-: (Constant . pack) "N") (Free 0 :>=: Integ 0)
+                                                <> mp ( asm .->. (Free 0 :>=. Integ 0))
+                                                <> simpL ((:||.) (Free 0  :<-. (Constant . pack) "N") (Free 0 :>=. Integ 10))
+                                                <> adj (Free 0  :<-. (Constant . pack) "N") (Free 0 :>=. Integ 0)
                                                 <> ui (Free 0) z2
-                                                <> mp ( mid .->. (Free 0 :==: Integ 0)  )
+                                                <> mp ( mid .->. (Free 0 :==. Integ 0)  )
                                             )  
                                         )
                                     ::[PredRuleDeBr]
@@ -149,7 +159,7 @@ main = do
                                      (
                                         proofByAsm asm z1 (
                                                 ui (Free 0) z1
-                                             <> mp ( asm .->. (Free 0 :>=: Integ 0))
+                                             <> mp ( asm .->. (Free 0 :>=. Integ 0))
                                       
                                             )
                                      )
@@ -176,12 +186,12 @@ main = do
 
 testprog::ProofGenTStd () [PredRuleDeBr] PropDeBr Text IO ()
 testprog = do
-      let z1 = Forall (((Bound 0  :<-: (Constant . pack) "N") :&&: (Bound 0 :>=: Integ 10))  :->: (Bound 0 :>=: Integ 0))
-      let z2 = Forall (((Bound 0  :<-: (Constant . pack) "N") :&&: (Bound 0 :>=: Integ 0)) :->: (Bound 0 :==: Integ 0))
-      let generalizable = ((Free 0  :<-: (Constant . pack) "N") :&&: (Free 0 :>=: Integ 10)) :->: (Free 0 :==: Integ 0)
-      let asm = (Free 0  :<-: (Constant . pack) "N") :&&: (Free 0 :>=: Integ 10)
-      let asm2 = (Free 0  :<-: (Constant . pack) "N") :&&: (Free 0 :>=: Integ 10)
-      let mid = (Free 0  :<-: (Constant . pack) "N") :&&: (Free 0 :>=: Integ 0)
+      let z1 = Forall (((Bound 0  :<-. (Constant . pack) "N") :||. (Bound 0 :>=. Integ 10))  :->. (Bound 0 :>=. Integ 0))
+      let z2 = Forall (((Bound 0  :<-. (Constant . pack) "N") :||. (Bound 0 :>=. Integ 0)) :->. (Bound 0 :==. Integ 0))
+      let generalizable = ((Free 0  :<-. (Constant . pack) "N") :||. (Free 0 :>=. Integ 10)) :->. (Free 0 :==. Integ 0)
+      let asm = (Free 0  :<-. (Constant . pack) "N") :||. (Free 0 :>=. Integ 10)
+      let asm2 = (Free 0  :<-. (Constant . pack) "N") :||. (Free 0 :>=. Integ 10)
+      let mid = (Free 0  :<-. (Constant . pack) "N") :||. (Free 0 :>=. Integ 0)
       fakeConstM "N" ()
       fakePropM z1
       fakePropM z2
@@ -207,12 +217,12 @@ testprog = do
 
 theoremProg::(MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) => ProofGenTStd () [PredRuleDeBr] PropDeBr Text m ()
 theoremProg = do
-    let z1 = Forall (((Bound 0  :<-: (Constant . pack) "N") :&&: (Bound 0 :>=: Integ 10))  :->: (Bound 0 :>=: Integ 0))
-    let z2 = Forall (((Bound 0  :<-: (Constant . pack) "N") :&&: (Bound 0 :>=: Integ 0)) :->: (Bound 0 :==: Integ 0))
-    let generalizable = ((Free 0  :<-: (Constant . pack) "N") :&&: (Free 0 :>=: Integ 10)) :->: (Free 0 :==: Integ 0)
-    let asm = (Free 0  :<-: (Constant . pack) "N") :&&: (Free 0 :>=: Integ 10)
-    let asm2 = (Free 0  :<-: (Constant . pack) "N") :&&: (Free 0 :>=: Integ 10)
-    let mid = (Free 0  :<-: (Constant . pack) "N") :&&: (Free 0 :>=: Integ 0)
+    let z1 = Forall (((Bound 0  :<-. (Constant . pack) "N") :||. (Bound 0 :>=. Integ 10))  :->. (Bound 0 :>=. Integ 0))
+    let z2 = Forall (((Bound 0  :<-. (Constant . pack) "N") :||. (Bound 0 :>=. Integ 0)) :->. (Bound 0 :==. Integ 0))
+    let generalizable = ((Free 0  :<-. (Constant . pack) "N") :||. (Free 0 :>=. Integ 10)) :->. (Free 0 :==. Integ 0)
+    let asm = (Free 0  :<-. (Constant . pack) "N") :||. (Free 0 :>=. Integ 10)
+    let asm2 = (Free 0  :<-. (Constant . pack) "N") :||. (Free 0 :>=. Integ 10)
+    let mid = (Free 0  :<-. (Constant . pack) "N") :||. (Free 0 :>=. Integ 0)
     (generalized, _, ()) <- runProofByUGM () do
           (imp,_,()) <- runProofByAsmM asm2 do
               newFreeVar <- getTopFreeVar
