@@ -283,11 +283,11 @@ instance TypedSent  Text () DeBrSe PropDeBr where
 instance PL.LogicSent PropDeBr () where
   
   (.&&.) :: PropDeBr -> PropDeBr -> PropDeBr
-  (.&&.) = (:||.)
+  (.&&.) = (:&&.)
 
   parseAdj :: PropDeBr -> Maybe (PropDeBr, PropDeBr)
   parseAdj p = case p of
-                 (:||.) p1 p2 -> Just (p1,p2) 
+                 (:&&.) p1 p2 -> Just (p1,p2) 
                  _ -> Nothing
 
   (.->.) :: PropDeBr -> PropDeBr -> PropDeBr
@@ -359,7 +359,7 @@ objDeBrSub boundVarIdx boundvarOffsetThreshold obj t = case obj of
 propDeBrSub :: Int -> Int -> PropDeBr -> ObjDeBr -> PropDeBr
 propDeBrSub boundVarIdx boundvarOffsetThreshold prop t = case prop of
     Neg p -> Neg (propDeBrSub boundVarIdx boundvarOffsetThreshold p t)
-    (:&&.) p1 p2 ->  (:||.) (propDeBrSub boundVarIdx boundvarOffsetThreshold p1 t) (propDeBrSub boundVarIdx boundvarOffsetThreshold p2 t) 
+    (:&&.) p1 p2 ->  (:&&.) (propDeBrSub boundVarIdx boundvarOffsetThreshold p1 t) (propDeBrSub boundVarIdx boundvarOffsetThreshold p2 t) 
     (:||.) p1 p2 ->  (:||.) (propDeBrSub boundVarIdx boundvarOffsetThreshold p1 t) (propDeBrSub boundVarIdx boundvarOffsetThreshold p2 t) 
     (:->.) p1 p2 ->  (:->.) (propDeBrSub boundVarIdx boundvarOffsetThreshold p1 t) (propDeBrSub boundVarIdx boundvarOffsetThreshold p2 t)
     (:<->.) p1 p2 ->  (:<->.) (propDeBrSub boundVarIdx boundvarOffsetThreshold p1 t) (propDeBrSub boundVarIdx boundvarOffsetThreshold p2 t)
@@ -392,7 +392,7 @@ propDeBrApplyUG :: PropDeBr -> Int -> Int -> PropDeBr
 propDeBrApplyUG prop freevarIdx boundvarIdx =
     case prop of
         Neg p -> Neg (propDeBrApplyUG p freevarIdx boundvarIdx)
-        (:&&.) p1 p2 -> (:||.) (propDeBrApplyUG p1 freevarIdx boundvarIdx) (propDeBrApplyUG p2 freevarIdx boundvarIdx) 
+        (:&&.) p1 p2 -> (:&&.) (propDeBrApplyUG p1 freevarIdx boundvarIdx) (propDeBrApplyUG p2 freevarIdx boundvarIdx) 
         (:||.) p1 p2 -> (:||.) (propDeBrApplyUG p1 freevarIdx boundvarIdx) (propDeBrApplyUG p2 freevarIdx boundvarIdx)
         (:->.) p1 p2 -> (:->.) (propDeBrApplyUG p1 freevarIdx boundvarIdx) (propDeBrApplyUG p2 freevarIdx boundvarIdx)
         (:<->.) p1 p2 -> (:<->.) (propDeBrApplyUG p1 freevarIdx boundvarIdx) (propDeBrApplyUG p2 freevarIdx boundvarIdx)
