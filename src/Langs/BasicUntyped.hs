@@ -93,7 +93,7 @@ instance SubexpDeBr ObjDeBr where
         Constant c -> Atom c
         Hilbert p -> Binding "ε" (boundDepthPropDeBr p) (toSubexpParseTree p)
         Bound i -> Atom $ "𝑥" <> showIndexAsSubscript i
-        Free i -> Atom $ "𝑣" <> showIndexAsSubscript i
+        V i -> Atom $ "𝑣" <> showIndexAsSubscript i
         X i -> Atom $ "X" <> showIndexAsSubscript i     
 
 
@@ -178,7 +178,7 @@ data ObjDeBr where
       Constant :: Text -> ObjDeBr
       Hilbert :: PropDeBr -> ObjDeBr
       Bound :: Int -> ObjDeBr
-      Free :: Int ->ObjDeBr
+      V :: Int ->ObjDeBr
       X :: Int -> ObjDeBr
    deriving (Eq, Ord)
 
@@ -203,7 +203,7 @@ boundDepthObjDeBr obj = case obj of
      Constant name -> 0
      Hilbert prop -> boundDepthPropDeBr prop + 1
      Bound idx -> 0
-     Free idx -> 0
+     V idx -> 0
      X idx -> 0
 
 
@@ -223,7 +223,7 @@ checkSanityObjDeBr obj varStackHeight constSet boundSet = case obj of
             Nothing
         else
             (return . ObjDeBrBoundVarIdx) idx
-     Free idx ->
+     V idx ->
         if idx >= 0 && idx < varStackHeight then
             Nothing
         else
@@ -279,7 +279,7 @@ instance TypeableTerm ObjDeBr Text () DeBrSe where
      const2Term :: Text -> ObjDeBr
      const2Term = Constant
      free2Term :: Int -> ObjDeBr
-     free2Term = Free
+     free2Term = V
 
 
 instance TypedSent  Text () DeBrSe PropDeBr where
@@ -330,7 +330,7 @@ objDeBrBoundVarInside obj idx =
         Constant const -> False
         Hilbert p -> propDeBrBoundVarInside p idx
         Bound i -> idx == i
-        Free i -> False
+        V i -> False
 
 
 
@@ -358,7 +358,7 @@ objDeBrSub boundVarIdx boundvarOffsetThreshold obj t = case obj of
                  | idx >= boundvarOffsetThreshold -> Bound (idx + termDepth)
                  | idx < boundVarIdx -> Bound idx
 
-    Free idx -> Free idx
+    V idx -> V idx
   where
         termDepth = boundDepthObjDeBr t
         calcBVOThreshold p = if propDeBrBoundVarInside p boundVarIdx then
@@ -390,10 +390,10 @@ objDeBrApplyUG obj freevarIdx boundvarIdx =
         Constant name -> Constant name
         Hilbert p1 -> Hilbert (propDeBrApplyUG p1 freevarIdx boundvarIdx)
         Bound idx -> Bound idx
-        Free idx -> if idx == freevarIdx then
+        V idx -> if idx == freevarIdx then
                                Bound boundvarIdx
                            else
-                               Free idx 
+                               V idx 
 
 
 
@@ -630,7 +630,7 @@ xsubObjDeBr o idx depth = case o of
     Constant name -> Constant name
     Hilbert p -> Hilbert (xsubPropDeBr p idx depth)
     Bound i -> Bound i
-    Free i -> Free i
+    V i -> V i
     X i -> if i == idx then
                 Bound depth 
             else
@@ -675,7 +675,7 @@ data ObjConv where
     Const :: Text -> ObjConv
     Hx :: Int -> PropConv -> ObjConv
     Xold :: Int -> ObjConv
-    V :: Int -> ObjConv
+    VOld:: Int -> ObjConv
   deriving (Eq, Ord)
 
 
@@ -698,7 +698,7 @@ boundDepthObjConv objConv = case objConv of
     Const _ -> 0
     Hx _ p -> boundDepthPropConv p + 1
     Xold _ -> 0
-    V _ -> 0
+    VOld _ -> 0
 
 
 convertPropConvToPropDeBr :: Map Int Int -> PropConv -> PropDeBr
@@ -727,7 +727,7 @@ convertObjConvToObjDeBr ctx objConv = case objConv of
     Const t -> Constant t
     Hx idx p -> Hilbert (convertPropConvToPropDeBr (insert idx (boundDepthPropConv p) ctx) p)
     Xold i -> Bound (ctx!i)
-    V i -> Free i
+    VOld i -> V i
 
 class HumanToDeBruijn h d where
     c :: h -> d
