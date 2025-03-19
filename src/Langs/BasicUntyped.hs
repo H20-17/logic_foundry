@@ -11,7 +11,8 @@ module Langs.BasicUntyped (
     showPropDeBrStepsBase,
     ObjConv(..),
     PropConv(..),
-    HumanToDeBruijn(..)
+    HumanToDeBruijn(..),
+    eX, hX, aX
 ) where
 import Control.Monad ( unless )
 import Data.List (intersperse)
@@ -35,6 +36,8 @@ import Internal.StdPattern
 import Control.Exception (SomeException)
 import qualified RuleSets.Internal.PropLogic as PL
 import qualified RuleSets.Internal.PredLogic as PREDL
+import GHC.Conc (numCapabilities)
+import Distribution.TestSuite (TestInstance(name))
 
 
 data PropDeBr where
@@ -175,6 +178,7 @@ data ObjDeBr where
       Hilbert :: PropDeBr -> ObjDeBr
       Bound :: Int -> ObjDeBr
       Free :: Int ->ObjDeBr
+      X :: Int -> ObjDeBr
    deriving (Eq, Ord)
 
 
@@ -188,6 +192,7 @@ data DeBrSe where
     ObjDeBrSeConstNotDefd :: Text -> DeBrSe
     ObjDeBrBoundVarIdx :: Int -> DeBrSe
     ObjDeBrFreeVarIdx :: Int -> DeBrSe
+    ObjDeBrUnconsumedX :: Int -> DeBrSe
    deriving Show
 
 
@@ -198,6 +203,8 @@ boundDepthObjDeBr obj = case obj of
      Hilbert prop -> boundDepthPropDeBr prop + 1
      Bound idx -> 0
      Free idx -> 0
+     X idx -> 0
+
 
 
 checkSanityObjDeBr :: ObjDeBr -> Int -> Set Text -> Set Int -> Maybe DeBrSe
@@ -220,7 +227,8 @@ checkSanityObjDeBr obj varStackHeight constSet boundSet = case obj of
             Nothing
         else
             (return . ObjDeBrFreeVarIdx) idx
-
+     X idx -> return $ ObjDeBrUnconsumedX idx   
+ 
 
 
 boundDepthPropDeBr :: PropDeBr -> Int
@@ -601,6 +609,45 @@ showPropDeBrStepsBase :: [PrfStdStepPredDeBr] -> Text
 showPropDeBrStepsBase = showPropDeBrSteps [] [] 0 True
 
 
+xsubPropDeBr :: PropDeBr -> Int -> Int -> PropDeBr
+xsubPropDeBr p idx depth = case p of
+    Neg p -> Neg (xsubPropDeBr p idx depth)
+    (:&&.) p1 p2 -> (:&&.) (xsubPropDeBr p1 idx depth) (xsubPropDeBr p2 idx depth)
+    (:||.) p1 p2 -> (:||.) (xsubPropDeBr p1 idx depth) (xsubPropDeBr p2 idx depth)
+    (:->.) p1 p2 -> (:->.) (xsubPropDeBr p1 idx depth) (xsubPropDeBr p2 idx depth)
+    (:<->.) p1 p2 -> (:<->.) (xsubPropDeBr p1 idx depth) (xsubPropDeBr p2 idx depth)
+    (:==.) o1 o2 -> (:==.) (xsubObjDeBr o1 idx depth) (xsubObjDeBr o2 idx depth)
+    (:<-.) o1 o2 -> (:<-.) (xsubObjDeBr o1 idx depth) (xsubObjDeBr o2 idx depth)
+    Forall p -> Forall (xsubPropDeBr p idx depth)
+    Exists p -> Exists (xsubPropDeBr p idx depth)
+    (:>=.) o1 o2 -> (:>=.) (xsubObjDeBr o1 idx depth) (xsubObjDeBr o2 idx depth)
+
+
+xsubObjDeBr :: ObjDeBr -> Int -> Int -> ObjDeBr
+xsubObjDeBr o idx depth = case o of
+    Integ num -> Integ num
+    Constant name -> Constant name
+    Hilbert p -> Hilbert (xsubPropDeBr p idx depth)
+    Bound i -> Bound i
+    Free i -> Free i
+    X i -> if i == idx then
+                Bound depth 
+            else
+                X i
+
+
+
+
+eX :: Int -> PropDeBr -> PropDeBr
+eX idx p = Exists $ xsubPropDeBr p idx (boundDepthPropDeBr p)
+
+aX :: Int -> PropDeBr -> PropDeBr
+aX idx p = Forall $ xsubPropDeBr p idx (boundDepthPropDeBr p)
+
+hX :: Int -> PropDeBr -> ObjDeBr
+hX idx p = Hilbert (xsubPropDeBr p idx (boundDepthPropDeBr p))
+
+
 data PropConv where
     Not :: PropConv -> PropConv
     (:&&:) :: PropConv -> PropConv -> PropConv
@@ -626,7 +673,7 @@ data ObjConv where
     IntNum :: Int -> ObjConv
     Const :: Text -> ObjConv
     Hx :: Int -> PropConv -> ObjConv
-    X :: Int -> ObjConv
+    Xold :: Int -> ObjConv
     V :: Int -> ObjConv
   deriving (Eq, Ord)
 
@@ -649,7 +696,7 @@ boundDepthObjConv objConv = case objConv of
     IntNum _ -> 0
     Const _ -> 0
     Hx _ p -> boundDepthPropConv p + 1
-    X _ -> 0
+    Xold _ -> 0
     V _ -> 0
 
 
@@ -678,7 +725,7 @@ convertObjConvToObjDeBr ctx objConv = case objConv of
     IntNum i -> Integ i
     Const t -> Constant t
     Hx idx p -> Hilbert (convertPropConvToPropDeBr (insert idx (boundDepthPropConv p) ctx) p)
-    X i -> Bound (ctx!i)
+    Xold i -> Bound (ctx!i)
     V i -> Free i
 
 class HumanToDeBruijn h d where
