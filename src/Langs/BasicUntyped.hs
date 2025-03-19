@@ -93,7 +93,8 @@ instance SubexpDeBr ObjDeBr where
         Constant c -> Atom c
         Hilbert p -> Binding "ε" (boundDepthPropDeBr p) (toSubexpParseTree p)
         Bound i -> Atom $ "𝑥" <> showIndexAsSubscript i
-        Free i -> Atom $ "𝑣" <> showIndexAsSubscript i      
+        Free i -> Atom $ "𝑣" <> showIndexAsSubscript i
+        X i -> Atom $ "X" <> showIndexAsSubscript i     
 
 
 instance SubexpDeBr PropDeBr where
