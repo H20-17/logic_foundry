@@ -9,9 +9,6 @@ module Langs.BasicUntyped (
     PredErrDeBr,
     PredRuleDeBr,
     showPropDeBrStepsBase,
-    ObjConv(..),
-    PropConv(..),
-    HumanToDeBruijn(..),
     eX, hX, aX
 ) where
 import Control.Monad ( unless )
@@ -42,25 +39,25 @@ import Distribution.TestSuite (TestInstance(name))
 
 data PropDeBr where
       Neg :: PropDeBr -> PropDeBr
-      (:&&.)  :: PropDeBr -> PropDeBr -> PropDeBr
-      (:||.) :: PropDeBr -> PropDeBr -> PropDeBr
-      (:->.)  :: PropDeBr -> PropDeBr -> PropDeBr
-      (:<->.) :: PropDeBr -> PropDeBr -> PropDeBr
-      (:==.) :: ObjDeBr -> ObjDeBr -> PropDeBr
-      (:<-.) :: ObjDeBr -> ObjDeBr -> PropDeBr
+      (:&&:)  :: PropDeBr -> PropDeBr -> PropDeBr
+      (:||:) :: PropDeBr -> PropDeBr -> PropDeBr
+      (:->:)  :: PropDeBr -> PropDeBr -> PropDeBr
+      (:<->:) :: PropDeBr -> PropDeBr -> PropDeBr
+      (:==:) :: ObjDeBr -> ObjDeBr -> PropDeBr
+      (:<-:) :: ObjDeBr -> ObjDeBr -> PropDeBr
       Forall :: PropDeBr -> PropDeBr
       Exists :: PropDeBr -> PropDeBr
-      (:>=.) :: ObjDeBr -> ObjDeBr -> PropDeBr
+      (:>=:) :: ObjDeBr -> ObjDeBr -> PropDeBr
     deriving (Eq, Ord)
 
 
-infixr 3 :&&.
-infixr 2 :||.
-infixr 0 :->.
-infixr 0 :<->.
-infix  4 :==.
-infix  4 :<-.
-infix  4 :>=.
+infixr 3 :&&:
+infixr 2 :||:
+infixr 0 :->:
+infixr 0 :<->:
+infix  4 :==:
+infix  4 :<-:
+infix  4 :>=:
 
 data SubexpParseTree where
     BinaryOp :: Text -> SubexpParseTree -> SubexpParseTree -> SubexpParseTree
@@ -101,15 +98,15 @@ instance SubexpDeBr PropDeBr where
   toSubexpParseTree :: PropDeBr -> SubexpParseTree
   toSubexpParseTree p = case p of
     Neg q -> UnaryOp "¬" (toSubexpParseTree q)
-    (:&&.) a b -> BinaryOp "∧" (toSubexpParseTree a) (toSubexpParseTree b)
-    (:||.) a b -> BinaryOp "∨" (toSubexpParseTree a) (toSubexpParseTree b)
-    (:->.)  a b -> BinaryOp "→" (toSubexpParseTree a) (toSubexpParseTree b)
-    (:<->.) a b -> BinaryOp "↔"(toSubexpParseTree a) (toSubexpParseTree b)
-    (:==.) a b -> BinaryOp "=" (toSubexpParseTree a) (toSubexpParseTree b)
-    (:<-.) a b -> BinaryOp "∈" (toSubexpParseTree a) (toSubexpParseTree b)
+    (:&&:) a b -> BinaryOp "∧" (toSubexpParseTree a) (toSubexpParseTree b)
+    (:||:) a b -> BinaryOp "∨" (toSubexpParseTree a) (toSubexpParseTree b)
+    (:->:)  a b -> BinaryOp "→" (toSubexpParseTree a) (toSubexpParseTree b)
+    (:<->:) a b -> BinaryOp "↔"(toSubexpParseTree a) (toSubexpParseTree b)
+    (:==:) a b -> BinaryOp "=" (toSubexpParseTree a) (toSubexpParseTree b)
+    (:<-:) a b -> BinaryOp "∈" (toSubexpParseTree a) (toSubexpParseTree b)
     Forall a -> Binding "∀" (boundDepthPropDeBr a) (toSubexpParseTree a)
     Exists a -> Binding "∃" (boundDepthPropDeBr a) (toSubexpParseTree a)
-    (:>=.) a b -> BinaryOp "≥" (toSubexpParseTree a) (toSubexpParseTree b)
+    (:>=:) a b -> BinaryOp "≥" (toSubexpParseTree a) (toSubexpParseTree b)
 
 showSubexpParseTree :: SubexpParseTree -> Text
 showSubexpParseTree sub = case sub of
@@ -235,37 +232,37 @@ checkSanityObjDeBr obj varStackHeight constSet boundSet = case obj of
 boundDepthPropDeBr :: PropDeBr -> Int
 boundDepthPropDeBr p = case p of
     Neg p -> boundDepthPropDeBr p
-    (:&&.) p1 p2 -> max (boundDepthPropDeBr p1) (boundDepthPropDeBr p2)
-    (:||.) p1 p2 -> max (boundDepthPropDeBr p1) (boundDepthPropDeBr p2)
-    (:->.) p1 p2 -> max (boundDepthPropDeBr p1) (boundDepthPropDeBr p2)
-    (:<->.) p1 p2 -> max (boundDepthPropDeBr p1) (boundDepthPropDeBr p2)
-    (:<-.) o1 o2 -> max (boundDepthObjDeBr o1) (boundDepthObjDeBr o2)
-    (:==.) o1 o2 -> max (boundDepthObjDeBr o1) (boundDepthObjDeBr o2)
+    (:&&:) p1 p2 -> max (boundDepthPropDeBr p1) (boundDepthPropDeBr p2)
+    (:||:) p1 p2 -> max (boundDepthPropDeBr p1) (boundDepthPropDeBr p2)
+    (:->:) p1 p2 -> max (boundDepthPropDeBr p1) (boundDepthPropDeBr p2)
+    (:<->:) p1 p2 -> max (boundDepthPropDeBr p1) (boundDepthPropDeBr p2)
+    (:<-:) o1 o2 -> max (boundDepthObjDeBr o1) (boundDepthObjDeBr o2)
+    (:==:) o1 o2 -> max (boundDepthObjDeBr o1) (boundDepthObjDeBr o2)
     Forall p -> boundDepthPropDeBr p + 1
     Exists p -> boundDepthPropDeBr p + 1
-    (:>=.) o1 o2 -> max (boundDepthObjDeBr o1) (boundDepthObjDeBr o2)
+    (:>=:) o1 o2 -> max (boundDepthObjDeBr o1) (boundDepthObjDeBr o2)
 
 checkSanityPropDeBr :: PropDeBr -> Int -> Set Text -> Set Int -> Maybe DeBrSe
 checkSanityPropDeBr prop freevarStackHeight consts boundVars = 
       case prop of
         Neg p -> checkSanityPropDeBr p freevarStackHeight consts boundVars
-        (:&&.) p1 p2 -> checkSanityPropDeBr p1 freevarStackHeight consts boundVars
+        (:&&:) p1 p2 -> checkSanityPropDeBr p1 freevarStackHeight consts boundVars
                          <|> checkSanityPropDeBr p2 freevarStackHeight consts boundVars
-        (:||.) p1 p2 -> checkSanityPropDeBr p1 freevarStackHeight consts boundVars
+        (:||:) p1 p2 -> checkSanityPropDeBr p1 freevarStackHeight consts boundVars
                          <|> checkSanityPropDeBr p2 freevarStackHeight consts boundVars
-        (:->.)  p1 p2 -> checkSanityPropDeBr p1 freevarStackHeight consts boundVars
+        (:->:)  p1 p2 -> checkSanityPropDeBr p1 freevarStackHeight consts boundVars
                          <|> checkSanityPropDeBr p2 freevarStackHeight consts boundVars
-        (:<->.) p1 p2 -> checkSanityPropDeBr p1 freevarStackHeight consts boundVars
+        (:<->:) p1 p2 -> checkSanityPropDeBr p1 freevarStackHeight consts boundVars
                          <|> checkSanityPropDeBr p2 freevarStackHeight consts boundVars
-        (:<-.) o1 o2 -> checkSanityObjDeBr o1 freevarStackHeight consts boundVars
+        (:<-:) o1 o2 -> checkSanityObjDeBr o1 freevarStackHeight consts boundVars
                          <|> checkSanityObjDeBr o2 freevarStackHeight consts boundVars
-        (:==.) o1 o2 -> checkSanityObjDeBr o1 freevarStackHeight consts boundVars
+        (:==:) o1 o2 -> checkSanityObjDeBr o1 freevarStackHeight consts boundVars
                          <|> checkSanityObjDeBr o2 freevarStackHeight consts boundVars
         Forall prop -> checkSanityPropDeBr prop freevarStackHeight consts
                             (Set.insert (boundDepthPropDeBr prop) boundVars )
         Exists prop -> checkSanityPropDeBr prop freevarStackHeight consts
                             (Set.insert (boundDepthPropDeBr prop) boundVars )
-        (:>=.) o1 o2 -> checkSanityObjDeBr o1 freevarStackHeight consts boundVars
+        (:>=:) o1 o2 -> checkSanityObjDeBr o1 freevarStackHeight consts boundVars
                          <|> checkSanityObjDeBr o2 freevarStackHeight consts boundVars
 
 
@@ -292,19 +289,19 @@ instance TypedSent  Text () DeBrSe PropDeBr where
 instance PL.LogicSent PropDeBr () where
   
   (.&&.) :: PropDeBr -> PropDeBr -> PropDeBr
-  (.&&.) = (:&&.)
+  (.&&.) = (:&&:)
 
   parseAdj :: PropDeBr -> Maybe (PropDeBr, PropDeBr)
   parseAdj p = case p of
-                 (:&&.) p1 p2 -> Just (p1,p2) 
+                 (:&&:) p1 p2 -> Just (p1,p2) 
                  _ -> Nothing
 
   (.->.) :: PropDeBr -> PropDeBr -> PropDeBr
-  (.->.) = (:->.)
+  (.->.) = (:->:)
 
   parse_implication :: PropDeBr -> Maybe (PropDeBr, PropDeBr)
   parse_implication p = case p of
-                 (:->.) p1 p2 -> Just (p1,p2) 
+                 (:->:) p1 p2 -> Just (p1,p2) 
                  _ -> Nothing
 
 
@@ -317,10 +314,10 @@ instance PL.LogicSent PropDeBr () where
     _ -> Nothing
 
   (.||.) :: PropDeBr -> PropDeBr -> PropDeBr
-  (.||.) = (:||.)
+  (.||.) = (:||:)
   parseDis :: PropDeBr -> Maybe (PropDeBr, PropDeBr)
   parseDis p = case p of
-                 (:||.) p1 p2 -> Just(p1,p2)
+                 (:||:) p1 p2 -> Just(p1,p2)
                  _ -> Nothing
 
 objDeBrBoundVarInside :: ObjDeBr -> Int -> Bool
@@ -337,15 +334,15 @@ objDeBrBoundVarInside obj idx =
 propDeBrBoundVarInside :: PropDeBr -> Int -> Bool
 propDeBrBoundVarInside prop idx = case prop of
     Neg p -> propDeBrBoundVarInside p idx
-    (:&&.) p1 p2 -> propDeBrBoundVarInside p1 idx || propDeBrBoundVarInside p2 idx
-    (:||.) p1 p2 -> propDeBrBoundVarInside p1 idx || propDeBrBoundVarInside p2 idx
-    (:->.) p1 p2 -> propDeBrBoundVarInside p1 idx || propDeBrBoundVarInside p2 idx
-    (:<->.) p1 p2 -> propDeBrBoundVarInside p1 idx || propDeBrBoundVarInside p2 idx
-    (:==.) o1 o2 -> objDeBrBoundVarInside o1 idx || objDeBrBoundVarInside o2 idx
-    (:<-.) o1 o2 -> objDeBrBoundVarInside o1 idx || objDeBrBoundVarInside o2 idx
+    (:&&:) p1 p2 -> propDeBrBoundVarInside p1 idx || propDeBrBoundVarInside p2 idx
+    (:||:) p1 p2 -> propDeBrBoundVarInside p1 idx || propDeBrBoundVarInside p2 idx
+    (:->:) p1 p2 -> propDeBrBoundVarInside p1 idx || propDeBrBoundVarInside p2 idx
+    (:<->:) p1 p2 -> propDeBrBoundVarInside p1 idx || propDeBrBoundVarInside p2 idx
+    (:==:) o1 o2 -> objDeBrBoundVarInside o1 idx || objDeBrBoundVarInside o2 idx
+    (:<-:) o1 o2 -> objDeBrBoundVarInside o1 idx || objDeBrBoundVarInside o2 idx
     Forall p -> propDeBrBoundVarInside p idx
     Exists p -> propDeBrBoundVarInside p idx
-    (:>=.) o1 o2 -> objDeBrBoundVarInside o1 idx || objDeBrBoundVarInside o2 idx
+    (:>=:) o1 o2 -> objDeBrBoundVarInside o1 idx || objDeBrBoundVarInside o2 idx
 
 
 objDeBrSub :: Int -> Int -> ObjDeBr -> ObjDeBr -> ObjDeBr
@@ -368,15 +365,15 @@ objDeBrSub boundVarIdx boundvarOffsetThreshold obj t = case obj of
 propDeBrSub :: Int -> Int -> PropDeBr -> ObjDeBr -> PropDeBr
 propDeBrSub boundVarIdx boundvarOffsetThreshold prop t = case prop of
     Neg p -> Neg (propDeBrSub boundVarIdx boundvarOffsetThreshold p t)
-    (:&&.) p1 p2 ->  (:&&.) (propDeBrSub boundVarIdx boundvarOffsetThreshold p1 t) (propDeBrSub boundVarIdx boundvarOffsetThreshold p2 t) 
-    (:||.) p1 p2 ->  (:||.) (propDeBrSub boundVarIdx boundvarOffsetThreshold p1 t) (propDeBrSub boundVarIdx boundvarOffsetThreshold p2 t) 
-    (:->.) p1 p2 ->  (:->.) (propDeBrSub boundVarIdx boundvarOffsetThreshold p1 t) (propDeBrSub boundVarIdx boundvarOffsetThreshold p2 t)
-    (:<->.) p1 p2 ->  (:<->.) (propDeBrSub boundVarIdx boundvarOffsetThreshold p1 t) (propDeBrSub boundVarIdx boundvarOffsetThreshold p2 t)
-    (:==.) o1 o2 -> (:==.) (objDeBrSub boundVarIdx boundvarOffsetThreshold o1 t) (objDeBrSub boundVarIdx boundvarOffsetThreshold o2 t)   
-    (:<-.) o1 o2 -> (:<-.) (objDeBrSub boundVarIdx boundvarOffsetThreshold o1 t) (objDeBrSub boundVarIdx boundvarOffsetThreshold o2 t)  
+    (:&&:) p1 p2 ->  (:&&:) (propDeBrSub boundVarIdx boundvarOffsetThreshold p1 t) (propDeBrSub boundVarIdx boundvarOffsetThreshold p2 t) 
+    (:||:) p1 p2 ->  (:||:) (propDeBrSub boundVarIdx boundvarOffsetThreshold p1 t) (propDeBrSub boundVarIdx boundvarOffsetThreshold p2 t) 
+    (:->:) p1 p2 ->  (:->:) (propDeBrSub boundVarIdx boundvarOffsetThreshold p1 t) (propDeBrSub boundVarIdx boundvarOffsetThreshold p2 t)
+    (:<->:) p1 p2 ->  (:<->:) (propDeBrSub boundVarIdx boundvarOffsetThreshold p1 t) (propDeBrSub boundVarIdx boundvarOffsetThreshold p2 t)
+    (:==:) o1 o2 -> (:==:) (objDeBrSub boundVarIdx boundvarOffsetThreshold o1 t) (objDeBrSub boundVarIdx boundvarOffsetThreshold o2 t)   
+    (:<-:) o1 o2 -> (:<-:) (objDeBrSub boundVarIdx boundvarOffsetThreshold o1 t) (objDeBrSub boundVarIdx boundvarOffsetThreshold o2 t)  
     Forall p -> Forall (propDeBrSub boundVarIdx (calcBVOThreshold p) p t)
     Exists p -> Exists (propDeBrSub boundVarIdx (calcBVOThreshold p) p t)
-    (:>=.) o1 o2 -> (:>=.) (objDeBrSub boundVarIdx boundvarOffsetThreshold o1 t) (objDeBrSub boundVarIdx boundvarOffsetThreshold o2 t)
+    (:>=:) o1 o2 -> (:>=:) (objDeBrSub boundVarIdx boundvarOffsetThreshold o1 t) (objDeBrSub boundVarIdx boundvarOffsetThreshold o2 t)
   where
           calcBVOThreshold p = if propDeBrBoundVarInside p boundVarIdx then
                                       boundDepthPropDeBr p
@@ -401,15 +398,15 @@ propDeBrApplyUG :: PropDeBr -> Int -> Int -> PropDeBr
 propDeBrApplyUG prop freevarIdx boundvarIdx =
     case prop of
         Neg p -> Neg (propDeBrApplyUG p freevarIdx boundvarIdx)
-        (:&&.) p1 p2 -> (:&&.) (propDeBrApplyUG p1 freevarIdx boundvarIdx) (propDeBrApplyUG p2 freevarIdx boundvarIdx) 
-        (:||.) p1 p2 -> (:||.) (propDeBrApplyUG p1 freevarIdx boundvarIdx) (propDeBrApplyUG p2 freevarIdx boundvarIdx)
-        (:->.) p1 p2 -> (:->.) (propDeBrApplyUG p1 freevarIdx boundvarIdx) (propDeBrApplyUG p2 freevarIdx boundvarIdx)
-        (:<->.) p1 p2 -> (:<->.) (propDeBrApplyUG p1 freevarIdx boundvarIdx) (propDeBrApplyUG p2 freevarIdx boundvarIdx)
-        (:==.) o1 o2 -> (:==.) (objDeBrApplyUG o1 freevarIdx boundvarIdx) (objDeBrApplyUG o2 freevarIdx boundvarIdx)
-        (:<-.) o1 o2 -> (:<-.) (objDeBrApplyUG o1 freevarIdx boundvarIdx) (objDeBrApplyUG o2 freevarIdx boundvarIdx)
+        (:&&:) p1 p2 -> (:&&:) (propDeBrApplyUG p1 freevarIdx boundvarIdx) (propDeBrApplyUG p2 freevarIdx boundvarIdx) 
+        (:||:) p1 p2 -> (:||:) (propDeBrApplyUG p1 freevarIdx boundvarIdx) (propDeBrApplyUG p2 freevarIdx boundvarIdx)
+        (:->:) p1 p2 -> (:->:) (propDeBrApplyUG p1 freevarIdx boundvarIdx) (propDeBrApplyUG p2 freevarIdx boundvarIdx)
+        (:<->:) p1 p2 -> (:<->:) (propDeBrApplyUG p1 freevarIdx boundvarIdx) (propDeBrApplyUG p2 freevarIdx boundvarIdx)
+        (:==:) o1 o2 -> (:==:) (objDeBrApplyUG o1 freevarIdx boundvarIdx) (objDeBrApplyUG o2 freevarIdx boundvarIdx)
+        (:<-:) o1 o2 -> (:<-:) (objDeBrApplyUG o1 freevarIdx boundvarIdx) (objDeBrApplyUG o2 freevarIdx boundvarIdx)
         Forall p -> Forall (propDeBrApplyUG p freevarIdx boundvarIdx)
         Exists p -> Exists (propDeBrApplyUG p freevarIdx boundvarIdx)
-        (:>=.) o1 o2 -> (:>=.) (objDeBrApplyUG o1 freevarIdx boundvarIdx) (objDeBrApplyUG o2 freevarIdx boundvarIdx)
+        (:>=:) o1 o2 -> (:>=:) (objDeBrApplyUG o1 freevarIdx boundvarIdx) (objDeBrApplyUG o2 freevarIdx boundvarIdx)
 
 
 boundExpToFunc :: PropDeBr -> ObjDeBr -> PropDeBr
@@ -613,15 +610,15 @@ showPropDeBrStepsBase = showPropDeBrSteps [] [] 0 True
 xsubPropDeBr :: PropDeBr -> Int -> Int -> PropDeBr
 xsubPropDeBr p idx depth = case p of
     Neg p -> Neg (xsubPropDeBr p idx depth)
-    (:&&.) p1 p2 -> (:&&.) (xsubPropDeBr p1 idx depth) (xsubPropDeBr p2 idx depth)
-    (:||.) p1 p2 -> (:||.) (xsubPropDeBr p1 idx depth) (xsubPropDeBr p2 idx depth)
-    (:->.) p1 p2 -> (:->.) (xsubPropDeBr p1 idx depth) (xsubPropDeBr p2 idx depth)
-    (:<->.) p1 p2 -> (:<->.) (xsubPropDeBr p1 idx depth) (xsubPropDeBr p2 idx depth)
-    (:==.) o1 o2 -> (:==.) (xsubObjDeBr o1 idx depth) (xsubObjDeBr o2 idx depth)
-    (:<-.) o1 o2 -> (:<-.) (xsubObjDeBr o1 idx depth) (xsubObjDeBr o2 idx depth)
+    (:&&:) p1 p2 -> (:&&:) (xsubPropDeBr p1 idx depth) (xsubPropDeBr p2 idx depth)
+    (:||:) p1 p2 -> (:||:) (xsubPropDeBr p1 idx depth) (xsubPropDeBr p2 idx depth)
+    (:->:) p1 p2 -> (:->:) (xsubPropDeBr p1 idx depth) (xsubPropDeBr p2 idx depth)
+    (:<->:) p1 p2 -> (:<->:) (xsubPropDeBr p1 idx depth) (xsubPropDeBr p2 idx depth)
+    (:==:) o1 o2 -> (:==:) (xsubObjDeBr o1 idx depth) (xsubObjDeBr o2 idx depth)
+    (:<-:) o1 o2 -> (:<-:) (xsubObjDeBr o1 idx depth) (xsubObjDeBr o2 idx depth)
     Forall p -> Forall (xsubPropDeBr p idx depth)
     Exists p -> Exists (xsubPropDeBr p idx depth)
-    (:>=.) o1 o2 -> (:>=.) (xsubObjDeBr o1 idx depth) (xsubObjDeBr o2 idx depth)
+    (:>=:) o1 o2 -> (:>=:) (xsubObjDeBr o1 idx depth) (xsubObjDeBr o2 idx depth)
 
 
 xsubObjDeBr :: ObjDeBr -> Int -> Int -> ObjDeBr
@@ -649,94 +646,10 @@ hX :: Int -> PropDeBr -> ObjDeBr
 hX idx p = Hilbert (xsubPropDeBr p idx (boundDepthPropDeBr p))
 
 
-data PropConv where
-    Not :: PropConv -> PropConv
-    (:&&:) :: PropConv -> PropConv -> PropConv
-    (:||:) :: PropConv -> PropConv -> PropConv
-    (:->:) :: PropConv -> PropConv -> PropConv
-    (:<->:) :: PropConv -> PropConv -> PropConv
-    (:==:) :: ObjConv -> ObjConv -> PropConv
-    (:<-:) :: ObjConv -> ObjConv -> PropConv
-    Ax :: Int -> PropConv -> PropConv
-    Ex :: Int -> PropConv -> PropConv
-    (:>=:) :: ObjConv -> ObjConv -> PropConv
-  deriving (Eq, Ord)
 
-infixr 3 :&&:
-infixr 2 :||:
-infixr 0 :->:
-infixr 0 :<->:
-infix  4 :==:
-infix  4 :<-:
-infix  4 :>=:
  
-data ObjConv where
-    IntNum :: Int -> ObjConv
-    Const :: Text -> ObjConv
-    Hx :: Int -> PropConv -> ObjConv
-    Xold :: Int -> ObjConv
-    VOld:: Int -> ObjConv
-  deriving (Eq, Ord)
 
 
-boundDepthPropConv :: PropConv -> Int
-boundDepthPropConv propConv = case propConv of
-    Not p -> boundDepthPropConv p
-    (:&&:) p1 p2 -> max (boundDepthPropConv p1) (boundDepthPropConv p2)
-    (:||:) p1 p2 -> max (boundDepthPropConv p1) (boundDepthPropConv p2)
-    (:->:) p1 p2 -> max (boundDepthPropConv p1) (boundDepthPropConv p2)
-    (:<->:) p1 p2 -> max (boundDepthPropConv p1) (boundDepthPropConv p2)
-    (:==:) o1 o2 -> max (boundDepthObjConv o1) (boundDepthObjConv o2)
-    (:<-:) o1 o2 -> max (boundDepthObjConv o1) (boundDepthObjConv o2)
-    Ax _ p -> boundDepthPropConv p + 1
-    Ex _ p -> boundDepthPropConv p + 1
-    (:>=:) o1 o2 -> max (boundDepthObjConv o1) (boundDepthObjConv o2)
-
-boundDepthObjConv :: ObjConv -> Int
-boundDepthObjConv objConv = case objConv of
-    IntNum _ -> 0
-    Const _ -> 0
-    Hx _ p -> boundDepthPropConv p + 1
-    Xold _ -> 0
-    VOld _ -> 0
 
 
-convertPropConvToPropDeBr :: Map Int Int -> PropConv -> PropDeBr
-convertPropConvToPropDeBr ctx propConv = case propConv of
-    Not p -> Neg (convertPropConvToPropDeBr ctx p)
-    (:&&:) p1 p2 -> (:&&.) (convertPropConvToPropDeBr ctx p1) 
-                          (convertPropConvToPropDeBr ctx p2)
-    (:||:) p1 p2 -> (:||.) (convertPropConvToPropDeBr ctx p1) 
-                          (convertPropConvToPropDeBr ctx p2)
-    (:->:) p1 p2 -> (:->.) (convertPropConvToPropDeBr ctx p1) 
-                               (convertPropConvToPropDeBr ctx p2)
-    (:<->:) p1 p2 -> (:<->.) (convertPropConvToPropDeBr ctx p1) 
-                          (convertPropConvToPropDeBr ctx p2)
-    (:==:) o1 o2 -> (:==.) (convertObjConvToObjDeBr ctx o1) 
-                               (convertObjConvToObjDeBr ctx o2)
-    (:<-:) o1 o2 -> (:<-.) (convertObjConvToObjDeBr ctx o1) 
-                               (convertObjConvToObjDeBr ctx o2)
-    Ax idx p -> Forall (convertPropConvToPropDeBr (insert idx (boundDepthPropConv p) ctx) p)
-    Ex idx p -> Exists (convertPropConvToPropDeBr (insert idx (boundDepthPropConv p) ctx) p)
-    (:>=:) o1 o2 -> (:>=.) (convertObjConvToObjDeBr ctx o1) 
-                 (convertObjConvToObjDeBr ctx o2)
 
-convertObjConvToObjDeBr :: Map Int Int -> ObjConv -> ObjDeBr
-convertObjConvToObjDeBr ctx objConv = case objConv of
-    IntNum i -> Integ i
-    Const t -> Constant t
-    Hx idx p -> Hilbert (convertPropConvToPropDeBr (insert idx (boundDepthPropConv p) ctx) p)
-    Xold i -> Bound (ctx!i)
-    VOld i -> V i
-
-class HumanToDeBruijn h d where
-    c :: h -> d
-
-
-instance HumanToDeBruijn PropConv PropDeBr where
-  c :: PropConv->PropDeBr
-  c orig = convertPropConvToPropDeBr mempty orig
-
-instance HumanToDeBruijn ObjConv ObjDeBr where
-    c :: ObjConv -> ObjDeBr
-    c orig = convertObjConvToObjDeBr mempty orig

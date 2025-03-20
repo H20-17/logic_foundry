@@ -57,28 +57,28 @@ import Langs.BasicUntyped
 testTheoremMSchema :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) => TheoremSchemaMT () [PredRuleDeBr] PropDeBr Text m ()
 testTheoremMSchema = TheoremSchemaMT  [("N",())] [z1,z2] theoremProg 
   where
-    z1 = aX 99 ((X 99 :<-. Constant "N") :&&. (X 99 :>=. Integ 10) :->. (X 99 :>=. Integ 0))
-    z2 = aX 0 ((X 0 :<-. Constant "N") :&&. (X 0 :>=. Integ 0) :->. (X 0 :==. Integ 0))
+    z1 = aX 99 ((X 99 :<-: Constant "N") :&&: (X 99 :>=: Integ 10) :->: (X 99 :>=: Integ 0))
+    z2 = aX 0 ((X 0 :<-: Constant "N") :&&: (X 0 :>=: Integ 0) :->: (X 0 :==: Integ 0))
 
 main :: IO ()
 main = do
-    let y0 = (Integ 0 :==. Integ 0) :->. (Integ 99 :==. Integ 99)
-    let y1 = Integ 0 :==. Integ 0
-    let y2 = (Integ 99 :==. Integ 99) :->. (Integ 1001 :==. Integ 1001)
-    let x0 = eX 0 (aX 0 ((Integ 0 :==. V 102) :&&. (X 0 :<-. X 1)) :&&. (X 1 :<-. X 1))
-    let x1 = aX 3 (aX 2 (aX 1 ((X 3 :==. X 2) :&&. aX 0 (X 0 :==. X 1))))
+    let y0 = (Integ 0 :==: Integ 0) :->: (Integ 99 :==: Integ 99)
+    let y1 = Integ 0 :==: Integ 0
+    let y2 = (Integ 99 :==: Integ 99) :->: (Integ 1001 :==: Integ 1001)
+    let x0 = eX 0 (aX 0 ((Integ 0 :==: V 102) :&&: (X 0 :<-: X 1)) :&&: (X 1 :<-: X 1))
+    let x1 = aX 3 (aX 2 (aX 1 ((X 3 :==: X 2) :&&: aX 0 (X 0 :==: X 1))))
     (print . show) (checkSanity [(),()] x0 mempty)
     print "X1" 
 
     (putStrLn . show) x1
-    let xv = aX 10 (aX 21 (aX 1 (X 10 :==. X 21 :&&. aX 0 (X 0 :==. X 1))))
+    let xv = aX 10 (aX 21 (aX 1 (X 10 :==: X 21 :&&: aX 0 (X 0 :==: X 1))))
     -- ∀𝑥₃(∀𝑥₂(∀𝑥₁(𝑥₃ = 𝑥₂ ∨ ∀𝑥₀(𝑥₀ = 𝑥₁))))
     let cxv = xv
     (putStrLn . show) cxv
     let f = parseForall x1
     case f of
         Just (f,()) -> do
-            let term1 = Hilbert (Integ 0 :<-. Integ 0)
+            let term1 = Hilbert (Integ 0 :<-: Integ 0)
             let fNew = f term1
             (print.show) fNew
         Nothing -> print "parse failed!"
@@ -89,18 +89,18 @@ main = do
                 <> fakeProp y2
                 <> mp y0
                 <> mp y2
-                <> proofByAsm y1 (Integ 99 :==. Integ 99) (mp $ y1 .->. (Integ 99 :==. Integ 99))
+                <> proofByAsm y1 (Integ 99 :==: Integ 99) (mp $ y1 .->. (Integ 99 :==: Integ 99))
                 )
                   ::[PropRuleDeBr]
     let zb = runProof proof
 
     -- either (putStrLn . show) (putStrLn . unpack . showPropDeBrStepsBase . snd) zb
     print "OI leave me alone"
-    let z1 = aX 0 ((X 0 :<-. Constant "N") :&&. (X 0 :>=. Integ 10) :->. (X 0 :>=. Integ 0))
-    let z2 = aX 0 ((X 0 :<-. Constant "N") :&&. (X 0 :>=. Integ 0) :->. (X 0 :==. Integ 0))
-    let generalized = aX 0 ((X 0 :<-. Constant "N") :&&. (X 0 :>=. Integ 10) :->. (X 0 :==. Integ 0))
-    let asm = (V 0 :<-. Constant "N") :&&. (V 0 :>=. Integ 10)
-    let mid = (V 0 :<-. Constant "N") :&&. (V 0 :>=. Integ 0)
+    let z1 = aX 0 ((X 0 :<-: Constant "N") :&&: (X 0 :>=: Integ 10) :->: (X 0 :>=: Integ 0))
+    let z2 = aX 0 ((X 0 :<-: Constant "N") :&&: (X 0 :>=: Integ 0) :->: (X 0 :==: Integ 0))
+    let generalized = aX 0 ((X 0 :<-: Constant "N") :&&: (X 0 :>=: Integ 10) :->: (X 0 :==: Integ 0))
+    let asm = (V 0 :<-: Constant "N") :&&: (V 0 :>=: Integ 10)
+    let mid = (V 0 :<-: Constant "N") :&&: (V 0 :>=: Integ 0)
 
     let proof2 =    fakeConst "N" ()
                  <> fakeProp z1
@@ -109,11 +109,11 @@ main = do
                                         (
                                             proofByAsm asm z1 (
                                                     ui (V 0) z1
-                                                <> mp ( asm .->. (V 0 :>=. Integ 0))
-                                                <> simpL ((V 0 :<-. Constant "N") :&&. (V 0 :>=. Integ 10))
-                                                <> adj (V 0 :<-. Constant "N") (V 0 :>=. Integ 0)
+                                                <> mp ( asm .->. (V 0 :>=: Integ 0))
+                                                <> simpL ((V 0 :<-: Constant "N") :&&: (V 0 :>=: Integ 10))
+                                                <> adj (V 0 :<-: Constant "N") (V 0 :>=: Integ 0)
                                                 <> ui (V 0) z2
-                                                <> mp ( mid .->. (V 0 :==. Integ 0)  )
+                                                <> mp ( mid .->. (V 0 :==: Integ 0)  )
                                             )  
                                         )
                                     ::[PredRuleDeBr]
@@ -122,7 +122,7 @@ main = do
                                      (
                                         proofByAsm asm z1 (
                                                 ui (V 0) z1
-                                             <> mp ( asm .->. (V 0 :>=. Integ 0))
+                                             <> mp ( asm .->. (V 0 :>=: Integ 0))
                                       
                                             )
                                      )
@@ -147,10 +147,11 @@ main = do
 
 testprog::ProofGenTStd () [PredRuleDeBr] PropDeBr Text IO ()
 testprog = do
-      let z1 = aX 0 ((X 0 :<-. Constant "N") :&&. (X 0 :>=. Integ 10) :->. (X 0 :>=. Integ 0))
-      let z2 = aX 0 ((X 0 :<-. Constant "N") :&&. (X 0 :>=. Integ 0) :->. (X 0 :==. Integ 0))
-      let asm = (V 0 :<-. Constant "N") :&&. (V 0 :>=. Integ 10)
-      let asm2 = (V 0 :<-. Constant "N") :&&. (V 0 :>=. Integ 10)
+      let z1 = aX 0 ((X 0 :<-: Constant "N") :&&: (X 0 :>=: Integ 10) :->: (X 0 :>=: Integ 0))
+      remarkM $ ((pack . show) z1)<> " Z1Z1Z1Z1" 
+      let z2 = aX 0 ((X 0 :<-: Constant "N") :&&: (X 0 :>=: Integ 0) :->: (X 0 :==: Integ 0))
+      let asm = (V 0 :<-: Constant "N") :&&: (V 0 :>=: Integ 10)
+      let asm2 = (V 0 :<-: Constant "N") :&&: (V 0 :>=: Integ 10)
       fakeConstM "N" ()
       fakePropM z1
       fakePropM z2
@@ -176,10 +177,10 @@ testprog = do
 
 theoremProg::(MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) => ProofGenTStd () [PredRuleDeBr] PropDeBr Text m ()
 theoremProg = do
-    let z1 = aX 0 ((X 0 :<-. Constant "N") :&&. (X 0 :>=. Integ 10) :->. (X 0 :>=. Integ 0))
-    let z2 = aX 0 ((X 0 :<-. Constant "N") :&&. (X 0 :>=. Integ 0) :->. (X 0 :==. Integ  0))
-    let asm = (V 0 :<-. Constant "N") :&&. (V 0 :>=. Integ 10)
-    let asm2 = (V 0 :<-. Constant "N") :&&. (V 0 :>=. Integ 10)
+    let z1 = aX 0 ((X 0 :<-: Constant "N") :&&: (X 0 :>=: Integ 10) :->: (X 0 :>=: Integ 0))
+    let z2 = aX 0 ((X 0 :<-: Constant "N") :&&: (X 0 :>=: Integ 0) :->: (X 0 :==: Integ  0))
+    let asm = (V 0 :<-: Constant "N") :&&: (V 0 :>=: Integ 10)
+    let asm2 = (V 0 :<-: Constant "N") :&&: (V 0 :>=: Integ 10)
     (generalized, _, ()) <- runProofByUGM () do
           (imp,_,()) <- runProofByAsmM asm2 do
               newFreeVar <- getTopFreeVar
