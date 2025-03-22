@@ -326,8 +326,8 @@ instance PL.LogicSent PropDeBr () where
 
   (.||.) :: PropDeBr -> PropDeBr -> PropDeBr
   (.||.) = (:||:)
-  parseDis :: PropDeBr -> Maybe (PropDeBr, PropDeBr)
-  parseDis p = case p of
+  parseDisj :: PropDeBr -> Maybe (PropDeBr, PropDeBr)
+  parseDisj p = case p of
                  (:||:) p1 p2 -> Just(p1,p2)
                  _ -> Nothing
   false :: PropDeBr

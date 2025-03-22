@@ -76,6 +76,18 @@ data LogicError s sE o tType where
     LogicErrContraNotProven :: s -> LogicError s sE o tType
     LogicErrAbsurdityNotProven :: s -> LogicError s sE o tType
     LogicErrConseqNotFalse :: s -> LogicError s sE o tType
+    LogicErrDisjIntroLRightNotSane :: s -> sE -> LogicError s sE o tType
+    LogicErrDisjIntroLLeftNotProven :: s -> LogicError s sE o tType
+    LogicErrDisjIntroRLeftNotSane :: s -> sE -> LogicError s sE o tType
+    LogicErrDisjIntroRRightNotProven :: s -> LogicError s sE o tType
+    LogicErrDisjElimPMismatch :: s -> s-> LogicError s sE o tType
+    LogicErrDisjElimQMismatch :: s -> s-> LogicError s sE o tType
+    LogicErrDisjElimRNotProven :: s -> LogicError s sE o tType
+    LogicErrDisjElimDisjNotProven :: s -> LogicError s sE o tType
+    LogicErrDisjElimPImpRNotProven :: s -> LogicError s sE o tType
+    LogicErrDisjElimQImpRNotProven :: s -> LogicError s sE o tType
+    LogicErrSentenceNotDisj :: s -> LogicError s sE o tType
+    LogicErrDisjElimRMismatch :: s -> s -> LogicError s sE o tType
     deriving(Show)
 
 data LogicRule tType s sE o where
@@ -89,7 +101,9 @@ data LogicRule tType s sE o where
     Adj :: s -> s -> LogicRule tType s sE o
     ContraF:: s -> LogicRule tType s sE o
     Absurd :: s -> LogicRule tType s sE o
-
+    DisjIntroL :: s -> s -> LogicRule tType s sE o
+    DisjIntroR :: s -> s -> LogicRule tType s sE o
+    DisjElim :: s -> s -> s -> LogicRule tType s sE o
     deriving(Show)
 
 
@@ -145,10 +159,49 @@ runProofAtomic rule context state =
             let negation = neg antecedant
             return (Just negation , Nothing, PrfStdStepStep negation "ABSURD" [idx])
 
+        DisjIntroL a b -> do
+            leftIndex <- maybe ((throwError . LogicErrDisjIntroLLeftNotProven) a) return (Data.Map.lookup a (provenSents state))
+            maybe (return ())   (throwError . LogicErrDisjIntroLRightNotSane b) (checkSanity (freeVarTypeStack context) b (fmap fst (consts state)))
+            let aOrB = a .||. b
+            return (Just aOrB, Nothing, PrfStdStepStep aOrB "DISJ_INTRO_L" [leftIndex])
+        DisjIntroR a b -> do
+            rightIndex <- maybe ((throwError . LogicErrDisjIntroRRightNotProven) b) return (Data.Map.lookup b (provenSents state))
+            maybe (return ())   (throwError . LogicErrDisjIntroRLeftNotSane a) (checkSanity (freeVarTypeStack context) a (fmap fst (consts state)))
+            let aOrB = a .||. b
+            return (Just aOrB, Nothing, PrfStdStepStep aOrB "DISJ_INTRO_R" [rightIndex])
 
+        DisjElim disj pImpR qImpR -> do
+            -- Ensure disjunction (P ∨ Q) is proven
+            disjIndex <- maybe (throwError $ LogicErrDisjElimDisjNotProven disj) 
+                        return 
+                        (Data.Map.lookup disj (provenSents state))
 
+            -- Ensure both implications (P → R and Q → R) are proven
+            pImpRIndex <- maybe (throwError $ LogicErrDisjElimPImpRNotProven pImpR) 
+                         return 
+                         (Data.Map.lookup pImpR (provenSents state))
 
+            qImpRIndex <- maybe (throwError $ LogicErrDisjElimQImpRNotProven qImpR) 
+                         return 
+                         (Data.Map.lookup qImpR (provenSents state))
 
+            -- Parse the disjunction (P ∨ Q) and implications
+            (p, q) <- maybe (throwError $ LogicErrSentenceNotDisj disj) return (parseDisj disj)
+            (pAnte, r1) <- maybe (throwError $ LogicErrSentenceNotImp pImpR) return (parse_implication pImpR)
+            (qAnte, r2) <- maybe (throwError $ LogicErrSentenceNotImp qImpR) return (parse_implication qImpR)
+
+            -- Ensure P matches the antecedent of P → R
+            unless (p == pAnte) (throwError $ LogicErrDisjElimPMismatch p pAnte)
+
+            -- Ensure Q matches the antecedent of Q → R
+            unless (q == qAnte) (throwError $ LogicErrDisjElimQMismatch q qAnte)
+
+            -- Ensure both implications lead to the same conclusion R
+            unless (r1 == r2) (throwError $ LogicErrDisjElimRMismatch r1 r2)
+
+            -- Conclusion: R
+            let result = r1
+            return (Just result, Nothing, PrfStdStepStep result "DISJ_ELIM" [disjIndex, pImpRIndex, qImpRIndex])
 
 
 
@@ -398,7 +451,7 @@ class (Ord s, Eq tType)
      neg :: s -> s
      parseNeg :: s -> Maybe s
      (.||.) :: s -> s -> s
-     parseDis :: s -> Maybe (s,s)
+     parseDisj :: s -> Maybe (s,s)
      false :: s
 
 
