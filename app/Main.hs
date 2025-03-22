@@ -166,7 +166,6 @@ testprog = do
                  (s3,_) <- adjM natAsm s2
                  (s4,_) <- uiM newFreeVar z2
                  (s5,idx) <- mpM s4
-                 (lift . print) "what happened?"
                  return ()
 --              runTheoremM (\schm -> [PredProofTheorem schm]) testTheoremMSchema
               return ()
