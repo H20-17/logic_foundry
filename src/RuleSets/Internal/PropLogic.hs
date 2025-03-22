@@ -85,7 +85,7 @@ data LogicRule tType s sE o where
     ProofBySubArg :: ProofBySubArgSchema s [LogicRule tType s sE o]-> LogicRule tType s sE o
     ExclMid :: s -> LogicRule tType s sE o
     SimpL :: s -> LogicRule tType s sE o
-    SimpR :: s -> s ->  LogicRule tType s sE o
+    SimpR :: s -> LogicRule tType s sE o
     Adj :: s -> s -> LogicRule tType s sE o
     ContraF:: s -> LogicRule tType s sE o
     Absurd :: s -> LogicRule tType s sE o
@@ -122,6 +122,10 @@ runProofAtomic rule context state =
             (a,b) <- maybe ((throwError . LogicErrSentenceNotAdj) aAndB) return (parseAdj aAndB)
             aAndBIndex <- maybe ((throwError . LogicErrSimpLAdjNotProven) aAndB) return (Data.Map.lookup aAndB (provenSents state))
             return (Just a, Nothing, PrfStdStepStep a "SIMP_L" [aAndBIndex])
+        SimpR aAndB -> do
+            (a,b) <- maybe ((throwError . LogicErrSentenceNotAdj) aAndB) return (parseAdj aAndB)
+            aAndBIndex <- maybe ((throwError . LogicErrSimpLAdjNotProven) aAndB) return (Data.Map.lookup aAndB (provenSents state))
+            return (Just b, Nothing, PrfStdStepStep a "SIMP_R" [aAndBIndex])
         Adj a b -> do
             leftIndex <- maybe ((throwError . LogicErrAdjLeftNotProven) a) return (Data.Map.lookup a (provenSents state))
             rightIndex <- maybe ((throwError . LogicErrAdjRightNotProven) b) return (Data.Map.lookup b (provenSents state))
