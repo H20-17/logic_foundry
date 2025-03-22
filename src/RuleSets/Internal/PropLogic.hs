@@ -3,7 +3,7 @@ module RuleSets.Internal.PropLogic
     LogicError, LogicRule(..), runProofAtomic, mpM, simpLM, adjM, 
     LogicRuleClass(..), SubproofRule(..),
     ProofByAsmSchema(..), SubproofError, runProofByAsm, runProofByAsmM, LogicSent(..),
-    SubproofMException(..)
+    SubproofMException(..), contraFM, absurdM
 ) where
 
 import Data.Monoid ( Last(..) )
@@ -57,7 +57,6 @@ import RuleSets.Internal.BaseLogic hiding
 import qualified RuleSets.Internal.BaseLogic as REM
 
 
-
 data LogicError s sE o tType where
     LogicErrMPImplNotProven :: s-> LogicError s sE o tType
     LogicErrMPAnteNotProven :: s-> LogicError s sE o tType
@@ -72,8 +71,9 @@ data LogicError s sE o tType where
     LogicErrRepOriginNotProven :: s -> LogicError s sE o tType
     LogicErrFakeSanityErr :: s -> sE -> LogicError s sE o tType
     LogicErrBasic :: REM.LogicError s sE o -> LogicError s sE o tType
+    LogicErrContraNotProven :: s -> LogicError s sE o tType
+    LogicErrAbsurdityNotProven :: s -> LogicError s sE o tType
     deriving(Show)
-
 
 data LogicRule tType s sE o where
     BaseRule :: REM.LogicRule tType s sE o -> LogicRule tType s sE o
@@ -84,6 +84,9 @@ data LogicRule tType s sE o where
     SimpL :: s -> LogicRule tType s sE o
     SimpR :: s -> s ->  LogicRule tType s sE o
     Adj :: s -> s -> LogicRule tType s sE o
+    ContraF:: s -> LogicRule tType s sE o
+    Absurd :: s -> LogicRule tType s sE o
+
     deriving(Show)
 
 
@@ -95,6 +98,8 @@ runProofAtomic :: (ProofStd s (LogicError s sE o tType) [LogicRule tType s sE o]
                                       -> Either (LogicError s sE o tType) (Maybe s,Maybe (o,tType),PrfStdStep s o tType)
 runProofAtomic rule context state = 
       case rule of
+        BaseRule r -> do
+            either (throwError . LogicErrBasic) return (REM.runProofAtomic r context state)
         MP implication -> do
              (antecedant, conseq) <- maybe ((throwError . LogicErrSentenceNotImp) implication) return (parse_implication implication)
              impIndex <- maybe ((throwError . LogicErrMPImplNotProven) implication) return (Data.Map.lookup implication (provenSents state))
@@ -119,8 +124,17 @@ runProofAtomic rule context state =
             rightIndex <- maybe ((throwError . LogicErrAdjRightNotProven) b) return (Data.Map.lookup b (provenSents state))
             let aAndB = a .&&. b
             return (Just aAndB, Nothing, PrfStdStepStep aAndB "ADJ" [leftIndex,rightIndex])
-        BaseRule r -> do
-            either (throwError . LogicErrBasic) return (REM.runProofAtomic r context state)
+        ContraF p -> do
+            let pAndNotP = p .&&. neg p
+            idx <- maybe ((throwError . LogicErrContraNotProven) pAndNotP) return (Data.Map.lookup pAndNotP (provenSents state))
+            return (Just false, Nothing, PrfStdStepStep false "CONTRA" [idx])
+          
+        Absurd s ->do
+            let sImpF = s .->. false
+            idx <- maybe ((throwError . LogicErrAbsurdityNotProven) sImpF) return (Data.Map.lookup sImpF (provenSents state))
+            let negation = neg s
+            return (Just negation , Nothing, PrfStdStepStep negation "ABSURD" [idx])
+
 
 
 
@@ -192,7 +206,8 @@ class LogicRuleClass r s tType sE o | r-> s, r->tType, r->sE, r->o where
     exclMid :: s -> r
     simpL :: s -> r
     adj :: s -> s -> r
-
+    contraF :: s -> r
+    absurd :: s -> r
 
 instance LogicRuleClass [LogicRule tType s sE o] s tType sE o where
     mp :: s -> [LogicRule tType s sE o]
@@ -203,6 +218,11 @@ instance LogicRuleClass [LogicRule tType s sE o] s tType sE o where
     simpL s = [SimpL s]
     adj :: s -> s -> [LogicRule tType s sE o]
     adj a b = [Adj a b]
+    contraF :: s -> [LogicRule tType s sE o]
+    contraF s = [ContraF s]
+    absurd :: s -> [LogicRule tType s sE o]
+    absurd s = [Absurd s]
+
 
 
 
@@ -255,6 +275,22 @@ adjM :: (Monad m, Monad m, LogicSent s tType, Ord o, Show sE, Typeable sE, Show 
          LogicRuleClass r s  tType sE o, Monoid r, ProofStd s eL r o tType, Typeable eL, Show eL)
          => s -> s-> ProofGenTStd tType r s o m (s,[Int])
 adjM a b = standardRuleM (adj a b)
+
+
+contraFM :: (Monad m, Monad m, LogicSent s tType, Ord o, Show sE, Typeable sE, Show s, Typeable s,
+       MonadThrow m, Show o, Typeable o, Show tType, Typeable tType, TypedSent o tType sE s, Monoid (PrfStdState s o tType), StdPrfPrintMonad s o tType m,
+       StdPrfPrintMonad s o tType (Either SomeException), Monoid (PrfStdContext tType),
+         LogicRuleClass r s  tType sE o, Monoid r, ProofStd s eL r o tType, Typeable eL, Show eL)
+         => s -> ProofGenTStd tType r s o m (s,[Int])
+contraFM a = standardRuleM (contraF a)
+
+
+absurdM :: (Monad m, Monad m, LogicSent s tType, Ord o, Show sE, Typeable sE, Show s, Typeable s,
+       MonadThrow m, Show o, Typeable o, Show tType, Typeable tType, TypedSent o tType sE s, Monoid (PrfStdState s o tType), StdPrfPrintMonad s o tType m,
+       StdPrfPrintMonad s o tType (Either SomeException), Monoid (PrfStdContext tType),
+         LogicRuleClass r s  tType sE o, Monoid r, ProofStd s eL r o tType, Typeable eL, Show eL)
+         => s -> ProofGenTStd tType r s o m (s,[Int])
+absurdM a = standardRuleM (absurd a)
 
  
 data ProofByAsmSchema s r where
@@ -353,6 +389,9 @@ class (Ord s, Eq tType)
      parseNeg :: s -> Maybe s
      (.||.) :: s -> s -> s
      parseDis :: s -> Maybe (s,s)
+     false :: s
+
+
 
 infixr 3 .&&.
 infixr 2 .||.

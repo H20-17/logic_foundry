@@ -123,6 +123,10 @@ instance PL.LogicRuleClass [LogicRule s sE o t tType ] s tType sE o where
      simpL a = [PropRule  (PL.SimpL a)]
      adj:: s -> s -> [LogicRule s sE o t tType ]
      adj a b = [PropRule  (PL.Adj a b)]
+     contraF :: s -> [LogicRule s sE o t tType ]
+     contraF a = [PropRule  (PL.ContraF a)]
+     absurd:: s -> [LogicRule s sE o t tType ]
+     absurd a = [PropRule  (PL.Absurd a)]    
 
  
 

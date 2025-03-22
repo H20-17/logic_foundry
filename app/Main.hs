@@ -170,9 +170,18 @@ testprog = do
                  return ()
 --              runTheoremM (\schm -> [PredProofTheorem schm]) testTheoremMSchema
               return ()
-     
+          return ()
       runTheoremM  testTheoremMSchema
       runTmSilentM  testTheoremMSchema
+      (absurdImp,_,_) <- runProofByAsmM z2 do
+        fakePropM (Neg z1)
+        adjM z1 (Neg z1)
+        (falseness,_) <- contraFM z1
+        remarkM $ ((pack . show) falseness) <> " is the falseness"
+        return ()
+      -- absurdM absurdImp
+      remarkM $ ((pack . show) absurdImp) <> " is the absurdity"
+      absurdM z2
       return ()
 
 theoremProg::(MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) => ProofGenTStd () [PredRuleDeBr] PropDeBr Text m ()
