@@ -158,27 +158,23 @@ testprog = do
       
       fux<- runProofByUGM () do
           runProofByAsmM  asm2 do
-              (s5,_,())<- runProofBySubArgM  do
+              (s5,_)<- runProofBySubArgM  do
                  newFreeVar <- getTopFreeVar
                  (s1,_) <- uiM newFreeVar z1
                  (s2,idx) <- mpM s1
                  (natAsm,_) <- simpLM asm
                  (s3,_) <- adjM natAsm s2
                  (s4,_) <- uiM newFreeVar z2
-                 (s5,idx) <- mpM s4
-                 return ()
---              runTheoremM (\schm -> [PredProofTheorem schm]) testTheoremMSchema
+                 mpM s4
               return ()
           return ()
       runTheoremM  testTheoremMSchema
       runTmSilentM  testTheoremMSchema
-      (absurdImp,_,_) <- runProofByAsmM z2 do
+      (absurdImp,_) <- runProofByAsmM z2 do
         fakePropM (Neg z1)
         (contra,_) <- adjM z1 (Neg z1)
         (falseness,_) <- contraFM contra
         remarkM $ (pack . show) falseness <> " is the falseness"
-        return ()
-      -- absurdM absurdImp
       remarkM $ (pack . show) absurdImp <> " is the absurdity"
       absurdM absurdImp
       return ()
@@ -189,8 +185,8 @@ theoremProg = do
     let z2 = aX 0 ((X 0 `In` Constant "N") :&&: (X 0 :>=: Integ 0) :->: (X 0 :==: Integ  0))
     let asm = (V 0 `In` Constant "N") :&&: (V 0 :>=: Integ 10)
     let asm2 = (V 0 `In` Constant "N") :&&: (V 0 :>=: Integ 10)
-    (generalized, _, ()) <- runProofByUGM () do
-          (imp,_,()) <- runProofByAsmM asm2 do
+    (generalized, _) <- runProofByUGM () do
+          runProofByAsmM asm2 do
               newFreeVar <- getTopFreeVar
               (s1,_) <- uiM newFreeVar z1
               (s2,_) <- mpM s1
@@ -207,9 +203,7 @@ theoremProg = do
                        <> "\nThis is the next line of this remark.")
               -- (lift . print . show) line_idx
               (s5,_) <- mpM s4
-              (s6,_) <- simpLM asm
-              return ()
-          return ()
+              simpLM asm
     return ()
 --              return (s5,())
 

@@ -677,7 +677,7 @@ runProofByUGM :: (Monoid r1, ProofStd s eL1 r1 o tType, Monad m,
                        MonadThrow m, TypedSent o tType sE s, Show sE, Typeable sE, 
                        StdPrfPrintMonad s o tType m,SubproofRule r1 s o tType)
                  =>  tType -> ProofGenTStd tType r1 s o m x
-                            -> ProofGenTStd tType r1 s o m (s, [Int], x)
+                            -> ProofGenTStd tType r1 s o m (s, [Int])
 runProofByUGM tt prog =  do
         state <- getProofState
         context <- ask
@@ -693,7 +693,7 @@ runProofByUGM tt prog =  do
         let resultSent = createForall generalizable tt (Prelude.length frVarTypeStack)
         mayMonadifyRes <- monadifyProofStd $ proofByUG resultSent subproof
         idx <- maybe (error "No theorem returned by monadifyProofStd on ug schema. This shouldn't happen") (return . snd) mayMonadifyRes       
-        return (resultSent,idx,extraData)
+        return (resultSent,idx)
 
 
 constDictTest :: (Ord o, Eq tType) => Map o tType -> Map o tType ->  Maybe (o, Maybe (tType,tType))

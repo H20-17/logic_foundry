@@ -361,7 +361,7 @@ runProofByAsmM :: (Monoid r1, ProofStd s eL1 r1 o tType, Monad m,
                        Show eL1, Typeable eL1, TypedSent o tType sE s, Show sE, Typeable sE, 
                        StdPrfPrintMonad s o tType m, SubproofRule r1 s )
                  =>   s -> ProofGenTStd tType r1 s o m x
-                            -> ProofGenTStd tType r1 s o m (s, [Int], x)
+                            -> ProofGenTStd tType r1 s o m (s, [Int])
 runProofByAsmM asm prog =  do
         state <- getProofState
         context <- ask
@@ -380,7 +380,7 @@ runProofByAsmM asm prog =  do
                  <- lift $ runSubproofM newContext state newState preambleSteps mayPreambleLastProp prog
         mayMonadifyRes <- monadifyProofStd $ proofByAsm asm consequent subproof
         idx <- maybe (error "No theorem returned by monadifyProofStd on asm schema. This shouldn't happen") (return . snd) mayMonadifyRes
-        return (asm .->. consequent,idx,extraData)
+        return (asm .->. consequent,idx)
 
 
 
