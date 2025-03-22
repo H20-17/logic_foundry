@@ -62,6 +62,7 @@ data LogicError s sE o tType where
     LogicErrMPAnteNotProven :: s-> LogicError s sE o tType
     LogicErrSentenceNotImp :: s -> LogicError s sE o tType
     LogicErrSentenceNotAdj :: s -> LogicError s sE o tType
+    LogicErrSentenceNotNeg :: s -> LogicError s sE o tType
     LogicErrPrfByAsmErr :: SubproofError s sE (LogicError s sE o tType) -> LogicError s sE o tType
     LogicErrPrfBySubArgErr :: REM.SubproofError s sE (LogicError s sE o tType) -> LogicError s sE o tType
     LogicErrExclMidSanityErr :: s -> sE -> LogicError s sE o tType
@@ -71,8 +72,10 @@ data LogicError s sE o tType where
     LogicErrRepOriginNotProven :: s -> LogicError s sE o tType
     LogicErrFakeSanityErr :: s -> sE -> LogicError s sE o tType
     LogicErrBasic :: REM.LogicError s sE o -> LogicError s sE o tType
+    LogicErrSentenceNotContra :: s -> LogicError s sE o tType
     LogicErrContraNotProven :: s -> LogicError s sE o tType
     LogicErrAbsurdityNotProven :: s -> LogicError s sE o tType
+    LogicErrConseqNotFalse :: s -> LogicError s sE o tType
     deriving(Show)
 
 data LogicRule tType s sE o where
@@ -124,15 +127,18 @@ runProofAtomic rule context state =
             rightIndex <- maybe ((throwError . LogicErrAdjRightNotProven) b) return (Data.Map.lookup b (provenSents state))
             let aAndB = a .&&. b
             return (Just aAndB, Nothing, PrfStdStepStep aAndB "ADJ" [leftIndex,rightIndex])
-        ContraF p -> do
-            let pAndNotP = p .&&. neg p
+        ContraF pAndNotP -> do
+            (p, notP) <- maybe ((throwError . LogicErrSentenceNotAdj) pAndNotP) return (parseAdj pAndNotP)
+            pOther <- maybe ((throwError . LogicErrSentenceNotNeg) notP) return (parseNeg notP)
+            unless (p == pOther) (throwError . LogicErrSentenceNotContra $ pAndNotP)
             idx <- maybe ((throwError . LogicErrContraNotProven) pAndNotP) return (Data.Map.lookup pAndNotP (provenSents state))
             return (Just false, Nothing, PrfStdStepStep false "CONTRA" [idx])
           
-        Absurd s ->do
-            let sImpF = s .->. false
+        Absurd sImpF ->do
+            (antecedant, conseq) <- maybe ((throwError . LogicErrSentenceNotImp) sImpF) return (parse_implication sImpF)
+            unless (conseq == false) (throwError . LogicErrConseqNotFalse $ conseq)
             idx <- maybe ((throwError . LogicErrAbsurdityNotProven) sImpF) return (Data.Map.lookup sImpF (provenSents state))
-            let negation = neg s
+            let negation = neg antecedant
             return (Just negation , Nothing, PrfStdStepStep negation "ABSURD" [idx])
 
 
