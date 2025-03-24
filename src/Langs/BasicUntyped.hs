@@ -35,6 +35,7 @@ import qualified RuleSets.Internal.PropLogic as PL
 import qualified RuleSets.Internal.PredLogic as PREDL
 import GHC.Conc (numCapabilities)
 import Distribution.TestSuite (TestInstance(name))
+import RuleSets.Internal.PropLogic (LogicSent(parseIff))
 
 
 data PropDeBr where
@@ -332,6 +333,14 @@ instance PL.LogicSent PropDeBr () where
                  _ -> Nothing
   false :: PropDeBr
   false = F
+  (.<->.) :: PropDeBr -> PropDeBr -> PropDeBr
+  (.<->.) = (:<->:)
+  parseIff  :: PropDeBr -> Maybe (PropDeBr, PropDeBr)
+  parseIff p = case p of
+                (:<->:) p1 p2 -> Just(p1,p2)
+                _ -> Nothing
+   
+
 
 objDeBrBoundVarInside :: ObjDeBr -> Int -> Bool
 objDeBrBoundVarInside obj idx =

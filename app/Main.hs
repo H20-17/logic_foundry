@@ -142,7 +142,13 @@ main = do
     (a,b,c,d) <- checkTheoremM testTheoremMSchema
 --   print "yo"
     (putStrLn . unpack . showPropDeBrStepsBase) d
---    return ()
+
+
+    print "TEST PROG 2 BEGIN-------------------------------------"
+    (a,b,c,d) <- runProofGeneratorT testprog2
+    (putStrLn . unpack . showPropDeBrStepsBase) c
+
+    return ()
 
 
 testprog::ProofGenTStd () [PredRuleDeBr] PropDeBr Text IO ()
@@ -171,13 +177,23 @@ testprog = do
       runTheoremM  testTheoremMSchema
       runTmSilentM  testTheoremMSchema
       (absurdImp,_) <- runProofByAsmM z2 do
-        fakePropM (Neg z1)
-        (contra,_) <- adjM z1 (Neg z1)
-        (falseness,_) <- contraFM contra
+        (notZ1,_) <- fakePropM (Neg z1)
+        (falseness,_) <- contraFM z1 notZ1
         remarkM $ (pack . show) falseness <> " is the falseness"
       remarkM $ (pack . show) absurdImp <> " is the absurdity"
       absurdM absurdImp
       return ()
+
+testprog2::ProofGenTStd () [PredRuleDeBr] PropDeBr Text IO ()
+testprog2 = do
+    let p = eX 0 (X 0 `In` Constant "N")
+    let q = eX 0 (X 0 :>=: Integ 10)
+    let pImpQ = p :->: q
+    fakeConstM "N" ()
+    fakePropM pImpQ
+    fakePropM $ neg q
+    modusTollensM pImpQ
+    return ()
 
 theoremProg::(MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) => ProofGenTStd () [PredRuleDeBr] PropDeBr Text m ()
 theoremProg = do

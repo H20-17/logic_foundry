@@ -3,7 +3,9 @@ module RuleSets.Internal.PropLogic
     LogicError, LogicRule(..), runProofAtomic, mpM, simpLM, adjM, 
     LogicRuleClass(..), SubproofRule(..),
     ProofByAsmSchema(..), SubproofError, runProofByAsm, runProofByAsmM, LogicSent(..),
-    SubproofMException(..), contraFM, absurdM
+    SubproofMException(..), contraFM, absurdM, MetaRuleError(..), disjIntroLM, disjIntroRM, disjElimM, doubleNegElimM,
+    deMorganConjM, deMorganDisjM, bicondIntroM, bicondElimLM, bicondElimRM, absorpAndM, absorpOrM, distAndOverOrM, distOrOverAndM,
+    peircesLawM, modusTollensM, imp2ConjM
 ) where
 
 import Data.Monoid ( Last(..) )
@@ -63,6 +65,7 @@ data LogicError s sE o tType where
     LogicErrSentenceNotImp :: s -> LogicError s sE o tType
     LogicErrSentenceNotAdj :: s -> LogicError s sE o tType
     LogicErrSentenceNotNeg :: s -> LogicError s sE o tType
+    LogicErrSentenceNotDoubleNeg :: s -> LogicError s sE o tType
     LogicErrPrfByAsmErr :: SubproofError s sE (LogicError s sE o tType) -> LogicError s sE o tType
     LogicErrPrfBySubArgErr :: REM.SubproofError s sE (LogicError s sE o tType) -> LogicError s sE o tType
     LogicErrExclMidSanityErr :: s -> sE -> LogicError s sE o tType
@@ -72,8 +75,9 @@ data LogicError s sE o tType where
     LogicErrRepOriginNotProven :: s -> LogicError s sE o tType
     LogicErrFakeSanityErr :: s -> sE -> LogicError s sE o tType
     LogicErrBasic :: REM.LogicError s sE o -> LogicError s sE o tType
-    LogicErrSentenceNotContra :: s -> LogicError s sE o tType
-    LogicErrContraNotProven :: s -> LogicError s sE o tType
+    LogicErrSentencesNotContra :: s -> s -> LogicError s sE o tType
+    LogicErrContraPNotProven :: s -> LogicError s sE o tType
+    LogicErrContraNotPNotProven :: s -> LogicError s sE o tType
     LogicErrAbsurdityNotProven :: s -> LogicError s sE o tType
     LogicErrConseqNotFalse :: s -> LogicError s sE o tType
     LogicErrDisjIntroLRightNotSane :: s -> sE -> LogicError s sE o tType
@@ -88,6 +92,34 @@ data LogicError s sE o tType where
     LogicErrDisjElimQImpRNotProven :: s -> LogicError s sE o tType
     LogicErrSentenceNotDisj :: s -> LogicError s sE o tType
     LogicErrDisjElimRMismatch :: s -> s -> LogicError s sE o tType
+    LogicErrDoubleNegNotProven :: s -> LogicError s sE o tType
+    LogicErrDeMorganConjNotProven :: s -> LogicError s sE o tType
+    LogicErrDeMorganDisjNotProven :: s -> LogicError s sE o tType
+    LogicErrSentenceNotNegConj :: s -> LogicError s sE o tType
+    LogicErrSentenceNotNegDisj :: s -> LogicError s sE o tType
+    LogicErrBicondIntroPImpQNotProven :: s -> LogicError s sE o tType
+    LogicErrBicondIntroQImpPNotProven :: s -> LogicError s sE o tType
+    LogicErrBicondIntroMismatch1 :: s -> s -> LogicError s sE o tType
+    LogicErrBicondIntroMismatch2 :: s -> s -> LogicError s sE o tType
+    LogicErrBicondElimLNotProven :: s -> LogicError s sE o tType
+    LogicErrBicondElimRNotProven :: s -> LogicError s sE o tType
+    LogicErrSentenceNotBicond :: s -> LogicError s sE o tType
+    LogicErrAbsorpOrMismatch :: s -> s -> LogicError s sE o tType
+    LogicErrAbsorpAndMismatch :: s -> s -> LogicError s sE o tType
+    LogicErrAbsorpOrNotProven :: s -> LogicError s sE o tType
+    LogicErrAbsorpAndNotProven :: s -> LogicError s sE o tType
+    LogicErrInvalidAbsorpOr :: s -> LogicError s sE o tType
+    LogicErrInvalidAbsorpAnd :: s -> LogicError s sE o tType
+    LogicErrDistAndOverOrNotProven :: s -> LogicError s sE o tType
+    LogicErrDistOrOverAndNotProven :: s -> LogicError s sE o tType
+    LogicErrInvalidDistAndOverOr :: s -> LogicError s sE o tType
+    LogicErrInvalidDistOrOverAnd :: s -> LogicError s sE o tType
+    LogicErrPeircesLawNotProven :: s -> LogicError s sE o tType
+    LogicErrInvalidPeircesLaw :: s -> LogicError s sE o tType
+
+
+
+
     deriving(Show)
 
 data LogicRule tType s sE o where
@@ -99,11 +131,25 @@ data LogicRule tType s sE o where
     SimpL :: s -> LogicRule tType s sE o
     SimpR :: s -> LogicRule tType s sE o
     Adj :: s -> s -> LogicRule tType s sE o
-    ContraF:: s -> LogicRule tType s sE o
+    ContraF:: s -> s -> LogicRule tType s sE o
     Absurd :: s -> LogicRule tType s sE o
     DisjIntroL :: s -> s -> LogicRule tType s sE o
     DisjIntroR :: s -> s -> LogicRule tType s sE o
     DisjElim :: s -> s -> s -> LogicRule tType s sE o
+    DoubleNegElim :: s -> LogicRule tType s sE o
+    DeMorganConj :: s -> LogicRule tType s sE o
+    DeMorganDisj :: s -> LogicRule tType s sE o
+    BicondIntro :: s -> s -> LogicRule tType s sE o
+    BicondElimL :: s -> LogicRule tType s sE o
+    BicondElimR :: s -> LogicRule tType s sE o
+    AbsorpAnd :: s -> LogicRule tType s sE o  -- P ∧ (P ∨ Q) ⟶ P
+    AbsorpOr :: s -> LogicRule tType s sE o   -- P ∨ (P ∧ Q) ⟶ P
+    DistAndOverOr :: s -> LogicRule tType s sE o  -- P ∧ (Q ∨ R) ⟶ (P ∧ Q) ∨ (P ∧ R)
+    DistOrOverAnd :: s -> LogicRule tType s sE o   -- P ∨ (Q ∧ R) ⟶ (P ∨ Q) ∧ (P ∨ R)
+    
+    PeircesLaw :: s -> LogicRule tType s sE o  -- Peirce’s Law: ((P → Q) → P) → P
+
+
     deriving(Show)
 
 
@@ -145,12 +191,12 @@ runProofAtomic rule context state =
             rightIndex <- maybe ((throwError . LogicErrAdjRightNotProven) b) return (Data.Map.lookup b (provenSents state))
             let aAndB = a .&&. b
             return (Just aAndB, Nothing, PrfStdStepStep aAndB "ADJ" [leftIndex,rightIndex])
-        ContraF pAndNotP -> do
-            (p, notP) <- maybe ((throwError . LogicErrSentenceNotAdj) pAndNotP) return (parseAdj pAndNotP)
+        ContraF p notP -> do
             pOther <- maybe ((throwError . LogicErrSentenceNotNeg) notP) return (parseNeg notP)
-            unless (p == pOther) (throwError . LogicErrSentenceNotContra $ pAndNotP)
-            idx <- maybe ((throwError . LogicErrContraNotProven) pAndNotP) return (Data.Map.lookup pAndNotP (provenSents state))
-            return (Just false, Nothing, PrfStdStepStep false "CONTRA" [idx])
+            unless (p == pOther) (throwError $ LogicErrSentencesNotContra p notP)
+            idx <- maybe ((throwError . LogicErrContraPNotProven) p) return (Data.Map.lookup p (provenSents state))
+            idx' <- maybe ((throwError . LogicErrContraNotPNotProven) notP) return (Data.Map.lookup notP (provenSents state))
+            return (Just false, Nothing, PrfStdStepStep false "CONTRA" [idx,idx'])
           
         Absurd sImpF ->do
             (antecedant, conseq) <- maybe ((throwError . LogicErrSentenceNotImp) sImpF) return (parse_implication sImpF)
@@ -202,8 +248,116 @@ runProofAtomic rule context state =
             -- Conclusion: R
             let result = r1
             return (Just result, Nothing, PrfStdStepStep result "DISJ_ELIM" [disjIndex, pImpRIndex, qImpRIndex])
+        DoubleNegElim doubleNegP -> do
+            notP <- maybe ((throwError . LogicErrSentenceNotDoubleNeg) doubleNegP) return (parseNeg doubleNegP)
+            innerP <- maybe ((throwError . LogicErrSentenceNotDoubleNeg) doubleNegP) return (parseNeg notP)
+            idx <- maybe ((throwError . LogicErrDoubleNegNotProven) doubleNegP) return (Data.Map.lookup doubleNegP (provenSents state))
+            return (Just innerP, Nothing, PrfStdStepStep innerP "DOUBLE_NEG_ELIM" [idx])
+        DeMorganConj negAnd -> do
+            -- Step 1: Ensure negAnd is a negation
+            inner <- maybe (throwError $ LogicErrSentenceNotNegConj negAnd) return (parseNeg negAnd)
+            
+            -- Step 2: Ensure the inner sentence is a conjunction
+            (p, q) <- maybe (throwError $ LogicErrSentenceNotNegConj negAnd) return (parseAdj inner)
+            
+            -- Step 3: Construct the disjunction ¬P ∨ ¬Q
+            let disj = neg p .||. neg q
+            
+            -- Step 4: Ensure negAnd is already proven
+            index <- maybe (throwError $ LogicErrDeMorganConjNotProven negAnd) return (Data.Map.lookup negAnd (provenSents state))
+            
+            -- Step 5: Return the new sentence
+            return (Just disj, Nothing, PrfStdStepStep disj "DEMORGAN_CONJ" [index])
 
+        DeMorganDisj negOr -> do
+            -- Step 1: Ensure negOr is a negation
+            inner <- maybe (throwError $ LogicErrSentenceNotNegDisj negOr) return (parseNeg negOr)
+            
+            -- Step 2: Ensure the inner sentence is a disjunction
+            (p, q) <- maybe (throwError $ LogicErrSentenceNotNegDisj negOr) return (parseDisj inner)
+            
+            -- Step 3: Construct the conjunction ¬P ∧ ¬Q
+            let conj = neg p .&&. neg q
+            
+            -- Step 4: Ensure negOr is already proven
+            index <- maybe (throwError $ LogicErrDeMorganDisjNotProven negOr) return (Data.Map.lookup negOr (provenSents state))
+            
+            -- Step 5: Return the new sentence
+            return (Just conj, Nothing, PrfStdStepStep conj "DEMORGAN_DISJ" [index])
+        BicondIntro pImpQ qImpP -> do
+            -- Ensure P → Q is proven
+            pImpQIndex <- maybe (throwError $ LogicErrBicondIntroPImpQNotProven pImpQ)
+                  return 
+                  (Data.Map.lookup pImpQ (provenSents state))
 
+            -- Ensure Q → P is proven
+            qImpPIndex <- maybe (throwError $ LogicErrBicondIntroQImpPNotProven qImpP)
+                  return (Data.Map.lookup qImpP (provenSents state))
+
+            -- Parse implications
+            (p1, q1) <- maybe (throwError $ LogicErrSentenceNotImp pImpQ) return (parse_implication pImpQ)
+            (q2, p2) <- maybe (throwError $ LogicErrSentenceNotImp qImpP) return (parse_implication qImpP)
+
+            -- Ensure antecedents match
+            unless (p1 == p2) (throwError $ LogicErrBicondIntroMismatch1 p1 p2)
+
+            -- Ensure consequents match
+            unless (q1 == q2) (throwError $ LogicErrBicondIntroMismatch2 q1 q2)
+
+            -- Conclusion: P ↔ Q
+            let bicond = p1 .<->. q1
+            return (Just bicond, Nothing, PrfStdStepStep bicond "BICOND_INTRO" [pImpQIndex, qImpPIndex])
+        BicondElimL bicond -> do
+            (p, q) <- maybe (throwError $ LogicErrSentenceNotBicond bicond) return (parseIff bicond)
+            bicondIndex <- maybe (throwError $ LogicErrBicondElimLNotProven bicond) return (Data.Map.lookup bicond (provenSents state))
+            let imp = p .->. q
+            return (Just imp, Nothing, PrfStdStepStep imp "BICOND_ELIM_L" [bicondIndex])
+
+        BicondElimR bicond -> do
+            (p, q) <- maybe (throwError $ LogicErrSentenceNotBicond bicond) return (parseIff bicond)
+            bicondIndex <- maybe (throwError $ LogicErrBicondElimRNotProven bicond) return (Data.Map.lookup bicond (provenSents state))
+            let imp = q .->. p
+            return (Just imp, Nothing, PrfStdStepStep imp "BICOND_ELIM_R" [bicondIndex])
+        AbsorpAnd lhs -> do 
+           --lhs = P ∧ (P ∨ Q) ⟶ P
+           (p, rhs) <- maybe (throwError $ LogicErrInvalidAbsorpAnd lhs) return (parse_implication lhs)
+           (p', q)  <- maybe (throwError $ LogicErrInvalidAbsorpAnd lhs) return (parseAdj rhs)
+           unless (p == p') (throwError $ LogicErrAbsorpAndMismatch p p')
+           index <- maybe (throwError $ LogicErrAbsorpAndNotProven lhs) return (Data.Map.lookup lhs (provenSents state))
+           return (Just p, Nothing, PrfStdStepStep p "ABSORP_1" [index])
+
+        AbsorpOr lhs -> do
+           -- lhs = P ∨ (P ∧ Q) ⟶ P
+           (p, rhs) <- maybe (throwError $ LogicErrInvalidAbsorpOr lhs) return (parseDisj lhs)
+           (p', q)  <- maybe (throwError $ LogicErrInvalidAbsorpOr lhs) return (parseAdj rhs)
+           unless (p == p') (throwError $ LogicErrAbsorpOrMismatch p p')
+           index <- maybe (throwError $ LogicErrAbsorpOrNotProven lhs) return (Data.Map.lookup lhs (provenSents state))
+           return (Just p, Nothing, PrfStdStepStep p "ABSORP_2" [index])
+        DistAndOverOr lhs -> do
+            (p, rhs) <- maybe (throwError $ LogicErrInvalidDistAndOverOr lhs) return (parseAdj lhs)
+            (q, r)   <- maybe (throwError $ LogicErrInvalidDistAndOverOr lhs) return (parseDisj rhs)
+            index <- maybe (throwError $ LogicErrDistAndOverOrNotProven lhs) return (Data.Map.lookup lhs (provenSents state))
+            let conclusion = (p .&&. q) .||. (p .&&. r)
+            return (Just conclusion, Nothing, PrfStdStepStep conclusion "DIST_AND_OVER_OR" [index])
+
+        DistOrOverAnd lhs -> do
+            (p, rhs) <- maybe (throwError $ LogicErrInvalidDistOrOverAnd lhs) return (parseDisj lhs)
+            (q, r)   <- maybe (throwError $ LogicErrInvalidDistOrOverAnd lhs) return (parseAdj rhs)
+            index <- maybe (throwError $ LogicErrDistOrOverAndNotProven lhs) return (Data.Map.lookup lhs (provenSents state))
+            let conclusion = (p .&&. q) .||. (p .&&. r)
+            return (Just conclusion, Nothing, PrfStdStepStep conclusion "DIST_OR_OVER_AND" [index])
+        PeircesLaw lhs -> do
+
+            -- Parse (P → Q) → P
+           (p1ImpQ,p2) <- maybe (throwError $ LogicErrInvalidPeircesLaw lhs) return (parse_implication lhs)
+           (p1, q) <- maybe (throwError $ LogicErrInvalidPeircesLaw lhs) return (parse_implication p1ImpQ)
+           unless (p1 == p2) (throwError $ LogicErrInvalidPeircesLaw lhs)
+
+           -- Ensure the given implication is proven
+           index <- maybe (throwError $ LogicErrPeircesLawNotProven lhs) return (Data.Map.lookup lhs (provenSents state))
+
+            -- Return P
+           return (Just p1, Nothing, PrfStdStepStep p1 "PEIRCE" [index])
 
 instance (LogicSent s tType, Show sE, Typeable sE, Show s, Typeable s, Ord o, TypedSent o tType sE s,
           Typeable o, Show o, Typeable tType, Show tType, Monoid (PrfStdState s o tType),
@@ -268,9 +422,24 @@ class LogicRuleClass r s tType sE o | r-> s, r->tType, r->sE, r->o where
     mp :: s -> r
     exclMid :: s -> r
     simpL :: s -> r
+    simpR :: s -> r
     adj :: s -> s -> r
-    contraF :: s -> r
+    contraF :: s -> s -> r
     absurd :: s -> r
+    disjIntroL :: s -> s -> r
+    disjIntroR :: s -> s -> r
+    disjElim :: s -> s -> s -> r
+    doubleNegElim :: s -> r
+    deMorganConj :: s -> r
+    deMorganDisj :: s -> r
+    bicondIntro :: s -> s -> r
+    bicondElimL :: s -> r
+    bicondElimR :: s -> r
+    absorpAnd :: s -> r
+    absorpOr :: s -> r
+    distAndOverOr :: s -> r
+    distOrOverAnd :: s -> r
+    peircesLaw :: s -> r
 
 instance LogicRuleClass [LogicRule tType s sE o] s tType sE o where
     mp :: s -> [LogicRule tType s sE o]
@@ -279,12 +448,42 @@ instance LogicRuleClass [LogicRule tType s sE o] s tType sE o where
     exclMid s = [ExclMid s]
     simpL :: s -> [LogicRule tType s sE o]
     simpL s = [SimpL s]
+    simpR :: s -> [LogicRule tType s sE o]
+    simpR s = [SimpL s]
     adj :: s -> s -> [LogicRule tType s sE o]
     adj a b = [Adj a b]
-    contraF :: s -> [LogicRule tType s sE o]
-    contraF s = [ContraF s]
+    contraF :: s -> s -> [LogicRule tType s sE o]
+    contraF s notS = [ContraF s notS]
     absurd :: s -> [LogicRule tType s sE o]
     absurd s = [Absurd s]
+    disjIntroL :: s -> s -> [LogicRule tType s sE o]
+    disjIntroL a b = [DisjIntroL a b]
+    disjIntroR :: s -> s -> [LogicRule tType s sE o]
+    disjIntroR a b = [DisjIntroR a b]
+    disjElim :: s -> s -> s -> [LogicRule tType s sE o]
+    disjElim a b c = [DisjElim a b c]
+    doubleNegElim :: s -> [LogicRule tType s sE o]
+    doubleNegElim s = [DoubleNegElim s]
+    deMorganConj :: s -> [LogicRule tType s sE o]
+    deMorganConj s = [DeMorganConj s]
+    deMorganDisj :: s -> [LogicRule tType s sE o]
+    deMorganDisj s = [DeMorganDisj s]
+    bicondIntro :: s -> s -> [LogicRule tType s sE o]
+    bicondIntro a b = [BicondIntro a b]
+    bicondElimL :: s -> [LogicRule tType s sE o]
+    bicondElimL s = [BicondElimL s]
+    bicondElimR :: s -> [LogicRule tType s sE o]
+    bicondElimR s = [BicondElimR s]
+    absorpAnd :: s -> [LogicRule tType s sE o]
+    absorpAnd s = [AbsorpAnd s]
+    absorpOr :: s -> [LogicRule tType s sE o]
+    absorpOr s = [AbsorpOr s]
+    distAndOverOr :: s -> [LogicRule tType s sE o]
+    distAndOverOr s = [DistAndOverOr s]
+    distOrOverAnd :: s -> [LogicRule tType s sE o]
+    distOrOverAnd s = [DistOrOverAnd s]
+    peircesLaw :: s -> [LogicRule tType s sE o]
+    peircesLaw p = [PeircesLaw p]
 
 
 
@@ -312,48 +511,112 @@ standardRuleM rule = do
      maybe (error "Critical failure: No index looking up sentence.") return mayPropIndex
 
 
-mpM :: (Monad m, LogicSent s tType, Ord o, Show sE, Typeable sE, Show s, Typeable s,
+mpM, exclMidM, simpLM, simpRM, absurdM, doubleNegElimM, deMorganConjM, 
+       deMorganDisjM, bicondElimLM, bicondElimRM, absorpAndM, absorpOrM, distAndOverOrM, distOrOverAndM,
+       peircesLawM ::
+       (Monad m, LogicSent s tType, Ord o, Show sE, Typeable sE, Show s, Typeable s,
        MonadThrow m, Show o, Typeable o, Show tType, Typeable tType, TypedSent o tType sE s,
        Monoid (PrfStdState s o tType), StdPrfPrintMonad s o tType m,
        StdPrfPrintMonad s o tType (Either SomeException), Monoid (PrfStdContext tType),
        LogicRuleClass r s tType sE o, Monoid r,
        ProofStd s eL r o tType, Typeable eL, Show eL )
           => s -> ProofGenTStd tType r s o m (s,[Int])
-mpM impl = standardRuleM (mp impl)
-      
 
-
-simpLM :: (Monad m, Monad m, LogicSent s tType, Ord o, Show sE, Typeable sE, Show s, Typeable s,
+adjM, disjIntroLM, disjIntroRM,  bicondIntroM, contraFM  ::
+       (Monad m, LogicSent s tType, Ord o, Show sE, Typeable sE, Show s, Typeable s,
        MonadThrow m, Show o, Typeable o, Show tType, Typeable tType, TypedSent o tType sE s,
        Monoid (PrfStdState s o tType), StdPrfPrintMonad s o tType m,
        StdPrfPrintMonad s o tType (Either SomeException), Monoid (PrfStdContext tType),
-         LogicRuleClass r s  tType sE o, Monoid r, ProofStd s eL r o tType, Typeable eL, Show eL) =>
-            s -> ProofGenTStd tType r s o m (s,[Int])
-simpLM aAndB = standardRuleM (simpL aAndB)
+       LogicRuleClass r s tType sE o, Monoid r,
+       ProofStd s eL r o tType, Typeable eL, Show eL )
+          => s -> s -> ProofGenTStd tType r s o m (s,[Int])
 
-
-adjM :: (Monad m, Monad m, LogicSent s tType, Ord o, Show sE, Typeable sE, Show s, Typeable s,
-       MonadThrow m, Show o, Typeable o, Show tType, Typeable tType, TypedSent o tType sE s, Monoid (PrfStdState s o tType), StdPrfPrintMonad s o tType m,
+disjElimM ::
+       (Monad m, LogicSent s tType, Ord o, Show sE, Typeable sE, Show s, Typeable s,
+       MonadThrow m, Show o, Typeable o, Show tType, Typeable tType, TypedSent o tType sE s,
+       Monoid (PrfStdState s o tType), StdPrfPrintMonad s o tType m,
        StdPrfPrintMonad s o tType (Either SomeException), Monoid (PrfStdContext tType),
-         LogicRuleClass r s  tType sE o, Monoid r, ProofStd s eL r o tType, Typeable eL, Show eL)
-         => s -> s-> ProofGenTStd tType r s o m (s,[Int])
+       LogicRuleClass r s tType sE o, Monoid r,
+       ProofStd s eL r o tType, Typeable eL, Show eL )
+          => s -> s -> s -> ProofGenTStd tType r s o m (s,[Int])
+
+mpM s = standardRuleM (mp s)
+exclMidM s = standardRuleM (exclMid s)
+simpLM s = standardRuleM (simpL s)
+simpRM s = standardRuleM (simpR s)
 adjM a b = standardRuleM (adj a b)
+contraFM s notS = standardRuleM (contraF s notS)
+absurdM s = standardRuleM (absurd s)
+disjIntroLM a b = standardRuleM (disjIntroL a b)
+disjIntroRM a b = standardRuleM (disjIntroR a b)
+disjElimM p q r = standardRuleM (disjElim p q r)
+doubleNegElimM s = standardRuleM (doubleNegElim s)
+deMorganConjM s = standardRuleM (deMorganConj s)
+deMorganDisjM s = standardRuleM (deMorganDisj s)
+bicondIntroM a b = standardRuleM (bicondIntro a b)
+bicondElimLM s = standardRuleM (bicondElimL s)
+bicondElimRM s = standardRuleM (bicondElimR s)
+absorpAndM s = standardRuleM (absorpAnd s)
+absorpOrM s = standardRuleM (absorpOr s)
+distAndOverOrM s = standardRuleM (distAndOverOr s)
+distOrOverAndM s = standardRuleM (distOrOverAnd s)
+peircesLawM p = standardRuleM (peircesLaw p)
+
+data MetaRuleError s where
+    MetaRuleErrNotImp :: s -> MetaRuleError s
+    MetaRuleErrNotModusTollens :: s -> MetaRuleError s
+    MetaRuleErrNotConsNotProven :: s -> MetaRuleError s
+    MetaRuleErrImpNotProven :: s -> MetaRuleError s
+    deriving (Show,Typeable)
 
 
-contraFM :: (Monad m, Monad m, LogicSent s tType, Ord o, Show sE, Typeable sE, Show s, Typeable s,
-       MonadThrow m, Show o, Typeable o, Show tType, Typeable tType, TypedSent o tType sE s, Monoid (PrfStdState s o tType), StdPrfPrintMonad s o tType m,
-       StdPrfPrintMonad s o tType (Either SomeException), Monoid (PrfStdContext tType),
-         LogicRuleClass r s  tType sE o, Monoid r, ProofStd s eL r o tType, Typeable eL, Show eL)
-         => s -> ProofGenTStd tType r s o m (s,[Int])
-contraFM a = standardRuleM (contraF a)
+instance (Show s, Typeable s) => Exception (MetaRuleError s)
 
 
-absurdM :: (Monad m, Monad m, LogicSent s tType, Ord o, Show sE, Typeable sE, Show s, Typeable s,
-       MonadThrow m, Show o, Typeable o, Show tType, Typeable tType, TypedSent o tType sE s, Monoid (PrfStdState s o tType), StdPrfPrintMonad s o tType m,
-       StdPrfPrintMonad s o tType (Either SomeException), Monoid (PrfStdContext tType),
-         LogicRuleClass r s  tType sE o, Monoid r, ProofStd s eL r o tType, Typeable eL, Show eL)
-         => s -> ProofGenTStd tType r s o m (s,[Int])
-absurdM a = standardRuleM (absurd a)
+imp2ConjM :: (SubproofRule r1 s, MonadThrow m, Monoid r1,  TypedSent o tType sE s, LogicRuleClass r1 s tType sE o, 
+  StdPrfPrintMonad s o tType m,  StdPrfPrintMonad s o tType (Either SomeException),  LogicSent s tType,  
+  Proof eL r1 (PrfStdState s o tType) (PrfStdContext tType) [PrfStdStep s o tType] s,
+  Show eL, Show o, Show s, Show sE, Show tType, Typeable eL,  
+  Typeable o, Typeable s, Typeable sE, Typeable tType) => 
+            s -> ProofGeneratorT s [PrfStdStep s o tType] (PrfStdContext tType) r1 (PrfStdState s o tType) m (s, [Int])
+imp2ConjM s = do
+    (a,b) <- maybe (throwM $ MetaRuleErrNotImp s) return (parse_implication s)
+    runProofByAsmM a $ do
+        mpM s
+        disjIntroRM (neg a) b
+
+
+modusTollensM :: (Monoid r1,
+                  MonadThrow m, LogicSent s tType,
+                Proof eL r1 (PrfStdState s o tType) (PrfStdContext tType) [PrfStdStep s o tType] s,
+                 Show eL, Show s, Show tType, Typeable eL, Typeable s, Typeable tType, TypedSent o tType sE s, StdPrfPrintMonad s o tType m,
+                 REM.SubproofRule r1 s, Show sE, Typeable sE, SubproofRule r1 s, LogicRuleClass r1 s tType sE o, 
+                 StdPrfPrintMonad s o tType (Either SomeException), Show o, Typeable o)
+    => s
+    -> ProofGeneratorT s [PrfStdStep s o tType] (PrfStdContext tType) r1 (PrfStdState s o tType) m (s, [Int])
+modusTollensM s = do
+    -- Parse (P → Q) and ¬Q from the input statement s
+    (p,q) <- maybe (throwM $ MetaRuleErrNotModusTollens s) return (parse_implication s)
+    let negQ = neg q
+
+    state <- getProofState
+    let sents = provenSents state 
+    -- Ensure that ¬Q is proven
+    negQIndex <- maybe (throwM $ MetaRuleErrNotConsNotProven negQ) return (Data.Map.lookup negQ sents)
+
+
+    -- Ensure that the given implication P → Q is proven
+    impIndex <- maybe (throwM $ MetaRuleErrImpNotProven s) return (Data.Map.lookup s sents)
+    runProofBySubArgM $ do
+    -- Derive ¬P from ¬Q and P → Q (Modus Tollens)
+        (absurdity,_) <- runProofByAsmM p $ do
+            (q,_) <- mpM s
+            contraFM q negQ
+            --False now derived
+        absurdM absurdity
+
+
+
 
  
 data ProofByAsmSchema s r where
@@ -453,13 +716,12 @@ class (Ord s, Eq tType)
      (.||.) :: s -> s -> s
      parseDisj :: s -> Maybe (s,s)
      false :: s
+     (.<->.) :: s -> s -> s
+     parseIff :: s -> Maybe (s,s)
 
 
 
 infixr 3 .&&.
 infixr 2 .||.
 infixr 0 .->.
---infixr 0 .<->.
---infix  4 .==.
---infix  4 .<-.
---infix  4 .>=.
+infixr 0 .<->.

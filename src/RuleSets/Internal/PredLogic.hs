@@ -121,12 +121,56 @@ instance PL.LogicRuleClass [LogicRule s sE o t tType ] s tType sE o where
      exclMid a = [PropRule  (PL.ExclMid a)]
      simpL:: s -> [LogicRule s sE o t tType ]
      simpL a = [PropRule  (PL.SimpL a)]
+     simpR :: s -> [LogicRule s sE o t tType]
+     simpR a = [PropRule (PL.SimpR a)]
+
      adj:: s -> s -> [LogicRule s sE o t tType ]
      adj a b = [PropRule  (PL.Adj a b)]
-     contraF :: s -> [LogicRule s sE o t tType ]
-     contraF a = [PropRule  (PL.ContraF a)]
+     contraF :: s -> s -> [LogicRule s sE o t tType ]
+     contraF a notA = [PropRule  (PL.ContraF a notA)]
      absurd:: s -> [LogicRule s sE o t tType ]
      absurd a = [PropRule  (PL.Absurd a)]    
+     disjIntroL :: s -> s -> [LogicRule s sE o t tType]
+     disjIntroL a b = [PropRule (PL.DisjIntroL a b)]
+    
+     disjIntroR :: s -> s -> [LogicRule s sE o t tType]
+     disjIntroR a b = [PropRule (PL.DisjIntroR a b)]
+    
+     disjElim :: s -> s -> s -> [LogicRule s sE o t tType]
+     disjElim a b c = [PropRule (PL.DisjElim a b c)]
+    
+     doubleNegElim :: s -> [LogicRule s sE o t tType]
+     doubleNegElim a = [PropRule (PL.DoubleNegElim a)]
+    
+     deMorganConj :: s -> [LogicRule s sE o t tType]
+     deMorganConj a = [PropRule (PL.DeMorganConj a)]
+    
+     deMorganDisj :: s -> [LogicRule s sE o t tType]
+     deMorganDisj a = [PropRule (PL.DeMorganDisj a)]
+    
+     bicondIntro :: s -> s -> [LogicRule s sE o t tType]
+     bicondIntro a b = [PropRule (PL.BicondIntro a b)]
+    
+     bicondElimL :: s -> [LogicRule s sE o t tType]
+     bicondElimL a = [PropRule (PL.BicondElimL a)]
+    
+     bicondElimR :: s -> [LogicRule s sE o t tType]
+     bicondElimR a = [PropRule (PL.BicondElimR a)]
+    
+     absorpAnd :: s -> [LogicRule s sE o t tType]
+     absorpAnd a = [PropRule (PL.AbsorpAnd a)]
+    
+     absorpOr :: s -> [LogicRule s sE o t tType]
+     absorpOr a = [PropRule (PL.AbsorpOr a)]
+    
+     distAndOverOr :: s -> [LogicRule s sE o t tType]
+     distAndOverOr a = [PropRule (PL.DistAndOverOr a)]
+    
+     distOrOverAnd :: s -> [LogicRule s sE o t tType]
+     distOrOverAnd a = [PropRule (PL.DistOrOverAnd a)]
+    
+     peircesLaw :: s -> [LogicRule s sE o t tType]
+     peircesLaw p = [PropRule (PL.PeircesLaw p)]
 
  
 
