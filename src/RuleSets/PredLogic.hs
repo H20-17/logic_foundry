@@ -8,7 +8,9 @@ module RuleSets.PredLogic
     runTmSilentM, runProofByUGM, SubproofError(..),
     TheoremSchemaMT(..),SubproofMException(..),
     TheoremAlgSchema,
-    TheoremSchema
+    TheoremSchema,
+    reverseANegIntroM, reverseENegIntroM,eNegIntroM, aNegIntroM,
+    eiHilbertM
 
 
 ) where
@@ -21,5 +23,7 @@ import RuleSets.Internal.PredLogic(LogicError(..), LogicRuleClass(..), SubproofR
     runTmSilentM, runProofByUGM, SubproofError(..), TheoremSchemaMT(..)
     ,SubproofMException(..),
     TheoremAlgSchema,
-    TheoremSchema
+    TheoremSchema,
+    reverseANegIntroM, reverseENegIntroM,eNegIntroM, aNegIntroM,
+    eiHilbertM
     )

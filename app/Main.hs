@@ -135,18 +135,32 @@ main = do
     --either (putStrLn . show) (putStrLn . unpack . showPropDeBrStepsBase . snd) zb3
     (a,b,c,d) <- runProofGeneratorT testprog
     print "hi wattup 2"
-    (putStrLn . unpack . showPropDeBrStepsBase) c
+    let stepTxt= showPropDeBrStepsBase (provenSents d) c
+    (putStrLn . unpack) stepTxt
     print "YOYOYOYOYOYOYOYOYOYO CHECK THEOREM"
     print "YOYOYOYOYOYOYOYOYOYO CHECK THEOREM"
     print "YOYOYOYOYOYOYOYOYOYO CHECK THEOREM3"
     (a,b,c,d) <- checkTheoremM testTheoremMSchema
 --   print "yo"
-    (putStrLn . unpack . showPropDeBrStepsBase) d
-
+    let stepTxt= showPropDeBrStepsBase (provenSents d) c
+    (putStrLn . unpack) stepTxt
 
     print "TEST PROG 2 BEGIN-------------------------------------"
     (a,b,c,d) <- runProofGeneratorT testprog2
     (putStrLn . unpack . showPropDeBrStepsBase) c
+
+    return ()
+
+    print "TEST PROG 3 BEGIN-------------------------------------"
+    (a,b,c,d) <- runProofGeneratorT testprog3
+    (putStrLn . unpack . showPropDeBrStepsBase) c
+
+    print "TEST PROG 4 BEGIN-------------------------------------"
+    (a,b,c,d) <- runProofGeneratorT testprog4
+    (putStrLn . unpack . showPropDeBrStepsBase) c
+
+
+
 
     return ()
 
@@ -192,8 +206,30 @@ testprog2 = do
     fakeConstM "N" ()
     fakePropM pImpQ
     fakePropM $ neg q
-    modusTollensM pImpQ
+    (s,idx) <- modusTollensM pImpQ
+    remarkM $ (pack . show) s <> " is the sentence. It was proven in line " <> (pack . show) idx
     return ()
+
+
+testprog3::ProofGenTStd () [PredRuleDeBr] PropDeBr Text IO ()
+testprog3 = do
+    let a = eX 0 (Neg (X 0 `In` Constant "N"))
+    fakeConstM "N" ()
+    fakePropM a
+    (s,idx) <- reverseANegIntroM a
+    remarkM $ (pack . show) s <> " is the sentence. It was proven in line " <> (pack . show) idx
+    return ()
+
+testprog4::ProofGenTStd () [PredRuleDeBr] PropDeBr Text IO ()
+testprog4 = do
+    let a = aX 0 (Neg (X 0 `In` Constant "N"))
+    fakeConstM "N" ()
+    fakePropM a
+    (s,idx) <- reverseENegIntroM a
+    showS <- showPropM s
+    remarkM $ (pack . show) s <> " is the sentence. It was proven in line " <> (pack . show) idx
+    return ()
+
 
 theoremProg::(MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) => ProofGenTStd () [PredRuleDeBr] PropDeBr Text m ()
 theoremProg = do

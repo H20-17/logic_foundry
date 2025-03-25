@@ -1,7 +1,8 @@
 module RuleSets.Internal.PredLogic 
 (
-    LogicError(..), LogicRule(..),
-    runProofAtomic, uiM, eiM,
+    LogicError(..), LogicRule(..), 
+    runProofAtomic, uiM, eiM, reverseANegIntroM, reverseENegIntroM,eNegIntroM, aNegIntroM,
+    eiHilbertM,
     LogicRuleClass(..), SubproofRule(..), checkTheoremM, establishTmSilentM, expandTheoremM, runProofByUG,
     runTheoremM, runTmSilentM, runProofByUGM, SubproofMException(..),
     SubproofError(..),
@@ -9,7 +10,7 @@ module RuleSets.Internal.PredLogic
     LogicSent(..), 
     TheoremSchemaMT(..),
     TheoremAlgSchema,
-    TheoremSchema
+    TheoremSchema(..)
 ) where
 
 
@@ -58,8 +59,10 @@ import RuleSets.Internal.PropLogic hiding
    LogicError(..),
    runProofAtomic,
    LogicSent,
-   SubproofMException(..))
+   SubproofMException(..),
+   MetaRuleError(..))
 import qualified RuleSets.Internal.PropLogic as PL
+import Distribution.PackageDescription (BuildInfo(asmOptions))
 
 
 
@@ -80,7 +83,12 @@ data LogicError s sE o t tType where
     LogicErrEGNotGeneralization :: t -> s -> LogicError s sE o t tType 
     LogicErrEGTermTypeMismatch :: t -> tType -> s -> LogicError s sE o t tType 
     LogicErrUITermTypeMismatch :: t -> tType -> s -> tType -> LogicError s sE o t tType 
-    PredProofTermSanity :: sE ->  LogicError s sE o t tType 
+    PredProofTermSanity :: sE ->  LogicError s sE o t tType
+    LogicErrENegNotExists :: s -> LogicError s sE o t tType
+    LogicErrENegNotProven :: s -> LogicError s sE o t tType
+    LogicErrANegNotForall :: s -> LogicError s sE o t tType
+    LogicErrANegNotProven :: s -> LogicError s sE o t tType
+
    deriving (Show)
 
 data LogicRule s sE o t tType  where
@@ -91,16 +99,20 @@ data LogicRule s sE o t tType  where
     ProofByUG :: ProofByUGSchema s [LogicRule s sE o t tType ] -> LogicRule s sE o t tType 
     EI :: s -> o -> LogicRule s sE o t tType 
        -- sentence of form E x . P, and a constant
+    EIHilbert :: s -> LogicRule s sE o t tType 
+       -- sentence of form E x . P
     EG :: t -> s -> LogicRule s sE o t tType 
         -- a free term,
         -- a sentence of the form E x . P
         -- Instantiate s using term t,
-        -- If the resulting sentence is already proven, then the generalization is OK, and that is sentence s.BErrAsmSanity
+        -- If the resulting sentence is already proven, then the generalization is OK, and that is sentence s.
     UI :: t -> s -> LogicRule s sE o t tType 
 
     Theorem :: TheoremSchema s [LogicRule s sE o t tType ] o tType -> LogicRule s sE o t tType 
     TheoremM :: TheoremAlgSchema tType [LogicRule s sE o t tType ] s o () -> 
-                             LogicRule s sE o t tType 
+                             LogicRule s sE o t tType
+    ENegIntro :: s -> LogicRule s sE o t tType
+    ANegIntro :: s -> LogicRule s sE o t tType
     deriving(Show)
 
 
@@ -176,18 +188,27 @@ instance PL.LogicRuleClass [LogicRule s sE o t tType ] s tType sE o where
 
 class LogicRuleClass r s t tType sE o | r->s, r->o, r->tType, r->sE, r->t where
      ei :: s -> o -> r
+     eiHilbert :: s -> r
      eg :: t -> s -> r
      ui :: t -> s -> r
+     eNegIntro :: s -> r
+     aNegIntro :: s -> r
 
 
 
 instance LogicRuleClass [LogicRule s sE o t tType ] s t tType sE o where
      ei:: s -> o -> [LogicRule s sE o t tType ]
+     eiHilbert:: s -> [LogicRule s sE o t tType ]
+     eiHilbert s = [EIHilbert s]
      ei s o = [EI s o]
      eg:: t -> s -> [LogicRule s sE o t tType ]
      eg t s = [EG t s]
      ui:: t -> s -> [LogicRule s sE o t tType ]
      ui t s = [UI t s]
+     eNegIntro:: s -> [LogicRule s sE o t tType ]
+     eNegIntro s = [ENegIntro s]
+     aNegIntro:: s -> [LogicRule s sE o t tType ]
+     aNegIntro s = [ANegIntro s]
 
 
 
@@ -252,6 +273,33 @@ runProofAtomic rule context state  =
                termType <- left PredProofTermSanity eitherTermType
                unless (tType == termType) ((throwError .  LogicErrUITermTypeMismatch term termType forallSent) tType)
                return (Just $ f term,Nothing, PrfStdStepStep (f term) "UI" [forallSentIdx])
+          ENegIntro negExistsSent -> do
+               let mayExistsSent = parseNeg negExistsSent
+               existsSent <- maybe ((throwError . LogicErrENegNotExists) negExistsSent) return mayExistsSent
+               let mayParse = parseExists existsSent
+               (f, tType) <- maybe ((throwError . LogicErrENegNotExists) negExistsSent) return mayParse
+               let mayNegExistsIdx = Data.Map.lookup negExistsSent (provenSents state)
+               negExistsIdx <- maybe ((throwError . LogicErrENegNotProven) negExistsSent) return mayNegExistsIdx
+               let forallNegSent = reverseParseQuantToForallNot f tType
+               return (Just forallNegSent, Nothing, PrfStdStepStep forallNegSent "E_NEG" [negExistsIdx])
+          ANegIntro negForallSent -> do
+               let mayForallSent = parseNeg negForallSent
+               forallSent <- maybe ((throwError . LogicErrANegNotForall) negForallSent) return mayForallSent
+               let mayParse = parseForall forallSent
+               (f, tType) <- maybe ((throwError . LogicErrANegNotForall) negForallSent) return mayParse
+               let mayNegForallIdx = Data.Map.lookup negForallSent (provenSents state)
+               negForallIdx <- maybe ((throwError . LogicErrANegNotProven) negForallSent) return mayNegForallIdx
+               let existsNegSent = reverseParseQuantToExistsNot f tType
+               return (Just existsNegSent, Nothing, PrfStdStepStep existsNegSent "A_NEG" [negForallIdx])
+          EIHilbert existsSent -> do 
+               let mayExistsParse = parseExists existsSent
+               (f,tType) <- maybe ((throwError . LogicErrEINotExists) existsSent) return mayExistsParse
+               let mayExistsSentIdx = Data.Map.lookup existsSent (provenSents state)
+               existsSentIdx <- maybe ((throwError . LogicErrEINotProven) existsSent) return mayExistsSentIdx
+               let hilbertObj = reverseParseQuantToHilbert f tType
+               let eIResultSent = f hilbertObj
+               return (Just eIResultSent,Nothing, PrfStdStepStep eIResultSent "EI_HILBERT" [existsSentIdx])
+
 
     where
         proven = (keysSet . provenSents) state
@@ -359,8 +407,86 @@ eiM :: (Monad m, LogicSent s t tType , TypeableTerm t o tType sE, Show s,
                 StdPrfPrintMonad s o tType m,
                 StdPrfPrintMonad s o tType (Either SomeException), Monoid (PrfStdContext tType),
                 LogicRuleClass r s t tType sE o, ProofStd s eL r o tType, Show eL, Typeable eL, Monoid r)
-                   => s -> o -> ProofGenTStd tType r s o m (s,[Int])
-eiM sent const = standardRuleM (ei sent const)
+                   => s -> o -> ProofGenTStd tType r s o m (s,[Int],t)
+eiM sent const = do
+                   (instantiated, idx) <- standardRuleM (ei sent const)
+                   return (instantiated,idx,const2Term const)
+
+
+
+eNegIntroM, aNegIntroM :: (Monad m, LogicSent s t tType , TypeableTerm t o tType sE, Show s,
+                Typeable s, Show sE, Typeable sE, MonadThrow m, Show o, Typeable o, Show t, Typeable t,
+                Show tType, Typeable tType, TypedSent o tType sE s, Monoid (PrfStdState s o tType),
+                StdPrfPrintMonad s o tType m,
+                StdPrfPrintMonad s o tType (Either SomeException), Monoid (PrfStdContext tType),
+                LogicRuleClass r s t tType sE o, ProofStd s eL r o tType, Show eL, Typeable eL, Monoid r)
+                   => s -> ProofGenTStd tType r s o m (s,[Int])
+eNegIntroM sent = standardRuleM (eNegIntro sent)
+
+aNegIntroM sent = standardRuleM (aNegIntro sent)
+
+
+eiHilbertM :: (Monad m, LogicSent s t tType , TypeableTerm t o tType sE, Show s,
+                Typeable s, Show sE, Typeable sE, MonadThrow m, Show o, Typeable o, Show t, Typeable t,
+                Show tType, Typeable tType, TypedSent o tType sE s, Monoid (PrfStdState s o tType),
+                StdPrfPrintMonad s o tType m,
+                StdPrfPrintMonad s o tType (Either SomeException), Monoid (PrfStdContext tType),
+                LogicRuleClass r s t tType sE o, ProofStd s eL r o tType, Show eL, Typeable eL, Monoid r)
+                   => s -> ProofGenTStd tType r s o m (s,[Int],t)
+
+eiHilbertM sent = do
+         (instantiated, idx) <- standardRuleM (eiHilbert sent)
+         let mayParse = parseExists sent
+         (f,tType) <- maybe (error "parse exists failed when it should not have") return mayParse
+         let hilbertProp = reverseParseQuantToHilbert f tType
+         return (instantiated,idx,hilbertProp)
+
+
+reverseANegIntroM, reverseENegIntroM :: (Monad m, LogicSent s t tType , TypeableTerm t o tType sE, Show s,
+                Typeable s, Show sE, Typeable sE, MonadThrow m, Show o, Typeable o, Show t, Typeable t,
+                Show tType, Typeable tType, TypedSent o tType sE s, Monoid (PrfStdState s o tType),
+                StdPrfPrintMonad s o tType m,
+                StdPrfPrintMonad s o tType (Either SomeException), Monoid (PrfStdContext tType),
+                LogicRuleClass r s t tType sE o, ProofStd s eL r o tType, Show eL, Typeable eL, Monoid r, 
+                REM.SubproofRule r s, LogicConst o, 
+                PL.SubproofRule r s, 
+                PL.LogicRuleClass r s tType sE o)
+                   => s -> ProofGenTStd tType r s o m (s,[Int])
+
+data MetaRuleError s where
+   ReverseANegIntroMNotExistsNot :: s -> MetaRuleError s
+   ReverseENegIntroMNotForallNot :: s -> MetaRuleError s
+   deriving(Show,Typeable)
+
+
+instance (Show s, Typeable s) => Exception (MetaRuleError s)
+
+reverseANegIntroM existsXNotPx = do
+      let mayExistsNot = parseExistsNot existsXNotPx
+      (f,tType) <- maybe (throwM $ ReverseANegIntroMNotExistsNot existsXNotPx) return mayExistsNot
+      
+      runProofBySubArgM $ do
+         (notPc,_, hObj) <- eiHilbertM existsXNotPx
+         let forallXPx = reverseParseQuantToForall f tType
+         (absurdity,_) <- runProofByAsmM forallXPx $ do         
+            (pc,_) <- uiM hObj forallXPx
+            contraFM pc notPc
+         absurdM absurdity
+
+reverseENegIntroM forallXNotPx = do
+      let mayForallNot = parseForallNot forallXNotPx
+      (f,tType) <- maybe (throwM $ ReverseENegIntroMNotForallNot forallXNotPx) return mayForallNot
+      
+      runProofBySubArgM $ do
+         let existsXPx = reverseParseQuantToExists f tType
+         (absurdity,_) <- runProofByAsmM existsXPx $ do
+            (pc,_,obj)<- eiHilbertM existsXPx
+            (notPc,_) <- uiM obj forallXNotPx        
+            contraFM pc notPc
+         absurdM absurdity
+
+
+
 
 instance RuleInject [PL.LogicRule tType s sE o] [LogicRule s sE o t tType ] where
     injectRule:: [PL.LogicRule tType s sE o] -> [LogicRule s sE o t tType ]
@@ -615,7 +741,14 @@ data ProofByUGSchema s r where
 
 class (PL.LogicSent s tType) => LogicSent s t tType | s ->tType, s ->t, s->t where
     parseExists :: s -> Maybe (t->s,tType)
+    parseExistsNot :: s -> Maybe (t->s,tType)
+    parseForallNot :: s-> Maybe (t->s,tType)
     parseForall :: s -> Maybe (t->s,tType)
+    reverseParseQuantToExistsNot :: (t->s) -> tType -> s
+    reverseParseQuantToForallNot :: (t->s) -> tType -> s
+    reverseParseQuantToForall :: (t->s) -> tType -> s
+    reverseParseQuantToExists :: (t->s) -> tType -> s
+    reverseParseQuantToHilbert :: (t->s) -> tType -> t
     -- create generalization from sentence, var type, and free var index.
     createForall ::s -> tType -> Int -> s
  
