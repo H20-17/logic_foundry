@@ -135,14 +135,14 @@ main = do
     --either (putStrLn . show) (putStrLn . unpack . showPropDeBrStepsBase . snd) zb3
     (a,b,c,d) <- runProofGeneratorT testprog
     print "hi wattup 2"
-    let stepTxt= showPropDeBrStepsBase (provenSents d) c
+    let stepTxt= showPropDeBrStepsBase c
     (putStrLn . unpack) stepTxt
     print "YOYOYOYOYOYOYOYOYOYO CHECK THEOREM"
     print "YOYOYOYOYOYOYOYOYOYO CHECK THEOREM"
     print "YOYOYOYOYOYOYOYOYOYO CHECK THEOREM3"
     (a,b,c,d) <- checkTheoremM testTheoremMSchema
 --   print "yo"
-    let stepTxt= showPropDeBrStepsBase (provenSents d) c
+    let stepTxt= showPropDeBrStepsBase d
     (putStrLn . unpack) stepTxt
 
     print "TEST PROG 2 BEGIN-------------------------------------"
@@ -168,7 +168,8 @@ main = do
 testprog::ProofGenTStd () [PredRuleDeBr] PropDeBr Text IO ()
 testprog = do
       let z1 = aX 0 ((X 0 `In` Constant "N") :&&: (X 0 :>=: Integ 10) :->: (X 0 :>=: Integ 0))
-      remarkM $ (pack . show) z1<> " Z1Z1Z1Z1" 
+      showZ1 <- showPropM z1
+      remarkM $ showZ1 <> " Z1Z1Z1Z1" 
       let z2 = aX 0 ((X 0 `In` Constant "N") :&&: (X 0 :>=: Integ 0) :->: (X 0 :==: Integ 0))
       let asm = (V 0 `In` Constant "N") :&&: (V 0 :>=: Integ 10)
       let asm2 = (V 0 `In` Constant "N") :&&: (V 0 :>=: Integ 10)
@@ -193,8 +194,10 @@ testprog = do
       (absurdImp,_) <- runProofByAsmM z2 do
         (notZ1,_) <- fakePropM (Neg z1)
         (falseness,_) <- contraFM z1 notZ1
-        remarkM $ (pack . show) falseness <> " is the falseness"
-      remarkM $ (pack . show) absurdImp <> " is the absurdity"
+        showF <- showPropM falseness
+        remarkM $ showF <> " is the falseness"
+      showAbsurdImp <- showPropM absurdImp
+      remarkM $ showAbsurdImp <> " is the absurdity"
       absurdM absurdImp
       return ()
 
@@ -207,7 +210,8 @@ testprog2 = do
     fakePropM pImpQ
     fakePropM $ neg q
     (s,idx) <- modusTollensM pImpQ
-    remarkM $ (pack . show) s <> " is the sentence. It was proven in line " <> (pack . show) idx
+    showS <- showPropM s
+    remarkM $ showS <> " is the sentence. It was proven in line " <> (pack . show) idx
     return ()
 
 
@@ -217,7 +221,8 @@ testprog3 = do
     fakeConstM "N" ()
     fakePropM a
     (s,idx) <- reverseANegIntroM a
-    remarkM $ (pack . show) s <> " is the sentence. It was proven in line " <> (pack . show) idx
+    showS <- showPropM s
+    remarkM $ showS <> " is the sentence. It was proven in line " <> (pack . show) idx
     return ()
 
 testprog4::ProofGenTStd () [PredRuleDeBr] PropDeBr Text IO ()
@@ -227,7 +232,7 @@ testprog4 = do
     fakePropM a
     (s,idx) <- reverseENegIntroM a
     showS <- showPropM s
-    remarkM $ (pack . show) s <> " is the sentence. It was proven in line " <> (pack . show) idx
+    remarkM $ showS <> " is the sentence. It was proven in line " <> (pack . show) idx
     return ()
 
 
@@ -251,8 +256,9 @@ theoremProg = do
               --(lift . print) "COmment 2"
               (s3,_) <- adjM natAsm s2
               (s4,line_idx) <- uiM newFreeVar z2
-              remarkM ((pack . show) s4 <> " is the sentence. It was proven in line " <> (pack . show) line_idx
-                       <> "\nThis is the next line of this remark.")
+              showS4 <- showPropM s4
+              remarkM $ showS4 <> " is the sentence. It was proven in line " <> (pack . show) line_idx
+                       <> "\nThis is the next line of this remark."
               -- (lift . print . show) line_idx
               (s5,_) <- mpM s4
               simpLM asm

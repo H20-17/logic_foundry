@@ -11,6 +11,8 @@ module Langs.BasicUntyped (
     showPropDeBrStepsBase,
     showPropDeBrStepsBaseM,
     eX, hX, aX,
+    showProp,
+    showObj,
     showPropM,
     showObjM
 ) where
@@ -35,6 +37,8 @@ import qualified RuleSets.Internal.PredLogic as PREDL
 import GHC.Conc (numCapabilities)
 import Distribution.TestSuite (TestInstance(name))
 import RuleSets.Internal.PropLogic (LogicSent(parseIff))
+import Control.Monad.State
+import Control.Monad.RWS
 
 
 
@@ -97,7 +101,7 @@ instance SubexpDeBr ObjDeBr where
     toSubexpParseTree obj dict = case obj of
         Integ i -> (Atom . pack . show) i
         Constant c -> Atom c
-        Hilbert p -> case Data.Map.lookup p dict of
+        Hilbert p -> case Data.Map.lookup (Exists p) dict of
             Just idxs -> HilbertShort idxs
             Nothing -> Binding "ε" (boundDepthPropDeBr p) (toSubexpParseTree p dict)
         Bound i -> Atom $ "𝑥" <> showIndexAsSubscript i
@@ -145,6 +149,7 @@ showSubexpParseTree sub = case sub of
                    )
               Binding {} -> showSubexpParseTree sub1
               Atom _ -> showSubexpParseTree sub1
+              HilbertShort idx -> showSubexpParseTree sub1
           <> " " <> opSymb <> " "
           <> case sub2 of
                UnaryOp _ _-> showSubexpParseTree sub2
@@ -160,9 +165,10 @@ showSubexpParseTree sub = case sub of
                    )
                Binding {} -> showSubexpParseTree sub2
                Atom _ -> showSubexpParseTree sub2
+               HilbertShort idx -> showSubexpParseTree sub2
     Binding quant idx sub1 -> quant <> "𝑥" <> showIndexAsSubscript idx <> "(" <> showSubexpParseTree sub1 <> ")" 
     Atom text -> text
-    HilbertShort idx -> "ε" <> showHierarchalIdxAsSubscript idx
+    HilbertShort idx -> "𝑐" <> showHierarchalIdxAsSubscript idx
   where
     showHierarchalIdxAsSubscript :: [Int] -> Text
     showHierarchalIdxAsSubscript idxs = Data.Text.concat (intersperse "." (Prelude.map showIndexAsSubscript idxs))
@@ -179,6 +185,12 @@ instance Show PropDeBr where
     show :: PropDeBr -> String
     show obj = unpack $ showSubexpParseTree $ toSubexpParseTree obj mempty
 
+
+showObj :: Map PropDeBr [Int] -> ObjDeBr -> Text
+showObj dict obj = showSubexpParseTree $ toSubexpParseTree obj dict
+
+
+
 showObjM :: (Monad m, Monoid r, 
              Proof eL r (PrfStdState PropDeBr Text ()) (PrfStdContext ()) [PrfStdStep PropDeBr Text ()] PropDeBr) 
                      => ObjDeBr -> ProofGenTStd () r PropDeBr Text m Text
@@ -186,8 +198,11 @@ showObjM obj =
     do
       state <- getProofState
       let dict = provenSents state
-      return $ showSubexpParseTree $ toSubexpParseTree obj dict
+      return $ showObj dict obj
            
+
+showProp :: Map PropDeBr [Int] -> PropDeBr -> Text
+showProp dict prop = showSubexpParseTree $ toSubexpParseTree prop dict
 
 showPropM :: (Monad m, Monoid r, 
              Proof eL r (PrfStdState PropDeBr Text ()) (PrfStdContext ()) [PrfStdStep PropDeBr Text ()] PropDeBr) 
@@ -196,7 +211,7 @@ showPropM obj =
     do
       state <- getProofState
       let dict = provenSents state
-      return $ showSubexpParseTree $ toSubexpParseTree obj dict
+      return $ showProp dict obj
 
 
 
@@ -530,17 +545,103 @@ showIndexAsSubscript n =  Data.Text.concat (Prelude.map f (show n))
 
 
 
+data PropDeBrStepContext where
+  PropDeBrStepContext :: {stepContextFrames :: [Bool],
+                            lineIndex :: [Int],
+                            notFromMonad :: Bool,
+                            lastLineNum :: Int} ->
+                           PropDeBrStepContext
 
-showPropDeBrStep :: [Bool] -> [Int] ->Int -> Bool -> Bool -> Map PropDeBr [Int] -> PrfStdStepPredDeBr -> Text
-showPropDeBrStep contextFrames index lineNum notFromMonad isLastLine dictMap step =
-        contextFramesShown
-          <> showIndex index
-                <> (if (not . Prelude.null) index then "." else "")
+data PropDeBrStepState where
+    PropDeBrStepState :: {sentMap :: Map PropDeBr [Int],
+                          stpCount :: Int} -> PropDeBrStepState
+
+
+
+showPropDeBrStep :: PrfStdStep PropDeBr Text () -> RWS PropDeBrStepContext Text PropDeBrStepState ()
+showPropDeBrStep step = do
+        context <- ask
+        let cf = stepContextFrames context
+        let lIndex = lineIndex context
+        state <- get
+        let dictMap = sentMap state
+        let lineNum = stpCount state
+        let notMonadic = notFromMonad context
+        let lastLineN = lastLineNum context
+        tell $ contextFramesShown cf
+          <> showIndex lIndex
+                <> (if (not . Prelude.null) lIndex then "." else "")
                 <> (pack . show) lineNum
                 <> ": "
-          <> showStepInfo
+        let newIndex = lIndex <> [lineNum]
+        let qed = if notMonadic && lineNum == lastLineN - 1 && (not . null) cf then " ◻" else ""
+        case step of
+            PrfStdStepStep prop justification depends -> do
+                let newDictMap = insert prop newIndex dictMap
+                put $ PropDeBrStepState newDictMap (lineNum + 1)
+                tell $ showProp newDictMap prop
+                       <> "    "
+                       <> justification
+                       <> showIndices depends
+                       <> qed
+            PrfStdStepLemma prop mayWhereProven -> do
+                let newDictMap = insert prop newIndex dictMap
+                put $ PropDeBrStepState newDictMap (lineNum + 1)
+                tell $ showProp newDictMap prop
+                       <> "    LEMMA"
+                       <> maybe "" (("[⬅ " <>) . (<> "]"). showIndexDepend) mayWhereProven
+                       <> qed
+            PrfStdStepConst constName _ mayWhereDefined -> do
+                put $ PropDeBrStepState dictMap (lineNum + 1)
+                tell $ "Const "
+                     <> (pack .show) constName
+                     <> "    CONSTDEF"
+                     <> maybe "" (("[⬅ " <>) . (<> "]"). showIndexDepend) mayWhereDefined
+            PrfStdStepTheorem prop steps -> do
+                let newDictMap = insert prop newIndex dictMap
+                put $ PropDeBrStepState newDictMap (lineNum + 1)
+                tell $ showProp newDictMap prop
+                       <> "    THEOREM"
+                       <> showSubproofF steps True notMonadic newDictMap cf newIndex
+                       <> qed
+            PrfStdStepSubproof prop subproofName steps -> do
+                let newDictMap = insert prop newIndex dictMap
+                put $ PropDeBrStepState newDictMap (lineNum + 1)
+                tell $ showProp newDictMap prop
+                       <> "    "
+                       <> subproofName
+                       <> qed
+                       <> showSubproofF steps False notMonadic newDictMap cf newIndex
+            PrfStdStepTheoremM prop -> do
+                let newDictMap = insert prop newIndex dictMap
+                put $ PropDeBrStepState newDictMap (lineNum + 1)
+                tell $ showProp newDictMap prop
+                       <> "    ALGORITHMIC_THEOREM"
+                       <> qed
+            PrfStdStepFreevar index _ -> do
+                put $ PropDeBrStepState dictMap (lineNum + 1)
+                tell $ "FreeVar 𝑣"
+                     <> showIndexAsSubscript index
+                     <> "    VARDEF"
+            PrfStdStepFakeConst constName _ -> do
+                put $ PropDeBrStepState dictMap (lineNum + 1)
+                tell $ "Const "
+                     <> (pack .show) constName
+                     <> "    FAKE_CONST"
+            PrfStdStepRemark text -> do
+                put $ PropDeBrStepState dictMap (lineNum + 1)
+                tell $ "REMARK"
+                     <> qed
+                     <> (if text == "" then "" else "\n" <> contextFramesShown cf <> "║") 
+                     <> intercalate ("\n" <> contextFramesShown cf <> "║") (Data.Text.lines text)
+                     <> "\n"
+                     <> contextFramesShown cf
+                     <> "╚"
+        let eol = if notMonadic && lineNum < lastLineN -1 then "\n" else ""
+        tell eol
+        return ()
       where
-        contextFramesShown = Data.Text.concat (Prelude.map mapBool contextFrames)
+        contextFramesShown cf = Data.Text.concat (Prelude.map mapBool cf)
         mapBool frameBool =  if frameBool
                                 then
                                     "┃"
@@ -551,73 +652,28 @@ showPropDeBrStep contextFrames index lineNum notFromMonad isLastLine dictMap ste
                             <> "]"
         showIndexDepend i = if Prelude.null i then "?" else showIndex i 
         showIndex i = Data.Text.concat (intersperse "." (Prelude.map (pack . show) i))
-        showStepInfo = 
-          case step of
-             PrfStdStepStep prop justification depends -> 
-                  (pack . show) prop
-                <> "    "
-                <> justification
-                <> showIndices depends
-                <> qed
-             PrfStdStepLemma prop mayWhereProven ->
-                   (pack . show) prop
-                <> "    LEMMA"
-                <> maybe "" (("[⬅ " <>) . (<> "]"). showIndexDepend) mayWhereProven
-                <> qed
-             PrfStdStepConst constName _ mayWhereDefined ->
-                   "Const "
-                <> (pack .show) constName
-                <> "    CONSTDEF"
-                <> maybe "" (("[⬅ " <>) . (<> "]"). showIndexDepend) mayWhereDefined
-             PrfStdStepTheorem prop steps ->
-                   (pack . show) prop
-                <> "    THEOREM"
-                <> qed
-                <> showSubproofF steps True
-             PrfStdStepSubproof prop subproofName steps ->
-                   (pack . show) prop
-                <> "    "
-                <> subproofName
-                <> qed
-                <> showSubproofF steps False
-             PrfStdStepTheoremM prop  ->
-                   (pack . show) prop
-                <> "    ALGORITHMIC_THEOREM"
-                <> qed
-             PrfStdStepFreevar index _ ->
-                   "FreeVar 𝑣"
-                <> showIndexAsSubscript index
-                <> "    VARDEF"  
-             PrfStdStepFakeConst constName _ ->
-                "Const "
-                     <> (pack .show) constName
-                <> "    FAKE_CONST"
-             PrfStdStepRemark text ->   "REMARK"
-                                      <> qed
-                                      <> (if text == "" then "" else "\n" <> contextFramesShown <> "║") 
-                                      <> intercalate ("\n" <> contextFramesShown <> "║") (Data.Text.lines text)
-                                      <> "\n"
-                                      <> contextFramesShown
-                                      <> "╚"
-             where
- 
-                showSubproofF steps isTheorem = 
-                    if notFromMonad then
-                          "\n"
-                       <> showPropDeBrSteps (contextFrames <> [isTheorem]) newIndex 0 notFromMonad dictMap steps
---                       <> " ◻"
-                       <> "\n"
-                       <> Data.Text.concat (Prelude.map mapBool contextFrames) 
+        showSubproofF steps isTheorem notMonadic dictMap cf newIndex = 
+                    if notMonadic then
+                         "\n"
+                        <> showPropDeBrSteps (cf <> [isTheorem]) newIndex 0 notMonadic newDictMap steps
+                      -- <> "\n"
+                       <> Data.Text.concat (Prelude.map mapBool cf) 
                                <> cornerFrame
                       else ""
                      where
-                        newIndex = if isTheorem then [] else index <> [lineNum]
+                        newDictMap = if isTheorem then
+                                        mempty
+                                        else
+                                        dictMap
                         cornerFrame = if isTheorem then
                                  "┗"
                               else
                                   "└"
-                qed = if notFromMonad && isLastLine && (not . null) contextFrames then " ◻" else ""
 
+
+ 
+                
+                
 
 instance StdPrfPrintMonadFrame IO where
     printStartFrame :: [Bool] -> IO ()
@@ -661,22 +717,34 @@ instance StdPrfPrintMonad PropDeBr Text () (Either SomeException) where
 
 
 showPropDeBrSteps :: [Bool] -> [Int] -> Int -> Bool -> Map PropDeBr [Int] -> [PrfStdStepPredDeBr] -> Text
-showPropDeBrSteps contextFrames index stepStart notFromMonad dictMap steps = fst foldResult
-    where 
-        foldResult = Prelude.foldl f ("", stepStart) steps
-           where
-             f (accumText,stepNum) step = (accumText 
-                                             <> showPropDeBrStep contextFrames index stepNum 
-                                                   notFromMonad isLastLine dictMap step <> eol,
-                                           stepNum+1)
-                  where
-                    isLastLine = stepNum == stepStart + length steps - 1
-                    eol = if isLastLine then "" else "\n"
+showPropDeBrSteps contextFrames index startLine notFromMonad dictMap steps = 
+
+    resultText runResult
+    where
+       lastLineN = startLine + length steps
+       runResult = runRWS (mapM_ showPropDeBrStep steps) context state
+       resultText (a,b,c) = c
+       context = PropDeBrStepContext contextFrames index notFromMonad lastLineN
+       state = PropDeBrStepState dictMap startLine
+    
+    
+--    fst foldResult
+--    where 
+
+--        foldResult = Prelude.foldl f ("", stepStart) steps
+--           where
+--             f (accumText,stepNum) step = (accumText 
+--                                             <> showPropDeBrStep contextFrames index stepNum 
+--                                                   notFromMonad isLastLine dictMap step <> eol,
+--                                           stepNum+1)
+--                  where
+--                    isLastLine = stepNum == stepStart + length steps - 1
+--                    eol = if isLastLine then "" else "\n"
 
 
 
-showPropDeBrStepsBase :: Map PropDeBr [Int] -> [PrfStdStepPredDeBr] -> Text
-showPropDeBrStepsBase = showPropDeBrSteps [] [] 0 True
+showPropDeBrStepsBase :: [PrfStdStepPredDeBr] -> Text
+showPropDeBrStepsBase = showPropDeBrSteps [] [] 0 True mempty
 
 
 showPropDeBrStepsBaseM :: (Monad m, Monoid r, 
@@ -685,7 +753,7 @@ showPropDeBrStepsBaseM :: (Monad m, Monoid r,
 showPropDeBrStepsBaseM steps = do 
       state <- getProofState
       let dict = provenSents state
-      return $ showPropDeBrStepsBase dict steps
+      return $ showPropDeBrStepsBase steps
 
 
 
