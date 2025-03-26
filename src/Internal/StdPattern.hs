@@ -9,7 +9,9 @@ module Internal.StdPattern(
     getTopFreeVar,
     testSubproof, monadifyProofStd,
     runSubproofM,
-    ProofGenTStd
+    ProofGenTStd,
+    LogicConst(..),
+    newConstM
     
 
 
@@ -125,6 +127,9 @@ class (Eq tType, Ord o) => TypeableTerm t o tType sE | t -> o, t ->tType, t -> s
     const2Term :: o -> t
     free2Term :: Int -> t
         
+class LogicConst o where
+    newConst :: Set o -> o
+
 class (Ord s, Eq tType, Ord o) => TypedSent o tType sE s | s-> tType, s-> sE, s -> o where
     checkSanity :: [tType] -> s -> Map o tType -> Maybe sE
 
@@ -184,7 +189,7 @@ class Monad m => StdPrfPrintMonadFrame m where
     printStartFrame :: [Bool] -> m()
 
 class (Monad m, StdPrfPrintMonadFrame m) => StdPrfPrintMonad s o tType m |  s -> o, s-> tType where
-     printSteps :: [Bool] -> [Int] -> Int -> [PrfStdStep s o tType] -> m ()
+     printSteps :: [Bool] -> [Int] -> Int -> Map s [Int] -> [PrfStdStep s o tType] -> m ()
 
 
 
@@ -202,8 +207,8 @@ instance (StdPrfPrintMonad s o tType m,
           Monoid r, 
           StdPrfPrintMonadFrame (ProofGenTStd tType r s o m))
              => StdPrfPrintMonad s o tType (ProofGenTStd tType r s o m) where
-  printSteps :: [Bool] -> [Int] -> Int -> [PrfStdStep s o tType] -> ProofGenTStd tType r s o m ()
-  printSteps contextFrames idx stepStart steps = lift $ printSteps contextFrames idx stepStart steps
+  printSteps :: [Bool] -> [Int] -> Int -> Map s [Int] -> [PrfStdStep s o tType] -> ProofGenTStd tType r s o m ()
+  printSteps contextFrames idx stepStart dictMap steps = lift $ printSteps contextFrames idx stepStart dictMap steps
 
 
 
@@ -218,13 +223,23 @@ monadifyProofStd p = do
      PrfStdContext fvStack idx contextFrames <- ask
      state <- getProofState
      (addedState,steps, mayLastProp) <- monadifyProof p
-     printSteps contextFrames idx (stepCount state) steps
+     printSteps contextFrames idx (stepCount state) (provenSents state) steps
      let stuff = f addedState =<< mayLastProp
      return stuff
    where
        f state prop = Just (prop, provenSents state!prop )
           
-       
+newConstM :: (MonadThrow m, ProofStd s eL r o tType, Monoid r,
+                    LogicConst o)
+           => ProofGenTStd tType r s o m o
+newConstM = do
+    context <- ask
+    state <- getProofState
+    let constDict = consts state
+    let constSet = keysSet constDict
+    let c = newConst constSet
+    return c
+
 
 
 
@@ -249,7 +264,10 @@ runSubproofM :: ( Monoid r1, ProofStd s eL1 r1 o tType, Monad m,
                           ->  m (x,s,r1,[PrfStdStep s o tType])
 runSubproofM context baseState preambleState preambleSteps mayPreambleLastProp prog =  do
           printStartFrame (contextFrames context)
-          unless (Prelude.null preambleSteps) (printSteps (contextFrames context) (stepIdxPrefix context) 0 preambleSteps)
+
+
+          unless (Prelude.null preambleSteps) 
+                    (printSteps (contextFrames context) (stepIdxPrefix context) 0 (provenSents baseState) preambleSteps)
           let baseStateZero = PrfStdState (provenSents baseState) (consts baseState) 0
           let startState = baseStateZero <> preambleState
           (extraData,newState,r,newSteps, mayLastProp) <- runProofGeneratorTOpen prog context startState
