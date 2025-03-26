@@ -158,9 +158,9 @@ main = do
     print "TEST PROG 4 BEGIN-------------------------------------"
     (a,b,c,d) <- runProofGeneratorT testprog4
     (putStrLn . unpack . showPropDeBrStepsBase) c
+    (putStrLn . show) b
 
-
-
+    (putStrLn . show) c
 
     return ()
 

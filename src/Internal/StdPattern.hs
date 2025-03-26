@@ -117,7 +117,7 @@ data PrfStdStep s o tType where
     PrfStdStepFreevar :: Int -> tType -> PrfStdStep s o tType
     PrfStdStepFakeConst :: o ->tType -> PrfStdStep s o tType
     PrfStdStepRemark :: Text -> PrfStdStep s o tType
-
+  deriving Show
 
 
 
