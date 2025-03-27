@@ -162,6 +162,14 @@ main = do
 
     (putStrLn . show) c
 
+
+    print "TEST PROG 5 BEGIN-------------------------------------"
+    (a,b,c,d) <- runProofGeneratorT testprog5
+    (putStrLn . unpack . showPropDeBrStepsBase) c
+    (putStrLn . show) b
+
+
+
     return ()
 
 
@@ -232,6 +240,18 @@ testprog4 = do
     fakePropM a
     (s,idx) <- reverseENegIntroM a
     showS <- showPropM s
+    remarkM $ showS <> " is the sentence. It was proven in line " <> (pack . show) idx
+    return ()
+
+
+testprog5::ProofGenTStd () [PredRuleDeBr] PropDeBr Text IO ()
+testprog5 = do
+    let a = eXBang 99 (Neg (X 99 `In` Constant "N"))
+    fakeConstM "N" ()
+    (s,idx) <- fakePropM a
+
+    --(s,idx) <- reverseENegIntroM a
+    showS <- showPropM a
     remarkM $ showS <> " is the sentence. It was proven in line " <> (pack . show) idx
     return ()
 

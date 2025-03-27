@@ -14,7 +14,8 @@ module Langs.BasicUntyped (
     showProp,
     showObj,
     showPropM,
-    showObjM
+    showObjM,
+    eXBang
 ) where
 import Control.Monad ( unless )
 import Data.List (intersperse)
@@ -109,20 +110,63 @@ instance SubexpDeBr ObjDeBr where
         X i -> Atom $ "X" <> showIndexAsSubscript i     
 
 
+boundDepthObjDeBr :: ObjDeBr -> Int
+boundDepthObjDeBr obj = case obj of
+     Integ num -> 0
+     Constant name -> 0
+     Hilbert prop -> boundDepthPropDeBr prop + 1
+     Bound idx -> 0
+     V idx -> 0
+     X idx -> 0
+
+
+boundDepthPropDeBr :: PropDeBr -> Int
+boundDepthPropDeBr p = case p of
+    Neg p -> boundDepthPropDeBr p
+    (:&&:) p1 p2 -> max (boundDepthPropDeBr p1) (boundDepthPropDeBr p2)
+    (:||:) p1 p2 -> max (boundDepthPropDeBr p1) (boundDepthPropDeBr p2)
+    (:->:) p1 p2 -> max (boundDepthPropDeBr p1) (boundDepthPropDeBr p2)
+    (:<->:) p1 p2 -> max (boundDepthPropDeBr p1) (boundDepthPropDeBr p2)
+    In o1 o2 -> max (boundDepthObjDeBr o1) (boundDepthObjDeBr o2)
+    (:==:) o1 o2 -> max (boundDepthObjDeBr o1) (boundDepthObjDeBr o2)
+    Forall p -> boundDepthPropDeBr p + 1
+    Exists p -> boundDepthPropDeBr p + 1
+    (:>=:) o1 o2 -> max (boundDepthObjDeBr o1) (boundDepthObjDeBr o2)
+    F -> 0
+
+
 instance SubexpDeBr PropDeBr where
   toSubexpParseTree :: PropDeBr -> Map PropDeBr [Int] -> SubexpParseTree
-  toSubexpParseTree p dict = case p of
-    Neg q -> UnaryOp "¬" (toSubexpParseTree q dict)
-    (:&&:) a b -> BinaryOp "∧" (toSubexpParseTree a dict) (toSubexpParseTree b dict)
-    (:||:) a b -> BinaryOp "∨" (toSubexpParseTree a dict) (toSubexpParseTree b dict)
-    (:->:)  a b -> BinaryOp "→" (toSubexpParseTree a dict) (toSubexpParseTree b dict)
-    (:<->:) a b -> BinaryOp "↔"(toSubexpParseTree a dict) (toSubexpParseTree b dict)
-    (:==:) a b -> BinaryOp "=" (toSubexpParseTree a dict) (toSubexpParseTree b dict)
-    In a b -> BinaryOp "∈" (toSubexpParseTree a dict) (toSubexpParseTree b dict)
-    Forall a -> Binding "∀" (boundDepthPropDeBr a) (toSubexpParseTree a dict)
-    Exists a -> Binding "∃" (boundDepthPropDeBr a) (toSubexpParseTree a dict)
-    (:>=:) a b -> BinaryOp "≥" (toSubexpParseTree a dict) (toSubexpParseTree b dict)
-    F -> Atom "⊥"
+  toSubexpParseTree prop dict = case prop of
+      Neg q -> UnaryOp "¬" (toSubexpParseTree q dict)
+      (:&&:) a b -> BinaryOp "∧" (toSubexpParseTree a dict) (toSubexpParseTree b dict)
+      (:||:) a b -> BinaryOp "∨" (toSubexpParseTree a dict) (toSubexpParseTree b dict)
+      (:->:)  a b -> BinaryOp "→" (toSubexpParseTree a dict) (toSubexpParseTree b dict)
+      (:<->:) a b -> BinaryOp "↔"(toSubexpParseTree a dict) (toSubexpParseTree b dict)
+      (:==:) a b -> BinaryOp "=" (toSubexpParseTree a dict) (toSubexpParseTree b dict)
+      In a b -> BinaryOp "∈" (toSubexpParseTree a dict) (toSubexpParseTree b dict)
+      Forall a -> Binding "∀" (boundDepthPropDeBr a) (toSubexpParseTree a dict)
+      Exists a -> ebuild a
+      (:>=:) a b -> BinaryOp "≥" (toSubexpParseTree a dict) (toSubexpParseTree b dict)
+      F -> Atom "⊥"
+    where
+        ebuild a = case a of  
+            p :&&: q -> if Forall (pDecremented :->: Bound (depth - 1):==: Bound depth) == q then
+                            Binding "∃!" (depth-1) (toSubexpParseTree pDecremented dict)
+                        else
+                            error (show pDecremented)
+                            -- defaultP
+                where
+                    pDecremented = boundDecrementPropDeBr depth p
+            _ -> defaultP
+         where
+           defaultP = Binding "∃" depth (toSubexpParseTree a dict)
+           depth = boundDepthPropDeBr a     
+ 
+
+
+
+
 
 showSubexpParseTree :: SubexpParseTree -> Text
 showSubexpParseTree sub = case sub of
@@ -240,14 +284,6 @@ data DeBrSe where
    deriving Show
 
 
-boundDepthObjDeBr :: ObjDeBr -> Int
-boundDepthObjDeBr obj = case obj of
-     Integ num -> 0
-     Constant name -> 0
-     Hilbert prop -> boundDepthPropDeBr prop + 1
-     Bound idx -> 0
-     V idx -> 0
-     X idx -> 0
 
 
 
@@ -274,22 +310,32 @@ checkSanityObjDeBr obj varStackHeight constSet boundSet = case obj of
             (return . ObjDeBrFreeVarIdx) idx
      X idx -> return $ ObjDeBrUnconsumedX idx
 
- 
+boundDecrementObjDeBr :: Int -> ObjDeBr -> ObjDeBr
+boundDecrementObjDeBr idx obj = case obj of
+     Integ num -> Integ num
+     Constant name -> Constant name
+     Hilbert prop -> Hilbert (boundDecrementPropDeBr idx prop)
+     Bound i -> if i == idx then Bound (i - 1) else Bound i
+     V i -> V i
+     X i -> X i
 
 
-boundDepthPropDeBr :: PropDeBr -> Int
-boundDepthPropDeBr p = case p of
-    Neg p -> boundDepthPropDeBr p
-    (:&&:) p1 p2 -> max (boundDepthPropDeBr p1) (boundDepthPropDeBr p2)
-    (:||:) p1 p2 -> max (boundDepthPropDeBr p1) (boundDepthPropDeBr p2)
-    (:->:) p1 p2 -> max (boundDepthPropDeBr p1) (boundDepthPropDeBr p2)
-    (:<->:) p1 p2 -> max (boundDepthPropDeBr p1) (boundDepthPropDeBr p2)
-    In o1 o2 -> max (boundDepthObjDeBr o1) (boundDepthObjDeBr o2)
-    (:==:) o1 o2 -> max (boundDepthObjDeBr o1) (boundDepthObjDeBr o2)
-    Forall p -> boundDepthPropDeBr p + 1
-    Exists p -> boundDepthPropDeBr p + 1
-    (:>=:) o1 o2 -> max (boundDepthObjDeBr o1) (boundDepthObjDeBr o2)
-    F -> 0
+
+boundDecrementPropDeBr :: Int -> PropDeBr -> PropDeBr
+boundDecrementPropDeBr idx prop = case prop of
+    Neg q -> Neg $ boundDecrementPropDeBr idx q
+    (:&&:) p1 p2 -> (:&&:) (boundDecrementPropDeBr idx p1) (boundDecrementPropDeBr idx p2)
+    (:||:) p1 p2 -> (:||:) (boundDecrementPropDeBr idx p1) (boundDecrementPropDeBr idx p2)
+    (:->:) p1 p2 -> (:->:) (boundDecrementPropDeBr idx p1) (boundDecrementPropDeBr idx p2)
+    (:<->:) p1 p2 -> (:<->:) (boundDecrementPropDeBr idx p1) (boundDecrementPropDeBr idx p2)
+    (:==:) o1 o2 -> (:==:) (boundDecrementObjDeBr idx o1) (boundDecrementObjDeBr idx o2)
+    In o1 o2 -> In (boundDecrementObjDeBr idx o1) (boundDecrementObjDeBr idx o2)
+    Forall q -> Forall (boundDecrementPropDeBr idx q)
+    Exists q -> Exists (boundDecrementPropDeBr idx q)
+    (:>=:) o1 o2 -> (:>=:) (boundDecrementObjDeBr idx o1) (boundDecrementObjDeBr idx o2)
+    F -> F
+
+
 
 checkSanityPropDeBr :: PropDeBr -> Int -> Set Text -> Set Int -> Maybe DeBrSe
 checkSanityPropDeBr prop freevarStackHeight consts boundVars = 
@@ -801,6 +847,14 @@ instance LogicConst Text where
 
 eX :: Int -> PropDeBr -> PropDeBr
 eX idx p = Exists $ xsubPropDeBr p idx (boundDepthPropDeBr p)
+
+
+eXBang :: Int -> PropDeBr -> PropDeBr
+eXBang idx p = eX idx (p :&&: aX idx (p :->: Bound depth :==: Bound (depth+1)))
+    where
+        depth = boundDepthPropDeBr p         
+
+
 
 aX :: Int -> PropDeBr -> PropDeBr
 aX idx p = Forall $ xsubPropDeBr p idx (boundDepthPropDeBr p)
