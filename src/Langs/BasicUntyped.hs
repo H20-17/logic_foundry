@@ -212,7 +212,7 @@ showSubexpParseTree sub = case sub of
                HilbertShort idx -> showSubexpParseTree sub2
     Binding quant idx sub1 -> quant <> "𝑥" <> showIndexAsSubscript idx <> "(" <> showSubexpParseTree sub1 <> ")" 
     Atom text -> text
-    HilbertShort idx -> "𝑐" <> showHierarchalIdxAsSubscript idx
+    HilbertShort idx -> "ε" <> showHierarchalIdxAsSubscript idx
   where
     showHierarchalIdxAsSubscript :: [Int] -> Text
     showHierarchalIdxAsSubscript idxs = Data.Text.concat (intersperse "." (Prelude.map showIndexAsSubscript idxs))
