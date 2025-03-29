@@ -4,7 +4,7 @@ module RuleSets.Internal.ZFC
     runProofAtomic, uiM, eiM, reverseANegIntroM, reverseENegIntroM,eNegIntroM, aNegIntroM,
     eiHilbertM,
     LogicRuleClass(..), checkTheoremM, establishTmSilentM, expandTheoremM, runProofByUG,
-    runTheoremM, runTmSilentM, runProofByUGM, SubproofMException(..),
+    runTheoremM, runTmSilentM, runProofByUGM,
     ProofByUGSchema(..),
     LogicSent(..), 
     TheoremSchemaMT(..),
@@ -95,135 +95,137 @@ data LogicError s sE t where
     LogicErrUG :: PREDL.SubproofError s sE  (LogicError s sE t) -> LogicError s sE t
     LogicErrTheorem :: PREDL.ChkTheoremError s sE (LogicError s sE t) Text () -> LogicError s sE t 
     LogicErrTheoremM :: SomeException -> LogicError s sE t 
-    LogicErrPredL ::  PREDL.LogicError s sE o Text () -> LogicError s sE t
+    LogicErrPredL ::  PREDL.LogicError s sE Text t () -> LogicError s sE t
     
 
    deriving (Show)
 
 data LogicRule s sE t  where
    -- t is a term
-    PredRule :: PREDL.LogicRule s sE t -> LogicRule s sE t 
+    PredRule :: PREDL.LogicRule s sE Text t () -> LogicRule s sE t 
     ProofByAsm :: ProofByAsmSchema s [LogicRule s sE t] -> LogicRule s sE t 
     ProofBySubArg :: ProofBySubArgSchema s [LogicRule s sE t] -> LogicRule s sE t
     ProofByUG :: ProofByUGSchema s [LogicRule s sE t] -> LogicRule s sE t 
-
+    Theorem :: TheoremSchema s [LogicRule s sE t ] Text () -> LogicRule s sE t 
+    TheoremM :: TheoremAlgSchema () [LogicRule s sE t ] s Text () -> 
+                             LogicRule s sE t
+    EmptySet :: LogicRule s sE t
     deriving(Show)
 
 
-instance REM.LogicRuleClass [LogicRule s sE o t tType ] s o tType sE where
-     remark:: Text -> [LogicRule s sE o t tType ]
-     remark rem = [(PropRule . PL.BaseRule . REM.Remark) rem]
-     rep :: s -> [LogicRule s sE o t tType ]
-     rep s = [(PropRule . PL.BaseRule . REM.Rep) s]
-     fakeProp:: s -> [LogicRule s sE o t tType ]
-     fakeProp s = [(PropRule . PL.BaseRule . REM.FakeProp) s]
-     fakeConst:: o -> tType -> [LogicRule s sE o t tType ]
-     fakeConst o t = [PropRule $ PL.BaseRule $ REM.FakeConst o t]
+instance REM.LogicRuleClass [LogicRule s sE t] s Text () sE where
+     remark:: Text -> [LogicRule s sE t]
+     remark rem = [(PredRule . PREDL.PropRule . PL.BaseRule . REM.Remark) rem]
+     rep :: s -> [LogicRule s sE t ]
+     rep s = [(PredRule . PREDL.PropRule . PL.BaseRule . REM.Rep) s]
+     fakeProp:: s -> [LogicRule s o t ]
+     fakeProp s = [(PredRule . PREDL.PropRule . PL.BaseRule . REM.FakeProp) s]
+     fakeConst:: Text -> () -> [LogicRule s sE t ]
+     fakeConst o t = [PredRule $ PREDL.PropRule $ PL.BaseRule $ REM.FakeConst o t]
 
-instance PL.LogicRuleClass [LogicRule s sE o t tType ] s tType sE o where
-     mp:: s -> [LogicRule s sE o t tType ]
-     mp a = [PropRule  (PL.MP a)]     
-     exclMid:: s -> [LogicRule s sE o t tType ]
-     exclMid a = [PropRule  (PL.ExclMid a)]
-     simpL:: s -> [LogicRule s sE o t tType ]
-     simpL a = [PropRule  (PL.SimpL a)]
-     simpR :: s -> [LogicRule s sE o t tType]
-     simpR a = [PropRule (PL.SimpR a)]
 
-     adj:: s -> s -> [LogicRule s sE o t tType ]
-     adj a b = [PropRule  (PL.Adj a b)]
-     contraF :: s -> s -> [LogicRule s sE o t tType ]
-     contraF a notA = [PropRule  (PL.ContraF a notA)]
-     absurd:: s -> [LogicRule s sE o t tType ]
-     absurd a = [PropRule  (PL.Absurd a)]    
-     disjIntroL :: s -> s -> [LogicRule s sE o t tType]
-     disjIntroL a b = [PropRule (PL.DisjIntroL a b)]
+instance PL.LogicRuleClass [LogicRule s sE t] s () sE Text where
+     mp:: s -> [LogicRule s sE t]
+     mp a = [(PredRule . PREDL.PropRule . PL.MP) a]     
+     exclMid:: s -> [LogicRule s sE t]
+     exclMid a = [(PredRule . PREDL.PropRule . PL.ExclMid) a]
+     simpL:: s -> [LogicRule s sE t]
+     simpL a = [(PredRule . PREDL.PropRule . PL.SimpL) a]
+     simpR :: s -> [LogicRule s sE t]
+     simpR a = [(PredRule . PREDL.PropRule . PL.SimpR) a]
+
+     adj:: s -> s -> [LogicRule s sE t]
+     adj a b = [PredRule $ PREDL.PropRule $ PL.Adj a b]
+     contraF :: s -> s -> [LogicRule s sE t]
+     contraF a notA = [PredRule $ PREDL.PropRule $ PL.ContraF a notA]
+     absurd:: s -> [LogicRule s sE t]
+     absurd a = [(PredRule . PREDL.PropRule . PL.Absurd) a]    
+     disjIntroL :: s -> s -> [LogicRule s sE t]
+     disjIntroL a b = [PredRule $ PREDL.PropRule $ PL.DisjIntroL a b]
     
-     disjIntroR :: s -> s -> [LogicRule s sE o t tType]
-     disjIntroR a b = [PropRule (PL.DisjIntroR a b)]
+     disjIntroR :: s -> s -> [LogicRule s sE t]
+     disjIntroR a b = [PredRule $ PREDL.PropRule $ PL.DisjIntroR a b]
     
-     disjElim :: s -> s -> s -> [LogicRule s sE o t tType]
-     disjElim a b c = [PropRule (PL.DisjElim a b c)]
+     disjElim :: s -> s -> s -> [LogicRule s sE t]
+     disjElim a b c = [PredRule $ PREDL.PropRule $ PL.DisjElim a b c]
     
-     doubleNegElim :: s -> [LogicRule s sE o t tType]
-     doubleNegElim a = [PropRule (PL.DoubleNegElim a)]
+     doubleNegElim :: s -> [LogicRule s sE t]
+     doubleNegElim a = [(PredRule . PREDL.PropRule . PL.DoubleNegElim) a]
     
-     deMorganConj :: s -> [LogicRule s sE o t tType]
-     deMorganConj a = [PropRule (PL.DeMorganConj a)]
+     deMorganConj :: s -> [LogicRule s sE t]
+     deMorganConj a = [(PredRule . PREDL.PropRule . PL.DeMorganConj) a]
     
-     deMorganDisj :: s -> [LogicRule s sE o t tType]
-     deMorganDisj a = [PropRule (PL.DeMorganDisj a)]
+     deMorganDisj :: s -> [LogicRule s sE t]
+     deMorganDisj a = [(PredRule . PREDL.PropRule . PL.DeMorganDisj) a]
     
-     bicondIntro :: s -> s -> [LogicRule s sE o t tType]
-     bicondIntro a b = [PropRule (PL.BicondIntro a b)]
+     bicondIntro :: s -> s -> [LogicRule s sE t]
+     bicondIntro a b = [PredRule $ PREDL.PropRule $ PL.BicondIntro a b]
     
-     bicondElimL :: s -> [LogicRule s sE o t tType]
-     bicondElimL a = [PropRule (PL.BicondElimL a)]
+     bicondElimL :: s -> [LogicRule s sE t]
+     bicondElimL a = [(PredRule . PREDL.PropRule . PL.BicondElimL) a]
     
-     bicondElimR :: s -> [LogicRule s sE o t tType]
-     bicondElimR a = [PropRule (PL.BicondElimR a)]
+     bicondElimR :: s -> [LogicRule s sE t]
+     bicondElimR a = [(PredRule . PREDL.PropRule . PL.BicondElimR) a]
     
-     absorpAnd :: s -> [LogicRule s sE o t tType]
-     absorpAnd a = [PropRule (PL.AbsorpAnd a)]
+     absorpAnd :: s -> [LogicRule s sE t]
+     absorpAnd a = [(PredRule . PREDL.PropRule . PL.AbsorpAnd) a]
     
-     absorpOr :: s -> [LogicRule s sE o t tType]
-     absorpOr a = [PropRule (PL.AbsorpOr a)]
+     absorpOr :: s -> [LogicRule s sE t]
+     absorpOr a = [(PredRule . PREDL.PropRule . PL.AbsorpOr) a]
     
-     distAndOverOr :: s -> [LogicRule s sE o t tType]
-     distAndOverOr a = [PropRule (PL.DistAndOverOr a)]
+     distAndOverOr :: s -> [LogicRule s sE t]
+     distAndOverOr a = [(PredRule . PREDL.PropRule . PL.DistAndOverOr) a]
     
-     distOrOverAnd :: s -> [LogicRule s sE o t tType]
-     distOrOverAnd a = [PropRule (PL.DistOrOverAnd a)]
+     distOrOverAnd :: s -> [LogicRule s sE t]
+     distOrOverAnd a = [(PredRule . PREDL.PropRule . PL.DistOrOverAnd) a]
     
-     peircesLaw :: s -> [LogicRule s sE o t tType]
-     peircesLaw p = [PropRule (PL.PeircesLaw p)]
+     peircesLaw :: s -> [LogicRule s sE t]
+     peircesLaw p = [(PredRule . PREDL.PropRule . PL.PeircesLaw) p]
 
  
 
-class LogicRuleClass r s t tType sE o | r->s, r->o, r->tType, r->sE, r->t where
-     ei :: s -> o -> r
-     eiHilbert :: s -> r
-     eg :: t -> s -> r
-     ui :: t -> s -> r
-     eNegIntro :: s -> r
-     aNegIntro :: s -> r
 
 
 
-instance LogicRuleClass [LogicRule s sE o t tType ] s t tType sE o where
-     ei:: s -> o -> [LogicRule s sE o t tType ]
-     eiHilbert:: s -> [LogicRule s sE o t tType ]
-     eiHilbert s = [EIHilbert s]
-     ei s o = [EI s o]
-     eg:: t -> s -> [LogicRule s sE o t tType ]
-     eg t s = [EG t s]
-     ui:: t -> s -> [LogicRule s sE o t tType ]
-     ui t s = [UI t s]
-     eNegIntro:: s -> [LogicRule s sE o t tType ]
-     eNegIntro s = [ENegIntro s]
-     aNegIntro:: s -> [LogicRule s sE o t tType ]
-     aNegIntro s = [ANegIntro s]
 
 
+instance PREDL.LogicRuleClass [LogicRule s sE t] s t () sE Text where
+     ei:: s -> Text -> [LogicRule s sE t ]
+     ei s o = [PredRule $ PREDL.EI s o]
+     eiHilbert:: s -> [LogicRule s sE t ]
+     eiHilbert s = [(PredRule . PREDL.EIHilbert) s]
+     
+     eg:: t -> s -> [LogicRule s sE t ]
+     eg t s = [PredRule $ PREDL.EG t s]
+     ui:: t -> s -> [LogicRule s sE t]
+     ui t s = [PredRule $ PREDL.UI t s]
+     eNegIntro:: s -> [LogicRule s sE t]
+     eNegIntro s = [(PredRule . PREDL.ENegIntro) s]
+     aNegIntro:: s -> [LogicRule s sE t]
+     aNegIntro s = [(PredRule . PREDL.ANegIntro) s]
 
+
+class LogicRuleClass r s sE t | r->s, r->sE, r->t where
+     emptySet :: r
 
 
 
 
 
 runProofAtomic :: (
-               ProofStd s (LogicError s sE o t tType ) [LogicRule s sE o t tType ] o tType,
-               Show sE, Typeable sE, Show s, Typeable s, TypeableTerm t o tType sE, TypedSent o tType sE s,
-               Typeable o, Show o,Typeable tType, Show tType, Show t, Typeable t,
-               StdPrfPrintMonad s o tType (Either SomeException)) =>
-                            LogicRule s sE o t tType  ->
-                            PrfStdContext tType -> 
-                            PrfStdState s o tType -> 
-                            Either (LogicError s sE o t tType ) (Maybe s,Maybe (o,tType),PrfStdStep s o tType)
+               ProofStd s (LogicError s sE t) [LogicRule s sE t] Text (),
+               Show sE, Typeable sE, Show s, Typeable s, TypeableTerm t Text () sE,
+                TypedSent Text () sE s,
+               Show t, Typeable t,
+               StdPrfPrintMonad s Text () (Either SomeException), PREDL.LogicSent s t ()) =>
+                            LogicRule s sE t  ->
+                            PrfStdContext () ->
+                            PrfStdState s Text () ->
+                            Either (LogicError s sE t) (Maybe s,Maybe (Text,()),PrfStdStep s Text ())
 runProofAtomic rule context state  = 
       case rule of
-          PredRule propR -> do
-               left  LogicErrPredL (PL.runProofAtomic propR context state)
+          PredRule predR -> do
+               left  LogicErrPredL (PREDL.runProofAtomic predR context state)
           ProofByAsm schema -> do
                (implication,step) <- left LogicErrPrfByAsm (runProofByAsm schema context state)
                return (Just implication, Nothing, step)
@@ -239,61 +241,6 @@ runProofAtomic rule context state  =
           ProofByUG schema -> do
                (generalized,step) <- left LogicErrUG (runProofByUG schema context state)
                return (Just generalized,Nothing, step)
-          EI existsSent const -> do 
-               let mayExistsParse = parseExists existsSent
-               (f,tType) <- maybe ((throwError . LogicErrEINotExists) existsSent) return mayExistsParse
-               let mayExistsSentIdx = Data.Map.lookup existsSent (provenSents state)
-               existsSentIdx <- maybe ((throwError . LogicErrEINotProven) existsSent) return mayExistsSentIdx
-               let constNotDefined = isNothing $ Data.Map.lookup const constDict
-               unless constNotDefined ((throwError . LogicErrEIConstDefined) const)
-               let eIResultSent = (f . const2Term) const
-               return (Just eIResultSent,Just (const,tType), PrfStdStepStep eIResultSent "EI" [existsSentIdx])
-          EG term generalization -> do
-               let eitherTermType = getTypeTerm term varStack constDict
-               termType <- left PredProofTermSanity eitherTermType
-               let mayParse = parseExists generalization
-               (f,tType) <- maybe ((throwError . LogicErrEGNotExists) generalization) return mayParse
-               unless (tType == termType) ((throwError .  LogicErrEGTermTypeMismatch term termType) generalization)
-               let sourceSent = f term
-               let maySourceSentIdx = Data.Map.lookup sourceSent (provenSents state)
-               sourceSentIdx <- maybe ((throwError . LogicErrEGNotGeneralization term) generalization) return maySourceSentIdx
-               return (Just generalization,Nothing, PrfStdStepStep sourceSent "EG" [sourceSentIdx])
-          UI term forallSent -> do
-               let mayForallSentIdx = Data.Map.lookup forallSent (provenSents state)
-               forallSentIdx <- maybe ((throwError . LogicErrUINotProven) forallSent) return mayForallSentIdx
-               let mayForallParse = parseForall forallSent
-               (f,tType) <- maybe ((throwError . LogicErrUINotForall) forallSent) return mayForallParse
-               let eitherTermType = getTypeTerm term varStack constDict
-               termType <- left PredProofTermSanity eitherTermType
-               unless (tType == termType) ((throwError .  LogicErrUITermTypeMismatch term termType forallSent) tType)
-               return (Just $ f term,Nothing, PrfStdStepStep (f term) "UI" [forallSentIdx])
-          ENegIntro negExistsSent -> do
-               let mayExistsSent = parseNeg negExistsSent
-               existsSent <- maybe ((throwError . LogicErrENegNotExists) negExistsSent) return mayExistsSent
-               let mayParse = parseExists existsSent
-               (f, tType) <- maybe ((throwError . LogicErrENegNotExists) negExistsSent) return mayParse
-               let mayNegExistsIdx = Data.Map.lookup negExistsSent (provenSents state)
-               negExistsIdx <- maybe ((throwError . LogicErrENegNotProven) negExistsSent) return mayNegExistsIdx
-               let forallNegSent = reverseParseQuantToForallNot f tType
-               return (Just forallNegSent, Nothing, PrfStdStepStep forallNegSent "E_NEG" [negExistsIdx])
-          ANegIntro negForallSent -> do
-               let mayForallSent = parseNeg negForallSent
-               forallSent <- maybe ((throwError . LogicErrANegNotForall) negForallSent) return mayForallSent
-               let mayParse = parseForall forallSent
-               (f, tType) <- maybe ((throwError . LogicErrANegNotForall) negForallSent) return mayParse
-               let mayNegForallIdx = Data.Map.lookup negForallSent (provenSents state)
-               negForallIdx <- maybe ((throwError . LogicErrANegNotProven) negForallSent) return mayNegForallIdx
-               let existsNegSent = reverseParseQuantToExistsNot f tType
-               return (Just existsNegSent, Nothing, PrfStdStepStep existsNegSent "A_NEG" [negForallIdx])
-          EIHilbert existsSent -> do 
-               let mayExistsParse = parseExists existsSent
-               (f,tType) <- maybe ((throwError . LogicErrEINotExists) existsSent) return mayExistsParse
-               let mayExistsSentIdx = Data.Map.lookup existsSent (provenSents state)
-               existsSentIdx <- maybe ((throwError . LogicErrEINotProven) existsSent) return mayExistsSentIdx
-               let hilbertObj = reverseParseQuantToHilbert f tType
-               let eIResultSent = f hilbertObj
-               return (Just eIResultSent,Nothing, PrfStdStepStep eIResultSent "EI_HILBERT" [existsSentIdx])
-
 
     where
         proven = (keysSet . provenSents) state
@@ -303,26 +250,24 @@ runProofAtomic rule context state  =
 
 
 
-instance (Show sE, Typeable sE, Show s, Typeable s, TypedSent o tType sE s,
-             TypeableTerm t o tType sE, Typeable o, Show o, Typeable tType, Show tType,
-             Monoid (PrfStdState s o tType), Show t, Typeable t,
-             StdPrfPrintMonad s o tType (Either SomeException),
-             Monoid (PrfStdContext tType)) 
-          => Proof (LogicError s sE o t tType ) 
-             [LogicRule s sE o t tType ] 
-             (PrfStdState s o tType) 
-             (PrfStdContext tType)
-             [PrfStdStep s o tType]
+instance (Show sE, Typeable sE, Show s, Typeable s, TypedSent Text () sE s,
+             TypeableTerm t Text () sE, 
+             Monoid (PrfStdState s Text ()), Show t, Typeable t,
+             StdPrfPrintMonad s Text () (Either SomeException),
+             Monoid (PrfStdContext ()),
+             PREDL.LogicSent s t ()) 
+          => Proof (LogicError s sE t) 
+             [LogicRule s sE t] 
+             (PrfStdState s Text ()) 
+             (PrfStdContext ())
+             [PrfStdStep s Text ()]
                s 
                  where
 
-    runProofOpen :: (Show sE, Typeable sE, Show s, Typeable s,
-                 TypedSent o tType sE s, TypeableTerm t o tType sE, Typeable o,
-                 Show o, Typeable tType, Show tType) =>
-                    [LogicRule s sE o t tType ]
-                     -> PrfStdContext tType 
-                     -> PrfStdState s o tType 
-                     -> Either (LogicError s sE o t tType ) (PrfStdState s o tType,[PrfStdStep s o tType], Last s)
+    runProofOpen :: [LogicRule s sE t ]
+                     -> PrfStdContext () 
+                     -> PrfStdState s Text ()
+                     -> Either (LogicError s sE t) (PrfStdState s Text (),[PrfStdStep s Text ()], Last s)
     runProofOpen rs context oldState = foldM f (PrfStdState mempty mempty 0,[], Last Nothing) rs
        where
            f (newState,newSteps, mayLastProp) r =  fmap g (runProofAtomic r context (oldState <> newState))
@@ -350,24 +295,24 @@ instance (Show sE, Typeable sE, Show s, Typeable s, TypedSent o tType sE s,
 
 
 
-instance REM.SubproofRule [LogicRule s sE o t tType ] s where
-     proofBySubArg:: s -> [LogicRule s sE o t tType ] -> [LogicRule s sE o t tType ]
+instance REM.SubproofRule [LogicRule s sE t] s where
+     proofBySubArg:: s -> [LogicRule s sE t] -> [LogicRule s sE t]
      proofBySubArg s r = [ProofBySubArg $ ProofBySubArgSchema s r]
 
 
 
-instance PL.SubproofRule [LogicRule s sE o t tType] s where
-     proofByAsm:: s -> s -> [LogicRule s sE o t tType ] -> [LogicRule s sE o t tType ]
+instance PL.SubproofRule [LogicRule s sE t] s where
+     proofByAsm:: s -> s -> [LogicRule s sE t] -> [LogicRule s sE t]
      proofByAsm asm cons subproof = [ProofByAsm $ ProofByAsmSchema asm cons subproof]
 
 
-instance PREDL.SubproofRule [LogicRule s sE o t tType ] s o tType where
-     theoremSchema:: TheoremSchema s [LogicRule s sE o t tType ] o tType -> [LogicRule s sE o t tType ]
+instance PREDL.SubproofRule [LogicRule s sE t] s Text () where
+     theoremSchema:: TheoremSchema s [LogicRule s sE t] Text () -> [LogicRule s sE t]
      theoremSchema schema = [Theorem schema]
-     theoremAlgSchema:: TheoremAlgSchema tType [LogicRule s sE o t tType ] s o () -> [LogicRule s sE o t tType ]
+     theoremAlgSchema:: TheoremAlgSchema () [LogicRule s sE t] s Text () -> [LogicRule s sE t]
      theoremAlgSchema schema = [TheoremM schema]
 
-     proofByUG:: s -> [LogicRule s sE o t tType ] -> [LogicRule s sE o t tType ]
+     proofByUG:: s -> [LogicRule s sE t] -> [LogicRule s sE t]
      proofByUG s r  = [ProofByUG $ ProofByUGSchema s r]
 
 standardRuleM :: (Monoid r,Monad m, Ord o, Show sE, Typeable sE, Show s, Typeable s, Show eL, Typeable eL,
@@ -393,199 +338,23 @@ instance (Show s, Typeable s) => Exception (MetaRuleError s)
 
 
 
+instance RuleInject [REM.LogicRule () s sE Text] [LogicRule s sE t] where
+    injectRule:: [REM.LogicRule () s sE Text] -> [LogicRule s sE t]
+    injectRule = Prelude.map (PredRule . PREDL.PropRule . PL.BaseRule)
 
 
 
-instance RuleInject [PL.LogicRule tType s sE o] [LogicRule s sE o t tType ] where
-    injectRule:: [PL.LogicRule tType s sE o] -> [LogicRule s sE o t tType ]
-    injectRule = Prelude.map PropRule
-
-instance RuleInject [REM.LogicRule tType s sE o] [LogicRule s sE o t tType ] where
-    injectRule:: [REM.LogicRule tType s sE o] -> [LogicRule s sE o t tType ]
-    injectRule = injectRule . Prelude.map PL.BaseRule
+instance RuleInject [PL.LogicRule () s sE Text] [LogicRule s sE t] where
+    injectRule:: [PL.LogicRule () s sE Text] -> [LogicRule s sE t]
+    injectRule = Prelude.map (PredRule . PREDL.PropRule)
 
 
-
-
-
-assignSequentialSet :: Ord s => Int -> [s] -> (Int, Map s [Int])
-assignSequentialSet base ls = Prelude.foldr (\el (i, m) -> 
-    (i + 1, Data.Map.insert el [length ls + base - i] m)) (base, mempty) ls
-
-
-
-assignSequentialMap :: Ord o => Int -> [(o,tType)] -> Either o (Int,Map o (tType,[Int]))
-assignSequentialMap base ls = Prelude.foldr f (Right (base,mempty)) ls
-   where 
-      f (k, v) foldObj = case foldObj of
-                           Left o -> Left o
-                           Right (count,m) ->
-                             case Data.Map.lookup k m of
-                                Nothing -> Right (count+1, Data.Map.insert k (v,[length ls + base - count]) m)
-                                Just _ -> Left k
-
-
-checkTheoremOpen :: (ProofStd s eL1 r1 o tType, TypedSent o tType sE s    )
-                            => Maybe (PrfStdState s o tType,PrfStdContext tType) -> TheoremSchema s r1 o tType 
-                                       -> Either (ChkTheoremError s sE eL1 o tType) [PrfStdStep s o tType]
-                                       
-checkTheoremOpen mayPrStateCxt (TheoremSchema constdict lemmas theorem subproof)  =
-  do
-       let eitherConstDictMap = assignSequentialMap 0 constdict
-       (newStepCountA, newConsts) <- either (throwError . ChkTheoremErrSchemaDupConst) return eitherConstDictMap
-       let (newStepCountB, newProven) = assignSequentialSet newStepCountA lemmas
-       let constdictPure = Data.Map.map fst newConsts
-       maybe (return ()) throwError (maybe (g1 constdictPure) (g2 constdictPure) mayPrStateCxt)
-       let newContext = PrfStdContext [] [] (maybe []  ((<>[True]) . contextFrames . snd) mayPrStateCxt)
-       let newState = PrfStdState newProven newConsts newStepCountB
-       let preambleSteps = conststeps <> lemmasteps
-       let mayPreambleLastProp = if Prelude.null lemmas then Last Nothing else (Last . Just . last) lemmas  
-       left ChkTheoremErrSubproofErr (
-                                      testSubproof newContext mempty newState preambleSteps mayPreambleLastProp theorem subproof)
-      where
-         conststeps = Prelude.foldr h1 [] constdict
-         lemmasteps = Prelude.foldr h2 [] lemmas
-         h1 (const,constType) accumList =  PrfStdStepConst const constType (q mayPrStateCxt) : accumList
-            where
-                 q Nothing = Nothing
-                 q (Just (state,_)) = fmap snd (Data.Map.lookup const (consts state)) 
-         h2 lemma accumList = PrfStdStepLemma lemma (q mayPrStateCxt) : accumList
-            where
-                 q Nothing = Nothing
-                 q (Just (state,_)) = Data.Map.lookup lemma (provenSents state) 
-
-         g2 constdictPure (PrfStdState alreadyProven alreadyDefinedConsts stepCount, 
-                 PrfStdContext freeVarTypeStack stepIdfPrefix contextDepth) 
-               = fmap constDictErr (constDictTest (fmap fst alreadyDefinedConsts) constdictPure)
-                                               <|> Prelude.foldr f1 Nothing lemmas
-           where
-             constDictErr (k,Nothing) = ChkTheoremErrConstNotDefd k
-             constDictErr (k, Just (a,b)) = ChkTheoremErrConstTypeConflict k a b
-             f1 a = maybe (maybeLemmaMissing <|> maybeLemmaInsane) Just 
-               where
-                  maybeLemmaMissing = if not (a `Set.member` Data.Map.keysSet alreadyProven)
-                                          then (Just . ChkTheoremErrLemmaNotEstablished) a else Nothing
-                  maybeLemmaInsane = fmap (ChkTheoremErrLemmaSanity a) (checkSanity mempty a constdictPure)
-         g1 constdictPure = Prelude.foldr f1 Nothing lemmas
-           where
-             f1 a = maybe maybeLemmaInsane Just 
-               where
-                  maybeLemmaInsane = fmap (ChkTheoremErrLemmaSanity a) (checkSanity mempty a constdictPure)
-
-checkTheorem :: (ProofStd s eL1 r1 o tType, TypedSent o tType sE s    )
-                            => TheoremSchema s r1 o tType
-                                       -> Either (ChkTheoremError s sE eL1 o tType) [PrfStdStep s o tType]
-checkTheorem  = checkTheoremOpen Nothing
-
-
-establishTheorem :: (ProofStd s eL1 r1 o tType,  TypedSent o tType sE s    )
-                            => TheoremSchema s r1 o tType -> PrfStdContext tType -> PrfStdState s o tType 
-                                       -> Either (ChkTheoremError s sE eL1 o tType) (PrfStdStep s o tType)
-establishTheorem schema context state = do
-    steps <- checkTheoremOpen (Just (state,context)) schema
-    let tm = theorem schema
-    return (PrfStdStepTheorem tm steps)
+instance RuleInject [PREDL.LogicRule s sE Text t ()] [LogicRule s sE t] where
+    injectRule:: [PREDL.LogicRule s sE Text t ()] -> [LogicRule s sE t]
+    injectRule = Prelude.map PredRule
 
 
 
 
 
 
-
-
-
-data SubproofMException s sE o tType where
-   BigExceptLemmaSanityErr :: s -> sE -> SubproofMException s sE o tType
-   BigExceptConstNotDefd :: o ->  SubproofMException s sE o tType
-   BigExceptConstTypeConflict :: o -> tType -> tType -> SubproofMException s sE o tType
-   BigExceptLemmaNotEstablished :: s -> SubproofMException s sE o tType
-   BigExceptSchemaConstDup :: o -> SubproofMException s sE o tType
-   BigExceptEmptyVarStack :: SubproofMException s sE o tType
-
-
-   deriving(Show)
-
-
-instance (
-              Show sE, Typeable sE, 
-              Show s, Typeable s,
-              Show o, Typeable o,
-              Show tType, Typeable tType)
-           => Exception (SubproofMException s sE o tType)
-
-
-
-checkTheoremMOpen :: (Show s, Typeable s, Monoid r1, ProofStd s eL1 r1 o tType, Monad m, MonadThrow m,
-                      TypedSent o tType sE s, Show sE, Typeable sE, Typeable tType, Show tType,
-                      Show eL1, Typeable eL1,
-                      Typeable o, Show o, StdPrfPrintMonad s o tType m )
-                 =>  Maybe (PrfStdState s o tType,PrfStdContext tType) ->  TheoremSchemaMT tType r1 s o m x
-                              -> m (s, r1, x, [PrfStdStep s o tType])
-checkTheoremMOpen mayPrStateCxt (TheoremSchemaMT constdict lemmas prog) =  do
-    let eitherConstDictMap = assignSequentialMap 0 constdict
-    (newStepCountA, newConsts) <- either (throwM . BigExceptSchemaConstDup) return eitherConstDictMap
-    let (newStepCountB, newProven) = assignSequentialSet newStepCountA lemmas
-    let constdictPure = Data.Map.map fst newConsts
-    maybe (maybe (return ()) throwM (g1 constdictPure)) (maybe (return ()) throwM . g2 constdictPure) mayPrStateCxt
-    let newContext = PrfStdContext [] [] (maybe []  ((<>[True]) . contextFrames . snd) mayPrStateCxt)
-    let preambleSteps = conststeps <> lemmasteps
-    let newState = PrfStdState newProven newConsts newStepCountB
-    let mayPreambleLastProp = if Prelude.null lemmas then Last Nothing else (Last . Just . last) lemmas
-    (extra,tm,proof,newSteps) 
-               <- runSubproofM newContext mempty newState preambleSteps mayPreambleLastProp prog
-    return (tm,proof,extra,newSteps) 
-       where
-            conststeps = Prelude.foldr h1 [] constdict
-            lemmasteps = Prelude.foldr h2 [] lemmas
-            h1 (const,constType) accumList = PrfStdStepConst const constType (q mayPrStateCxt) : accumList
-              where
-                 q Nothing = Nothing
-                 q (Just (state,_)) = fmap snd (Data.Map.lookup const (consts state)) 
-            h2 lemma accumList = PrfStdStepLemma lemma (q mayPrStateCxt) : accumList
-              where
-                 q Nothing = Nothing
-                 q (Just (state,_)) = Data.Map.lookup lemma (provenSents state) 
-
-            g2 constdictPure (PrfStdState alreadyProven alreadyDefinedConsts stepCount, PrfStdContext freeVarTypeStack stepIdfPrefix contextDepth) 
-                 = fmap constDictErr (constDictTest (fmap fst alreadyDefinedConsts) constdictPure)
-                                               <|> Prelude.foldr f1 Nothing lemmas
-             where
-                constDictErr (k,Nothing) = BigExceptConstNotDefd k
-                constDictErr (k, Just (a,b)) = BigExceptConstTypeConflict k a b
-                f1 a = maybe (maybeLemmaInsane <|> maybeLemmaMissing) Just 
-                  where
-                     maybeLemmaMissing = if not (a `Set.member` Data.Map.keysSet alreadyProven)
-                                          then (Just . BigExceptLemmaNotEstablished) a else Nothing
-                     maybeLemmaInsane = fmap (BigExceptLemmaSanityErr a) (checkSanity mempty a constdictPure)
-            g1 constdictPure = Prelude.foldr f1 Nothing lemmas
-              where
-                 f1 a = maybe maybeLemmaInsane Just 
-                   where
-                      maybeLemmaInsane = fmap (BigExceptLemmaSanityErr a) (checkSanity mempty a constdictPure)
-  
-
-
-
-
-
--- NO new types of subproof are required for ZF
---class SubproofRule r s o tType | r->o, r -> tType where
---   theoremSchema :: TheoremSchema s r o tType -> r
---   theoremAlgSchema :: TheoremAlgSchema tType r s o () -> r
---   proofByUG :: s -> r -> r
-
-
-
-
-constDictTest :: (Ord o, Eq tType) => Map o tType -> Map o tType ->  Maybe (o, Maybe (tType,tType))
-constDictTest envDict = Data.Map.foldrWithKey f Nothing
-     where         
-         f k aVal Nothing = case Data.Map.lookup k envDict of
-                                              Just bVal -> if 
-                                                              aVal /= bVal 
-                                                           then
-                                                              Just (k,Just (aVal,bVal))
-                                                           else
-                                                               Nothing -- we good
-                                              Nothing -> Just (k,Nothing)
-         f k aVal (Just x) = Just x

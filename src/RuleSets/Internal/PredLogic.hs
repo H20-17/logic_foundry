@@ -11,7 +11,8 @@ module RuleSets.Internal.PredLogic
     TheoremSchemaMT(..),
     TheoremAlgSchema,
     TheoremSchema(..),
-    ChkTheoremError(..)
+    ChkTheoremError(..),
+    establishTheorem
 ) where
 
 
@@ -489,14 +490,14 @@ reverseENegIntroM forallXNotPx = do
 
 
 
+instance RuleInject [REM.LogicRule tType s sE o] [LogicRule s sE o t tType ] where
+    injectRule:: [REM.LogicRule tType s sE o] -> [LogicRule s sE o t tType ]
+    injectRule = Prelude.map (PropRule . PL.BaseRule)
+
+
 instance RuleInject [PL.LogicRule tType s sE o] [LogicRule s sE o t tType ] where
     injectRule:: [PL.LogicRule tType s sE o] -> [LogicRule s sE o t tType ]
     injectRule = Prelude.map PropRule
-
-instance RuleInject [REM.LogicRule tType s sE o] [LogicRule s sE o t tType ] where
-    injectRule:: [REM.LogicRule tType s sE o] -> [LogicRule s sE o t tType ]
-    injectRule = injectRule . Prelude.map PL.BaseRule
-
 
 
 data TheoremSchema s r o tType where
