@@ -85,7 +85,9 @@ class LogicTerm t where
    integer :: Int -> t
 
 class (PREDL.LogicSent s t ()) => LogicSent s t | s ->t where
+   emptySetAxiom :: s
    parseIn :: s -> Maybe (t, t)
+   memberOf :: t -> t -> s
 
 
 
@@ -217,7 +219,8 @@ runProofAtomic :: (
                Show sE, Typeable sE, Show s, Typeable s, TypeableTerm t Text () sE,
                 TypedSent Text () sE s,
                Show t, Typeable t,
-               StdPrfPrintMonad s Text () (Either SomeException), PREDL.LogicSent s t ()) =>
+               StdPrfPrintMonad s Text () (Either SomeException),
+                            dPREDL.LogicSent s t (), LogicSent s t ) =>
                             LogicRule s sE t  ->
                             PrfStdContext () ->
                             PrfStdState s Text () ->
@@ -241,6 +244,9 @@ runProofAtomic rule context state  =
           ProofByUG schema -> do
                (generalized,step) <- left LogicErrUG (runProofByUG schema context state)
                return (Just generalized,Nothing, step)
+          EmptySet -> do
+               let step = PrfStdStepStep emptySetAxiom "AXIOM_EMPTYSET" []
+               return (Just emptySetAxiom, Nothing, step)
 
     where
         proven = (keysSet . provenSents) state
