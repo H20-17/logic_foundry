@@ -1,15 +1,12 @@
 module RuleSets.Internal.ZFC 
 (
     LogicError(..), LogicRule(..), 
-    runProofAtomic, uiM, eiM, reverseANegIntroM, reverseENegIntroM,eNegIntroM, aNegIntroM,
-    eiHilbertM,
-    LogicRuleClass(..), checkTheoremM, establishTmSilentM, expandTheoremM, runProofByUG,
-    runTheoremM, runTmSilentM, runProofByUGM,
-    ProofByUGSchema(..),
-    LogicSent(..), 
-    TheoremSchemaMT(..),
-    TheoremAlgSchema,
-    TheoremSchema(..)
+    runProofAtomic, 
+    LogicRuleClass(..),
+    LogicSent(..),
+     emptySetM,
+     specificationM,
+     MetaRuleError(..)
 ) where
 
 
@@ -86,6 +83,7 @@ class LogicTerm t where
 
 class (PREDL.LogicSent s t ()) => LogicSent s t | s ->t where
    emptySetAxiom :: s
+   specAxiom :: t -> s -> s
    parseIn :: s -> Maybe (t, t)
    memberOf :: t -> t -> s
 
@@ -98,7 +96,8 @@ data LogicError s sE t where
     LogicErrTheorem :: PREDL.ChkTheoremError s sE (LogicError s sE t) Text () -> LogicError s sE t 
     LogicErrTheoremM :: SomeException -> LogicError s sE t 
     LogicErrPredL ::  PREDL.LogicError s sE Text t () -> LogicError s sE t
-    
+    LogicErrReplTermNotClosedSane :: t -> sE -> LogicError s sE t
+    LogicErrReplInstanceNotClosedSane :: s -> sE -> LogicError s sE t
 
    deriving (Show)
 
@@ -112,6 +111,7 @@ data LogicRule s sE t  where
     TheoremM :: TheoremAlgSchema () [LogicRule s sE t ] s Text () -> 
                              LogicRule s sE t
     EmptySet :: LogicRule s sE t
+    Specification :: t -> s -> LogicRule s sE t
     deriving(Show)
 
 
@@ -209,8 +209,13 @@ instance PREDL.LogicRuleClass [LogicRule s sE t] s t () sE Text where
 
 class LogicRuleClass r s sE t | r->s, r->sE, r->t where
      emptySet :: r
+     specification :: t -> s -> r
 
-
+instance LogicRuleClass [LogicRule s sE t] s sE t where
+     emptySet :: [LogicRule s sE t]
+     emptySet = [EmptySet]
+     specification :: t -> s -> [LogicRule s sE t]
+     specification t s = [Specification t s]
 
 
 
@@ -220,7 +225,7 @@ runProofAtomic :: (
                 TypedSent Text () sE s,
                Show t, Typeable t,
                StdPrfPrintMonad s Text () (Either SomeException),
-                            dPREDL.LogicSent s t (), LogicSent s t ) =>
+                            PREDL.LogicSent s t (), LogicSent s t ) =>
                             LogicRule s sE t  ->
                             PrfStdContext () ->
                             PrfStdState s Text () ->
@@ -247,7 +252,25 @@ runProofAtomic rule context state  =
           EmptySet -> do
                let step = PrfStdStepStep emptySetAxiom "AXIOM_EMPTYSET" []
                return (Just emptySetAxiom, Nothing, step)
+          Specification t s -> do
+               -- Check that t is a closed and sane term
 
+               -- No other variables are in the term. 
+               left (LogicErrReplTermNotClosedSane t) (getTypeTerm t [] constDict)
+               -- Build an instance of the replacement axiom
+               -- using the term t and the sentence s
+               let specAx = specAxiom t s
+               -- Check that the axiom instance is closed and sane.
+               -- s should have only one "X 0" variable in it
+               -- How the replacementAxiom function is defined should take
+               -- take advantage of that, replacing X 0 with a bound variable. Sanity checking for closure
+               -- after the replacementAxiom function is applied will ensure that
+               -- No other variables are in the term. 
+               maybe (return ()) (throwError . LogicErrReplInstanceNotClosedSane s) (
+                            checkSanity [] specAx constDict)
+
+               let step = PrfStdStepStep specAx "AXIOM_REPLACEMENT" []
+               return (Just specAx, Nothing, step)
     where
         proven = (keysSet . provenSents) state
         constDict = fmap fst (consts state)
@@ -261,7 +284,8 @@ instance (Show sE, Typeable sE, Show s, Typeable s, TypedSent Text () sE s,
              Monoid (PrfStdState s Text ()), Show t, Typeable t,
              StdPrfPrintMonad s Text () (Either SomeException),
              Monoid (PrfStdContext ()),
-             PREDL.LogicSent s t ()) 
+             PREDL.LogicSent s t (),
+             LogicSent s t) 
           => Proof (LogicError s sE t) 
              [LogicRule s sE t] 
              (PrfStdState s Text ()) 
@@ -331,7 +355,18 @@ standardRuleM rule = do
      mayPropIndex <- monadifyProofStd rule
      maybe (error "Critical failure: No index looking up sentence.") return mayPropIndex
 
+emptySetM :: (Monad m, Show sE, Typeable sE, Show s, Typeable s, Show eL, Typeable eL,
+       MonadThrow m, Show o, Typeable o, Show tType, Typeable tType, TypedSent o tType sE s,
+       Monoid (PrfStdState s o tType), ProofStd s eL [LogicRule s sE t] o tType, StdPrfPrintMonad s o tType m    )
+       => ProofGenTStd tType [LogicRule s sE t] s o m (s,[Int])
+emptySetM = standardRuleM emptySet
 
+
+specificationM :: (Monad m, Show sE, Typeable sE, Show s, Typeable s, Show eL, Typeable eL,
+       MonadThrow m, Show o, Typeable o, Show tType, Typeable tType, TypedSent o tType sE s,
+       Monoid (PrfStdState s o tType), ProofStd s eL [LogicRule s sE t] o tType, StdPrfPrintMonad s o tType m    )
+       => t -> s -> ProofGenTStd tType [LogicRule s sE t] s o m (s,[Int])
+specificationM t s = standardRuleM (specification t s)
 
 
 

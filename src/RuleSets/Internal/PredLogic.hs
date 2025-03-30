@@ -12,7 +12,8 @@ module RuleSets.Internal.PredLogic
     TheoremAlgSchema,
     TheoremSchema(..),
     ChkTheoremError(..),
-    establishTheorem
+    establishTheorem,
+    MetaRuleError(..)
 ) where
 
 
@@ -440,8 +441,8 @@ eiHilbertM sent = do
          (instantiated, idx) <- standardRuleM (eiHilbert sent)
          let mayParse = parseExists sent
          (f,tType) <- maybe (error "parse exists failed when it should not have") return mayParse
-         let hilbertProp = reverseParseQuantToHilbert f tType
-         return (instantiated,idx,hilbertProp)
+         let hilbertObj = reverseParseQuantToHilbert f tType
+         return (instantiated,idx,hilbertObj)
 
 
 reverseANegIntroM, reverseENegIntroM :: (Monad m, LogicSent s t tType , TypeableTerm t o tType sE, Show s,

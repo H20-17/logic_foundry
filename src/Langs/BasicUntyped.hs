@@ -35,9 +35,9 @@ import Internal.StdPattern
 import Control.Exception (SomeException)
 import qualified RuleSets.Internal.PropLogic as PL
 import qualified RuleSets.Internal.PredLogic as PREDL
-import GHC.Conc (numCapabilities)
-import Distribution.TestSuite (TestInstance(name))
+import qualified RuleSets.Internal.ZFC as ZFC
 import RuleSets.Internal.PropLogic (LogicSent(parseIff))
+import RuleSets.Internal.ZFC (emptySetAxiom, specification,parseIn,memberOf)
 import Control.Monad.State
 import Control.Monad.RWS
 
@@ -861,6 +861,13 @@ aX idx p = Forall $ xsubPropDeBr p idx (boundDepthPropDeBr p)
 
 hX :: Int -> PropDeBr -> ObjDeBr
 hX idx p = Hilbert (xsubPropDeBr p idx (boundDepthPropDeBr p))
+
+instance ZFC.LogicSent PropDeBr ObjDeBr where
+    emptySetAxiom :: PropDeBr
+    emptySetAxiom = eX 0 $ Neg $ aX 1 $ X 1 `In` X 0
+    specAxiom :: ObjDeBr -> PropDeBr -> PropDeBr
+    -- specification axiom composed from term t and predicate P(x)
+    specAxiom t p = eX 0 $ Neg $ aX 1 $ X 1 `In` t :->: (p :&&: Neg (X 1 `In` t))
 
 
 
