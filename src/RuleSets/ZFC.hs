@@ -4,15 +4,11 @@ module RuleSets.ZFC
     LogicSent(..), 
     MetaRuleError(..),
     emptySetM,
-    specificationM
-
-
-
-
-
+    specificationM,
+    replacementM
 ) where
 
 import RuleSets.Internal.ZFC(LogicError(..), LogicRuleClass(..),
-    LogicSent(..), MetaRuleError(..),emptySetM,specificationM
+    LogicSent(..), MetaRuleError(..),emptySetM,specificationM, replacementM
 
     )

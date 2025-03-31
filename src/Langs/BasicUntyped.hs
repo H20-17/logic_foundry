@@ -40,6 +40,7 @@ import RuleSets.Internal.PropLogic (LogicSent(parseIff))
 import RuleSets.Internal.ZFC (emptySetAxiom, specification,parseIn,memberOf)
 import Control.Monad.State
 import Control.Monad.RWS
+    ( MonadReader(ask), runRWS, MonadWriter(tell), RWS )
 
 
 
@@ -267,6 +268,7 @@ data ObjDeBr where
       Bound :: Int -> ObjDeBr
       V :: Int ->ObjDeBr
       X :: Int -> ObjDeBr
+      Pair :: ObjDeBr -> ObjDeBr -> ObjDeBr
    deriving (Eq, Ord)
 
 
@@ -309,6 +311,8 @@ checkSanityObjDeBr obj varStackHeight constSet boundSet = case obj of
         else
             (return . ObjDeBrFreeVarIdx) idx
      X idx -> return $ ObjDeBrUnconsumedX idx
+     Pair a b -> checkSanityObjDeBr a varStackHeight constSet boundSet
+                 <|> checkSanityObjDeBr b varStackHeight constSet boundSet
 
 boundDecrementObjDeBr :: Int -> ObjDeBr -> ObjDeBr
 boundDecrementObjDeBr idx obj = case obj of
@@ -862,12 +866,18 @@ aX idx p = Forall $ xsubPropDeBr p idx (boundDepthPropDeBr p)
 hX :: Int -> PropDeBr -> ObjDeBr
 hX idx p = Hilbert (xsubPropDeBr p idx (boundDepthPropDeBr p))
 
-instance ZFC.LogicSent PropDeBr ObjDeBr where
-    emptySetAxiom :: PropDeBr
-    emptySetAxiom = eX 0 $ Neg $ aX 1 $ X 1 `In` X 0
-    specAxiom :: ObjDeBr -> PropDeBr -> PropDeBr
-    -- specification axiom composed from term t and predicate P(x)
-    specAxiom t p = eX 0 $ Neg $ aX 1 $ X 1 `In` t :->: (p :&&: Neg (X 1 `In` t))
+
+-- isFuncSet t = aX 0 $ X 0 `In` t :<->: e X1 $ eBangX  
+
+--instance ZFC.LogicSent PropDeBr ObjDeBr where
+--    emptySetAxiom :: PropDeBr
+--    emptySetAxiom = eX 0 $ Neg $ aX 1 $ X 1 `In` X 0
+--    specAxiom :: ObjDeBr -> PropDeBr -> PropDeBr
+--    -- specification axiom composed from term t and predicate P(x)
+--    specAxiom t p = eX 0 $ aX 1 $ X 1 `In` X 0 :<->: p :&&: X 1 `In` t
+--    replaceAxiom:: ObjDeBr -> PropDeBr -> PropDeBr
+--    replaceAxiom t p = 
+ 
 
 
 

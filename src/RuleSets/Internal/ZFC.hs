@@ -6,6 +6,7 @@ module RuleSets.Internal.ZFC
     LogicSent(..),
      emptySetM,
      specificationM,
+     replacementM,
      MetaRuleError(..)
 ) where
 
@@ -74,7 +75,6 @@ import qualified RuleSets.Internal.PredLogic as PREDL
 
 
 
-import Distribution.PackageDescription (BuildInfo(asmOptions))
 
 
 class LogicTerm t where
@@ -84,6 +84,7 @@ class LogicTerm t where
 class (PREDL.LogicSent s t ()) => LogicSent s t | s ->t where
    emptySetAxiom :: s
    specAxiom :: t -> s -> s
+   replaceAxiom :: t -> s -> s
    parseIn :: s -> Maybe (t, t)
    memberOf :: t -> t -> s
 
@@ -96,7 +97,9 @@ data LogicError s sE t where
     LogicErrTheorem :: PREDL.ChkTheoremError s sE (LogicError s sE t) Text () -> LogicError s sE t 
     LogicErrTheoremM :: SomeException -> LogicError s sE t 
     LogicErrPredL ::  PREDL.LogicError s sE Text t () -> LogicError s sE t
+
     LogicErrReplTermNotClosedSane :: t -> sE -> LogicError s sE t
+    LogicErrSpecTermNotClosedSane :: t -> sE -> LogicError s sE t
     LogicErrReplInstanceNotClosedSane :: s -> sE -> LogicError s sE t
 
    deriving (Show)
@@ -112,6 +115,7 @@ data LogicRule s sE t  where
                              LogicRule s sE t
     EmptySet :: LogicRule s sE t
     Specification :: t -> s -> LogicRule s sE t
+    Replacement :: t -> s -> LogicRule s sE t
     deriving(Show)
 
 
@@ -210,12 +214,16 @@ instance PREDL.LogicRuleClass [LogicRule s sE t] s t () sE Text where
 class LogicRuleClass r s sE t | r->s, r->sE, r->t where
      emptySet :: r
      specification :: t -> s -> r
+     replacement :: t -> s -> r
 
 instance LogicRuleClass [LogicRule s sE t] s sE t where
      emptySet :: [LogicRule s sE t]
      emptySet = [EmptySet]
      specification :: t -> s -> [LogicRule s sE t]
      specification t s = [Specification t s]
+     replacement :: t ->  s -> [LogicRule s sE t]
+     replacement t s = [Replacement t s]
+
 
 
 
@@ -255,8 +263,7 @@ runProofAtomic rule context state  =
           Specification t s -> do
                -- Check that t is a closed and sane term
 
-               -- No other variables are in the term. 
-               left (LogicErrReplTermNotClosedSane t) (getTypeTerm t [] constDict)
+               left (LogicErrSpecTermNotClosedSane t) (getTypeTerm t [] constDict)
                -- Build an instance of the replacement axiom
                -- using the term t and the sentence s
                let specAx = specAxiom t s
@@ -264,13 +271,32 @@ runProofAtomic rule context state  =
                -- s should have only one "X 0" variable in it
                -- How the replacementAxiom function is defined should take
                -- take advantage of that, replacing X 0 with a bound variable. Sanity checking for closure
-               -- after the replacementAxiom function is applied will ensure that
+               -- after the specAxiom function is applied will ensure that
                -- No other variables are in the term. 
                maybe (return ()) (throwError . LogicErrReplInstanceNotClosedSane s) (
                             checkSanity [] specAx constDict)
 
-               let step = PrfStdStepStep specAx "AXIOM_REPLACEMENT" []
+               let step = PrfStdStepStep specAx "AXIOM_SPECIFICATION" []
                return (Just specAx, Nothing, step)
+          Replacement t s -> do
+               -- Check that t is a closed and sane term
+               left (LogicErrSpecTermNotClosedSane t) (getTypeTerm t [] constDict)
+               -- Build an instance of the specification axiom
+               -- using the term t and the sentence s
+               let replAx = replaceAxiom t s
+               -- Check that the axiom instance is closed and sane.
+               -- s should have only one "X 0" variable in it
+               -- How the replacementAxiom function is defined should take
+               -- take advantage of that, replacing X 0 with a bound variable. Sanity checking for closure
+               -- after the replaceAxiom function is applied will ensure that
+               -- No other variables are in the term.
+               maybe (return ()) (throwError . LogicErrReplInstanceNotClosedSane s) (
+                            checkSanity [] replAx constDict)
+
+               let step = PrfStdStepStep replAx "AXIOM_REPLACEMENT" []
+               return (Just replAx, Nothing, step)
+
+
     where
         proven = (keysSet . provenSents) state
         constDict = fmap fst (consts state)
@@ -362,12 +388,12 @@ emptySetM :: (Monad m, Show sE, Typeable sE, Show s, Typeable s, Show eL, Typeab
 emptySetM = standardRuleM emptySet
 
 
-specificationM :: (Monad m, Show sE, Typeable sE, Show s, Typeable s, Show eL, Typeable eL,
+specificationM, replacementM :: (Monad m, Show sE, Typeable sE, Show s, Typeable s, Show eL, Typeable eL,
        MonadThrow m, Show o, Typeable o, Show tType, Typeable tType, TypedSent o tType sE s,
        Monoid (PrfStdState s o tType), ProofStd s eL [LogicRule s sE t] o tType, StdPrfPrintMonad s o tType m    )
        => t -> s -> ProofGenTStd tType [LogicRule s sE t] s o m (s,[Int])
 specificationM t s = standardRuleM (specification t s)
-
+replacementM t s = standardRuleM (replacement t s)
 
 
 data MetaRuleError s where
