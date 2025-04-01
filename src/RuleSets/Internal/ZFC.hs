@@ -233,7 +233,8 @@ runProofAtomic :: (
                 TypedSent Text () sE s,
                Show t, Typeable t,
                StdPrfPrintMonad s Text () (Either SomeException),
-                            PREDL.LogicSent s t (), LogicSent s t ) =>
+                            PREDL.LogicSent s t (), LogicSent s t ,
+                            Eq t) =>
                             LogicRule s sE t  ->
                             PrfStdContext () ->
                             PrfStdState s Text () ->
@@ -313,7 +314,7 @@ instance (Show sE, Typeable sE, Show s, Typeable s, TypedSent Text () sE s,
              StdPrfPrintMonad s Text () (Either SomeException),
              Monoid (PrfStdContext ()),
              PREDL.LogicSent s t (),
-             LogicSent s t) 
+             LogicSent s t, Eq t) 
           => Proof (LogicError s sE t) 
              [LogicRule s sE t] 
              (PrfStdState s Text ()) 

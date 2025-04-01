@@ -92,6 +92,20 @@ data LogicError s sE o t tType where
     LogicErrANegNotForall :: s -> LogicError s sE o t tType
     LogicErrANegNotProven :: s -> LogicError s sE o t tType
 
+    -- Equality Errors
+    LogicErrSentenceNotEq :: s -> LogicError s sE o t tType       
+    -- Error when expecting an equality sentence (e.g., for EqSym, EqTrans)
+    LogicErrEqNotProven :: s -> LogicError s sE o t tType         
+    -- Error when a required equality premise is not proven (e.g., for EqSym, EqTrans)
+    LogicErrEqTransMismatch :: t -> t -> LogicError s sE o t tType 
+    -- Error when the middle terms in EqTrans don't match (e.g., a=b and c=d)
+
+    LogicErrEqSubstSourceNotProven :: s -> LogicError s sE o t tType -- New
+    LogicErrEqSubstEqNotProven :: s -> LogicError s sE o t tType
+    LogicErrEqSubstSourceSanity :: s -> sE -> LogicError s sE o t tType     -- New
+    LogicErrEqSubstResultSanity :: s -> sE -> LogicError s sE o t tType
+
+
    deriving (Show)
 
 data LogicRule s sE o t tType  where
@@ -119,6 +133,8 @@ data LogicRule s sE o t tType  where
     EqRefl :: t -> LogicRule s sE o t tType
     EqSym :: s -> LogicRule s sE o t tType
     EqTrans :: s -> s -> LogicRule s sE o t tType
+    EqSubst :: s -> s -> LogicRule s sE o t tType 
+       -- Template P(X 0), Equality a == b
     deriving(Show)
 
 
@@ -227,7 +243,7 @@ runProofAtomic :: (LogicSent s t tType ,
                ProofStd s (LogicError s sE o t tType ) [LogicRule s sE o t tType ] o tType,
                Show sE, Typeable sE, Show s, Typeable s, TypeableTerm t o tType sE, TypedSent o tType sE s,
                Typeable o, Show o,Typeable tType, Show tType, Show t, Typeable t,
-               StdPrfPrintMonad s o tType (Either SomeException)) =>
+               StdPrfPrintMonad s o tType (Either SomeException), Eq t) =>
                             LogicRule s sE o t tType  ->
                             PrfStdContext tType -> 
                             PrfStdState s o tType -> 
@@ -305,7 +321,72 @@ runProofAtomic rule context state  =
                let hilbertObj = reverseParseQuantToHilbert f tType
                let eIResultSent = f hilbertObj
                return (Just eIResultSent,Nothing, PrfStdStepStep eIResultSent "EI_HILBERT" [existsSentIdx])
+          EqRefl term -> do
+              -- Check term sanity (similar to EG/UI)
+              let eitherTermType = getTypeTerm term varStack constDict
+              termType <- left PredProofTermSanity eitherTermType
+              let resultSent = term .==. term
+              return (Just resultSent, Nothing, PrfStdStepStep resultSent "EQ_REFL" [])
 
+          EqSym eqSent -> do
+              -- Parse the equality sentence (e.g., a .==. b)
+              (termA, termB) <- maybe (throwError $ LogicErrSentenceNotEq eqSent) -- Add LogicErrSentenceNotEq to your error type
+                                 return (parseEq eqSent)
+              -- Check if the original equality is proven
+              eqSentIdx <- maybe (throwError $ LogicErrEqNotProven eqSent) -- Add LogicErrEqNotProven
+                                 return (Data.Map.lookup eqSent (provenSents state))
+              -- Construct the symmetric sentence (b .==. a)
+              let symSent = termB .==. termA
+              return (Just symSent, Nothing, PrfStdStepStep symSent "EQ_SYM" [eqSentIdx])
+
+          EqTrans eqSent1 eqSent2 -> do
+              -- Parse the first equality (e.g., a .==. b)
+              (termA, termB1) <- maybe (throwError $ LogicErrSentenceNotEq eqSent1) -- Re-use error
+                                  return (parseEq eqSent1)
+              -- Parse the second equality (e.g., b .==. c)
+              (termB2, termC) <- maybe (throwError $ LogicErrSentenceNotEq eqSent2) -- Re-use error
+                                  return (parseEq eqSent2)
+
+              -- Check if the middle terms match
+              unless (termB1 == termB2) (throwError $ LogicErrEqTransMismatch termB1 termB2) -- Add LogicErrEqTransMismatch
+
+              -- Check if the premises are proven
+              eqSent1Idx <- maybe (throwError $ LogicErrEqNotProven eqSent1) -- Re-use error
+                                  return (Data.Map.lookup eqSent1 (provenSents state))
+              eqSent2Idx <- maybe (throwError $ LogicErrEqNotProven eqSent2) -- Re-use error
+                                  return (Data.Map.lookup eqSent2 (provenSents state))
+
+              -- Construct the transitive sentence (a .==. c)
+              let transSent = termA .==. termC
+              return (Just transSent, Nothing, PrfStdStepStep transSent "EQ_TRANS" [eqSent1Idx, eqSent2Idx])
+          EqSubst templateSent eqSent -> do
+              -- Check if equality sentence a == b is proven
+              eqSentIdx <- maybe (throwError $ LogicErrEqSubstEqNotProven eqSent)
+                                 return (Data.Map.lookup eqSent (provenSents state))
+
+              -- Parse the equality sentence a == b
+              (termA, termB) <- maybe (throwError $ LogicErrSentenceNotEq eqSent)
+                                     return (parseEq eqSent)
+
+              -- Instantiate the template with termA to get P(a)
+              let sourceSent = substX0 templateSent termA
+
+              -- *** Sanity check P(a) ***
+              let sourceSanityError = checkSanity varStack sourceSent constDict
+              maybe (return ()) (throwError . LogicErrEqSubstSourceSanity sourceSent) sourceSanityError
+
+              -- Check if the instantiated source sentence P(a) is proven
+              sourceSentIdx <- maybe (throwError $ LogicErrEqSubstSourceNotProven sourceSent)
+                                     return (Data.Map.lookup sourceSent (provenSents state))
+
+              -- Perform the substitution in the template with termB to get P(b)
+              let resultSent = substX0 templateSent termB
+
+              -- *** Sanity check P(b) ***
+              let resultSanityError = checkSanity varStack resultSent constDict
+              maybe (return ()) (throwError . LogicErrEqSubstResultSanity resultSent) resultSanityError
+
+              return (Just resultSent, Nothing, PrfStdStepStep resultSent "EQ_SUBST" [sourceSentIdx, eqSentIdx])
 
     where
         proven = (keysSet . provenSents) state
@@ -319,7 +400,7 @@ instance (LogicSent s t tType, Show sE, Typeable sE, Show s, Typeable s, TypedSe
              TypeableTerm t o tType sE, Typeable o, Show o, Typeable tType, Show tType,
              Monoid (PrfStdState s o tType), Show t, Typeable t,
              StdPrfPrintMonad s o tType (Either SomeException),
-             Monoid (PrfStdContext tType)) 
+             Monoid (PrfStdContext tType), Eq t) 
           => Proof (LogicError s sE o t tType ) 
              [LogicRule s sE o t tType ] 
              (PrfStdState s o tType) 
@@ -759,6 +840,7 @@ class (PL.LogicSent s tType) => LogicSent s t tType | s ->tType, s ->t, s->t whe
     reverseParseQuantToHilbert :: (t->s) -> tType -> t
     -- create generalization from sentence, var type, and free var index.
     createForall ::s -> tType -> Int -> s
+    substX0 :: s -> t -> s
  
 
 

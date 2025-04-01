@@ -581,14 +581,16 @@ instance PREDL.LogicSent PropDeBr ObjDeBr ()  where
     reverseParseQuantToExists f () = eX 0 (f (X 0))
     reverseParseQuantToHilbert :: (ObjDeBr -> PropDeBr) -> () -> ObjDeBr
     reverseParseQuantToHilbert f () = hX 0 (f (X 0))
+    parseEq :: PropDeBr -> Maybe (ObjDeBr, ObjDeBr)
+    parseEq p = case p of
+                (:==:) o1 o2 -> Just(o1,o2)
+                _ -> Nothing
+    (.==.) :: ObjDeBr -> ObjDeBr -> PropDeBr
+    (.==.) = (:==:)
+    substX0 :: PropDeBr -> ObjDeBr -> PropDeBr
+    substX0 = substX0Prop
 
     
-
-
-    
-
-
-
 
 type PropErrDeBr = PL.LogicError PropDeBr DeBrSe Text ObjDeBr
 type PropRuleDeBr = PL.LogicRule () PropDeBr DeBrSe Text
@@ -904,6 +906,32 @@ isFunction t = isRelation t :&&:
                             
 
 
+-- Substitutes ONLY X 0 with the given term within a PropDeBr
+substX0Prop :: PropDeBr -> ObjDeBr -> PropDeBr
+substX0Prop sentence termToSub = case sentence of
+    Neg p -> Neg (substX0Prop p termToSub)
+    p :&&: q -> (substX0Prop p termToSub) :&&: (substX0Prop q termToSub)
+    p :||: q -> (substX0Prop p termToSub) :||: (substX0Prop q termToSub)
+    p :->: q -> (substX0Prop p termToSub) :->: (substX0Prop q termToSub)
+    p :<->: q -> (substX0Prop p termToSub) :<->: (substX0Prop q termToSub)
+    a :==: b -> (substX0Obj a termToSub) :==: (substX0Obj b termToSub)
+    In a b -> In (substX0Obj a termToSub) (substX0Obj b termToSub)
+    Forall p -> Forall (substX0Prop p termToSub) -- Check if termToSub has vars clashing with bound var 'p' introduces
+    Exists p -> Exists (substX0Prop p termToSub) -- Check if termToSub has vars clashing with bound var 'p' introduces
+    a :>=: b -> (substX0Obj a termToSub) :>=: (substX0Obj b termToSub)
+    F -> F
+
+-- Substitutes ONLY X 0 with the given term within an ObjDeBr
+substX0Obj :: ObjDeBr -> ObjDeBr -> ObjDeBr
+substX0Obj currentTerm termToSub = case currentTerm of
+    X 0 -> termToSub -- The actual substitution happens here
+    X i -> X i       -- Other X placeholders are ignored
+    Integ i -> Integ i
+    Constant c -> Constant c
+    Hilbert p -> Hilbert (substX0Prop p termToSub) -- Substitute inside Hilbert term's prop
+    Bound i -> Bound i -- Bound variables are ignored
+    V i -> V i       -- Free variables are ignored (usually)
+    Pair a b -> Pair (substX0Obj a termToSub) (substX0Obj b termToSub)
 
 
 instance ZFC.LogicSent PropDeBr ObjDeBr where
@@ -914,7 +942,8 @@ instance ZFC.LogicSent PropDeBr ObjDeBr where
     specAxiom t p = eX 0 $ aX 1 $ X 1 `In` X 0 :<->: p :&&: X 1 `In` t
     replaceAxiom:: ObjDeBr -> PropDeBr -> PropDeBr
     replaceAxiom t p = aX 0 ((X 0) `In` t :->: eXBang 1 p)
-                         :->: eX 2 (aX 1 (X 1 `In` X 2 :<->: eX 0 (X 0 `In` t :&&: p)))    
+                         :->: eX 2 (aX 1 (X 1 `In` X 2 :<->: eX 0 (X 0 `In` t :&&: p)))  
+      
  
 
 
