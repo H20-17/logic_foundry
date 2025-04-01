@@ -250,7 +250,7 @@ testprog5 = do
     fakeConstM "N" ()
     (s,idx) <- fakePropM a
 
-    --(s,idx) <- reverseENegIntroM a
+
     showS <- showPropM a
     remarkM $ showS <> " is the sentence. It was proven in line " <> (pack . show) idx
     return ()

@@ -79,6 +79,7 @@ data SubexpParseTree where
     Binding :: Text -> Int -> SubexpParseTree -> SubexpParseTree
     HilbertShort :: [Int] -> SubexpParseTree
     Atom :: Text -> SubexpParseTree
+    Tuple :: [SubexpParseTree] -> SubexpParseTree
 
 
 
@@ -108,7 +109,9 @@ instance SubexpDeBr ObjDeBr where
             Nothing -> Binding "ε" (boundDepthPropDeBr p) (toSubexpParseTree p dict)
         Bound i -> Atom $ "𝑥" <> showIndexAsSubscript i
         V i -> Atom $ "𝑣" <> showIndexAsSubscript i
-        X i -> Atom $ "X" <> showIndexAsSubscript i     
+        X i -> Atom $ "X" <> showIndexAsSubscript i
+        Pair a b -> Tuple [toSubexpParseTree a dict,toSubexpParseTree b dict]
+        
 
 
 boundDepthObjDeBr :: ObjDeBr -> Int
@@ -119,6 +122,7 @@ boundDepthObjDeBr obj = case obj of
      Bound idx -> 0
      V idx -> 0
      X idx -> 0
+     Pair a b -> max (boundDepthObjDeBr a) (boundDepthObjDeBr b)
 
 
 boundDepthPropDeBr :: PropDeBr -> Int
@@ -178,6 +182,8 @@ showSubexpParseTree sub = case sub of
               BinaryOp {} -> "(" <>  showSubexpParseTree sub1 <> ")"
               Binding {} -> showSubexpParseTree sub1
               Atom _ -> showSubexpParseTree sub1
+              HilbertShort idx -> showSubexpParseTree sub1
+              Tuple as -> showSubexpParseTree sub1
     BinaryOp opSymb sub1 sub2 ->
            case sub1 of
               UnaryOp _ _ -> showSubexpParseTree sub1
@@ -195,6 +201,7 @@ showSubexpParseTree sub = case sub of
               Binding {} -> showSubexpParseTree sub1
               Atom _ -> showSubexpParseTree sub1
               HilbertShort idx -> showSubexpParseTree sub1
+              Tuple as -> showSubexpParseTree sub1
           <> " " <> opSymb <> " "
           <> case sub2 of
                UnaryOp _ _-> showSubexpParseTree sub2
@@ -211,9 +218,11 @@ showSubexpParseTree sub = case sub of
                Binding {} -> showSubexpParseTree sub2
                Atom _ -> showSubexpParseTree sub2
                HilbertShort idx -> showSubexpParseTree sub2
+               Tuple as -> showSubexpParseTree sub2
     Binding quant idx sub1 -> quant <> "𝑥" <> showIndexAsSubscript idx <> "(" <> showSubexpParseTree sub1 <> ")" 
     Atom text -> text
     HilbertShort idx -> "ε" <> showHierarchalIdxAsSubscript idx
+    Tuple as -> "(" <> Data.Text.concat (intersperse "," $ Prelude.map showSubexpParseTree as ) <> ")"
   where
     showHierarchalIdxAsSubscript :: [Int] -> Text
     showHierarchalIdxAsSubscript idxs = Data.Text.concat (intersperse "." (Prelude.map showIndexAsSubscript idxs))
@@ -322,6 +331,7 @@ boundDecrementObjDeBr idx obj = case obj of
      Bound i -> if i == idx then Bound (i - 1) else Bound i
      V i -> V i
      X i -> X i
+     Pair a b -> Pair (boundDecrementObjDeBr idx a) (boundDecrementObjDeBr idx b)
 
 
 
@@ -437,6 +447,7 @@ objDeBrBoundVarInside obj idx =
         Hilbert p -> propDeBrBoundVarInside p idx
         Bound i -> idx == i
         V i -> False
+        Pair a b -> objDeBrBoundVarInside a idx || objDeBrBoundVarInside b idx
 
 
 
@@ -466,6 +477,7 @@ objDeBrSub boundVarIdx boundvarOffsetThreshold obj t = case obj of
                  | idx < boundVarIdx -> Bound idx
 
     V idx -> V idx
+    Pair o1 o2 -> Pair (objDeBrSub boundVarIdx boundvarOffsetThreshold o1 t) (objDeBrSub boundVarIdx boundvarOffsetThreshold o2 t)
   where
         termDepth = boundDepthObjDeBr t
         calcBVOThreshold p = if propDeBrBoundVarInside p boundVarIdx then
@@ -501,7 +513,8 @@ objDeBrApplyUG obj freevarIdx boundvarIdx =
         V idx -> if idx == freevarIdx then
                                Bound boundvarIdx
                            else
-                               V idx 
+                               V idx
+        Pair a b -> Pair (objDeBrApplyUG a freevarIdx boundvarIdx) (objDeBrApplyUG b freevarIdx boundvarIdx)
 
 
 
@@ -842,6 +855,7 @@ xsubObjDeBr o idx depth = case o of
                 Bound depth 
             else
                 X i
+    Pair o1 o2 -> Pair (xsubObjDeBr o1 idx depth) (xsubObjDeBr o2 idx depth)
 
 
 instance LogicConst Text where
@@ -867,16 +881,40 @@ hX :: Int -> PropDeBr -> ObjDeBr
 hX idx p = Hilbert (xsubPropDeBr p idx (boundDepthPropDeBr p))
 
 
--- isFuncSet t = aX 0 $ X 0 `In` t :<->: e X1 $ eBangX  
+isPair :: ObjDeBr -> PropDeBr
+isPair t = eX 0 $ eX 1 $ t :==: Pair (X 0) (X 1)
 
---instance ZFC.LogicSent PropDeBr ObjDeBr where
---    emptySetAxiom :: PropDeBr
---    emptySetAxiom = eX 0 $ Neg $ aX 1 $ X 1 `In` X 0
---    specAxiom :: ObjDeBr -> PropDeBr -> PropDeBr
---    -- specification axiom composed from term t and predicate P(x)
---    specAxiom t p = eX 0 $ aX 1 $ X 1 `In` X 0 :<->: p :&&: X 1 `In` t
---    replaceAxiom:: ObjDeBr -> PropDeBr -> PropDeBr
---    replaceAxiom t p = 
+isRelation :: ObjDeBr -> PropDeBr
+isRelation s = aX 0 $ X 0 `In` s :->: isPair (X 0)
+
+relDomain :: ObjDeBr -> ObjDeBr
+relDomain s = hX 0 $ (aX 1 $ aX 2 $ Pair (X 1) (X 2) `In` s :->: (X 1) `In` (X 0)) 
+                   :&&: (aX 2 $ (X 2) `In` X 0 :->: eX 1 $ Pair (X 1) (X 2) `In` X 0) 
+
+isFunction :: ObjDeBr -> PropDeBr
+isFunction t = isRelation t :&&: 
+          (aX 0 $ X 0 `In` relDomain t :->: eXBang 1 $ Pair (X 0) (X 1) `In` t)
+
+--propIsFuncOnSet :: ObjDeBr -> PropDeBr -> PropDeBr
+--propIsFuncOnSet t p = 
+
+
+--(isRelation (X 0) :&&: 
+--                            (aX 1 $ (X 1) `In` relDomain (X 0) :->: eBangX 2 
+                            
+
+
+
+
+instance ZFC.LogicSent PropDeBr ObjDeBr where
+    emptySetAxiom :: PropDeBr
+    emptySetAxiom = eX 0 $ Neg $ aX 1 $ X 1 `In` X 0
+    specAxiom :: ObjDeBr -> PropDeBr -> PropDeBr
+    -- specification axiom composed from term t and predicate P(x)
+    specAxiom t p = eX 0 $ aX 1 $ X 1 `In` X 0 :<->: p :&&: X 1 `In` t
+    replaceAxiom:: ObjDeBr -> PropDeBr -> PropDeBr
+    replaceAxiom t p = aX 0 ((X 0) `In` t :->: eXBang 1 p)
+                         :->: eX 2 (aX 1 (X 1 `In` X 2 :<->: eX 0 (X 0 `In` t :&&: p)))    
  
 
 

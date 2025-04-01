@@ -268,7 +268,8 @@ runProofAtomic rule context state  =
                -- using the term t and the sentence s
                let specAx = specAxiom t s
                -- Check that the axiom instance is closed and sane.
-               -- s should have only one "X 0" variable in it
+               -- s can have instance of "X 0" variables in it,
+               -- but not other X n instances. 
                -- How the replacementAxiom function is defined should take
                -- take advantage of that, replacing X 0 with a bound variable. Sanity checking for closure
                -- after the specAxiom function is applied will ensure that
@@ -281,13 +282,14 @@ runProofAtomic rule context state  =
           Replacement t s -> do
                -- Check that t is a closed and sane term
                left (LogicErrSpecTermNotClosedSane t) (getTypeTerm t [] constDict)
-               -- Build an instance of the specification axiom
+               -- Build an instance of the replacement axiom
                -- using the term t and the sentence s
                let replAx = replaceAxiom t s
                -- Check that the axiom instance is closed and sane.
-               -- s should have only one "X 0" variable in it
+               -- s can have  "X 0" and "X 1" variables in it
                -- How the replacementAxiom function is defined should take
-               -- take advantage of that, replacing X 0 with a bound variable. Sanity checking for closure
+               -- take advantage of that, replacing X 0 
+               -- and X 1 with bound variables. Sanity checking for closure
                -- after the replaceAxiom function is applied will ensure that
                -- No other variables are in the term.
                maybe (return ()) (throwError . LogicErrReplInstanceNotClosedSane s) (
