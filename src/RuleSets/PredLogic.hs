@@ -10,7 +10,9 @@ module RuleSets.PredLogic
     TheoremAlgSchema,
     TheoremSchema,
     reverseANegIntroM, reverseENegIntroM,eNegIntroM, aNegIntroM,
-    eiHilbertM
+    eiHilbertM,
+    ChkTheoremError(..),
+    MetaRuleError(..)
 
 
 ) where
@@ -25,5 +27,7 @@ import RuleSets.Internal.PredLogic(LogicError(..), LogicRuleClass(..), SubproofR
     TheoremAlgSchema,
     TheoremSchema,
     reverseANegIntroM, reverseENegIntroM,eNegIntroM, aNegIntroM,
-    eiHilbertM
+    eiHilbertM,
+    ChkTheoremError(..),
+    MetaRuleError(..)
     )

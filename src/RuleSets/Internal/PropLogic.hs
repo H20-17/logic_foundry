@@ -565,8 +565,6 @@ peircesLawM p = standardRuleM (peircesLaw p)
 data MetaRuleError s where
     MetaRuleErrNotImp :: s -> MetaRuleError s
     MetaRuleErrNotModusTollens :: s -> MetaRuleError s
-    MetaRuleErrNotConsNotProven :: s -> MetaRuleError s
-    MetaRuleErrImpNotProven :: s -> MetaRuleError s
     deriving (Show,Typeable)
 
 
@@ -599,14 +597,7 @@ modusTollensM s = do
     (p,q) <- maybe (throwM $ MetaRuleErrNotModusTollens s) return (parse_implication s)
     let negQ = neg q
 
-    state <- getProofState
-    let sents = provenSents state 
-    -- Ensure that ¬Q is proven
-    negQIndex <- maybe (throwM $ MetaRuleErrNotConsNotProven negQ) return (Data.Map.lookup negQ sents)
 
-
-    -- Ensure that the given implication P → Q is proven
-    impIndex <- maybe (throwM $ MetaRuleErrImpNotProven s) return (Data.Map.lookup s sents)
     runProofBySubArgM $ do
     -- Derive ¬P from ¬Q and P → Q (Modus Tollens)
         (absurdity,_) <- runProofByAsmM p $ do
@@ -615,7 +606,24 @@ modusTollensM s = do
             --False now derived
         absurdM absurdity
 
+doubleNegIntroM :: (Monoid r1, MonadThrow m, LogicSent s tType,
+                   Proof eL r1 (PrfStdState s o tType) (PrfStdContext tType) [PrfStdStep s o tType] s,
+                   Show eL, Show s, Show tType, Typeable eL, Typeable s, Typeable tType,
+                   TypedSent o tType sE s, StdPrfPrintMonad s o tType m, REM.SubproofRule r1 s,
+                   Show sE, Typeable sE, SubproofRule r1 s, LogicRuleClass r1 s tType sE o,
+                   StdPrfPrintMonad s o tType (Either SomeException), Show o, Typeable o)
+    => s  -- The sentence P, which must be already proven
+    -> ProofGenTStd tType r1 s o m (s, [Int]) -- Returns the proven ¬¬P and its index
+doubleNegIntroM p = do
+    -- Prove ¬P → ⊥ by assuming ¬P and deriving a contradiction with P
+    (negP_imp_False, _) <- runProofByAsmM (neg p) $ do
+        -- Inside this subproof, (neg p) is assumed.
+        -- contraFM uses 'p' (proven outside) and 'neg p' (the assumption).
+        contraFM p (neg p) -- Derive False (⊥)
 
+    -- Use the Absurd rule: (¬P → ⊥) ⊢ ¬¬P
+    (negNegP, negNegPIdx) <- absurdM negP_imp_False
+    return (negNegP, negNegPIdx)
 
 
  

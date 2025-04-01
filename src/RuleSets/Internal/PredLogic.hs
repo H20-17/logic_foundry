@@ -10,7 +10,10 @@ module RuleSets.Internal.PredLogic
     LogicSent(..), 
     TheoremSchemaMT(..),
     TheoremAlgSchema,
-    TheoremSchema(..)
+    TheoremSchema(..),
+    ChkTheoremError(..),
+    establishTheorem,
+    MetaRuleError(..)
 ) where
 
 
@@ -438,8 +441,8 @@ eiHilbertM sent = do
          (instantiated, idx) <- standardRuleM (eiHilbert sent)
          let mayParse = parseExists sent
          (f,tType) <- maybe (error "parse exists failed when it should not have") return mayParse
-         let hilbertProp = reverseParseQuantToHilbert f tType
-         return (instantiated,idx,hilbertProp)
+         let hilbertObj = reverseParseQuantToHilbert f tType
+         return (instantiated,idx,hilbertObj)
 
 
 reverseANegIntroM, reverseENegIntroM :: (Monad m, LogicSent s t tType , TypeableTerm t o tType sE, Show s,
@@ -488,14 +491,14 @@ reverseENegIntroM forallXNotPx = do
 
 
 
+instance RuleInject [REM.LogicRule tType s sE o] [LogicRule s sE o t tType ] where
+    injectRule:: [REM.LogicRule tType s sE o] -> [LogicRule s sE o t tType ]
+    injectRule = Prelude.map (PropRule . PL.BaseRule)
+
+
 instance RuleInject [PL.LogicRule tType s sE o] [LogicRule s sE o t tType ] where
     injectRule:: [PL.LogicRule tType s sE o] -> [LogicRule s sE o t tType ]
     injectRule = Prelude.map PropRule
-
-instance RuleInject [REM.LogicRule tType s sE o] [LogicRule s sE o t tType ] where
-    injectRule:: [REM.LogicRule tType s sE o] -> [LogicRule s sE o t tType ]
-    injectRule = injectRule . Prelude.map PL.BaseRule
-
 
 
 data TheoremSchema s r o tType where
