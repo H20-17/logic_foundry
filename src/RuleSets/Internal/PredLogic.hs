@@ -116,6 +116,9 @@ data LogicRule s sE o t tType  where
                              LogicRule s sE o t tType
     ENegIntro :: s -> LogicRule s sE o t tType
     ANegIntro :: s -> LogicRule s sE o t tType
+    EqRefl :: t -> LogicRule s sE o t tType
+    EqSym :: s -> LogicRule s sE o t tType
+    EqTrans :: s -> s -> LogicRule s sE o t tType
     deriving(Show)
 
 
@@ -744,6 +747,8 @@ data ProofByUGSchema s r where
 
 class (PL.LogicSent s tType) => LogicSent s t tType | s ->tType, s ->t, s->t where
     parseExists :: s -> Maybe (t->s,tType)
+    parseEq :: s -> Maybe (t,t)
+    (.==.) :: t -> t -> s
     parseExistsNot :: s -> Maybe (t->s,tType)
     parseForallNot :: s-> Maybe (t->s,tType)
     parseForall :: s -> Maybe (t->s,tType)
