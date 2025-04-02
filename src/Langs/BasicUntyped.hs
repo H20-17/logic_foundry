@@ -291,6 +291,7 @@ data DeBrSe where
     ObjDeBrSeConstNotDefd :: Text -> DeBrSe
     ObjDeBrBoundVarIdx :: Int -> DeBrSe
     ObjDeBrFreeVarIdx :: Int -> DeBrSe
+    ObjDeBrTemplateVarIdx :: Int -> DeBrSe
     ObjDeBrUnconsumedX :: Int -> DeBrSe
    deriving Show
 
@@ -299,15 +300,15 @@ data DeBrSe where
 
 
 
-checkSanityObjDeBr :: ObjDeBr -> Int -> Set Text -> Set Int -> Maybe DeBrSe
+checkSanityObjDeBr :: ObjDeBr -> Int -> Int -> Set Text -> Set Int -> Maybe DeBrSe
 
-checkSanityObjDeBr obj varStackHeight constSet boundSet = case obj of
+checkSanityObjDeBr obj varStackHeight templateVarCount constSet boundSet = case obj of
      Integ num -> Nothing
      Constant name -> if name `Set.member` constSet then
                            Nothing
                        else
                            (return . ObjDeBrSeConstNotDefd) name
-     Hilbert prop -> checkSanityPropDeBr prop varStackHeight constSet 
+     Hilbert prop -> checkSanityPropDeBr prop varStackHeight templateVarCount constSet 
                             (Set.insert (boundDepthPropDeBr prop) boundSet )
      Bound idx -> 
         if idx `Set.member` boundSet then
@@ -319,9 +320,13 @@ checkSanityObjDeBr obj varStackHeight constSet boundSet = case obj of
             Nothing
         else
             (return . ObjDeBrFreeVarIdx) idx
-     X idx -> return $ ObjDeBrUnconsumedX idx
-     Pair a b -> checkSanityObjDeBr a varStackHeight constSet boundSet
-                 <|> checkSanityObjDeBr b varStackHeight constSet boundSet
+     X idx -> 
+        if idx >= 0 && idx < templateVarCount then
+            Nothing
+        else
+            (return . ObjDeBrTemplateVarIdx) idx
+     Pair a b -> checkSanityObjDeBr a varStackHeight templateVarCount constSet boundSet
+                 <|> checkSanityObjDeBr b varStackHeight templateVarCount constSet boundSet
 
 boundDecrementObjDeBr :: Int -> ObjDeBr -> ObjDeBr
 boundDecrementObjDeBr idx obj = case obj of
@@ -351,37 +356,38 @@ boundDecrementPropDeBr idx prop = case prop of
 
 
 
-checkSanityPropDeBr :: PropDeBr -> Int -> Set Text -> Set Int -> Maybe DeBrSe
-checkSanityPropDeBr prop freevarStackHeight consts boundVars = 
+checkSanityPropDeBr :: PropDeBr -> Int -> Int -> Set Text -> Set Int -> Maybe DeBrSe
+checkSanityPropDeBr prop freevarStackHeight templateVarCount consts boundVars = 
       case prop of
-        Neg p -> checkSanityPropDeBr p freevarStackHeight consts boundVars
-        (:&&:) p1 p2 -> checkSanityPropDeBr p1 freevarStackHeight consts boundVars
-                         <|> checkSanityPropDeBr p2 freevarStackHeight consts boundVars
-        (:||:) p1 p2 -> checkSanityPropDeBr p1 freevarStackHeight consts boundVars
-                         <|> checkSanityPropDeBr p2 freevarStackHeight consts boundVars
-        (:->:)  p1 p2 -> checkSanityPropDeBr p1 freevarStackHeight consts boundVars
-                         <|> checkSanityPropDeBr p2 freevarStackHeight consts boundVars
-        (:<->:) p1 p2 -> checkSanityPropDeBr p1 freevarStackHeight consts boundVars
-                         <|> checkSanityPropDeBr p2 freevarStackHeight consts boundVars
-        In o1 o2 -> checkSanityObjDeBr o1 freevarStackHeight consts boundVars
-                         <|> checkSanityObjDeBr o2 freevarStackHeight consts boundVars
-        (:==:) o1 o2 -> checkSanityObjDeBr o1 freevarStackHeight consts boundVars
-                         <|> checkSanityObjDeBr o2 freevarStackHeight consts boundVars
-        Forall prop -> checkSanityPropDeBr prop freevarStackHeight consts
+        Neg p -> checkSanityPropDeBr p freevarStackHeight templateVarCount consts boundVars
+        (:&&:) p1 p2 -> checkSanityPropDeBr p1 freevarStackHeight templateVarCount consts boundVars
+                         <|> checkSanityPropDeBr p2 freevarStackHeight templateVarCount consts boundVars
+        (:||:) p1 p2 -> checkSanityPropDeBr p1 freevarStackHeight templateVarCount consts boundVars
+                         <|> checkSanityPropDeBr p2 freevarStackHeight templateVarCount consts boundVars
+        (:->:)  p1 p2 -> checkSanityPropDeBr p1 freevarStackHeight templateVarCount consts boundVars
+                         <|> checkSanityPropDeBr p2 freevarStackHeight templateVarCount consts boundVars
+        (:<->:) p1 p2 -> checkSanityPropDeBr p1 freevarStackHeight templateVarCount consts boundVars
+                         <|> checkSanityPropDeBr p2 freevarStackHeight templateVarCount consts boundVars
+        In o1 o2 -> checkSanityObjDeBr o1 freevarStackHeight templateVarCount consts boundVars
+                         <|> checkSanityObjDeBr o2 freevarStackHeight templateVarCount consts boundVars
+        (:==:) o1 o2 -> checkSanityObjDeBr o1 freevarStackHeight templateVarCount consts boundVars
+                         <|> checkSanityObjDeBr o2 freevarStackHeight templateVarCount consts boundVars
+        Forall prop -> checkSanityPropDeBr prop freevarStackHeight templateVarCount consts
                             (Set.insert (boundDepthPropDeBr prop) boundVars )
-        Exists prop -> checkSanityPropDeBr prop freevarStackHeight consts
+        Exists prop -> checkSanityPropDeBr prop freevarStackHeight templateVarCount consts
                             (Set.insert (boundDepthPropDeBr prop) boundVars )
-        (:>=:) o1 o2 -> checkSanityObjDeBr o1 freevarStackHeight consts boundVars
-                         <|> checkSanityObjDeBr o2 freevarStackHeight consts boundVars
+        (:>=:) o1 o2 -> checkSanityObjDeBr o1 freevarStackHeight templateVarCount consts boundVars
+                         <|> checkSanityObjDeBr o2 freevarStackHeight templateVarCount consts boundVars
         F -> Nothing
 
 
 
 instance TypeableTerm ObjDeBr Text () DeBrSe where
  
-     getTypeTerm :: ObjDeBr -> [()] -> Map Text () -> Either DeBrSe ()
-     getTypeTerm term vs constDict = 
-         maybe (return ()) throwError (checkSanityObjDeBr term (Prelude.length vs) (keysSet constDict) mempty)
+     getTypeTerm :: [()] -> [()] -> Map Text () -> ObjDeBr -> Either DeBrSe ()
+     getTypeTerm ts vs constDict term = 
+         maybe (return ()) throwError (checkSanityObjDeBr term (Prelude.length vs) 
+                        (Prelude.length ts) (keysSet constDict) mempty)
      const2Term :: Text -> ObjDeBr
      const2Term = Constant
      free2Term :: Int -> ObjDeBr
@@ -389,9 +395,10 @@ instance TypeableTerm ObjDeBr Text () DeBrSe where
 
 
 instance TypedSent  Text () DeBrSe PropDeBr where
-    checkSanity :: [()] -> PropDeBr -> Map Text () -> Maybe DeBrSe
-    checkSanity freeVarStack prop constDict = checkSanityPropDeBr
-        prop (Prelude.length freeVarStack) (keysSet constDict) mempty
+    checkSanity :: [()] -> [()] -> Map Text () -> PropDeBr -> Maybe DeBrSe
+    checkSanity tsTypes freeVarStack constDict prop = checkSanityPropDeBr
+        prop (Prelude.length freeVarStack) 
+        (Prelude.length tsTypes)  (keysSet constDict) mempty
 
 
 
@@ -439,103 +446,140 @@ instance PL.LogicSent PropDeBr () where
    
 
 
-objDeBrBoundVarInside :: ObjDeBr -> Bool
-objDeBrBoundVarInside obj =
+objDeBrBoundVarInside :: ObjDeBr -> Int -> Bool
+objDeBrBoundVarInside obj idx =
     case obj of
         Integ num -> False
         Constant const -> False
-        Hilbert p -> propDeBrBoundVarInside p
-        Bound i -> False
-        X idx -> idx == 0
+        Hilbert p -> propDeBrBoundVarInside p idx
+        Bound i -> idx == i
         V i -> False
-        Pair a b -> objDeBrBoundVarInside a || objDeBrBoundVarInside b
+        Pair a b -> objDeBrBoundVarInside a idx || objDeBrBoundVarInside b idx
 
 
 
-propDeBrBoundVarInside :: PropDeBr -> Bool
-propDeBrBoundVarInside prop = case prop of
-    Neg p -> propDeBrBoundVarInside p
-    (:&&:) p1 p2 -> propDeBrBoundVarInside p1 || propDeBrBoundVarInside p2
-    (:||:) p1 p2 -> propDeBrBoundVarInside p1 || propDeBrBoundVarInside p2
-    (:->:) p1 p2 -> propDeBrBoundVarInside p1 || propDeBrBoundVarInside p2
-    (:<->:) p1 p2 -> propDeBrBoundVarInside p1|| propDeBrBoundVarInside p2
-    (:==:) o1 o2 -> objDeBrBoundVarInside o1 || objDeBrBoundVarInside o2
-    In o1 o2 -> objDeBrBoundVarInside o1 || objDeBrBoundVarInside o2
-    Forall p -> propDeBrBoundVarInside p
-    Exists p -> propDeBrBoundVarInside p
-    (:>=:) o1 o2 -> objDeBrBoundVarInside o1 || objDeBrBoundVarInside o2
+objDeBrX0Inside :: ObjDeBr -> Bool
+objDeBrX0Inside obj =
+    case obj of
+        Integ num -> False
+        Constant const -> False
+        Hilbert p -> propDeBrX0Inside p
+        Bound i -> False
+        V i -> False
+        X idx | idx == 0 -> True
+              | otherwise -> False
+        Pair a b -> objDeBrX0Inside a|| objDeBrX0Inside b
+
+
+propDeBrBoundVarInside :: PropDeBr -> Int -> Bool
+propDeBrBoundVarInside prop idx = case prop of
+    Neg p -> propDeBrBoundVarInside p idx
+    (:&&:) p1 p2 -> propDeBrBoundVarInside p1 idx || propDeBrBoundVarInside p2 idx
+    (:||:) p1 p2 -> propDeBrBoundVarInside p1 idx || propDeBrBoundVarInside p2 idx
+    (:->:) p1 p2 -> propDeBrBoundVarInside p1 idx || propDeBrBoundVarInside p2 idx
+    (:<->:) p1 p2 -> propDeBrBoundVarInside p1 idx || propDeBrBoundVarInside p2 idx
+    (:==:) o1 o2 -> objDeBrBoundVarInside o1 idx || objDeBrBoundVarInside o2 idx
+    In o1 o2 -> objDeBrBoundVarInside o1 idx || objDeBrBoundVarInside o2 idx
+    Forall p -> propDeBrBoundVarInside p idx
+    Exists p -> propDeBrBoundVarInside p idx
+    (:>=:) o1 o2 -> objDeBrBoundVarInside o1 idx || objDeBrBoundVarInside o2 idx
+    false -> False
+
+propDeBrX0Inside :: PropDeBr -> Bool
+propDeBrX0Inside prop = case prop of
+    Neg p -> propDeBrX0Inside p
+    (:&&:) p1 p2 -> propDeBrX0Inside p1 || propDeBrX0Inside p2
+    (:||:) p1 p2 -> propDeBrX0Inside p1 || propDeBrX0Inside p2
+    (:->:) p1 p2 -> propDeBrX0Inside p1 || propDeBrX0Inside p2
+    (:<->:) p1 p2 -> propDeBrX0Inside p1 || propDeBrX0Inside p2
+    (:==:) o1 o2 -> objDeBrX0Inside o1  || objDeBrX0Inside o2
+    In o1 o2 -> objDeBrX0Inside o1 || objDeBrX0Inside o2
+    Forall p -> propDeBrX0Inside p
+    Exists p -> propDeBrX0Inside p
+    (:>=:) o1 o2 -> objDeBrX0Inside o1 || objDeBrX0Inside o2
     false -> False
 
 
-objDeBrSubBoundVarToX0 :: Int -> ObjDeBr -> ObjDeBr
-objDeBrSubBoundVarToX0 boundVarIdx obj = case obj of
+
+objDeBrSub :: Int -> Int -> ObjDeBr -> ObjDeBr -> ObjDeBr
+objDeBrSub boundVarIdx boundvarOffsetThreshold obj t = case obj of
     Integ num -> Integ num
     Constant const -> Constant const
-    Hilbert p -> Hilbert (propDeBrSubBoundVarToX0 boundVarIdx p)                            
-    Bound idx -> if idx == boundVarIdx then X 0
-                   else Bound idx
+    Hilbert p -> Hilbert (propDeBrSub boundVarIdx (calcBVOThreshold p) p t)                            
+    Bound idx 
+                 | idx==boundVarIdx -> t
+                 | idx >= boundvarOffsetThreshold -> Bound (idx + termDepth)
+                 | idx < boundVarIdx -> Bound idx
+
     V idx -> V idx
-    Pair o1 o2 -> Pair (objDeBrSubBoundVarToX0 boundVarIdx o1) 
-           (objDeBrSubBoundVarToX0 boundVarIdx o1) 
- 
-
-propDeBrSubBoundVarToX0 :: Int -> PropDeBr -> PropDeBr
-propDeBrSubBoundVarToX0 boundVarIdx prop = case prop of
-    p :&&: q -> propDeBrSubBoundVarToX0 boundVarIdx p :&&: propDeBrSubBoundVarToX0 boundVarIdx q
-    p :||: q -> propDeBrSubBoundVarToX0 boundVarIdx p :||: propDeBrSubBoundVarToX0 boundVarIdx q
-    p :->: q -> propDeBrSubBoundVarToX0 boundVarIdx p :->: propDeBrSubBoundVarToX0 boundVarIdx q
-    p :<->: q -> propDeBrSubBoundVarToX0 boundVarIdx p :<->: propDeBrSubBoundVarToX0 boundVarIdx q
-    -- Uses the already implemented objDeBrSubBoundVarToX0 for terms
-    a :==: b -> objDeBrSubBoundVarToX0 boundVarIdx a :==: objDeBrSubBoundVarToX0 boundVarIdx b
-    In a b -> In (objDeBrSubBoundVarToX0 boundVarIdx a) (objDeBrSubBoundVarToX0 boundVarIdx b)
-    -- Simple recursion for quantifiers, no index adjustment needed as per requirement
-    Forall p -> Forall (propDeBrSubBoundVarToX0 boundVarIdx p)
-    Exists p -> Exists (propDeBrSubBoundVarToX0 boundVarIdx p)
-    a :>=: b -> objDeBrSubBoundVarToX0 boundVarIdx a :>=: objDeBrSubBoundVarToX0 boundVarIdx b
-    F -> F
-
-
-
-objDeBrSub :: Int -> ObjDeBr -> ObjDeBr -> ObjDeBr
-objDeBrSub boundvarOffsetThreshold obj t = case obj of
-    Integ num -> Integ num
-    Constant const -> Constant const
-    Hilbert p -> Hilbert (propDeBrSub (calcBVOThreshold p) p t)                            
-    Bound idx -> if idx >= boundvarOffsetThreshold then Bound (idx + termDepth)
-                     else Bound idx 
-           --      | idx==boundVarIdx -> t
-           --      | idx >= boundvarOffsetThreshold -> Bound (idx + termDepth)
-           --     | idx < boundVarIdx -> Bound idx
-    X idx -> if idx == 0 then t else X idx
-    V idx -> V idx
-    Pair o1 o2 -> Pair (objDeBrSub boundvarOffsetThreshold o1 t) (objDeBrSub boundvarOffsetThreshold o2 t)
+    Pair o1 o2 -> Pair (objDeBrSub boundVarIdx boundvarOffsetThreshold o1 t) (objDeBrSub boundVarIdx boundvarOffsetThreshold o2 t)
   where
         termDepth = boundDepthObjDeBr t
-        calcBVOThreshold p = if propDeBrBoundVarInside p then
+        calcBVOThreshold p = if propDeBrBoundVarInside p boundVarIdx then
                                   boundDepthPropDeBr p
                              else boundvarOffsetThreshold
 
-propDeBrSub :: Int -> PropDeBr -> ObjDeBr -> PropDeBr
-propDeBrSub boundvarOffsetThreshold prop t = case prop of
-    Neg p -> Neg (propDeBrSub boundvarOffsetThreshold p t)
-    (:&&:) p1 p2 ->  (:&&:) (propDeBrSub boundvarOffsetThreshold p1 t) 
-                      (propDeBrSub boundvarOffsetThreshold p2 t) 
-    (:||:) p1 p2 ->  (:||:) (propDeBrSub boundvarOffsetThreshold p1 t)
-                            (propDeBrSub boundvarOffsetThreshold p2 t) 
-    (:->:) p1 p2 ->  (:->:) (propDeBrSub boundvarOffsetThreshold p1 t) 
-                            (propDeBrSub boundvarOffsetThreshold p2 t)
-    (:<->:) p1 p2 ->  (:<->:) (propDeBrSub boundvarOffsetThreshold p1 t) 
-                           (propDeBrSub boundvarOffsetThreshold p2 t)
-    (:==:) o1 o2 -> (:==:) (objDeBrSub boundvarOffsetThreshold o1 t) 
-                           (objDeBrSub boundvarOffsetThreshold o2 t)   
-    In o1 o2 -> In (objDeBrSub boundvarOffsetThreshold o1 t) 
-                       (objDeBrSub boundvarOffsetThreshold o2 t)  
-    Forall p -> Forall (propDeBrSub (calcBVOThreshold p) p t)
-    Exists p -> Exists (propDeBrSub (calcBVOThreshold p) p t)
-    (:>=:) o1 o2 -> (:>=:) (objDeBrSub boundvarOffsetThreshold o1 t) (objDeBrSub boundvarOffsetThreshold o2 t)
+
+
+objDeBrSubX0 :: Int -> ObjDeBr -> ObjDeBr -> ObjDeBr
+objDeBrSubX0 boundvarOffsetThreshold obj t = case obj of
+    Integ num -> Integ num
+    Constant const -> Constant const
+    Hilbert p -> Hilbert (propDeBrSubX0 (calcBVOThreshold p) p t)                            
+    Bound idx
+                | idx >= boundvarOffsetThreshold -> Bound (idx + termDepth)
+                | otherwise -> Bound idx
+           --      | idx==boundVarIdx -> t
+           --      | idx >= boundvarOffsetThreshold -> Bound (idx + termDepth)
+           --      | idx < boundVarIdx -> Bound idx
+
+    V idx -> V idx
+    X idx 
+        | idx == 0 -> t
+        | otherwise -> X idx
+    Pair o1 o2 -> Pair (objDeBrSubX0 boundvarOffsetThreshold o1 t) (objDeBrSubX0 boundvarOffsetThreshold o2 t)
+  where
+        termDepth = boundDepthObjDeBr t
+        calcBVOThreshold p = if propDeBrX0Inside p then
+                                  boundDepthPropDeBr p
+                             else boundvarOffsetThreshold
+
+
+
+propDeBrSub :: Int -> Int -> PropDeBr -> ObjDeBr -> PropDeBr
+propDeBrSub boundVarIdx boundvarOffsetThreshold prop t = case prop of
+    Neg p -> Neg (propDeBrSub boundVarIdx boundvarOffsetThreshold p t)
+    (:&&:) p1 p2 ->  (:&&:) (propDeBrSub boundVarIdx boundvarOffsetThreshold p1 t) (propDeBrSub boundVarIdx boundvarOffsetThreshold p2 t) 
+    (:||:) p1 p2 ->  (:||:) (propDeBrSub boundVarIdx boundvarOffsetThreshold p1 t) (propDeBrSub boundVarIdx boundvarOffsetThreshold p2 t) 
+    (:->:) p1 p2 ->  (:->:) (propDeBrSub boundVarIdx boundvarOffsetThreshold p1 t) (propDeBrSub boundVarIdx boundvarOffsetThreshold p2 t)
+    (:<->:) p1 p2 ->  (:<->:) (propDeBrSub boundVarIdx boundvarOffsetThreshold p1 t) (propDeBrSub boundVarIdx boundvarOffsetThreshold p2 t)
+    (:==:) o1 o2 -> (:==:) (objDeBrSub boundVarIdx boundvarOffsetThreshold o1 t) (objDeBrSub boundVarIdx boundvarOffsetThreshold o2 t)   
+    In o1 o2 -> In (objDeBrSub boundVarIdx boundvarOffsetThreshold o1 t) (objDeBrSub boundVarIdx boundvarOffsetThreshold o2 t)  
+    Forall p -> Forall (propDeBrSub boundVarIdx (calcBVOThreshold p) p t)
+    Exists p -> Exists (propDeBrSub boundVarIdx (calcBVOThreshold p) p t)
+    (:>=:) o1 o2 -> (:>=:) (objDeBrSub boundVarIdx boundvarOffsetThreshold o1 t) (objDeBrSub boundVarIdx boundvarOffsetThreshold o2 t)
     F -> F
   where
-          calcBVOThreshold p = if propDeBrBoundVarInside p  then
+          calcBVOThreshold p = if propDeBrBoundVarInside p boundVarIdx then
+                                      boundDepthPropDeBr p
+                               else boundvarOffsetThreshold 
+
+
+propDeBrSubX0 :: Int -> PropDeBr -> ObjDeBr -> PropDeBr
+propDeBrSubX0 boundvarOffsetThreshold prop t = case prop of
+    Neg p -> Neg (propDeBrSubX0 boundvarOffsetThreshold p t)
+    (:&&:) p1 p2 ->  (:&&:) (propDeBrSubX0 boundvarOffsetThreshold p1 t) (propDeBrSubX0 boundvarOffsetThreshold p2 t) 
+    (:||:) p1 p2 ->  (:||:) (propDeBrSubX0 boundvarOffsetThreshold p1 t) (propDeBrSubX0 boundvarOffsetThreshold p2 t) 
+    (:->:) p1 p2 ->  (:->:) (propDeBrSubX0 boundvarOffsetThreshold p1 t) (propDeBrSubX0 boundvarOffsetThreshold p2 t)
+    (:<->:) p1 p2 ->  (:<->:) (propDeBrSubX0 boundvarOffsetThreshold p1 t) (propDeBrSubX0 boundvarOffsetThreshold p2 t)
+    (:==:) o1 o2 -> (:==:) (objDeBrSubX0 boundvarOffsetThreshold o1 t) (objDeBrSubX0 boundvarOffsetThreshold o2 t)   
+    In o1 o2 -> In (objDeBrSubX0 boundvarOffsetThreshold o1 t) (objDeBrSubX0 boundvarOffsetThreshold o2 t)  
+    Forall p -> Forall (propDeBrSubX0 (calcBVOThreshold p) p t)
+    Exists p -> Exists (propDeBrSubX0 (calcBVOThreshold p) p t)
+    (:>=:) o1 o2 -> (:>=:) (objDeBrSubX0 boundvarOffsetThreshold o1 t) (objDeBrSubX0 boundvarOffsetThreshold o2 t)
+    F -> F
+  where
+          calcBVOThreshold p = if propDeBrX0Inside p then
                                       boundDepthPropDeBr p
                                else boundvarOffsetThreshold 
 
@@ -551,7 +595,6 @@ objDeBrApplyUG obj freevarIdx boundvarIdx =
                                Bound boundvarIdx
                            else
                                V idx
-        X idx -> X idx
         Pair a b -> Pair (objDeBrApplyUG a freevarIdx boundvarIdx) (objDeBrApplyUG b freevarIdx boundvarIdx)
 
 
@@ -573,15 +616,14 @@ propDeBrApplyUG prop freevarIdx boundvarIdx =
 
 
 boundExpToFunc :: PropDeBr -> ObjDeBr -> PropDeBr
-boundExpToFunc p = propDeBrSub (calcBVOThreshold p) templateExp
-    where
-       templateExp = propDeBrSubBoundVarToX0 (boundVarIdx p) p
-          where
-           boundVarIdx = boundDepthPropDeBr
-       calcBVOThreshold p = if propDeBrBoundVarInside p then
-                                      boundDepthPropDeBr p
+boundExpToFunc p = propDeBrSubX0 calcBVOThreshold template
+           where 
+                 boundDepth = boundDepthPropDeBr p
+                 template = propDeBrSubBoundVarToX0 boundDepth p 
+                 calcBVOThreshold = if propDeBrBoundVarInside p boundDepth then
+                                      boundDepth
                                   else 
-                                      boundDepthPropDeBr p + 1
+                                      boundDepth + 1
 
 
 instance PREDL.LogicSent PropDeBr ObjDeBr ()  where
@@ -629,7 +671,12 @@ instance PREDL.LogicSent PropDeBr ObjDeBr ()  where
     (.==.) :: ObjDeBr -> ObjDeBr -> PropDeBr
     (.==.) = (:==:)
     substX0 :: PropDeBr -> ObjDeBr -> PropDeBr
-    substX0 = substX0Prop
+    substX0 p = propDeBrSubX0 (calcBVOThreshold p) p
+           where boundVarIdx = boundDepthPropDeBr
+                 calcBVOThreshold p = if propDeBrX0Inside p then
+                                      boundDepthPropDeBr p
+                                  else 
+                                      boundDepthPropDeBr p + 1
 
     
 
@@ -777,7 +824,34 @@ showPropDeBrStep step = do
                                   "└"
 
 
+objDeBrSubBoundVarToX0 :: Int -> ObjDeBr -> ObjDeBr
+objDeBrSubBoundVarToX0 boundVarIdx obj = case obj of
+    Integ num -> Integ num
+    Constant const -> Constant const
+    Hilbert p -> Hilbert (propDeBrSubBoundVarToX0 boundVarIdx p)                            
+    Bound idx -> if idx == boundVarIdx then X 0
+                   else Bound idx
+    V idx -> V idx
+    Pair o1 o2 -> Pair (objDeBrSubBoundVarToX0 boundVarIdx o1) 
+           (objDeBrSubBoundVarToX0 boundVarIdx o1) 
  
+
+propDeBrSubBoundVarToX0 :: Int -> PropDeBr -> PropDeBr
+propDeBrSubBoundVarToX0 boundVarIdx prop = case prop of
+    Neg p -> Neg $ propDeBrSubBoundVarToX0 boundVarIdx p
+    p :&&: q -> propDeBrSubBoundVarToX0 boundVarIdx p :&&: propDeBrSubBoundVarToX0 boundVarIdx q
+    p :||: q -> propDeBrSubBoundVarToX0 boundVarIdx p :||: propDeBrSubBoundVarToX0 boundVarIdx q
+    p :->: q -> propDeBrSubBoundVarToX0 boundVarIdx p :->: propDeBrSubBoundVarToX0 boundVarIdx q
+    p :<->: q -> propDeBrSubBoundVarToX0 boundVarIdx p :<->: propDeBrSubBoundVarToX0 boundVarIdx q
+    -- Uses the already implemented objDeBrSubBoundVarToX0 for terms
+    a :==: b -> objDeBrSubBoundVarToX0 boundVarIdx a :==: objDeBrSubBoundVarToX0 boundVarIdx b
+    In a b -> In (objDeBrSubBoundVarToX0 boundVarIdx a) (objDeBrSubBoundVarToX0 boundVarIdx b)
+    -- Simple recursion for quantifiers, no index adjustment needed as per requirement
+    Forall p -> Forall (propDeBrSubBoundVarToX0 boundVarIdx p)
+    Exists p -> Exists (propDeBrSubBoundVarToX0 boundVarIdx p)
+    a :>=: b -> objDeBrSubBoundVarToX0 boundVarIdx a :>=: objDeBrSubBoundVarToX0 boundVarIdx b
+
+    F -> F
                 
                 
 
@@ -945,34 +1019,6 @@ isFunction t = isRelation t :&&:
 --(isRelation (X 0) :&&: 
 --                            (aX 1 $ (X 1) `In` relDomain (X 0) :->: eBangX 2 
                             
-
-
--- Substitutes ONLY X 0 with the given term within a PropDeBr
-substX0Prop :: PropDeBr -> ObjDeBr -> PropDeBr
-substX0Prop sentence termToSub = case sentence of
-    Neg p -> Neg (substX0Prop p termToSub)
-    p :&&: q -> (substX0Prop p termToSub) :&&: (substX0Prop q termToSub)
-    p :||: q -> (substX0Prop p termToSub) :||: (substX0Prop q termToSub)
-    p :->: q -> (substX0Prop p termToSub) :->: (substX0Prop q termToSub)
-    p :<->: q -> (substX0Prop p termToSub) :<->: (substX0Prop q termToSub)
-    a :==: b -> (substX0Obj a termToSub) :==: (substX0Obj b termToSub)
-    In a b -> In (substX0Obj a termToSub) (substX0Obj b termToSub)
-    Forall p -> Forall (substX0Prop p termToSub) -- Check if termToSub has vars clashing with bound var 'p' introduces
-    Exists p -> Exists (substX0Prop p termToSub) -- Check if termToSub has vars clashing with bound var 'p' introduces
-    a :>=: b -> (substX0Obj a termToSub) :>=: (substX0Obj b termToSub)
-    F -> F
-
--- Substitutes ONLY X 0 with the given term within an ObjDeBr
-substX0Obj :: ObjDeBr -> ObjDeBr -> ObjDeBr
-substX0Obj currentTerm termToSub = case currentTerm of
-    X 0 -> termToSub -- The actual substitution happens here
-    X i -> X i       -- Other X placeholders are ignored
-    Integ i -> Integ i
-    Constant c -> Constant c
-    Hilbert p -> Hilbert (substX0Prop p termToSub) -- Substitute inside Hilbert term's prop
-    Bound i -> Bound i -- Bound variables are ignored
-    V i -> V i       -- Free variables are ignored (usually)
-    Pair a b -> Pair (substX0Obj a termToSub) (substX0Obj b termToSub)
 
 
 instance ZFC.LogicSent PropDeBr ObjDeBr where
