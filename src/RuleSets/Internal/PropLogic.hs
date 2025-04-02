@@ -175,7 +175,7 @@ runProofAtomic rule context state =
              step <- left LogicErrPrfBySubArgErr (runProofBySubArg schema context state)
              return (Just $ argPrfConsequent schema, Nothing, step)
         ExclMid s -> do
-             maybe (return ())   (throwError . LogicErrExclMidSanityErr s) (checkSanity (freeVarTypeStack context) s (fmap fst (consts state)))
+             maybe (return ())   (throwError . LogicErrExclMidSanityErr s) (checkSanity [] (freeVarTypeStack context) (fmap fst (consts state))s)
              let prop = s .||. neg s
              return (Just prop, Nothing, PrfStdStepStep prop "EXMID" [])
         SimpL aAndB -> do
@@ -207,12 +207,12 @@ runProofAtomic rule context state =
 
         DisjIntroL a b -> do
             leftIndex <- maybe ((throwError . LogicErrDisjIntroLLeftNotProven) a) return (Data.Map.lookup a (provenSents state))
-            maybe (return ())   (throwError . LogicErrDisjIntroLRightNotSane b) (checkSanity (freeVarTypeStack context) b (fmap fst (consts state)))
+            maybe (return ())   (throwError . LogicErrDisjIntroLRightNotSane b) (checkSanity [] (freeVarTypeStack context) (fmap fst (consts state)) b)
             let aOrB = a .||. b
             return (Just aOrB, Nothing, PrfStdStepStep aOrB "DISJ_INTRO_L" [leftIndex])
         DisjIntroR a b -> do
             rightIndex <- maybe ((throwError . LogicErrDisjIntroRRightNotProven) b) return (Data.Map.lookup b (provenSents state))
-            maybe (return ())   (throwError . LogicErrDisjIntroRLeftNotSane a) (checkSanity (freeVarTypeStack context) a (fmap fst (consts state)))
+            maybe (return ())   (throwError . LogicErrDisjIntroRLeftNotSane a) (checkSanity [] (freeVarTypeStack context) (fmap fst (consts state)) a)
             let aOrB = a .||. b
             return (Just aOrB, Nothing, PrfStdStepStep aOrB "DISJ_INTRO_R" [rightIndex])
 
@@ -653,7 +653,7 @@ runProofByAsm (ProofByAsmSchema assumption consequent subproof) context state  =
       do
          let frVarTypeStack = freeVarTypeStack context
          let constdict = fmap fst (consts state)
-         let sc = checkSanity frVarTypeStack assumption constdict
+         let sc = checkSanity [] frVarTypeStack constdict assumption
          maybe (return ()) (throwError .  ProofByAsmErrAsmNotSane assumption) sc
          let alreadyProven = provenSents state
          let newStepIdxPrefix = stepIdxPrefix context ++ [stepCount state]
@@ -695,7 +695,7 @@ runProofByAsmM asm prog =  do
         context <- ask
         let frVarTypeStack = freeVarTypeStack context
         let constdict = fmap fst (consts state)
-        let sc = checkSanity frVarTypeStack asm constdict
+        let sc = checkSanity [] frVarTypeStack constdict asm
         maybe (return ()) (throwM . BigExceptAsmSanity asm) sc
         let newStepIdxPrefix = stepIdxPrefix context ++ [stepCount state]
         let newSents = Data.Map.insert asm (newStepIdxPrefix ++ [0]) mempty

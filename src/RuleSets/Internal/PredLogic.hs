@@ -66,6 +66,8 @@ import RuleSets.Internal.PropLogic hiding
    MetaRuleError(..))
 import qualified RuleSets.Internal.PropLogic as PL
 import Distribution.PackageDescription (BuildInfo(asmOptions))
+import qualified RuleSets.Internal.BaseLogic as BASE
+
 
 
 
@@ -102,8 +104,8 @@ data LogicError s sE o t tType where
 
     LogicErrEqSubstSourceNotProven :: s -> LogicError s sE o t tType -- New
     LogicErrEqSubstEqNotProven :: s -> LogicError s sE o t tType
-    LogicErrEqSubstSourceSanity :: s -> sE -> LogicError s sE o t tType     -- New
-    LogicErrEqSubstResultSanity :: s -> sE -> LogicError s sE o t tType
+    LogicErrEqSubstTemplateSanityA :: s -> tType -> sE -> LogicError s sE o t tType     -- New
+    LogicErrEqSubstTemplateSanityB :: s -> tType -> sE -> LogicError s sE o t tType
 
 
    deriving (Show)
@@ -277,7 +279,7 @@ runProofAtomic rule context state  =
                let eIResultSent = (f . const2Term) const
                return (Just eIResultSent,Just (const,tType), PrfStdStepStep eIResultSent "EI" [existsSentIdx])
           EG term generalization -> do
-               let eitherTermType = getTypeTerm term varStack constDict
+               let eitherTermType = getTypeTerm mempty varStack constDict term
                termType <- left PredProofTermSanity eitherTermType
                let mayParse = parseExists generalization
                (f,tType) <- maybe ((throwError . LogicErrEGNotExists) generalization) return mayParse
@@ -291,7 +293,7 @@ runProofAtomic rule context state  =
                forallSentIdx <- maybe ((throwError . LogicErrUINotProven) forallSent) return mayForallSentIdx
                let mayForallParse = parseForall forallSent
                (f,tType) <- maybe ((throwError . LogicErrUINotForall) forallSent) return mayForallParse
-               let eitherTermType = getTypeTerm term varStack constDict
+               let eitherTermType = getTypeTerm mempty varStack constDict term
                termType <- left PredProofTermSanity eitherTermType
                unless (tType == termType) ((throwError .  LogicErrUITermTypeMismatch term termType forallSent) tType)
                return (Just $ f term,Nothing, PrfStdStepStep (f term) "UI" [forallSentIdx])
@@ -323,7 +325,7 @@ runProofAtomic rule context state  =
                return (Just eIResultSent,Nothing, PrfStdStepStep eIResultSent "EI_HILBERT" [existsSentIdx])
           EqRefl term -> do
               -- Check term sanity (similar to EG/UI)
-              let eitherTermType = getTypeTerm term varStack constDict
+              let eitherTermType = getTypeTerm mempty varStack constDict term
               termType <- left PredProofTermSanity eitherTermType
               let resultSent = term .==. term
               return (Just resultSent, Nothing, PrfStdStepStep resultSent "EQ_REFL" [])
@@ -364,27 +366,42 @@ runProofAtomic rule context state  =
               eqSentIdx <- maybe (throwError $ LogicErrEqSubstEqNotProven eqSent)
                                  return (Data.Map.lookup eqSent (provenSents state))
 
+                        
               -- Parse the equality sentence a == b
               (termA, termB) <- maybe (throwError $ LogicErrSentenceNotEq eqSent)
                                      return (parseEq eqSent)
 
+              -- Get the type of termA
+              -- The PredProofTermSanity error should never happen because we
+              -- are getting a type from an already-proven sentence.
+              let eitherTermType = getTypeTerm mempty varStack constDict termA
+              termTypeA <- left PredProofTermSanity eitherTermType        
+
+              -- Sanity check the template with the type of termA as the template var type.
+              let tmpltSanityErrorA = checkSanity [termTypeA] varStack constDict templateSent
+              maybe (return ()) (throwError . LogicErrEqSubstTemplateSanityA templateSent termTypeA) tmpltSanityErrorA
+
               -- Instantiate the template with termA to get P(a)
               let sourceSent = substX0 templateSent termA
-
-              -- *** Sanity check P(a) ***
-              let sourceSanityError = checkSanity varStack sourceSent constDict
-              maybe (return ()) (throwError . LogicErrEqSubstSourceSanity sourceSent) sourceSanityError
 
               -- Check if the instantiated source sentence P(a) is proven
               sourceSentIdx <- maybe (throwError $ LogicErrEqSubstSourceNotProven sourceSent)
                                      return (Data.Map.lookup sourceSent (provenSents state))
 
+              -- We aren't checking that the sanity of the template is sane relative to 
+              -- the type of termB because, if the type of getTermType returns different
+              -- types for termA and termB, these are just possible types, and 
+              -- the equality of termA and termB guarantees that termA and termB have the same
+              -- real underlying type, which should be a subtype of the effective types,
+              -- and if the template is sane relative to the type of termA, because termA is identical to termB,
+              -- then it must be sane when instantiated with termB. In other words CheckSanity on the template relative to the
+              -- type of termA should return Nothing iff checkSanity relative to the type of termB returns Nothing. 
+              --
+
+
               -- Perform the substitution in the template with termB to get P(b)
               let resultSent = substX0 templateSent termB
 
-              -- *** Sanity check P(b) ***
-              let resultSanityError = checkSanity varStack resultSent constDict
-              maybe (return ()) (throwError . LogicErrEqSubstResultSanity resultSent) resultSanityError
 
               return (Just resultSent, Nothing, PrfStdStepStep resultSent "EQ_SUBST" [sourceSentIdx, eqSentIdx])
 
@@ -663,12 +680,12 @@ checkTheoremOpen mayPrStateCxt (TheoremSchema constdict lemmas theorem subproof)
                where
                   maybeLemmaMissing = if not (a `Set.member` Data.Map.keysSet alreadyProven)
                                           then (Just . ChkTheoremErrLemmaNotEstablished) a else Nothing
-                  maybeLemmaInsane = fmap (ChkTheoremErrLemmaSanity a) (checkSanity mempty a constdictPure)
+                  maybeLemmaInsane = fmap (ChkTheoremErrLemmaSanity a) (checkSanity mempty mempty constdictPure a)
          g1 constdictPure = Prelude.foldr f1 Nothing lemmas
            where
              f1 a = maybe maybeLemmaInsane Just 
                where
-                  maybeLemmaInsane = fmap (ChkTheoremErrLemmaSanity a) (checkSanity mempty a constdictPure)
+                  maybeLemmaInsane = fmap (ChkTheoremErrLemmaSanity a) (checkSanity mempty mempty constdictPure a)
 
 checkTheorem :: (ProofStd s eL1 r1 o tType, TypedSent o tType sE s    )
                             => TheoremSchema s r1 o tType
@@ -771,12 +788,12 @@ checkTheoremMOpen mayPrStateCxt (TheoremSchemaMT constdict lemmas prog) =  do
                   where
                      maybeLemmaMissing = if not (a `Set.member` Data.Map.keysSet alreadyProven)
                                           then (Just . BigExceptLemmaNotEstablished) a else Nothing
-                     maybeLemmaInsane = fmap (BigExceptLemmaSanityErr a) (checkSanity mempty a constdictPure)
+                     maybeLemmaInsane = fmap (BigExceptLemmaSanityErr a) (checkSanity mempty mempty constdictPure a)
             g1 constdictPure = Prelude.foldr f1 Nothing lemmas
               where
                  f1 a = maybe maybeLemmaInsane Just 
                    where
-                      maybeLemmaInsane = fmap (BigExceptLemmaSanityErr a) (checkSanity mempty a constdictPure)
+                      maybeLemmaInsane = fmap (BigExceptLemmaSanityErr a) (checkSanity mempty mempty constdictPure a)
   
 
 

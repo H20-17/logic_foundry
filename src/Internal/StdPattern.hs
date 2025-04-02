@@ -122,8 +122,9 @@ data PrfStdStep s o tType where
 
 
 class (Eq tType, Ord o) => TypeableTerm t o tType sE | t -> o, t ->tType, t -> sE where
-    getTypeTerm :: t -> [tType] -> Map o tType -> Either sE tType
-    -- get term type using a varstack and a const dictionary
+    getTypeTerm :: [tType] -> [tType] -> Map o tType -> t -> Either sE tType
+    -- get term type using a list of template variable types, a list of
+    -- free variable types and a const dictionary
     const2Term :: o -> t
     free2Term :: Int -> t
         
@@ -131,7 +132,9 @@ class LogicConst o where
     newConst :: Set o -> o
 
 class (Ord s, Eq tType, Ord o) => TypedSent o tType sE s | s-> tType, s-> sE, s -> o where
-    checkSanity :: [tType] -> s -> Map o tType -> Maybe sE
+    -- check the sanity of a sentence using a list of template variable types,
+    -- a list of free variable types and a const dictionary
+    checkSanity :: [tType] -> [tType] -> Map o tType -> s -> Maybe sE
 
 
 data TestSubproofErr s sE eL where
@@ -154,7 +157,7 @@ testSubproof context baseState preambleState preambleSteps mayPreambleLastProp t
              let baseStateZero = PrfStdState (provenSents baseState) (consts baseState) 0
              let startState = baseStateZero <> preambleState
              let constdict = fmap fst (consts startState)
-             let sc = checkSanity frVarTypeStack targetProp constdict
+             let sc = checkSanity [] frVarTypeStack constdict targetProp
              maybe (return ()) (throwError . TestSubproofErrResultNotSane targetProp) sc
              (newState,newSteps, mayLastProp) <- 
                    left TestSubproofErrorSubproofFailedOnErr (runProofOpen subproof context startState)
@@ -274,7 +277,7 @@ runSubproofM context baseState preambleState preambleSteps mayPreambleLastProp p
           let constdict = fmap fst (consts startState)
           let mayPrfResult = getLast $ mayPreambleLastProp <> mayLastProp
           prfResult <- maybe (throwM BigExceptNothingProved) return mayPrfResult
-          let sc = checkSanity (freeVarTypeStack context) prfResult constdict
+          let sc = checkSanity [] (freeVarTypeStack context) constdict prfResult
           maybe (return ()) (throwM . BigExceptResultSanity prfResult) sc
           let endState = preambleState <> newState
           let finalSteps = preambleSteps <> newSteps

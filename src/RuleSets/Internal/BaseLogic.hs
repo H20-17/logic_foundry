@@ -60,7 +60,7 @@ runProofAtomic rule context state =
             originIndex <- maybe ((throwError . LogicErrRepOriginNotProven) s) return (Data.Map.lookup s (provenSents state))
             return (Just s, Nothing, PrfStdStepStep s "REP" [originIndex])
         FakeProp s -> do
-            maybe (return ())   (throwError . LogicErrFakeSanityErr s) (checkSanity (freeVarTypeStack context) s (fmap fst (consts state)))
+            maybe (return ())   (throwError . LogicErrFakeSanityErr s) (checkSanity [] (freeVarTypeStack context) (fmap fst (consts state)) s)
             return (Just s, Nothing, PrfStdStepStep s "FAKE_PROP" [])
         FakeConst const tType -> do
                let constNotDefined = isNothing $ Data.Map.lookup const constDict

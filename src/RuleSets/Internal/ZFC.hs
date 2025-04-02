@@ -100,8 +100,8 @@ data LogicError s sE t where
 
     LogicErrReplTermNotClosedSane :: t -> sE -> LogicError s sE t
     LogicErrSpecTermNotClosedSane :: t -> sE -> LogicError s sE t
-    LogicErrReplInstanceNotClosedSane :: s -> sE -> LogicError s sE t
-
+    LogicErrSpecTmpltNotSane :: s -> sE -> LogicError s sE t
+    LogicErrReplTmpltNotSane :: s -> sE -> LogicError s sE t
    deriving (Show)
 
 data LogicRule s sE t  where
@@ -262,39 +262,51 @@ runProofAtomic rule context state  =
                let step = PrfStdStepStep emptySetAxiom "AXIOM_EMPTYSET" []
                return (Just emptySetAxiom, Nothing, step)
           Specification t s -> do
-               -- Check that t is a closed and sane term
-
-               left (LogicErrSpecTermNotClosedSane t) (getTypeTerm t [] constDict)
-               -- Build an instance of the replacement axiom
-               -- using the term t and the sentence s
-               let specAx = specAxiom t s
-               -- Check that the axiom instance is closed and sane.
-               -- s can have instance of "X 0" variables in it,
+               -- s can have instances of "X 0" template variables in it,
                -- but not other X n instances. 
                -- How the replacementAxiom function is defined should take
                -- take advantage of that, replacing X 0 with a bound variable. Sanity checking for closure
                -- after the specAxiom function is applied will ensure that
                -- No other variables are in the term. 
-               maybe (return ()) (throwError . LogicErrReplInstanceNotClosedSane s) (
-                            checkSanity [] specAx constDict)
+
+
+
+               -- Check that t is a closed and sane term and also get it's type
+               left (LogicErrSpecTermNotClosedSane t) (getTypeTerm [] [] constDict t)
+
+               -- Check the that template (when X 0 has type ()) is sane and closed
+               maybe (return ()) (throwError . LogicErrSpecTmpltNotSane s)
+                     (checkSanity [()] [] constDict s)
+
+               -- Build an instance of the replacement axiom
+               -- using the term t and the sentence s
+               let specAx = specAxiom t s
+
 
                let step = PrfStdStepStep specAx "AXIOM_SPECIFICATION" []
                return (Just specAx, Nothing, step)
           Replacement t s -> do
-               -- Check that t is a closed and sane term
-               left (LogicErrSpecTermNotClosedSane t) (getTypeTerm t [] constDict)
-               -- Build an instance of the replacement axiom
-               -- using the term t and the sentence s
-               let replAx = replaceAxiom t s
-               -- Check that the axiom instance is closed and sane.
                -- s can have  "X 0" and "X 1" variables in it
                -- How the replacementAxiom function is defined should take
                -- take advantage of that, replacing X 0 
                -- and X 1 with bound variables. Sanity checking for closure
                -- after the replaceAxiom function is applied will ensure that
                -- No other variables are in the term.
-               maybe (return ()) (throwError . LogicErrReplInstanceNotClosedSane s) (
-                            checkSanity [] replAx constDict)
+
+               -- Check that t is a closed and sane term.
+               left (LogicErrSpecTermNotClosedSane t) (getTypeTerm [] [] constDict t)
+
+
+               -- check that the template 
+               -- Build an instance of the replacement axiom
+               -- using the term t and the sentence s
+               let replAx = replaceAxiom t s
+
+               -- Check the that template (when X 0 and X 1 both have type ()) is sane and closed
+
+
+               maybe (return ()) (throwError . LogicErrReplTmpltNotSane s) (
+                            checkSanity [(),()] [] constDict s)
 
                let step = PrfStdStepStep replAx "AXIOM_REPLACEMENT" []
                return (Just replAx, Nothing, step)
