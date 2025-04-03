@@ -501,25 +501,6 @@ propDeBrX0Inside prop = case prop of
 
 
 
-objDeBrSub :: Int -> Int -> ObjDeBr -> ObjDeBr -> ObjDeBr
-objDeBrSub boundVarIdx boundvarOffsetThreshold obj t = case obj of
-    Integ num -> Integ num
-    Constant const -> Constant const
-    Hilbert p -> Hilbert (propDeBrSub boundVarIdx (calcBVOThreshold p) p t)                            
-    Bound idx 
-                 | idx==boundVarIdx -> t
-                 | idx >= boundvarOffsetThreshold -> Bound (idx + termDepth)
-                 | idx < boundVarIdx -> Bound idx
-
-    V idx -> V idx
-    Pair o1 o2 -> Pair (objDeBrSub boundVarIdx boundvarOffsetThreshold o1 t) (objDeBrSub boundVarIdx boundvarOffsetThreshold o2 t)
-  where
-        termDepth = boundDepthObjDeBr t
-        calcBVOThreshold p = if propDeBrBoundVarInside p boundVarIdx then
-                                  boundDepthPropDeBr p
-                             else boundvarOffsetThreshold
-
-
 
 objDeBrSubX0 :: Int -> ObjDeBr -> ObjDeBr -> ObjDeBr
 objDeBrSubX0 boundvarOffsetThreshold obj t = case obj of
@@ -546,23 +527,7 @@ objDeBrSubX0 boundvarOffsetThreshold obj t = case obj of
 
 
 
-propDeBrSub :: Int -> Int -> PropDeBr -> ObjDeBr -> PropDeBr
-propDeBrSub boundVarIdx boundvarOffsetThreshold prop t = case prop of
-    Neg p -> Neg (propDeBrSub boundVarIdx boundvarOffsetThreshold p t)
-    (:&&:) p1 p2 ->  (:&&:) (propDeBrSub boundVarIdx boundvarOffsetThreshold p1 t) (propDeBrSub boundVarIdx boundvarOffsetThreshold p2 t) 
-    (:||:) p1 p2 ->  (:||:) (propDeBrSub boundVarIdx boundvarOffsetThreshold p1 t) (propDeBrSub boundVarIdx boundvarOffsetThreshold p2 t) 
-    (:->:) p1 p2 ->  (:->:) (propDeBrSub boundVarIdx boundvarOffsetThreshold p1 t) (propDeBrSub boundVarIdx boundvarOffsetThreshold p2 t)
-    (:<->:) p1 p2 ->  (:<->:) (propDeBrSub boundVarIdx boundvarOffsetThreshold p1 t) (propDeBrSub boundVarIdx boundvarOffsetThreshold p2 t)
-    (:==:) o1 o2 -> (:==:) (objDeBrSub boundVarIdx boundvarOffsetThreshold o1 t) (objDeBrSub boundVarIdx boundvarOffsetThreshold o2 t)   
-    In o1 o2 -> In (objDeBrSub boundVarIdx boundvarOffsetThreshold o1 t) (objDeBrSub boundVarIdx boundvarOffsetThreshold o2 t)  
-    Forall p -> Forall (propDeBrSub boundVarIdx (calcBVOThreshold p) p t)
-    Exists p -> Exists (propDeBrSub boundVarIdx (calcBVOThreshold p) p t)
-    (:>=:) o1 o2 -> (:>=:) (objDeBrSub boundVarIdx boundvarOffsetThreshold o1 t) (objDeBrSub boundVarIdx boundvarOffsetThreshold o2 t)
-    F -> F
-  where
-          calcBVOThreshold p = if propDeBrBoundVarInside p boundVarIdx then
-                                      boundDepthPropDeBr p
-                               else boundvarOffsetThreshold 
+
 
 
 propDeBrSubX0 :: Int -> PropDeBr -> ObjDeBr -> PropDeBr
