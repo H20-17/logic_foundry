@@ -1005,12 +1005,11 @@ isRelation :: ObjDeBr -> PropDeBr
 isRelation s = aX 0 $ X 0 `In` s :->: isPair (X 0)
 
 relDomain :: ObjDeBr -> ObjDeBr
-relDomain s = hX 0 $ (aX 1 $ aX 2 $ Pair (X 1) (X 2) `In` s :->: (X 1) `In` (X 0)) 
-                   :&&: (aX 2 $ (X 2) `In` X 0 :->: eX 1 $ Pair (X 1) (X 2) `In` X 0) 
+relDomain s = hX 0 $ aX 1 (aX 2 $ Pair (X 1) (X 2) `In` s :->: X 1 `In` X 0) 
 
 isFunction :: ObjDeBr -> PropDeBr
 isFunction t = isRelation t :&&: 
-          (aX 0 $ X 0 `In` relDomain t :->: eXBang 1 $ Pair (X 0) (X 1) `In` t)
+          aX 0 ( X 0 `In` relDomain t :->: eXBang 1 $ Pair (X 0) (X 1) `In` t)
 
 --propIsFuncOnSet :: ObjDeBr -> PropDeBr -> PropDeBr
 --propIsFuncOnSet t p = 
@@ -1028,7 +1027,7 @@ instance ZFC.LogicSent PropDeBr ObjDeBr where
     -- specification axiom composed from term t and predicate P(x)
     specAxiom t p = eX 0 $ aX 1 $ X 1 `In` X 0 :<->: p :&&: X 1 `In` t
     replaceAxiom:: ObjDeBr -> PropDeBr -> PropDeBr
-    replaceAxiom t p = aX 0 ((X 0) `In` t :->: eXBang 1 p)
+    replaceAxiom t p = aX 0 (X 0 `In` t :->: eXBang 1 p)
                          :->: eX 2 (aX 1 (X 1 `In` X 2 :<->: eX 0 (X 0 `In` t :&&: p)))  
       
  

@@ -13,7 +13,9 @@ module RuleSets.Internal.PredLogic
     TheoremSchema(..),
     ChkTheoremError(..),
     establishTheorem,
-    MetaRuleError(..)
+    MetaRuleError(..),
+    eqReflM, eqSymM, eqTransM, eqSubstM
+
 ) where
 
 
@@ -217,7 +219,10 @@ class LogicRuleClass r s t tType sE o | r->s, r->o, r->tType, r->sE, r->t where
      ui :: t -> s -> r
      eNegIntro :: s -> r
      aNegIntro :: s -> r
-
+     eqRefl :: t -> r
+     eqSym :: s -> r
+     eqTrans :: s -> s -> r
+     eqSubst :: s -> s -> r
 
 
 instance LogicRuleClass [LogicRule s sE o t tType ] s t tType sE o where
@@ -233,7 +238,14 @@ instance LogicRuleClass [LogicRule s sE o t tType ] s t tType sE o where
      eNegIntro s = [ENegIntro s]
      aNegIntro:: s -> [LogicRule s sE o t tType ]
      aNegIntro s = [ANegIntro s]
-
+     eqRefl :: t -> [LogicRule s sE o t tType]
+     eqRefl t = [EqRefl t]
+     eqSym :: s -> [LogicRule s sE o t tType]
+     eqSym s = [EqSym s]
+     eqTrans :: s -> s -> [LogicRule s sE o t tType]
+     eqTrans s1 s2 = [EqTrans s1 s2]
+     eqSubst :: s -> s -> [LogicRule s sE o t tType]
+     eqSubst s1 s2 = [EqSubst s1 s2]
 
 
 
@@ -518,7 +530,7 @@ eiM sent const = do
 
 
 
-eNegIntroM, aNegIntroM :: (Monad m, LogicSent s t tType , TypeableTerm t o tType sE, Show s,
+eNegIntroM, aNegIntroM, eqSymM :: (Monad m, LogicSent s t tType , TypeableTerm t o tType sE, Show s,
                 Typeable s, Show sE, Typeable sE, MonadThrow m, Show o, Typeable o, Show t, Typeable t,
                 Show tType, Typeable tType, TypedSent o tType sE s, Monoid (PrfStdState s o tType),
                 StdPrfPrintMonad s o tType m,
@@ -528,6 +540,8 @@ eNegIntroM, aNegIntroM :: (Monad m, LogicSent s t tType , TypeableTerm t o tType
 eNegIntroM sent = standardRuleM (eNegIntro sent)
 
 aNegIntroM sent = standardRuleM (aNegIntro sent)
+
+eqSymM eqSent = standardRuleM (eqSym eqSent)
 
 
 eiHilbertM :: (Monad m, LogicSent s t tType , TypeableTerm t o tType sE, Show s,
@@ -546,6 +560,26 @@ eiHilbertM sent = do
          return (instantiated,idx,hilbertObj)
 
 
+eqTransM, eqSubstM :: (Monad m, LogicSent s t tType , TypeableTerm t o tType sE, Show s,
+             Typeable s, Show sE, Typeable sE, MonadThrow m, Show o, Typeable o, Show t, Typeable t,
+             Show tType, Typeable tType, TypedSent o tType sE s, Monoid (PrfStdState s o tType),
+             StdPrfPrintMonad s o tType m, StdPrfPrintMonad s o tType (Either SomeException),
+             Monoid (PrfStdContext tType), LogicRuleClass r s t tType sE o, ProofStd s eL r o tType, Show eL,
+             Typeable eL, Monoid r)
+           => s -> s -> ProofGenTStd tType r s o m (s,[Int])
+eqTransM eqSent1 eqSent2 = standardRuleM (eqTrans eqSent1 eqSent2)
+eqSubstM templateSent eqSent = standardRuleM (eqSubst templateSent eqSent)
+
+eqReflM :: (Monad m, LogicSent s t tType , TypeableTerm t o tType sE, Show s,
+            Typeable s, Show sE, Typeable sE, MonadThrow m, Show o, Typeable o, Show t, Typeable t,
+            Show tType, Typeable tType, TypedSent o tType sE s, Monoid (PrfStdState s o tType),
+            StdPrfPrintMonad s o tType m, StdPrfPrintMonad s o tType (Either SomeException),
+            Monoid (PrfStdContext tType), LogicRuleClass r s t tType sE o, ProofStd s eL r o tType, Show eL,
+            Typeable eL, Monoid r)
+          => t -> ProofGenTStd tType r s o m (s,[Int])
+eqReflM term = standardRuleM (eqRefl term)
+
+
 reverseANegIntroM, reverseENegIntroM :: (Monad m, LogicSent s t tType , TypeableTerm t o tType sE, Show s,
                 Typeable s, Show sE, Typeable sE, MonadThrow m, Show o, Typeable o, Show t, Typeable t,
                 Show tType, Typeable tType, TypedSent o tType sE s, Monoid (PrfStdState s o tType),
@@ -556,6 +590,10 @@ reverseANegIntroM, reverseENegIntroM :: (Monad m, LogicSent s t tType , Typeable
                 PL.SubproofRule r s, 
                 PL.LogicRuleClass r s tType sE o)
                    => s -> ProofGenTStd tType r s o m (s,[Int])
+
+
+
+
 
 data MetaRuleError s where
    ReverseANegIntroMNotExistsNot :: s -> MetaRuleError s

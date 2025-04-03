@@ -60,6 +60,64 @@ testTheoremMSchema = TheoremSchemaMT  [("N",())] [z1,z2] theoremProg
     z1 = aX 99 ((X 99 `In` Constant "N") :&&: (X 99 :>=: Integ 10) :->: (X 99 :>=: Integ 0))
     z2 = aX 0 ((X 0 `In` Constant "N") :&&: (X 0 :>=: Integ 0) :->: (X 0 :==: Integ 0))
 
+
+testEqualityRules :: ProofGenTStd () [PredRuleDeBr] PropDeBr Text IO ()
+testEqualityRules = do
+    remarkM "--- Testing Equality Rules ---"
+
+    -- Test eqReflM
+    remarkM "Testing eqReflM (0 == 0):"
+    let term0 = Integ 0
+    (reflSent, reflIdx) <- eqReflM term0
+    reflShow <- showPropM reflSent
+    remarkM $ "Proved: " <> reflShow <> " at index " <> pack (show reflIdx)
+
+    -- Test eqSymM
+    remarkM "Testing eqSymM (given fake 1 == 2):"
+    let term1 = Integ 1
+    let term2 = Integ 2
+    let eq12 = term1 :==: term2
+    (eq12Sent, eq12Idx) <- fakePropM eq12 -- Assume 1==2 is proven for the test
+    eq12Show <- showPropM eq12Sent
+    remarkM $ "Assuming: " <> eq12Show <> " at index " <> pack (show eq12Idx)
+    (symSent, symIdx) <- eqSymM eq12Sent
+    symShow <- showPropM symSent
+    remarkM $ "Proved: " <> symShow <> " at index " <> pack (show symIdx)
+
+    -- Test eqTransM
+    remarkM "Testing eqTransM (given fake 1 == 2 and 2 == 3):"
+    let term3 = Integ 3
+    let eq23 = term2 :==: term3
+    (eq23Sent, eq23Idx) <- fakePropM eq23 -- Assume 2==3 is proven
+    eq23Show <- showPropM eq23Sent
+    remarkM $ "Assuming: " <> eq23Show <> " at index " <> pack (show eq23Idx)
+    (transSent, transIdx) <- eqTransM eq12Sent eq23Sent -- Use eq12Sent from previous step
+    transShow <- showPropM transSent
+    remarkM $ "Proved: " <> transShow <> " at index " <> pack (show transIdx)
+
+    -- Test eqSubstM
+    remarkM "Testing eqSubstM (template X0 == X0, given fake 5 == 6):"
+    let template = X 0 :==: X 0
+    let term5 = Integ 5
+    let term6 = Integ 6
+    let eq56 = term5 :==: term6
+    -- Prove the source sentence P(a), which is 5 == 5
+    (sourceSent, sourceIdx) <- eqReflM term5 -- Use eqReflM to prove 5==5
+    sourceShow <- showPropM sourceSent
+    remarkM $ "Proved source: " <> sourceShow <> " at index " <> pack (show sourceIdx)
+    -- Assume the equality a == b, which is 5 == 6
+    (eqSent, eqIdx) <- fakePropM eq56
+    eqShow <- showPropM eqSent
+    remarkM $ "Assuming equality: " <> eqShow <> " at index " <> pack (show eqIdx)
+    -- Perform substitution
+    (substSent, substIdx) <- eqSubstM template eqSent -- Use the template, not the source sentence here
+    substShow <- showPropM substSent
+    remarkM $ "Proved subst: " <> substShow <> " at index " <> pack (show substIdx)
+
+    remarkM "--- Equality Rule Tests Complete ---"
+    return ()
+
+
 main :: IO ()
 main = do
     let y0 = (Integ 0 :==: Integ 0) :->: (Integ 99 :==: Integ 99)
@@ -168,8 +226,9 @@ main = do
     (putStrLn . unpack . showPropDeBrStepsBase) c
     (putStrLn . show) b
 
-
-
+    print "TEST EQUALITY RULES BEGIN-------------------------------------"
+    (aEq, bEq, cEq, dEq) <- runProofGeneratorT testEqualityRules
+    (putStrLn . unpack . showPropDeBrStepsBase) cEq
     return ()
 
 
