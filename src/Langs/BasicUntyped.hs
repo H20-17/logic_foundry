@@ -68,10 +68,10 @@ infix  4 :==:
 infix  4 `In`
 infix  4 :>=:
 
-inSet :: ObjDeBr -> ObjDeBr -> PropDeBr
-inSet = In
+--inSet :: ObjDeBr -> ObjDeBr -> PropDeBr
+--inSet = In
 
-infix 4 `inSet`
+--infix 4 `inSet`
 
 data SubexpParseTree where
     BinaryOp :: Text -> SubexpParseTree -> SubexpParseTree -> SubexpParseTree
@@ -91,7 +91,8 @@ class SubexpDeBr sub where
 
 binaryOpInData :: [(Text,(Associativity,Int))]
 binaryOpInData = [("=",(NotAssociative,5)),("→",(RightAssociative,1)),("↔",(RightAssociative,1)),("∈",(NotAssociative,5)),("∧",(RightAssociative,4)),("∨",(RightAssociative,3)),
-     ("≥",(NotAssociative,5))]
+     ("≥",(NotAssociative,5)),
+     ("≠",(NotAssociative,5)),("∉",(NotAssociative,5))]
 
 
 --The Int is it's precedence number.
@@ -143,7 +144,10 @@ boundDepthPropDeBr p = case p of
 instance SubexpDeBr PropDeBr where
   toSubexpParseTree :: PropDeBr -> Map PropDeBr [Int] -> SubexpParseTree
   toSubexpParseTree prop dict = case prop of
-      Neg q -> UnaryOp "¬" (toSubexpParseTree q dict)
+      Neg q -> case q of
+        o1 :==: o2 -> BinaryOp "≠" (toSubexpParseTree o1 dict) (toSubexpParseTree o2 dict)  
+        In o1 o2 -> BinaryOp "∉" (toSubexpParseTree o1 dict) (toSubexpParseTree o2 dict)      
+        _ -> UnaryOp "¬" (toSubexpParseTree q dict)
       (:&&:) a b -> BinaryOp "∧" (toSubexpParseTree a dict) (toSubexpParseTree b dict)
       (:||:) a b -> BinaryOp "∨" (toSubexpParseTree a dict) (toSubexpParseTree b dict)
       (:->:)  a b -> BinaryOp "→" (toSubexpParseTree a dict) (toSubexpParseTree b dict)
@@ -940,10 +944,23 @@ xsubObjDeBr o idx depth = case o of
     Pair o1 o2 -> Pair (xsubObjDeBr o1 idx depth) (xsubObjDeBr o2 idx depth)
 
 
+
+
+
+
 instance LogicConst Text where
     newConst :: Set Text -> Text
     newConst constSet = head $ Prelude.filter (`notMember` constSet) $ Prelude.map (\i -> pack ("c" ++ show i)) [0..]
    
+neq :: ObjDeBr -> ObjDeBr -> PropDeBr
+neq a b = Neg $ a :==: b
+
+infix 4 `neq`
+
+nin :: ObjDeBr -> ObjDeBr -> PropDeBr
+nin a b = Neg $ a `In` b
+
+infix 4 `nin`
 
 eX :: Int -> PropDeBr -> PropDeBr
 eX idx p = Exists $ xsubPropDeBr p idx (boundDepthPropDeBr p)
@@ -961,6 +978,8 @@ aX idx p = Forall $ xsubPropDeBr p idx (boundDepthPropDeBr p)
 
 hX :: Int -> PropDeBr -> ObjDeBr
 hX idx p = Hilbert (xsubPropDeBr p idx (boundDepthPropDeBr p))
+
+
 
 
 isPair :: ObjDeBr -> PropDeBr
