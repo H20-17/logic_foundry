@@ -284,7 +284,7 @@ testprog2 = do
 
 testprog3::ProofGenTStd () [PredRuleDeBr] PropDeBr Text IO ()
 testprog3 = do
-    let a = eX 0 (Neg (X 0 `In` Constant "N"))
+    let a = eX 0 (X 0 `nIn` Constant "N")
     fakeConstM "N" ()
     fakePropM a
     (s,idx) <- reverseANegIntroM a
@@ -294,7 +294,7 @@ testprog3 = do
 
 testprog4::ProofGenTStd () [PredRuleDeBr] PropDeBr Text IO ()
 testprog4 = do
-    let a = aX 0 (Neg (X 0 `In` Constant "N"))
+    let a = aX 0 (X 0 `nIn` Constant "N")
     fakeConstM "N" ()
     fakePropM a
     (s,idx) <- reverseENegIntroM a

@@ -15,7 +15,9 @@ module Langs.BasicUntyped (
     showObj,
     showPropM,
     showObjM,
-    eXBang
+    eXBang,
+    (./=.),
+    nIn
 ) where
 import Control.Monad ( unless )
 import Data.List (intersperse)
@@ -952,15 +954,17 @@ instance LogicConst Text where
     newConst :: Set Text -> Text
     newConst constSet = head $ Prelude.filter (`notMember` constSet) $ Prelude.map (\i -> pack ("c" ++ show i)) [0..]
    
-neq :: ObjDeBr -> ObjDeBr -> PropDeBr
-neq a b = Neg $ a :==: b
+(./=.) :: ObjDeBr -> ObjDeBr -> PropDeBr
+(./=.) a b = Neg $ a :==: b
 
-infix 4 `neq`
+infix 4 ./=.
 
-nin :: ObjDeBr -> ObjDeBr -> PropDeBr
-nin a b = Neg $ a `In` b
 
-infix 4 `nin`
+
+nIn :: ObjDeBr -> ObjDeBr -> PropDeBr
+nIn a b = Neg $ a `In` b
+
+infix 4 `nIn`
 
 eX :: Int -> PropDeBr -> PropDeBr
 eX idx p = Exists $ xsubPropDeBr p idx (boundDepthPropDeBr p)
