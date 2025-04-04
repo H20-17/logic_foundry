@@ -28,7 +28,7 @@ extra-source-files: CHANGELOG.md
 library
    default-extensions: GADTs, FunctionalDependencies, FlexibleContexts, FlexibleInstances, InstanceSigs, ScopedTypeVariables, OverloadedStrings, ExtendedDefaultRules, UnicodeSyntax, ConstraintKinds
    build-depends: base,mtl>=2.3.1,containers,text,Cabal,transformers,xhtml, exceptions
-   other-modules: Internal.StdPattern,RuleSets.Internal.PropLogic,RuleSets.Internal.PredLogic, RuleSets.Internal.BaseLogic, RuleSets.Internal.ZFC
+   other-modules: Internal.StdPattern
    hs-source-dirs: src
    exposed-modules: Kernel,StdPattern,RuleSets.PropLogic,RuleSets.PredLogic, Langs.BasicUntyped,RuleSets.BaseLogic, RuleSets.ZFC
 

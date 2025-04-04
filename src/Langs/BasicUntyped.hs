@@ -33,11 +33,11 @@ import Kernel
 import Internal.StdPattern
 
 import Control.Exception (SomeException)
-import qualified RuleSets.Internal.PropLogic as PL
-import qualified RuleSets.Internal.PredLogic as PREDL
-import qualified RuleSets.Internal.ZFC as ZFC
-import RuleSets.Internal.PropLogic (LogicSent(parseIff))
-import RuleSets.Internal.ZFC (emptySetAxiom, specification,parseIn,memberOf)
+import qualified RuleSets.PropLogic as PL
+import qualified RuleSets.PredLogic as PREDL
+import qualified RuleSets.ZFC as ZFC
+import RuleSets.PropLogic (LogicSent(parseIff))
+import RuleSets.ZFC (emptySetAxiom, specification,parseIn,memberOf)
 import Control.Monad.State
 import Control.Monad.RWS
     ( MonadReader(ask), runRWS, MonadWriter(tell), RWS )
@@ -748,7 +748,7 @@ showPropDeBrStep step = do
             PrfStdStepFakeConst constName _ -> do
                 put $ PropDeBrStepState dictMap (lineNum + 1)
                 tell $ "Const "
-                     <> (pack .show) constName
+                     <> constName
                      <> "    FAKE_CONST"
             PrfStdStepRemark text -> do
                 put $ PropDeBrStepState dictMap (lineNum + 1)
