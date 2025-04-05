@@ -1005,7 +1005,14 @@ isFunction t = isRelation t :&&:
 
 --(isRelation (X 0) :&&: 
 --                            (aX 1 $ (X 1) `In` relDomain (X 0) :->: eBangX 2 
-                            
+
+
+builderX :: ObjDeBr -> PropDeBr -> ObjDeBr
+
+-- Assumes that t is a term with no template variables.
+-- and P is predicate template with X 1 as a template variable and
+-- no other template variables (inclucding X 0). Free variables allowed.
+builderX t p = hX 0 $ aX 1 $ X 1 `In` X 0 :<->: p :&&: X 1 `In` t                           
 
 
 instance ZFC.LogicSent PropDeBr ObjDeBr where
