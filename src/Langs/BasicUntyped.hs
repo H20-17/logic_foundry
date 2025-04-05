@@ -163,10 +163,9 @@ instance SubexpDeBr PropDeBr where
     where
         ebuild a = case a of  
             p :&&: q -> if Forall (pDecremented :->: Bound (depth - 1):==: Bound depth) == q then
-                            Binding "∃!" (depth-1) (toSubexpParseTree pDecremented dict)
+                            Binding "∃!" depth (toSubexpParseTree p dict)
                         else
-                            error (show pDecremented)
-                            -- defaultP
+                            defaultP
                 where
                     pDecremented = boundDecrementPropDeBr depth p
             _ -> defaultP
