@@ -43,6 +43,7 @@ import RuleSets.ZFC (emptySetAxiom, specification,parseIn,memberOf)
 import Control.Monad.State
 import Control.Monad.RWS
     ( MonadReader(ask), runRWS, MonadWriter(tell), RWS )
+import Text.XHtml (sub)
 
 
 
@@ -78,12 +79,92 @@ infix  4 :>=:
 data SubexpParseTree where
     BinaryOp :: Text -> SubexpParseTree -> SubexpParseTree -> SubexpParseTree
     UnaryOp :: Text -> SubexpParseTree ->SubexpParseTree
-    Binding :: Text -> Int -> SubexpParseTree -> SubexpParseTree
+    Binding :: Text -> SubexpParseTree -> SubexpParseTree
     HilbertShort :: [Int] -> SubexpParseTree
-    Atom :: Text -> SubexpParseTree
+    ParseTreeConst :: Text -> SubexpParseTree
+    ParseTreeFreeVar :: Int -> SubexpParseTree
+    ParseTreeBoundVar :: Int -> SubexpParseTree
+    ParseTreeX :: Int -> SubexpParseTree
     Tuple :: [SubexpParseTree] -> SubexpParseTree
+    ParseTreeF :: SubexpParseTree
+    ParseTreeInt :: Int -> SubexpParseTree
+
+-- sbParseTreeBoundVarToX :: Int -> SubexpParseTree -> SubexpParseTree
+-- sbParseTreeBoundVarToX boundVarIdx sub = case sub of
+--    BinaryOp opSymb sub1 sub2 -> BinaryOp opSymb (sbParseTreeBoundVarToX boundVarIdx sub1) (sbParseTreeBoundVarToX boundVarIdx sub2)
+--    UnaryOp opSymb sub1 -> UnaryOp opSymb (sbParseTreeBoundVarToX boundVarIdx sub1)
+--    Binding quant sub1 -> Binding quant (sbParseTreeBoundVarToX boundVarIdx sub1)
+--    HilbertShort idxs -> HilbertShort idxs
+--    ParseTreeConst const -> ParseTreeConst const
+--    ParseTreeFreeVar idx -> ParseTreeFreeVar idx
+--    ParseTreeBoundVar idx -> if idx == boundVarIdx then
+--                                  ParseTreeX idx
+--                              else
+--                                  ParseTreeBoundVar idx
+--    ParseTreeSubexpX idx -> ParseTreeSubexpX idx
+--    Tuple as -> Tuple $ Prelude.map (sbParseTreeBoundVarToX boundVarIdx) as
+--    ParseTreeX idx -> ParseTreeX idx
+
+-- subexpParseTreeXToBoundVar :: Int -> Int -> SubexpParseTree -> SubexpParseTree
+-- subexpParseTreeXToBoundVar xIdx boundvarIdx sub = case sub of
+--    BinaryOp opSymb sub1 sub2 -> BinaryOp opSymb (subexpParseTreeXTOBoundVar xIdx boundvarIdx sub1) (subexpParseTreeXTOBoundVar xIdx boundvarIdx sub2)
+--    UnaryOp opSymb sub1 -> UnaryOp opSymb (subexpParseTreeXTOBoundVar xIdx boundvarIdx sub1)
+--    Binding quant sub1 -> Binding quant (subexpParseTreeXTOBoundVar xIdx boundvarIdx sub1)
+--    HilbertShort idxs -> HilbertShort idxs
+--    ParseTreeConst const -> ParseTreeConst const
+--    ParseTreeFreeVar idx -> ParseTreeFreeVar idx
+--    ParseTreeBoundVar idx -> ParseTreeBoundVar idx
+--    ParseTreeSubexpX idx -> ParseTreeSubexpX idx
+--    Tuple as -> Tuple $ Prelude.map (subexpParseTreeXTOBoundVar xIdx boundvarIdx) as
+--    ParseTreeX idx -> if idx == xIdx then
+--                          ParseTreeBoundVar boundvarIdx
+--                      else
+--                          ParseTreeX idx 
+
+subexpParseTreeBoundDepth :: SubexpParseTree -> Int
+subexpParseTreeBoundDepth sub = case sub of
+    BinaryOp _ sub1 sub2 -> max (subexpParseTreeBoundDepth sub1) (subexpParseTreeBoundDepth sub2)
+    UnaryOp _ sub1 -> subexpParseTreeBoundDepth sub1
+    Binding _ sub1 -> 1 + subexpParseTreeBoundDepth sub1
+    HilbertShort idxs -> length idxs
+    ParseTreeConst const -> 0
+    ParseTreeFreeVar idx -> 0
+    ParseTreeBoundVar idx -> 0
+
+    ParseTreeX idx -> 0
+    Tuple as -> maximum $ Prelude.map subexpParseTreeBoundDepth as
+    ParseTreeF -> 0
+    ParseTreeInt _ -> 0
 
 
+
+sbParseTreeNormalize :: Int -> SubexpParseTree -> SubexpParseTree
+-- Be ultra-careful with this function. It will probably break indexing if
+-- boundVarIdx is greater than than subepParseTreeDepth sub.
+sbParseTreeNormalize boundVarIdx sub =
+       sbParseTreeNormalize' (subexpParseTreeBoundDepth sub) sub
+    where
+        sbParseTreeNormalize' :: Int -> SubexpParseTree -> SubexpParseTree
+        sbParseTreeNormalize' depth sub = case sub of
+            BinaryOp opSymb sub1 sub2 -> BinaryOp opSymb (sbParseTreeNormalize' depth sub1)
+                            (sbParseTreeNormalize' depth sub2)
+            UnaryOp opSymb sub1 -> UnaryOp opSymb (sbParseTreeNormalize' depth sub1)
+            Binding quant sub1 -> Binding quant (sbParseTreeNormalize' depth sub1)
+            HilbertShort idxs -> HilbertShort idxs
+            ParseTreeConst const -> ParseTreeConst const
+            ParseTreeFreeVar idx -> ParseTreeFreeVar idx
+            ParseTreeBoundVar idx -> if idx == boundVarIdx then
+                                          ParseTreeBoundVar depth
+                                        else
+                                            ParseTreeBoundVar idx
+
+            Tuple as -> Tuple $ Prelude.map (sbParseTreeNormalize' depth) as
+            ParseTreeX idx -> ParseTreeX idx
+            ParseTreeF -> ParseTreeF
+            ParseTreeInt i -> ParseTreeInt i
+    
+    
+  
 
 class SubexpDeBr sub where
     toSubexpParseTree :: sub -> Map PropDeBr [Int] -> SubexpParseTree
@@ -105,14 +186,17 @@ binaryOpData = Data.Map.fromList binaryOpInData
 instance SubexpDeBr ObjDeBr where
     toSubexpParseTree :: ObjDeBr -> Map PropDeBr [Int]  -> SubexpParseTree
     toSubexpParseTree obj dict = case obj of
-        Integ i -> (Atom . pack . show) i
-        Constant c -> Atom c
+        Integ i -> ParseTreeInt i
+        Constant c -> ParseTreeConst c
         Hilbert p -> case Data.Map.lookup (Exists p) dict of
             Just idxs -> HilbertShort idxs
-            Nothing -> Binding "ε" (boundDepthPropDeBr p) (toSubexpParseTree p dict)
-        Bound i -> Atom $ "𝑥" <> showIndexAsSubscript i
-        V i -> Atom $ "𝑣" <> showIndexAsSubscript i
-        X i -> Atom $ "X" <> showIndexAsSubscript i
+            Nothing -> Binding "ε" (sbParseTreeNormalize pDepth pTree) 
+                where
+                    pDepth = boundDepthPropDeBr p
+                    pTree = toSubexpParseTree p dict
+        Bound i -> ParseTreeBoundVar i
+        V i -> ParseTreeFreeVar i
+        X i -> ParseTreeX i
         Pair a b -> Tuple [toSubexpParseTree a dict,toSubexpParseTree b dict]
         
 
@@ -156,21 +240,27 @@ instance SubexpDeBr PropDeBr where
       (:<->:) a b -> BinaryOp "↔"(toSubexpParseTree a dict) (toSubexpParseTree b dict)
       (:==:) a b -> BinaryOp "=" (toSubexpParseTree a dict) (toSubexpParseTree b dict)
       In a b -> BinaryOp "∈" (toSubexpParseTree a dict) (toSubexpParseTree b dict)
-      Forall a -> Binding "∀" (boundDepthPropDeBr a) (toSubexpParseTree a dict)
+      Forall a -> Binding "∀" (sbParseTreeNormalize pDepth pTree) 
+                where
+                    pDepth = boundDepthPropDeBr a
+                    pTree = toSubexpParseTree a dict
       Exists a -> ebuild a
       (:>=:) a b -> BinaryOp "≥" (toSubexpParseTree a dict) (toSubexpParseTree b dict)
-      F -> Atom "⊥"
+      F -> ParseTreeF
     where
         ebuild a = case a of  
             p :&&: q -> if Forall (pDecremented :->: Bound (depth - 1):==: Bound depth) == q then
-                            Binding "∃!" depth (toSubexpParseTree p dict)
+                            Binding "∃!" (toSubexpParseTree pDecremented dict)
                         else
                             defaultP
                 where
                     pDecremented = boundDecrementPropDeBr depth p
             _ -> defaultP
          where
-           defaultP = Binding "∃" depth (toSubexpParseTree a dict)
+           defaultP = Binding "∃" (sbParseTreeNormalize pDepth pTree) 
+                where
+                    pDepth = boundDepthPropDeBr a
+                    pTree = toSubexpParseTree a dict
            depth = boundDepthPropDeBr a     
  
 
@@ -186,9 +276,14 @@ showSubexpParseTree sub = case sub of
               UnaryOp _ _ -> showSubexpParseTree sub1
               BinaryOp {} -> "(" <>  showSubexpParseTree sub1 <> ")"
               Binding {} -> showSubexpParseTree sub1
-              Atom _ -> showSubexpParseTree sub1
+              ParseTreeConst const -> showSubexpParseTree sub1
+              ParseTreeFreeVar idx -> showSubexpParseTree sub1
+              ParseTreeBoundVar idx -> showSubexpParseTree sub1
               HilbertShort idx -> showSubexpParseTree sub1
               Tuple as -> showSubexpParseTree sub1
+              ParseTreeF -> showSubexpParseTree sub1
+              ParseTreeX idx -> showSubexpParseTree sub1
+              ParseTreeInt i -> showSubexpParseTree sub1
     BinaryOp opSymb sub1 sub2 ->
            case sub1 of
               UnaryOp _ _ -> showSubexpParseTree sub1
@@ -204,9 +299,15 @@ showSubexpParseTree sub = case sub of
 
                    )
               Binding {} -> showSubexpParseTree sub1
-              Atom _ -> showSubexpParseTree sub1
+              ParseTreeConst const -> showSubexpParseTree sub1
+              ParseTreeFreeVar idx -> showSubexpParseTree sub1
+              ParseTreeBoundVar idx -> showSubexpParseTree sub1
+
               HilbertShort idx -> showSubexpParseTree sub1
               Tuple as -> showSubexpParseTree sub1
+              ParseTreeF -> showSubexpParseTree sub1
+              ParseTreeX idx -> showSubexpParseTree sub1
+              ParseTreeInt i -> showSubexpParseTree sub1
           <> " " <> opSymb <> " "
           <> case sub2 of
                UnaryOp _ _-> showSubexpParseTree sub2
@@ -221,13 +322,29 @@ showSubexpParseTree sub = case sub of
                         "(" <> showSubexpParseTree sub2 <> ")"
                    )
                Binding {} -> showSubexpParseTree sub2
-               Atom _ -> showSubexpParseTree sub2
+               ParseTreeConst const -> showSubexpParseTree sub2
+               ParseTreeFreeVar idx -> showSubexpParseTree sub2
+               ParseTreeBoundVar idx -> showSubexpParseTree sub2
+
                HilbertShort idx -> showSubexpParseTree sub2
                Tuple as -> showSubexpParseTree sub2
-    Binding quant idx sub1 -> quant <> "𝑥" <> showIndexAsSubscript idx <> "(" <> showSubexpParseTree sub1 <> ")" 
-    Atom text -> text
+               ParseTreeF -> showSubexpParseTree sub2
+               ParseTreeX idx -> showSubexpParseTree sub2
+               ParseTreeInt i -> showSubexpParseTree sub2
+    Binding quant sub1 -> quant <> "𝑥" <> showIndexAsSubscript idx <> "(" <> showSubexpParseTree sub1 <> ")"
+        where
+            idx = subexpParseTreeBoundDepth sub1 
+    ParseTreeConst const -> const
+    ParseTreeX idx -> "X" <> showIndexAsSubscript idx
+    ParseTreeFreeVar idx -> "𝑣" <> showIndexAsSubscript idx
+    ParseTreeBoundVar idx -> "𝑥" <> showIndexAsSubscript idx
+
+
     HilbertShort idx -> "ε" <> showHierarchalIdxAsSubscript idx
     Tuple as -> "(" <> Data.Text.concat (intersperse "," $ Prelude.map showSubexpParseTree as ) <> ")"
+    ParseTreeF -> "⊥"
+    ParseTreeInt i -> pack $ show i
+
   where
     showHierarchalIdxAsSubscript :: [Int] -> Text
     showHierarchalIdxAsSubscript idxs = Data.Text.concat (intersperse "." (Prelude.map showIndexAsSubscript idxs))

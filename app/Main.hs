@@ -117,6 +117,19 @@ testEqualityRules = do
     remarkM "--- Equality Rule Tests Complete ---"
     return ()
 
+testNormalization :: ProofGenTStd () [PredRuleDeBr] PropDeBr Text IO ()
+testNormalization = do
+    remarkM "--- Testing Normalization ---"
+    let term2 = Integ 1
+    let s1 = eXBang 0 (X 0 `In` X 1)
+    let s2 = aX 1 s1
+
+    fakeConstM "N" ()
+    fakePropM s2
+    s1Show <- showPropM s2
+    remarkM $ "Proved: " <> s1Show   
+    return ()
+ 
 
 main :: IO ()
 main = do
@@ -231,7 +244,10 @@ main = do
     (putStrLn . unpack . showPropDeBrStepsBase) cEq
     return ()
 
-
+    print "TEST NORMALIZATION-------------------------------------"
+    (aEq, bEq, cEq, dEq) <- runProofGeneratorT testNormalization
+    (putStrLn . unpack . showPropDeBrStepsBase) cEq
+    return ()
 testprog::ProofGenTStd () [PredRuleDeBr] PropDeBr Text IO ()
 testprog = do
       let z1 = aX 0 ((X 0 `In` Constant "N") :&&: (X 0 :>=: Integ 10) :->: (X 0 :>=: Integ 0))
