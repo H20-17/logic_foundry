@@ -17,6 +17,7 @@ module Langs.BasicUntyped (
     showObjM,
     eXBang,
     (./=.),
+    builderX,
     nIn
 ) where
 import Control.Monad ( unless )
@@ -44,6 +45,7 @@ import Control.Monad.State
 import Control.Monad.RWS
     ( MonadReader(ask), runRWS, MonadWriter(tell), RWS )
 import Text.XHtml (sub)
+import qualified Internal.StdPattern
 
 
 
@@ -88,38 +90,8 @@ data SubexpParseTree where
     Tuple :: [SubexpParseTree] -> SubexpParseTree
     ParseTreeF :: SubexpParseTree
     ParseTreeInt :: Int -> SubexpParseTree
+    Builder :: SubexpParseTree -> SubexpParseTree -> SubexpParseTree
 
--- sbParseTreeBoundVarToX :: Int -> SubexpParseTree -> SubexpParseTree
--- sbParseTreeBoundVarToX boundVarIdx sub = case sub of
---    BinaryOp opSymb sub1 sub2 -> BinaryOp opSymb (sbParseTreeBoundVarToX boundVarIdx sub1) (sbParseTreeBoundVarToX boundVarIdx sub2)
---    UnaryOp opSymb sub1 -> UnaryOp opSymb (sbParseTreeBoundVarToX boundVarIdx sub1)
---    Binding quant sub1 -> Binding quant (sbParseTreeBoundVarToX boundVarIdx sub1)
---    HilbertShort idxs -> HilbertShort idxs
---    ParseTreeConst const -> ParseTreeConst const
---    ParseTreeFreeVar idx -> ParseTreeFreeVar idx
---    ParseTreeBoundVar idx -> if idx == boundVarIdx then
---                                  ParseTreeX idx
---                              else
---                                  ParseTreeBoundVar idx
---    ParseTreeSubexpX idx -> ParseTreeSubexpX idx
---    Tuple as -> Tuple $ Prelude.map (sbParseTreeBoundVarToX boundVarIdx) as
---    ParseTreeX idx -> ParseTreeX idx
-
--- subexpParseTreeXToBoundVar :: Int -> Int -> SubexpParseTree -> SubexpParseTree
--- subexpParseTreeXToBoundVar xIdx boundvarIdx sub = case sub of
---    BinaryOp opSymb sub1 sub2 -> BinaryOp opSymb (subexpParseTreeXTOBoundVar xIdx boundvarIdx sub1) (subexpParseTreeXTOBoundVar xIdx boundvarIdx sub2)
---    UnaryOp opSymb sub1 -> UnaryOp opSymb (subexpParseTreeXTOBoundVar xIdx boundvarIdx sub1)
---    Binding quant sub1 -> Binding quant (subexpParseTreeXTOBoundVar xIdx boundvarIdx sub1)
---    HilbertShort idxs -> HilbertShort idxs
---    ParseTreeConst const -> ParseTreeConst const
---    ParseTreeFreeVar idx -> ParseTreeFreeVar idx
---    ParseTreeBoundVar idx -> ParseTreeBoundVar idx
---    ParseTreeSubexpX idx -> ParseTreeSubexpX idx
---    Tuple as -> Tuple $ Prelude.map (subexpParseTreeXTOBoundVar xIdx boundvarIdx) as
---    ParseTreeX idx -> if idx == xIdx then
---                          ParseTreeBoundVar boundvarIdx
---                      else
---                          ParseTreeX idx 
 
 subexpParseTreeBoundDepth :: SubexpParseTree -> Int
 subexpParseTreeBoundDepth sub = case sub of
@@ -162,6 +134,7 @@ sbParseTreeNormalize boundVarIdx sub =
             ParseTreeX idx -> ParseTreeX idx
             ParseTreeF -> ParseTreeF
             ParseTreeInt i -> ParseTreeInt i
+            Builder sub1 sub2 -> Builder (sbParseTreeNormalize' depth sub1) (sbParseTreeNormalize' depth sub2)
     
     
   
@@ -183,6 +156,39 @@ binaryOpData :: Map Text (Associativity, Int)
 binaryOpData = Data.Map.fromList binaryOpInData
 
 
+
+objDeBrBoundVarInside :: ObjDeBr -> Int -> Bool
+objDeBrBoundVarInside obj idx = case obj of
+    Integ num -> False
+    Constant const -> False
+    Hilbert p -> propDeBrBoundVarInside p idx
+    Bound i -> idx == i
+    V i -> False
+    X i -> False
+    Pair a b -> objDeBrBoundVarInside a idx || objDeBrBoundVarInside b idx
+
+
+
+
+propDeBrHasBoundVar :: PropDeBr -> Int -> Bool
+propDeBrHasBoundVar sub idx = case sub of
+    Neg p -> propDeBrBoundVarInside p idx
+    (:&&:) p1 p2 -> propDeBrBoundVarInside p1 idx || propDeBrBoundVarInside p2 idx
+    (:||:) p1 p2 -> propDeBrBoundVarInside p1 idx || propDeBrBoundVarInside p2 idx
+    (:->:)  p1 p2 -> propDeBrBoundVarInside p1 idx || propDeBrBoundVarInside p2 idx
+    (:<->:) p1 p2 -> propDeBrBoundVarInside p1 idx || propDeBrBoundVarInside p2 idx
+    (:==:) o1 o2 -> objDeBrBoundVarInside o1 idx || objDeBrBoundVarInside o2 idx
+    In o1 o2 -> objDeBrBoundVarInside o1 idx || objDeBrBoundVarInside o2 idx
+    Forall p -> propDeBrBoundVarInside p idx
+    Exists p -> propDeBrBoundVarInside p idx
+    (:>=:) o1 o2 -> objDeBrBoundVarInside o1 idx || objDeBrBoundVarInside o2 idx
+    F -> False
+
+
+
+
+
+
 instance SubexpDeBr ObjDeBr where
     toSubexpParseTree :: ObjDeBr -> Map PropDeBr [Int]  -> SubexpParseTree
     toSubexpParseTree obj dict = case obj of
@@ -190,10 +196,32 @@ instance SubexpDeBr ObjDeBr where
         Constant c -> ParseTreeConst c
         Hilbert p -> case Data.Map.lookup (Exists p) dict of
             Just idxs -> HilbertShort idxs
-            Nothing -> Binding "ε" (sbParseTreeNormalize pDepth pTree) 
-                where
-                    pDepth = boundDepthPropDeBr p
-                    pTree = toSubexpParseTree p dict
+            Nothing -> case p of
+                Forall (Bound a `In` Bound b :<->: q :&&: Bound c `In` t) -> 
+                    if a == pDepth - 1 
+                        && c == a 
+                        && b == pDepth 
+                        && not (propDeBrBoundVarInside q b) 
+                        && not (objDeBrBoundVarInside t a) 
+                        && not (objDeBrBoundVarInside t b) then
+                               Builder tTree (sbParseTreeNormalize (pDepth-1) qTree)
+                        -- For this to be a proper usage, q cannot bind b, and t cannot
+                        -- bind a or b.
+                        -- so we have to check for this before using the builder notation.
+                        -- If either of these two conditions are not met and we used
+                        -- the builder notation, then we would would lose
+                        -- quantifiers that are quantifying over b or a.
+                    else 
+                        Binding "ε" (sbParseTreeNormalize pDepth pTree) 
+                          where
+                            pDepth = boundDepthPropDeBr p
+                            pTree = toSubexpParseTree p dict
+                            tTree = toSubexpParseTree t dict
+                            qTree = toSubexpParseTree q dict
+                _ -> Binding "ε" (sbParseTreeNormalize pDepth pTree) 
+                          where
+                            pDepth = boundDepthPropDeBr p
+                            pTree = toSubexpParseTree p dict
         Bound i -> ParseTreeBoundVar i
         V i -> ParseTreeFreeVar i
         X i -> ParseTreeX i
@@ -251,9 +279,6 @@ instance SubexpDeBr PropDeBr where
         ebuild a = case a of  
             p :&&: q -> if Forall (pDecremented :->: Bound (depth - 1):==: Bound depth) == q then
                             Binding "∃!" (sbParseTreeNormalize pDepth pTree)
-                               
-                            
-                           --(toSubexpParseTree pDecremented dict)
                         else
                             defaultP
                     where
@@ -289,6 +314,7 @@ showSubexpParseTree sub = case sub of
               ParseTreeF -> showSubexpParseTree sub1
               ParseTreeX idx -> showSubexpParseTree sub1
               ParseTreeInt i -> showSubexpParseTree sub1
+              Builder {} -> showSubexpParseTree sub1
     BinaryOp opSymb sub1 sub2 ->
            case sub1 of
               UnaryOp _ _ -> showSubexpParseTree sub1
@@ -313,6 +339,7 @@ showSubexpParseTree sub = case sub of
               ParseTreeF -> showSubexpParseTree sub1
               ParseTreeX idx -> showSubexpParseTree sub1
               ParseTreeInt i -> showSubexpParseTree sub1
+              Builder {} -> showSubexpParseTree sub1
           <> " " <> opSymb <> " "
           <> case sub2 of
                UnaryOp _ _-> showSubexpParseTree sub2
@@ -336,6 +363,7 @@ showSubexpParseTree sub = case sub of
                ParseTreeF -> showSubexpParseTree sub2
                ParseTreeX idx -> showSubexpParseTree sub2
                ParseTreeInt i -> showSubexpParseTree sub2
+               Builder {} -> showSubexpParseTree sub2
     Binding quant sub1 -> quant <> "𝑥" <> showIndexAsSubscript idx <> "(" <> showSubexpParseTree sub1 <> ")"
         where
             idx = subexpParseTreeBoundDepth sub1 
@@ -349,7 +377,15 @@ showSubexpParseTree sub = case sub of
     Tuple as -> "(" <> Data.Text.concat (intersperse "," $ Prelude.map showSubexpParseTree as ) <> ")"
     ParseTreeF -> "⊥"
     ParseTreeInt i -> pack $ show i
-
+    Builder sub1 sub2 -> "{" 
+                             <> "𝑥" <> showIndexAsSubscript idx
+                             <> " ∈ "
+                             <> showSubexpParseTree sub1 
+                             <> " | " 
+                             <> showSubexpParseTree sub2
+                             <> "}"
+          where
+            idx = subexpParseTreeBoundDepth sub2
   where
     showHierarchalIdxAsSubscript :: [Int] -> Text
     showHierarchalIdxAsSubscript idxs = Data.Text.concat (intersperse "." (Prelude.map showIndexAsSubscript idxs))
@@ -573,15 +609,7 @@ instance PL.LogicSent PropDeBr () where
    
 
 
-objDeBrBoundVarInside :: ObjDeBr -> Int -> Bool
-objDeBrBoundVarInside obj idx =
-    case obj of
-        Integ num -> False
-        Constant const -> False
-        Hilbert p -> propDeBrBoundVarInside p idx
-        Bound i -> idx == i
-        V i -> False
-        Pair a b -> objDeBrBoundVarInside a idx || objDeBrBoundVarInside b idx
+
 
 
 
@@ -1128,12 +1156,26 @@ isFunction t = isRelation t :&&:
 --                            (aX 1 $ (X 1) `In` relDomain (X 0) :->: eBangX 2 
 
 
-builderX :: ObjDeBr -> PropDeBr -> ObjDeBr
+builderX :: Int -> ObjDeBr -> PropDeBr -> ObjDeBr
 
 -- Assumes that t is a term with no template variables.
--- and P is predicate template with X 1 as a template variable and
--- no other template variables (inclucding X 0). Free variables allowed.
-builderX t p = hX 0 $ aX 1 $ X 1 `In` X 0 :<->: p :&&: X 1 `In` t                           
+-- and p is predicate template with X i as a template variable and
+-- no other template variables. Free variables allowed.
+-- For this to be a proper usage, p cannot bind the outer hilbert
+-- quantifier variable, and t cannot
+-- bind X i or the outer hilbert quantifier variable. 
+-- It is not an actual programmatic error if these conditions
+-- are not met, but the result won't be representable in set
+-- builder notation, and when corresponding output is shown, 
+-- set builder notation
+-- will NOT be used. Essentially, improper usage results in a GIGO
+-- situation.
+                       
+                          
+builderX idx t p = Hilbert $ aX idx $ X idx `In` Bound hilbertIdx :<->: p :&&: X idx `In` t
+     where hilbertIdx = (max (boundDepthObjDeBr t) (boundDepthPropDeBr p)) + 1
+
+
 
 
 instance ZFC.LogicSent PropDeBr ObjDeBr where

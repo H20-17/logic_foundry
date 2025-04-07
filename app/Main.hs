@@ -121,18 +121,125 @@ testNormalization :: ProofGenTStd () [PredRuleDeBr] PropDeBr Text IO ()
 testNormalization = do
     remarkM "--- Testing Normalization ---"
     let term2 = Integ 1
-    let s1 = eXBang 0 (X 0 `In` X 1)
-    let s2 = aX 1 s1
+    let s1 = aX 1 (eXBang 0 (X 1 :==: X 0))
+
 
     fakeConstM "N" ()
-    fakePropM s2
-    s1Show <- showPropM s2
+    fakePropM s1
+    s1Show <- showPropM s1
     remarkM $ "Proved: " <> s1Show   
     return ()
  
+testMoreComplexNesting :: ProofGenTStd () [PredRuleDeBr] PropDeBr Text IO ()
+testMoreComplexNesting = do
+    remarkM "--- Testing More Complex Nesting (A > E > E!) ---"
+    
+    -- Represents ∀𝑥₂ ( ∃𝑥₁ ( ∃!𝑥₀ ( (𝑥₂ = 𝑥₁) ∧ (𝑥₁ = 𝑥₀) ) ) )
+    let s3 = aX 2 ( eX 1 ( eXBang 0 ( (X 2 :==: X 1) :&&: (X 1 :==: X 0) ) ) )
+
+    -- Add as fake prop and print
+    fakePropM s3
+    s3Show <- showPropM s3
+    remarkM $ "Input: aX 2 ( eX 1 ( eXBang 0 ( (X 2 :==: X 1) :&&: (X 1 :==: X 0) ) ) )"
+    remarkM $ "Printed: " <> s3Show   
+    
+    remarkM "--- More Complex Nesting Test Complete ---"
+    return ()
+
+testNonSequentialIndices :: ProofGenTStd () [PredRuleDeBr] PropDeBr Text IO ()
+testNonSequentialIndices = do
+    remarkM "--- Testing Non-Sequential Indices (A5 > E!2 > A7) ---"
+
+    -- Represents ∀𝑥₅ ( ∃!𝑥₂ ( ∀𝑥₇ ( (𝑥₅ = 𝑥₂) ∨ (𝑥₂ = 𝑥₇) ) ) )
+    let s4 = aX 5 ( eXBang 2 ( aX 7 ( (X 5 :==: X 2) :||: (X 2 :==: X 7) ) ) )
+
+    -- Add as fake prop and print
+    fakePropM s4
+    s4Show <- showPropM s4
+    remarkM $ "Input: aX 5 ( eXBang 2 ( aX 7 ( (X 5 :==: X 2) :||: (X 2 :==: X 7) ) ) )"
+    remarkM $ "Printed: " <> s4Show
+
+    remarkM "--- Non-Sequential Indices Test Complete ---"
+    return ()
+
+
+
+
+
+testSetBuilder :: ProofGenTStd () [PredRuleDeBr] PropDeBr Text IO ()
+testSetBuilder = do
+    remarkM "--- Testing Set Builder Notation ---"
+
+    -- Define the source set N
+    let setN = Constant "N"
+    -- Define the property P(x) as x = x.
+    let propertyP = (X 0 :==: X 0)
+
+    -- Construct the term representing { x ∈ N | x = x }
+    let setBuilt = builderX 0 setN propertyP
+
+    -- Add N as a fake constant for context
+    fakeConstM "N" ()
+    -- Add the constructed set as a fake proposition/term to see it printed
+    -- (We need a way to print ObjDeBr - using fakePropM on an equality
+    -- with the set might work, or if you have a dedicated Obj print)
+    -- Let's just create an equality for printing purposes:
+    setBuiltShow <- showObjM setBuilt
+    remarkM $ "Set Builder: " <> setBuiltShow
+    remarkM "--- Set Builder Notation Test Complete ---"
+    return ()
+
+testComplexSetBuilder :: ProofGenTStd () [PredRuleDeBr] PropDeBr Text IO ()
+testComplexSetBuilder = do
+    remarkM "--- Testing Complex Set Builder Notation ---"
+
+    -- Define set names
+    let setN = Constant "N"
+    let setM = Constant "M"
+    let setP = Constant "P"
+
+    -- Define the property P(x), where x corresponds to X 1 (chosen index for builderX)
+    -- The property is: ∀y (y ∈ M → ∃z (z ∈ P ∧ <x, y> = z))
+    -- Let y be X 0 (bound by aX 0)
+    -- Let z be X 2 (bound by eX 2)
+    -- x is X 1 (the variable bound by builderX 1)
+    let propertyP =
+          aX 0 -- Binds y as X 0
+             ( (X 0 `In` setM) -- y in M
+               :->:            -- implies
+               (eX 2          -- exists z as X 2
+                  ( (X 2 `In` setP) -- z in P
+                    :&&:            -- and
+                    (Pair (X 1) (X 0) :==: X 2) -- <x, y> = z
+                  )
+               )
+             )
+
+    -- Construct the term representing the set using index 1 for 'x'
+    let setBuiltComplex = builderX 1 setN propertyP
+
+    -- Add constants for context
+    fakeConstM "N" ()
+    fakeConstM "M" ()
+    fakeConstM "P" ()
+
+    -- Print the constructed term (e.g., via an equality)
+    (eqProp, _) <- fakePropM (setBuiltComplex :==: setBuiltComplex)
+    setBuiltShow <- showObjM setBuiltComplex -- Use showObjM
+
+    -- Use actual Unicode characters in the remark strings
+    remarkM $ "Input Term (Conceptual): { x ∈ N | ∀y (y ∈ M → ∃z (z ∈ P ∧ <x, y> = z)) }"
+    remarkM $ "Constructed Term (via builderX): " <> setBuiltShow
+    remarkM $ "----> Expected future output: {𝑥₁ ∈ N | ∀𝑥₀((𝑥₀ ∈ M) → ∃𝑥₂( (𝑥₂ ∈ P) ∧ (<𝑥₁, 𝑥₀> = 𝑥₂)))}"
+
+    remarkM "--- Complex Set Builder Test Complete ---"
+    return ()
 
 main :: IO ()
 main = do
+    print "TEST SET BUILDER BEGIN-------------------------------------"
+    (aSB, bSB, cSB, dSB) <- runProofGeneratorT testSetBuilder
+    (putStrLn . unpack . showPropDeBrStepsBase) cSB
     let y0 = (Integ 0 :==: Integ 0) :->: (Integ 99 :==: Integ 99)
     let y1 = Integ 0 :==: Integ 0
     let y2 = (Integ 99 :==: Integ 99) :->: (Integ 1001 :==: Integ 1001)
@@ -248,6 +355,20 @@ main = do
     (aEq, bEq, cEq, dEq) <- runProofGeneratorT testNormalization
     (putStrLn . unpack . showPropDeBrStepsBase) cEq
     return ()
+
+    print "TEST MORE COMPLEX NESTING BEGIN-------------------------------------"
+    (aMC, bMC, cMC, dMC) <- runProofGeneratorT testMoreComplexNesting
+    (putStrLn . unpack . showPropDeBrStepsBase) cMC
+
+    print "TEST NON-SEQUENTIAL INDICES BEGIN-------------------------------------"
+    (aNS, bNS, cNS, dNS) <- runProofGeneratorT testNonSequentialIndices
+    (putStrLn . unpack . showPropDeBrStepsBase) cNS
+
+    print "TEST COMPLEX SET BUILDER BEGIN-------------------------------------"
+    (aCSB, bCSB, cCSB, dCSB) <- runProofGeneratorT testComplexSetBuilder
+    (putStrLn . unpack . showPropDeBrStepsBase) cCSB
+
+
 testprog::ProofGenTStd () [PredRuleDeBr] PropDeBr Text IO ()
 testprog = do
       let z1 = aX 0 ((X 0 `In` Constant "N") :&&: (X 0 :>=: Integ 10) :->: (X 0 :>=: Integ 0))
