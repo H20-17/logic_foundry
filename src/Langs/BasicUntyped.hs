@@ -1175,7 +1175,9 @@ builderX :: Int -> ObjDeBr -> PropDeBr -> ObjDeBr
 builderX idx t p = Hilbert $ aX idx $ X idx `In` Bound hilbertIdx :<->: p :&&: X idx `In` t
      where hilbertIdx = (max (boundDepthObjDeBr t) (boundDepthPropDeBr p)) + 1
 
-
+subset :: ObjDeBr -> ObjDeBr -> PropDeBr
+subset a b = Forall (Bound idx `In` a :->: Bound idx `In` b)
+    where idx = max (boundDepthObjDeBr a) (boundDepthObjDeBr b)
 
 
 instance ZFC.LogicSent PropDeBr ObjDeBr where

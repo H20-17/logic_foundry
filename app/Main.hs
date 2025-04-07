@@ -231,7 +231,6 @@ testComplexSetBuilder = do
     remarkM $ "Input Term (Conceptual): { x ∈ N | ∀y (y ∈ M → ∃z (z ∈ P ∧ <x, y> = z)) }"
     remarkM $ "Constructed Term (via builderX): " <> setBuiltShow
     remarkM $ "----> Expected future output: {𝑥₁ ∈ N | ∀𝑥₀((𝑥₀ ∈ M) → ∃𝑥₂( (𝑥₂ ∈ P) ∧ (<𝑥₁, 𝑥₀> = 𝑥₂)))}"
-
     remarkM "--- Complex Set Builder Test Complete ---"
     return ()
 
