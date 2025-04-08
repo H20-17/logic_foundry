@@ -289,6 +289,76 @@ testComplexSubsetNotation = do
     return ()
 
 
+testStrictSubsetNotation :: ProofGenTStd () [PredRuleDeBr] PropDeBr Text IO ()
+testStrictSubsetNotation = do
+    remarkM "--- Testing Strict Subset Notation (⊂) ---"
+
+    -- Define set constants
+    let setA = Constant "A"
+    let setB = Constant "B"
+
+    -- Add constants to proof state
+    fakeConstM "A" ()
+    fakeConstM "B" ()
+
+    -- Test 1: Basic strict subset A ⊂ B (using the helper function)
+    remarkM "Test 1: Basic strict subset A ⊂ B (using helper)"
+    -- This helper creates: (subset setA setB) :&&: Neg (setA :==: setB)
+    let strictSubProp1 = strictSubset setA setB
+
+    (addedProp1, _) <- fakePropM strictSubProp1
+    printedOutput1 <- showPropM addedProp1
+    remarkM $ "Actual printed output (Test 1): " <> printedOutput1
+    remarkM $ "(Should be A ⊂ B)"
+
+    -- Test 2: Test fallback for the Definition 2 pattern when precondition fails
+    remarkM "Test 2: Testing fallback for Def 2 structure (should NOT use ⊂)"
+    -- Create structure: (subset H H) ∧ (Exists y (y ∈ Bound 1 ∧ y ∉ H))
+    -- where H = Hilbert (Bound 0 :==: C).
+    -- This should fail the 'not (termB contains Bound 1)' check in 'andBuild'.
+    fakeConstM "C" ()
+    let setH = Hilbert (Bound 0 :==: Constant "C") -- max depth 1
+    let termBound1 = Bound 1                     -- This IS Bound 1
+
+    -- Manually construct subset H H: Forall (Bound 1 In H :->: Bound 1 In H)
+    let idx_sub = max (boundDepthObjDeBr setH) (boundDepthObjDeBr setH) -- = 1
+    let subPropHH = Forall ( (Bound idx_sub `In` setH) :->: (Bound idx_sub `In` setH) )
+
+    -- Manually construct Exists part: Exists (Bound 1 In termBound1 && not (Bound 1 In setH))
+    let idx_ex = max (boundDepthObjDeBr termBound1) (boundDepthObjDeBr setH) -- = 1
+    let exists_inner = (Bound idx_ex `In` termBound1) :&&: Neg (Bound idx_ex `In` setH)
+    let exists_part = Exists exists_inner -- Exists ( (Bound 1 In Bound 1) && Neg (Bound 1 In setH) )
+
+    -- Combine them
+    let complexConj = subPropHH :&&: exists_part
+
+    remarkM $ "Constructed PropDeBr (Test 2): " <> (pack $ show complexConj) -- Raw view
+
+    -- Check conditions manually via remarks for clarity
+    remarkM $ "Manual check of 'andBuild' conditions for Def 2 pattern:"
+    remarkM $ "  idx1=1, a1=setH, idx2=1, a2=setH"
+    remarkM $ "  idx3=1, a3=termBound1, idx4=1, a4=setH"
+    remarkM $ "  Checks:"
+    remarkM $ "    idx1==max(d H,d H)? -> 1==1 PASS"
+    remarkM $ "    idx2==idx1? -> 1==1 PASS"
+    remarkM $ "    idx1==idx3? -> 1==1 PASS"
+    remarkM $ "    idx1==idx4? -> 1==1 PASS"
+    remarkM $ "    a2==a3? -> setH == termBound1? -> FAIL" -- Corrected term check fails here anyway
+    remarkM $ "    a1==a4? -> setH == setH? -> PASS"
+    remarkM $ "    not(a1 contains idx1)? -> not(setH contains 1)? -> PASS"
+    remarkM $ "    not(a2 contains idx1)? -> not(setH contains 1)? -> PASS"
+    remarkM $ "  (Note: Even if term checks were a2==a3 and a1==a4, the precondition check on a3=termBound1 would fail as 'termBound1 contains 1')"
+
+
+    -- Add the proposition and get the printed output
+    (addedProp2, _) <- fakePropM complexConj
+    printedOutput2 <- showPropM addedProp2
+    remarkM $ "Actual printed output (Test 2): " <> printedOutput2
+    remarkM $ "(Should use default ∀, ∧, ∃ notations, NOT ⊂)"
+
+    remarkM "--- Strict Subset Notation Test Complete ---"
+    return ()
+
 main :: IO ()
 main = do
     print "TEST SET BUILDER BEGIN-------------------------------------"
@@ -430,6 +500,13 @@ main = do
     print "TEST SUBSET INTERNAL BINDING BEGIN-------------------------------------"
     (aIB, bIB, cIB, dIB) <- runProofGeneratorT testSubsetInternalBinding
     (putStrLn . unpack . showPropDeBrStepsBase) cIB -- Print results
+
+    print "TEST STRICT SUBSET NOTATION BEGIN-------------------------------------"
+    (aStrict, bStrict, cStrict, dStrict) <- runProofGeneratorT testStrictSubsetNotation
+    (putStrLn . unpack . showPropDeBrStepsBase) cStrict -- Print results
+
+    -- ... (rest of main) ...
+    return ()
 
     -- ... (rest of main) ...
     return ()

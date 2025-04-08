@@ -19,7 +19,10 @@ module Langs.BasicUntyped (
     (./=.),
     builderX,
     nIn,
-    subset
+    subset,
+    strictSubset,
+    boundDepthObjDeBr,
+    boundDepthPropDeBr
 ) where
 import Control.Monad ( unless )
 import Data.List (intersperse)
@@ -264,7 +267,12 @@ instance SubexpDeBr PropDeBr where
         o1 :==: o2 -> BinaryOp "≠" (toSubexpParseTree o1 dict) (toSubexpParseTree o2 dict)  
         In o1 o2 -> BinaryOp "∉" (toSubexpParseTree o1 dict) (toSubexpParseTree o2 dict)      
         _ -> UnaryOp "¬" (toSubexpParseTree q dict)
-      (:&&:) a b -> BinaryOp "∧" (toSubexpParseTree a dict) (toSubexpParseTree b dict)
+      (:&&:) a b -> andBuild a b 
+        
+        
+        --BinaryOp "∧" (toSubexpParseTree a dict) (toSubexpParseTree b dict)
+
+
       (:||:) a b -> BinaryOp "∨" (toSubexpParseTree a dict) (toSubexpParseTree b dict)
       (:->:)  a b -> BinaryOp "→" (toSubexpParseTree a dict) (toSubexpParseTree b dict)
       (:<->:) a b -> BinaryOp "↔"(toSubexpParseTree a dict) (toSubexpParseTree b dict)
@@ -275,6 +283,39 @@ instance SubexpDeBr PropDeBr where
       (:>=:) a b -> BinaryOp "≥" (toSubexpParseTree a dict) (toSubexpParseTree b dict)
       F -> ParseTreeF
     where
+        andBuild (Forall (Bound idx1 `In` a1 :->: Bound idx2 `In` a2))
+                        (Neg (a3 :==: a4)) =
+                 if idx1 == max (boundDepthObjDeBr a1) (boundDepthObjDeBr a2)
+                    && idx2 == idx1
+                    && a1 == a3
+                    && a2 == a4
+                    && not (objDeBrBoundVarInside a1 idx1) 
+                    && not (objDeBrBoundVarInside a2 idx1)
+                 then
+                    BinaryOp "⊂" (toSubexpParseTree a1 dict) (toSubexpParseTree a2 dict)
+                 else
+                    andBuildDefault (Forall (Bound idx1 `In` a1 :->: Bound idx2 `In` a2))
+                         (Neg (a3 :==: a4))
+        andBuild (Forall (Bound idx1 `In` a1 :->: Bound idx2 `In` a2))
+                        (Exists (Bound idx3 `In` a3 :&&:
+                            Neg (Bound idx4 `In` a4)))=
+                 if idx1 == max (boundDepthObjDeBr a1) (boundDepthObjDeBr a2)
+                    && idx2 == idx1
+                    && idx1 == idx3
+                    && idx1 == idx4
+                    && a2 == a3
+                    && a1 == a4
+                    && not (objDeBrBoundVarInside a1 idx1) 
+                    && not (objDeBrBoundVarInside a2 idx1)
+                 then
+                    BinaryOp "⊂" (toSubexpParseTree a1 dict) (toSubexpParseTree a2 dict)
+                 else
+                    andBuildDefault (Forall (Bound idx1 `In` a1 :->: Bound idx2 `In` a2))
+                        (Exists (Bound idx3 `In` a3 :&&:
+                            Neg (Bound idx4 `In` a4)))
+        andBuild a b = andBuildDefault a b                    
+        andBuildDefault a b = BinaryOp "∧" (toSubexpParseTree a dict) (toSubexpParseTree b dict)
+        
         abuild a = case a of
             Bound idx1 `In` a1 :->: Bound idx2 `In` a2 ->
                  if idx1 == max (boundDepthObjDeBr a1) (boundDepthObjDeBr a2)
@@ -1202,6 +1243,12 @@ subset :: ObjDeBr -> ObjDeBr -> PropDeBr
 
 subset a b = Forall (Bound idx `In` a :->: Bound idx `In` b)
     where idx = max (boundDepthObjDeBr a) (boundDepthObjDeBr b)
+
+
+strictSubset :: ObjDeBr -> ObjDeBr -> PropDeBr
+strictSubset a b = (subset a b) :&&: (Neg (a :==: b))
+
+
 
 
 instance ZFC.LogicSent PropDeBr ObjDeBr where
