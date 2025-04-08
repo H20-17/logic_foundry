@@ -18,7 +18,8 @@ module Langs.BasicUntyped (
     eXBang,
     (./=.),
     builderX,
-    nIn
+    nIn,
+    subset
 ) where
 import Control.Monad ( unless )
 import Data.List (intersperse)
@@ -148,7 +149,8 @@ class SubexpDeBr sub where
 binaryOpInData :: [(Text,(Associativity,Int))]
 binaryOpInData = [("=",(NotAssociative,5)),("→",(RightAssociative,1)),("↔",(RightAssociative,1)),("∈",(NotAssociative,5)),("∧",(RightAssociative,4)),("∨",(RightAssociative,3)),
      ("≥",(NotAssociative,5)),
-     ("≠",(NotAssociative,5)),("∉",(NotAssociative,5))]
+     ("≠",(NotAssociative,5)),("∉",(NotAssociative,5)),
+     ("⊆",(NotAssociative,5)),("⊂",(NotAssociative,5))]
 
 
 --The Int is it's precedence number.
@@ -268,14 +270,27 @@ instance SubexpDeBr PropDeBr where
       (:<->:) a b -> BinaryOp "↔"(toSubexpParseTree a dict) (toSubexpParseTree b dict)
       (:==:) a b -> BinaryOp "=" (toSubexpParseTree a dict) (toSubexpParseTree b dict)
       In a b -> BinaryOp "∈" (toSubexpParseTree a dict) (toSubexpParseTree b dict)
-      Forall a -> Binding "∀" (sbParseTreeNormalize pDepth pTree) 
-                where
-                    pDepth = boundDepthPropDeBr a
-                    pTree = toSubexpParseTree a dict
+      Forall a ->  abuild a
       Exists a -> ebuild a
       (:>=:) a b -> BinaryOp "≥" (toSubexpParseTree a dict) (toSubexpParseTree b dict)
       F -> ParseTreeF
     where
+        abuild a = case a of
+            Bound idx1 `In` a1 :->: Bound idx2 `In` a2 ->
+                 if idx1 == max (boundDepthObjDeBr a1) (boundDepthObjDeBr a2)
+                    && idx2 == idx1
+                    && not (objDeBrBoundVarInside a1 idx1) 
+                    && not (objDeBrBoundVarInside a2 idx1)
+                 then
+                    BinaryOp "⊆" (toSubexpParseTree a1 dict) (toSubexpParseTree a2 dict)
+                 else
+                    defaultExp
+            _ -> defaultExp
+          where
+            defaultExp = Binding "∀" (sbParseTreeNormalize pDepth pTree) 
+                  where
+                      pDepth = boundDepthPropDeBr a
+                      pTree = toSubexpParseTree a dict
         ebuild a = case a of  
             p :&&: q -> if Forall (pDecremented :->: Bound (depth - 1):==: Bound depth) == q then
                             Binding "∃!" (sbParseTreeNormalize pDepth pTree)
@@ -1176,6 +1191,15 @@ builderX idx t p = Hilbert $ aX idx $ X idx `In` Bound hilbertIdx :<->: p :&&: X
      where hilbertIdx = (max (boundDepthObjDeBr t) (boundDepthPropDeBr p)) + 1
 
 subset :: ObjDeBr -> ObjDeBr -> PropDeBr
+
+-- For this to be a proper usage,
+-- neither a or b can bind the outer quantifier.
+-- It is not an actual programmatic errof if this condition is not met,
+-- but the result won't be representable using subset notation,
+-- and when corresponding output is shown, subset notation
+-- will NOT be used. Essentially improper usage results in a
+-- GIGO situation.
+
 subset a b = Forall (Bound idx `In` a :->: Bound idx `In` b)
     where idx = max (boundDepthObjDeBr a) (boundDepthObjDeBr b)
 

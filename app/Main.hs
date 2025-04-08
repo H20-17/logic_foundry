@@ -234,6 +234,61 @@ testComplexSetBuilder = do
     remarkM "--- Complex Set Builder Test Complete ---"
     return ()
 
+testComplexSubsetNotation :: ProofGenTStd () [PredRuleDeBr] PropDeBr Text IO ()
+testComplexSubsetNotation = do
+    remarkM "--- Testing More Complex Subset Notation (⊆) ---"
+
+    -- 1. Define constants to represent sets
+    let setN = Constant "N"
+    let setA = Constant "A" -- Placeholder for Test 1 & 2
+    let setB = Constant "B"
+    let setC = Constant "C"
+
+    -- 2. Add constants to the proof state
+    fakeConstM "N" () -- Needed for Test 3
+    fakeConstM "A" () -- Assume these are defined/exist for the test
+    fakeConstM "B" ()
+    fakeConstM "C" ()
+
+    -- 3. Test 1: Basic subset A B
+    remarkM "Test 1: Basic subset A B"
+    let subPropAB = subset setA setB
+    (addedProp1, _) <- fakePropM subPropAB
+    printedOutput1 <- showPropM addedProp1
+    remarkM $ "Actual printed output (Test 1): " <> printedOutput1
+    remarkM $ "(Should be A ⊆ B)"
+
+    -- 4. Test 2: Subset notation within a conjunction: (A ⊆ B) ∧ (B ⊆ C)
+    remarkM "Test 2: Subset notation within conjunction (A ⊆ B) ∧ (B ⊆ C)"
+    let subPropBC = subset setB setC
+    -- Construct the conjunction using the PropDeBr operator :&&:
+    let conjProp = subPropAB :&&: subPropBC
+    (addedConjProp, _) <- fakePropM conjProp
+    printedOutputConj <- showPropM addedConjProp
+    remarkM $ "Actual printed output (Test 2): " <> printedOutputConj
+    -- Note: Depending on operator precedence for ∧ and ⊆, parentheses might appear
+    remarkM $ "(Should look like (A ⊆ B) ∧ (B ⊆ C) or similar)"
+
+    -- 5. Test 3: Using a set builder expression {x ∈ N | x ≥ 5} ⊆ N
+    remarkM "Test 3: Checking print for {x ∈ N | x ≥ 5} ⊆ N"
+    -- Ensure N constant is added (done above)
+    let five = Integ 5
+    -- Define the property P(x) as x >= 5, using X 0 for the bound variable 'x'
+    let propertyP = (X 0 :>=: five)
+    -- Construct the set {x ∈ N | x ≥ 5} using builderX with index 0
+    let setBuilderA = builderX 0 setN propertyP -- Defined in Langs/BasicUntyped.hs
+    -- Create the subset proposition: {x ∈ N | x ≥ 5} ⊆ N
+    let subPropBuilder = subset setBuilderA setN
+    -- Add, print, and check the output
+    (addedPropBuilder, _) <- fakePropM subPropBuilder
+    printedOutputBuilder <- showPropM addedPropBuilder
+    remarkM $ "Actual printed output (Test 3): " <> printedOutputBuilder
+    remarkM $ "(Should look like {𝑥₀ ∈ N | 𝑥₀ ≥ 5} ⊆ N or similar)"
+
+    remarkM "--- Complex Subset Notation Test Complete ---"
+    return ()
+
+
 main :: IO ()
 main = do
     print "TEST SET BUILDER BEGIN-------------------------------------"
@@ -367,6 +422,59 @@ main = do
     (aCSB, bCSB, cCSB, dCSB) <- runProofGeneratorT testComplexSetBuilder
     (putStrLn . unpack . showPropDeBrStepsBase) cCSB
 
+
+    print "TEST COMPLEX SUBSET NOTATION BEGIN-------------------------------------"
+    (aCSub, bCSub, cCSub, dCSub) <- runProofGeneratorT testComplexSubsetNotation
+    (putStrLn . unpack . showPropDeBrStepsBase) cCSub -- Print results
+
+    print "TEST SUBSET INTERNAL BINDING BEGIN-------------------------------------"
+    (aIB, bIB, cIB, dIB) <- runProofGeneratorT testSubsetInternalBinding
+    (putStrLn . unpack . showPropDeBrStepsBase) cIB -- Print results
+
+    -- ... (rest of main) ...
+    return ()
+
+testSubsetInternalBinding :: ProofGenTStd () [PredRuleDeBr] PropDeBr Text IO ()
+testSubsetInternalBinding = do
+    remarkM "--- Testing Subset Notation with Internal Binding ---"
+
+    -- 1. Define a constant C and the term A = {y | exists x (y = C)}
+    --    (Represented by Hilbert (Bound 0 :==: Constant "C"))
+    fakeConstM "C" ()
+    let setA = Hilbert (Bound 0 :==: Constant "C")
+
+    -- 2. Construct the subset proposition: subset setA setA
+    --    Based on your 'subset' function, this creates:
+    --    Forall ( (Bound 1 `In` setA) :->: (Bound 1 `In` setA) )
+    --    because max depth of setA is 1.
+    let subProp = subset setA setA
+
+    remarkM $ "Constructed PropDeBr: Forall ((Bound 1 `In` Hilbert (Bound 0 :==: Constant \"C\")) :->: (Bound 1 `In` Hilbert (Bound 0 :==: Constant \"C\")))"
+
+    -- 3. Manually trace the conditions from your 'toSubexpParseTree'/'abuild' logic:
+    remarkM $ "Checking conditions for '⊆' shorthand manually:"
+    remarkM $ "  Pattern: Forall (Bound idx1 `In` a1 :->: Bound idx2 `In` a2)"
+    remarkM $ "  Here: idx1=1, a1=setA, idx2=1, a2=setA."
+    remarkM $ "  Condition 1: idx1 == max(depth a1, depth a2)? -> 1 == max(1, 1)? -> PASS"
+    remarkM $ "  Condition 2: idx2 == idx1? -> 1 == 1? -> PASS"
+    remarkM $ "  Condition 3: not (a1 contains Bound idx1)? -> not (setA contains Bound 1)? -> not (False)? -> PASS"
+    remarkM $ "  Condition 4: not (a2 contains Bound idx1)? -> not (setA contains Bound 1)? -> not (False)? -> PASS"
+    remarkM $ "Conclusion based on checks: All conditions PASS. Shorthand '⊆' should apply."
+
+    -- 4. Add the proposition to the proof state using fakePropM
+    (addedProp, _) <- fakePropM subProp
+
+    -- 5. Get the actual printed output using showPropM
+    printedOutput <- showPropM addedProp
+
+    -- 6. Display the expected vs. actual output
+    --    We use showObjM to print setA cleanly in the expected output remark
+    setAShow <- showObjM setA
+    remarkM $ "Expected output based on implemented condition check: " <> setAShow <> " ⊆ " <> setAShow
+    remarkM $ "Actual printed output: " <> printedOutput
+
+    remarkM "--- Internal Binding Subset Test Complete ---"
+    return ()
 
 testprog::ProofGenTStd () [PredRuleDeBr] PropDeBr Text IO ()
 testprog = do
