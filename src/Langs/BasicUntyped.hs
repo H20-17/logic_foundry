@@ -855,13 +855,16 @@ propDeBrSubX' subidx boundvarOffsetThreshold prop t = case prop of
 
 
 objDeBrSubX :: Int -> ObjDeBr -> ObjDeBr -> ObjDeBr
-objDeBrSubX subidx obj t = objDeBrSubX' subidx calcBVOThreshold obj t
+objDeBrSubX subidx t obj = objDeBrSubX' subidx calcBVOThreshold obj t
    where 
                  boundDepth = boundDepthObjDeBr obj
                  calcBVOThreshold = if objDeBrBoundVarInside obj boundDepth then
                                       boundDepth
                                   else 
                                       boundDepth + 1
+
+
+
 -- | Applies a list of substitutions [(Index, Term)] to an ObjDeBr term.
 objDeBrSubXs :: [(Int, ObjDeBr)]  -- List of (Index to replace, Substitution Term) pairs
               -> ObjDeBr        -- Initial proposition template
@@ -875,17 +878,16 @@ objDeBrSubXs substitutions initialObj =
              -> (Int, ObjDeBr)    -- The current substitution (idx, term)
              -> ObjDeBr          -- The object after this substitution
     applySub currentObj (idx, term) =
-        -- Call propDeBrSubX to substitute X idx with term in currentProp
-        objDeBrSubX idx currentObj term
+        -- Call propDeBrSubX to substitute X idx with term in currentObj
+        objDeBrSubX idx term currentObj
 
 
 
 
-propDeBrSubX :: Int -> PropDeBr -> ObjDeBr -> PropDeBr
-propDeBrSubX subidx prop t = propDeBrSubX' subidx calcBVOThreshold prop t
+propDeBrSubX :: Int -> ObjDeBr -> PropDeBr -> PropDeBr
+propDeBrSubX subidx t prop = propDeBrSubX' subidx calcBVOThreshold prop t
    where 
-                 boundDepth = boundDepthPropDeBr prop
-                 template = propDeBrSubBoundVarToX0 boundDepth prop 
+                 boundDepth = boundDepthPropDeBr prop 
                  calcBVOThreshold = if propDeBrBoundVarInside prop boundDepth then
                                       boundDepth
                                   else 
@@ -907,7 +909,7 @@ propDeBrSubXs substitutions initialProp =
              -> PropDeBr          -- The proposition after this substitution
     applySub currentProp (idx, term) =
         -- Call propDeBrSubX to substitute X idx with term in currentProp
-        propDeBrSubX idx currentProp term
+        propDeBrSubX idx term currentProp
 
 
 
@@ -943,7 +945,7 @@ propDeBrApplyUG prop freevarIdx boundvarIdx =
 
 
 boundExpToFunc :: PropDeBr -> ObjDeBr -> PropDeBr
-boundExpToFunc p = propDeBrSubX 0 template
+boundExpToFunc p obj = propDeBrSubX 0 obj template
            where 
                  boundDepth = boundDepthPropDeBr p
                  template = propDeBrSubBoundVarToX0 boundDepth p 
@@ -995,7 +997,7 @@ instance PREDL.LogicSent PropDeBr ObjDeBr ()  where
     (.==.) :: ObjDeBr -> ObjDeBr -> PropDeBr
     (.==.) = (:==:)
     substX0 :: PropDeBr -> ObjDeBr -> PropDeBr
-    substX0 = propDeBrSubX 0
+    substX0 template obj = propDeBrSubX 0 obj template
 
 
     
@@ -1373,22 +1375,13 @@ builderX :: Int -> ObjDeBr -> PropDeBr -> ObjDeBr
 builderX idx t p = Hilbert $ aX idx $ X idx `In` Bound hilbertIdx :<->: p :&&: X idx `In` t
      where hilbertIdx = max (boundDepthObjDeBr t) (boundDepthPropDeBr p) + 1
 
---subset :: ObjDeBr -> ObjDeBr -> PropDeBr
 
--- For this to be a proper usage,
--- neither a or b can bind the outer quantifier (i.e. they cannot bind idx).
--- It is not an actual programmatic errof if this condition is not met,
--- but the result won't be representable using subset notation,
--- and when corresponding output is shown, subset notation
--- will NOT be used. Essentially improper usage results in a
--- GIGO situation.
-
---subset a b = Forall (Bound idx `In` a :->: Bound idx `In` b)
---    where idx = max (boundDepthObjDeBr a) (boundDepthObjDeBr b)
-
-
+-- For intended usage,
+-- a and b should both not have any template variables occuring within it.
+-- If they do, they can effectively result in variable capture, if consumed,
+-- or an insane sentence, it left unconsumed. Consider this a GIGO situation.
 subset :: ObjDeBr -> ObjDeBr -> PropDeBr
-subset a b = aX 2 (propDeBrSubX 1 (propDeBrSubX 0 (X 2 `In` X 1 :->: X 2 `In` X 0) b) a)
+subset a b = propDeBrSubXs [(1,a),(0,b)] (aX 2 (X 2 `In` X 1 :->: X 2 `In` X 0))
 
 
 strictSubset :: ObjDeBr -> ObjDeBr -> PropDeBr
@@ -1398,17 +1391,11 @@ notSubset :: ObjDeBr -> ObjDeBr -> PropDeBr
 notSubset a b = Neg (subset a b)
 
 -- The following function projects the first element of a pair.
--- For this representation to work as intended within this system's indexing convention,
--- 'pair' should not contain bound variable indicies d and d+1.
--- Violating this precondition might lead to unintended variable capture or meaning (GIGO).
-
--- pairFirst' :: ObjDeBr -> ObjDeBr
---pairFirst' pair = Hilbert (Exists (pair :==: Pair (Bound (d + 1)) (Bound d)))
---    where d = boundDepthObjDeBr pair
-
-
+-- For intended usage, pair should not have any template variables occuring within it.
+-- If it does, it can effectively result in variable capture, if consumed,
+-- or an insane sentence, it left unconsumed. Consider this a GIGO situation.
 pairFirst :: ObjDeBr -> ObjDeBr
-pairFirst pair = hX 2 (eX 1 (propDeBrSubX 0 (X 0 :==: Pair (X 2) (X 1)) pair))
+pairFirst pair = objDeBrSubX 0 pair (hX 2 (eX 1 (X 0 :==: Pair (X 2) (X 1))))
 
 
 relDomain :: ObjDeBr -> ObjDeBr
