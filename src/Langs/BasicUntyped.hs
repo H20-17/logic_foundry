@@ -22,7 +22,10 @@ module Langs.BasicUntyped (
     subset,
     strictSubset,
     boundDepthObjDeBr,
-    boundDepthPropDeBr
+    boundDepthPropDeBr,
+    notSubset,
+    pairFirst,
+    (.@.)
 ) where
 import Control.Monad ( unless )
 import Data.List (intersperse)
@@ -95,6 +98,7 @@ data SubexpParseTree where
     ParseTreeF :: SubexpParseTree
     ParseTreeInt :: Int -> SubexpParseTree
     Builder :: SubexpParseTree -> SubexpParseTree -> SubexpParseTree
+    FuncApp :: SubexpParseTree -> SubexpParseTree -> SubexpParseTree
 
 
 subexpParseTreeBoundDepth :: SubexpParseTree -> Int
@@ -111,6 +115,7 @@ subexpParseTreeBoundDepth sub = case sub of
     Tuple as -> maximum $ Prelude.map subexpParseTreeBoundDepth as
     ParseTreeF -> 0
     ParseTreeInt _ -> 0
+    FuncApp sub1 sub2 -> max (subexpParseTreeBoundDepth sub1) (subexpParseTreeBoundDepth sub2)
 
 
 
@@ -139,6 +144,7 @@ sbParseTreeNormalize boundVarIdx sub =
             ParseTreeF -> ParseTreeF
             ParseTreeInt i -> ParseTreeInt i
             Builder sub1 sub2 -> Builder (sbParseTreeNormalize' depth sub1) (sbParseTreeNormalize' depth sub2)
+            FuncApp sub1 sub2 -> FuncApp (sbParseTreeNormalize' depth sub1) (sbParseTreeNormalize' depth sub2)
     
     
   
@@ -153,7 +159,7 @@ binaryOpInData :: [(Text,(Associativity,Int))]
 binaryOpInData = [("=",(NotAssociative,5)),("→",(RightAssociative,1)),("↔",(RightAssociative,1)),("∈",(NotAssociative,5)),("∧",(RightAssociative,4)),("∨",(RightAssociative,3)),
      ("≥",(NotAssociative,5)),
      ("≠",(NotAssociative,5)),("∉",(NotAssociative,5)),
-     ("⊆",(NotAssociative,5)),("⊂",(NotAssociative,5))]
+     ("⊆",(NotAssociative,5)),("⊂",(NotAssociative,5)),("⊈",(NotAssociative,5)) ]
 
 
 --The Int is it's precedence number.
@@ -194,45 +200,115 @@ propDeBrHasBoundVar sub idx = case sub of
 
 
 
+-- instance SubexpDeBr ObjDeBr where
+--    toSubexpParseTree :: ObjDeBr -> Map PropDeBr [Int]  -> SubexpParseTree
+--    toSubexpParseTree obj dict = case obj of
+--        Integ i -> ParseTreeInt i
+--        Constant c -> ParseTreeConst c
+--        Hilbert p -> case Data.Map.lookup (Exists p) dict of
+--            Just idxs -> HilbertShort idxs
+--            Nothing -> case p of
+--                Forall (Bound a `In` Bound b :<->: q :&&: Bound c `In` t) -> 
+--                    if a == pDepth - 1 
+--                        && c == a 
+--                        && b == pDepth 
+--                        && not (propDeBrBoundVarInside q b) 
+--                        && not (objDeBrBoundVarInside t a) 
+--                        && not (objDeBrBoundVarInside t b) then
+--                               Builder tTree (sbParseTreeNormalize (pDepth-1) qTree)
+--                        -- For this to be a proper usage, q cannot bind b, and t cannot
+--                        -- bind a or b.
+--                        -- so we have to check for this before using the builder notation.
+--                        -- If either of these two conditions are not met and we used
+--                        -- the builder notation, then we would would lose
+--                        -- quantifiers that are quantifying over b or a.
+--                    else 
+--                        Binding "ε" (sbParseTreeNormalize pDepth pTree) 
+--                          where
+--                            pDepth = boundDepthPropDeBr p
+--                            pTree = toSubexpParseTree p dict
+--                            tTree = toSubexpParseTree t dict
+--                            qTree = toSubexpParseTree q dict
+--                Pair x (Bound d) `In` (Hilbert (Exists ( f :==: Pair (Bound dp_fPlus1) (Bound dp_f) ))) ->
+--                    if    d == max (boundDepthObjDeBr f + 2) (boundDepthObjDeBr x)
+--                       && dp_f == boundDepthObjDeBr f
+--                       && dp_fPlus1 == dp_f + 1
+--                       && not (objDeBrBoundVarInside f dp_f)
+--                       && not (objDeBrBoundVarInside f (dp_f+1))
+--                       && not (objDeBrBoundVarInside f d)
+--                       && not (objDeBrBoundVarInside x d)
+--                   then
+--                       FuncApp (toSubexpParseTree f dict) (toSubexpParseTree x dict)
+--                   else
+--                       Binding  "ε" (sbParseTreeNormalize pDepth pTree)  
+--                           where
+--                            pDepth = boundDepthPropDeBr p
+--                            pTree = toSubexpParseTree p dict
+--                _ -> Binding "ε" (sbParseTreeNormalize pDepth pTree) 
+--                          where
+--                            pDepth = boundDepthPropDeBr p
+--                            pTree = toSubexpParseTree p dict
+--        Bound i -> ParseTreeBoundVar i
+--        V i -> ParseTreeFreeVar i
+--        X i -> ParseTreeX i
+--        Pair a b -> Tuple [toSubexpParseTree a dict,toSubexpParseTree b dict]
+        
 instance SubexpDeBr ObjDeBr where
-    toSubexpParseTree :: ObjDeBr -> Map PropDeBr [Int]  -> SubexpParseTree
+    toSubexpParseTree :: ObjDeBr -> Map PropDeBr [Int] -> SubexpParseTree
     toSubexpParseTree obj dict = case obj of
         Integ i -> ParseTreeInt i
         Constant c -> ParseTreeConst c
-        Hilbert p -> case Data.Map.lookup (Exists p) dict of
-            Just idxs -> HilbertShort idxs
-            Nothing -> case p of
-                Forall (Bound a `In` Bound b :<->: q :&&: Bound c `In` t) -> 
-                    if a == pDepth - 1 
-                        && c == a 
-                        && b == pDepth 
-                        && not (propDeBrBoundVarInside q b) 
-                        && not (objDeBrBoundVarInside t a) 
-                        && not (objDeBrBoundVarInside t b) then
-                               Builder tTree (sbParseTreeNormalize (pDepth-1) qTree)
-                        -- For this to be a proper usage, q cannot bind b, and t cannot
-                        -- bind a or b.
-                        -- so we have to check for this before using the builder notation.
-                        -- If either of these two conditions are not met and we used
-                        -- the builder notation, then we would would lose
-                        -- quantifiers that are quantifying over b or a.
-                    else 
-                        Binding "ε" (sbParseTreeNormalize pDepth pTree) 
-                          where
-                            pDepth = boundDepthPropDeBr p
-                            pTree = toSubexpParseTree p dict
-                            tTree = toSubexpParseTree t dict
-                            qTree = toSubexpParseTree q dict
-                _ -> Binding "ε" (sbParseTreeNormalize pDepth pTree) 
-                          where
-                            pDepth = boundDepthPropDeBr p
-                            pTree = toSubexpParseTree p dict
         Bound i -> ParseTreeBoundVar i
         V i -> ParseTreeFreeVar i
         X i -> ParseTreeX i
-        Pair a b -> Tuple [toSubexpParseTree a dict,toSubexpParseTree b dict]
-        
+        Pair a b -> Tuple [toSubexpParseTree a dict, toSubexpParseTree b dict]
 
+        Hilbert p ->
+            -- First, check if Exists p is proven, for the ε[line] shorthand
+            case Data.Map.lookup (Exists p) dict of
+                Just idxs -> HilbertShort idxs -- Use ε[line] shorthand
+
+                -- If Exists p is NOT proven, THEN check structure of p for other shorthands
+                Nothing ->
+                    case p of
+                        -- Pattern 1: Function Application (User's detailed version)
+                        Pair x (Bound d) `In` (Hilbert (Exists ( f :==: Pair (Bound dp1) (Bound dp0) ))) ->
+                            if    d == max (boundDepthObjDeBr f + 2) (boundDepthObjDeBr x)
+                               && dp0 == boundDepthObjDeBr f
+                               && dp1 == dp0 + 1
+                               && not (objDeBrBoundVarInside f dp0)
+                               && not (objDeBrBoundVarInside f dp1)
+                               && not (objDeBrBoundVarInside f d)
+                               && not (objDeBrBoundVarInside x d)
+                            then
+                               FuncApp (toSubexpParseTree f dict) (toSubexpParseTree x dict)
+                            else
+                               renderDefaultHilbert p -- Use local helper
+
+                        -- Pattern 2: Set Builder
+                        Forall (Bound a `In` Bound b :<->: q :&&: Bound c `In` t) ->
+                             let pDepth = boundDepthPropDeBr p
+                                 qTree = toSubexpParseTree q dict
+                             in if a == pDepth - 1
+                                   && c == a
+                                   && b == pDepth
+                                   && not (propDeBrBoundVarInside q b)
+                                   && not (objDeBrBoundVarInside t a)
+                                   && not (objDeBrBoundVarInside t b) then
+                                       Builder (toSubexpParseTree t dict) (sbParseTreeNormalize (pDepth-1) qTree)
+                                else
+                                   renderDefaultHilbert p -- Use local helper
+
+                        -- Default for other Hilbert structures
+                        _ -> renderDefaultHilbert p -- Use local helper
+      where
+        -- Define renderDefaultHilbert locally within toSubexpParseTree
+        -- It can capture 'dict' from the outer scope.
+        renderDefaultHilbert :: PropDeBr -> SubexpParseTree
+        renderDefaultHilbert currentP = Binding "ε" (sbParseTreeNormalize pDepth pTree)
+            where
+                pDepth = boundDepthPropDeBr currentP
+                pTree = toSubexpParseTree currentP dict -- Use 'dict' from outer scope
 
 boundDepthObjDeBr :: ObjDeBr -> Int
 boundDepthObjDeBr obj = case obj of
@@ -263,10 +339,32 @@ boundDepthPropDeBr p = case p of
 instance SubexpDeBr PropDeBr where
   toSubexpParseTree :: PropDeBr -> Map PropDeBr [Int] -> SubexpParseTree
   toSubexpParseTree prop dict = case prop of
+
       Neg q -> case q of
-        o1 :==: o2 -> BinaryOp "≠" (toSubexpParseTree o1 dict) (toSubexpParseTree o2 dict)  
-        In o1 o2 -> BinaryOp "∉" (toSubexpParseTree o1 dict) (toSubexpParseTree o2 dict)      
+        -- Existing case for Inequality (≠)
+        o1 :==: o2 -> BinaryOp "≠" (toSubexpParseTree o1 dict) (toSubexpParseTree o2 dict)
+
+        -- Existing case for Not Member (∉)
+        In o1 o2 -> BinaryOp "∉" (toSubexpParseTree o1 dict) (toSubexpParseTree o2 dict)
+
+        -- >>> New case for Not Subset (⊈) <<<
+        -- Check if q matches the structure Forall(Bound idx `In` a :->: Bound idx `In` b)
+        Forall (Bound idx1 `In` a1 :->: Bound idx2 `In` a2) ->
+            -- Check if it matches the specific structure generated by your 'subset' helper
+            if idx1 == max (boundDepthObjDeBr a1) (boundDepthObjDeBr a2) -- Corrected depth check
+               && idx2 == idx1             -- Index consistency check
+               && not (objDeBrBoundVarInside a1 idx1) -- Precondition check on a1
+               && not (objDeBrBoundVarInside a2 idx1) -- Precondition check on a2
+            then
+               -- If it matches, render using the ⊈ symbol
+               BinaryOp "⊈" (toSubexpParseTree a1 dict) (toSubexpParseTree a2 dict)
+            else
+               -- If it's a Forall but doesn't match the subset conditions, render as ¬(∀...)
+               UnaryOp "¬" (toSubexpParseTree q dict) -- q is the Forall(...) expression
+
+        -- Fallback for any other Neg expression (e.g., ¬(A ∧ B))
         _ -> UnaryOp "¬" (toSubexpParseTree q dict)
+
       (:&&:) a b -> andBuild a b 
         
         
@@ -296,23 +394,6 @@ instance SubexpDeBr PropDeBr where
                  else
                     andBuildDefault (Forall (Bound idx1 `In` a1 :->: Bound idx2 `In` a2))
                          (Neg (a3 :==: a4))
-        andBuild (Forall (Bound idx1 `In` a1 :->: Bound idx2 `In` a2))
-                        (Exists (Bound idx3 `In` a3 :&&:
-                            Neg (Bound idx4 `In` a4)))=
-                 if idx1 == max (boundDepthObjDeBr a1) (boundDepthObjDeBr a2)
-                    && idx2 == idx1
-                    && idx1 == idx3
-                    && idx1 == idx4
-                    && a2 == a3
-                    && a1 == a4
-                    && not (objDeBrBoundVarInside a1 idx1) 
-                    && not (objDeBrBoundVarInside a2 idx1)
-                 then
-                    BinaryOp "⊂" (toSubexpParseTree a1 dict) (toSubexpParseTree a2 dict)
-                 else
-                    andBuildDefault (Forall (Bound idx1 `In` a1 :->: Bound idx2 `In` a2))
-                        (Exists (Bound idx3 `In` a3 :&&:
-                            Neg (Bound idx4 `In` a4)))
         andBuild a b = andBuildDefault a b                    
         andBuildDefault a b = BinaryOp "∧" (toSubexpParseTree a dict) (toSubexpParseTree b dict)
         
@@ -371,6 +452,7 @@ showSubexpParseTree sub = case sub of
               ParseTreeX idx -> showSubexpParseTree sub1
               ParseTreeInt i -> showSubexpParseTree sub1
               Builder {} -> showSubexpParseTree sub1
+              FuncApp {} -> showSubexpParseTree sub1
     BinaryOp opSymb sub1 sub2 ->
            case sub1 of
               UnaryOp _ _ -> showSubexpParseTree sub1
@@ -396,6 +478,7 @@ showSubexpParseTree sub = case sub of
               ParseTreeX idx -> showSubexpParseTree sub1
               ParseTreeInt i -> showSubexpParseTree sub1
               Builder {} -> showSubexpParseTree sub1
+              FuncApp {} -> showSubexpParseTree sub1
           <> " " <> opSymb <> " "
           <> case sub2 of
                UnaryOp _ _-> showSubexpParseTree sub2
@@ -420,6 +503,7 @@ showSubexpParseTree sub = case sub of
                ParseTreeX idx -> showSubexpParseTree sub2
                ParseTreeInt i -> showSubexpParseTree sub2
                Builder {} -> showSubexpParseTree sub2
+               FuncApp {} -> showSubexpParseTree sub2
     Binding quant sub1 -> quant <> "𝑥" <> showIndexAsSubscript idx <> "(" <> showSubexpParseTree sub1 <> ")"
         where
             idx = subexpParseTreeBoundDepth sub1 
@@ -442,6 +526,16 @@ showSubexpParseTree sub = case sub of
                              <> "}"
           where
             idx = subexpParseTreeBoundDepth sub2
+    FuncApp f x -> case f of
+        ParseTreeConst c -> showSubexpParseTree f <> "(" <> showSubexpParseTree x <> ")"
+        ParseTreeX idx -> showSubexpParseTree f <> "(" <> showSubexpParseTree x <> ")"
+        Tuple _ -> showSubexpParseTree f <> "(" <> showSubexpParseTree x <> ")"
+        ParseTreeFreeVar idx -> showSubexpParseTree f <> "(" <> showSubexpParseTree x <> ")"
+        ParseTreeBoundVar idx -> showSubexpParseTree f <> "(" <> showSubexpParseTree x <> ")"
+        HilbertShort _ -> showSubexpParseTree f <> "(" <> showSubexpParseTree x <> ")"
+        Builder _ _ -> showSubexpParseTree f <> "(" <> showSubexpParseTree x <> ")"
+        _ -> "(" <> showSubexpParseTree f <> ")" <> "(" <> showSubexpParseTree x <> ")"
+
   where
     showHierarchalIdxAsSubscript :: [Int] -> Text
     showHierarchalIdxAsSubscript idxs = Data.Text.concat (intersperse "." (Prelude.map showIndexAsSubscript idxs))
@@ -669,17 +763,17 @@ instance PL.LogicSent PropDeBr () where
 
 
 
-objDeBrX0Inside :: ObjDeBr -> Bool
-objDeBrX0Inside obj =
+objDeBrXInside :: Int -> ObjDeBr -> Bool
+objDeBrXInside subidx obj =
     case obj of
         Integ num -> False
         Constant const -> False
-        Hilbert p -> propDeBrX0Inside p
+        Hilbert p -> propDeBrXInside subidx p
         Bound i -> False
         V i -> False
-        X idx | idx == 0 -> True
+        X idx | idx == subidx -> True
               | otherwise -> False
-        Pair a b -> objDeBrX0Inside a|| objDeBrX0Inside b
+        Pair a b -> objDeBrXInside subidx a|| objDeBrXInside subidx b
 
 
 propDeBrBoundVarInside :: PropDeBr -> Int -> Bool
@@ -696,28 +790,28 @@ propDeBrBoundVarInside prop idx = case prop of
     (:>=:) o1 o2 -> objDeBrBoundVarInside o1 idx || objDeBrBoundVarInside o2 idx
     false -> False
 
-propDeBrX0Inside :: PropDeBr -> Bool
-propDeBrX0Inside prop = case prop of
-    Neg p -> propDeBrX0Inside p
-    (:&&:) p1 p2 -> propDeBrX0Inside p1 || propDeBrX0Inside p2
-    (:||:) p1 p2 -> propDeBrX0Inside p1 || propDeBrX0Inside p2
-    (:->:) p1 p2 -> propDeBrX0Inside p1 || propDeBrX0Inside p2
-    (:<->:) p1 p2 -> propDeBrX0Inside p1 || propDeBrX0Inside p2
-    (:==:) o1 o2 -> objDeBrX0Inside o1  || objDeBrX0Inside o2
-    In o1 o2 -> objDeBrX0Inside o1 || objDeBrX0Inside o2
-    Forall p -> propDeBrX0Inside p
-    Exists p -> propDeBrX0Inside p
-    (:>=:) o1 o2 -> objDeBrX0Inside o1 || objDeBrX0Inside o2
+propDeBrXInside :: Int -> PropDeBr -> Bool
+propDeBrXInside subidx prop = case prop of
+    Neg p -> propDeBrXInside subidx p
+    (:&&:) p1 p2 -> propDeBrXInside subidx p1 || propDeBrXInside subidx p2
+    (:||:) p1 p2 -> propDeBrXInside subidx p1 || propDeBrXInside subidx p2
+    (:->:) p1 p2 -> propDeBrXInside subidx p1 || propDeBrXInside subidx p2
+    (:<->:) p1 p2 -> propDeBrXInside subidx p1 || propDeBrXInside subidx p2
+    (:==:) o1 o2 -> objDeBrXInside subidx o1  || objDeBrXInside subidx o2
+    In o1 o2 -> objDeBrXInside subidx o1 || objDeBrXInside subidx o2
+    Forall p -> propDeBrXInside subidx p
+    Exists p -> propDeBrXInside subidx p
+    (:>=:) o1 o2 -> objDeBrXInside subidx o1 || objDeBrXInside subidx o2
     false -> False
 
 
 
 
-objDeBrSubX0 :: Int -> ObjDeBr -> ObjDeBr -> ObjDeBr
-objDeBrSubX0 boundvarOffsetThreshold obj t = case obj of
+objDeBrSubX' :: Int -> Int -> ObjDeBr -> ObjDeBr -> ObjDeBr
+objDeBrSubX' subidx boundvarOffsetThreshold obj t = case obj of
     Integ num -> Integ num
     Constant const -> Constant const
-    Hilbert p -> Hilbert (propDeBrSubX0 (calcBVOThreshold p) p t)                            
+    Hilbert p -> Hilbert (propDeBrSubX' subidx (calcBVOThreshold p) p t)                            
     Bound idx
                 | idx >= boundvarOffsetThreshold -> Bound (idx + termDepth)
                 | otherwise -> Bound idx
@@ -727,12 +821,12 @@ objDeBrSubX0 boundvarOffsetThreshold obj t = case obj of
 
     V idx -> V idx
     X idx 
-        | idx == 0 -> t
+        | idx == subidx -> t
         | otherwise -> X idx
-    Pair o1 o2 -> Pair (objDeBrSubX0 boundvarOffsetThreshold o1 t) (objDeBrSubX0 boundvarOffsetThreshold o2 t)
+    Pair o1 o2 -> Pair (objDeBrSubX' subidx boundvarOffsetThreshold o1 t) (objDeBrSubX' subidx boundvarOffsetThreshold o2 t)
   where
         termDepth = boundDepthObjDeBr t
-        calcBVOThreshold p = if propDeBrX0Inside p then
+        calcBVOThreshold p = if propDeBrXInside subidx p then
                                   boundDepthPropDeBr p
                              else boundvarOffsetThreshold
 
@@ -741,23 +835,80 @@ objDeBrSubX0 boundvarOffsetThreshold obj t = case obj of
 
 
 
-propDeBrSubX0 :: Int -> PropDeBr -> ObjDeBr -> PropDeBr
-propDeBrSubX0 boundvarOffsetThreshold prop t = case prop of
-    Neg p -> Neg (propDeBrSubX0 boundvarOffsetThreshold p t)
-    (:&&:) p1 p2 ->  (:&&:) (propDeBrSubX0 boundvarOffsetThreshold p1 t) (propDeBrSubX0 boundvarOffsetThreshold p2 t) 
-    (:||:) p1 p2 ->  (:||:) (propDeBrSubX0 boundvarOffsetThreshold p1 t) (propDeBrSubX0 boundvarOffsetThreshold p2 t) 
-    (:->:) p1 p2 ->  (:->:) (propDeBrSubX0 boundvarOffsetThreshold p1 t) (propDeBrSubX0 boundvarOffsetThreshold p2 t)
-    (:<->:) p1 p2 ->  (:<->:) (propDeBrSubX0 boundvarOffsetThreshold p1 t) (propDeBrSubX0 boundvarOffsetThreshold p2 t)
-    (:==:) o1 o2 -> (:==:) (objDeBrSubX0 boundvarOffsetThreshold o1 t) (objDeBrSubX0 boundvarOffsetThreshold o2 t)   
-    In o1 o2 -> In (objDeBrSubX0 boundvarOffsetThreshold o1 t) (objDeBrSubX0 boundvarOffsetThreshold o2 t)  
-    Forall p -> Forall (propDeBrSubX0 (calcBVOThreshold p) p t)
-    Exists p -> Exists (propDeBrSubX0 (calcBVOThreshold p) p t)
-    (:>=:) o1 o2 -> (:>=:) (objDeBrSubX0 boundvarOffsetThreshold o1 t) (objDeBrSubX0 boundvarOffsetThreshold o2 t)
+propDeBrSubX' :: Int -> Int -> PropDeBr -> ObjDeBr -> PropDeBr
+propDeBrSubX' subidx boundvarOffsetThreshold prop t = case prop of
+    Neg p -> Neg (propDeBrSubX' subidx boundvarOffsetThreshold p t)
+    (:&&:) p1 p2 ->  (:&&:) (propDeBrSubX' subidx boundvarOffsetThreshold p1 t) (propDeBrSubX' subidx boundvarOffsetThreshold p2 t) 
+    (:||:) p1 p2 ->  (:||:) (propDeBrSubX' subidx boundvarOffsetThreshold p1 t) (propDeBrSubX' subidx boundvarOffsetThreshold p2 t) 
+    (:->:) p1 p2 ->  (:->:) (propDeBrSubX' subidx boundvarOffsetThreshold p1 t) (propDeBrSubX' subidx boundvarOffsetThreshold p2 t)
+    (:<->:) p1 p2 ->  (:<->:) (propDeBrSubX' subidx boundvarOffsetThreshold p1 t) (propDeBrSubX' subidx boundvarOffsetThreshold p2 t)
+    (:==:) o1 o2 -> (:==:) (objDeBrSubX' subidx boundvarOffsetThreshold o1 t) (objDeBrSubX' subidx boundvarOffsetThreshold o2 t)   
+    In o1 o2 -> In (objDeBrSubX' subidx boundvarOffsetThreshold o1 t) (objDeBrSubX' subidx boundvarOffsetThreshold o2 t)  
+    Forall p -> Forall (propDeBrSubX' subidx (calcBVOThreshold p) p t)
+    Exists p -> Exists (propDeBrSubX' subidx (calcBVOThreshold p) p t)
+    (:>=:) o1 o2 -> (:>=:) (objDeBrSubX' subidx boundvarOffsetThreshold o1 t) (objDeBrSubX' subidx boundvarOffsetThreshold o2 t)
     F -> F
   where
-          calcBVOThreshold p = if propDeBrX0Inside p then
+          calcBVOThreshold p = if propDeBrXInside subidx p then
                                       boundDepthPropDeBr p
                                else boundvarOffsetThreshold 
+
+
+objDeBrSubX :: Int -> ObjDeBr -> ObjDeBr -> ObjDeBr
+objDeBrSubX subidx obj t = objDeBrSubX' subidx calcBVOThreshold obj t
+   where 
+                 boundDepth = boundDepthObjDeBr obj
+                 calcBVOThreshold = if objDeBrBoundVarInside obj boundDepth then
+                                      boundDepth
+                                  else 
+                                      boundDepth + 1
+-- | Applies a list of substitutions [(Index, Term)] to an ObjDeBr term.
+objDeBrSubXs :: [(Int, ObjDeBr)]  -- List of (Index to replace, Substitution Term) pairs
+              -> ObjDeBr        -- Initial proposition template
+              -> ObjDeBr        -- Resulting proposition after all substitutions
+objDeBrSubXs substitutions initialObj =
+    -- Use foldl' to iteratively apply each substitution from the list
+    foldl' applySub initialObj substitutions
+  where
+    -- Helper function for the fold: applies one substitution step
+    applySub :: ObjDeBr          -- The object from the previous step
+             -> (Int, ObjDeBr)    -- The current substitution (idx, term)
+             -> ObjDeBr          -- The object after this substitution
+    applySub currentObj (idx, term) =
+        -- Call propDeBrSubX to substitute X idx with term in currentProp
+        objDeBrSubX idx currentObj term
+
+
+
+
+propDeBrSubX :: Int -> PropDeBr -> ObjDeBr -> PropDeBr
+propDeBrSubX subidx prop t = propDeBrSubX' subidx calcBVOThreshold prop t
+   where 
+                 boundDepth = boundDepthPropDeBr prop
+                 template = propDeBrSubBoundVarToX0 boundDepth prop 
+                 calcBVOThreshold = if propDeBrBoundVarInside prop boundDepth then
+                                      boundDepth
+                                  else 
+                                      boundDepth + 1
+
+
+
+-- | Applies a list of substitutions [(Index, Term)] to a PropDeBr term.
+propDeBrSubXs :: [(Int, ObjDeBr)]  -- List of (Index to replace, Substitution Term) pairs
+              -> PropDeBr        -- Initial proposition template
+              -> PropDeBr        -- Resulting proposition after all substitutions
+propDeBrSubXs substitutions initialProp =
+    -- Use foldl' to iteratively apply each substitution from the list
+    foldl' applySub initialProp substitutions
+  where
+    -- Helper function for the fold: applies one substitution step
+    applySub :: PropDeBr          -- The proposition from the previous step
+             -> (Int, ObjDeBr)    -- The current substitution (idx, term)
+             -> PropDeBr          -- The proposition after this substitution
+    applySub currentProp (idx, term) =
+        -- Call propDeBrSubX to substitute X idx with term in currentProp
+        propDeBrSubX idx currentProp term
+
 
 
 objDeBrApplyUG :: ObjDeBr -> Int -> Int -> ObjDeBr
@@ -792,14 +943,11 @@ propDeBrApplyUG prop freevarIdx boundvarIdx =
 
 
 boundExpToFunc :: PropDeBr -> ObjDeBr -> PropDeBr
-boundExpToFunc p = propDeBrSubX0 calcBVOThreshold template
+boundExpToFunc p = propDeBrSubX 0 template
            where 
                  boundDepth = boundDepthPropDeBr p
                  template = propDeBrSubBoundVarToX0 boundDepth p 
-                 calcBVOThreshold = if propDeBrBoundVarInside p boundDepth then
-                                      boundDepth
-                                  else 
-                                      boundDepth + 1
+
 
 
 instance PREDL.LogicSent PropDeBr ObjDeBr ()  where
@@ -847,12 +995,8 @@ instance PREDL.LogicSent PropDeBr ObjDeBr ()  where
     (.==.) :: ObjDeBr -> ObjDeBr -> PropDeBr
     (.==.) = (:==:)
     substX0 :: PropDeBr -> ObjDeBr -> PropDeBr
-    substX0 p = propDeBrSubX0 (calcBVOThreshold p) p
-           where boundVarIdx = boundDepthPropDeBr
-                 calcBVOThreshold p = if propDeBrX0Inside p then
-                                      boundDepthPropDeBr p
-                                  else 
-                                      boundDepthPropDeBr p + 1
+    substX0 = propDeBrSubX 0
+
 
     
 
@@ -1197,8 +1341,6 @@ isPair t = eX 0 $ eX 1 $ t :==: Pair (X 0) (X 1)
 isRelation :: ObjDeBr -> PropDeBr
 isRelation s = aX 0 $ X 0 `In` s :->: isPair (X 0)
 
-relDomain :: ObjDeBr -> ObjDeBr
-relDomain s = hX 0 $ aX 1 (aX 2 $ Pair (X 1) (X 2) `In` s :->: X 1 `In` X 0) 
 
 isFunction :: ObjDeBr -> PropDeBr
 isFunction t = isRelation t :&&: 
@@ -1229,26 +1371,91 @@ builderX :: Int -> ObjDeBr -> PropDeBr -> ObjDeBr
                        
                           
 builderX idx t p = Hilbert $ aX idx $ X idx `In` Bound hilbertIdx :<->: p :&&: X idx `In` t
-     where hilbertIdx = (max (boundDepthObjDeBr t) (boundDepthPropDeBr p)) + 1
+     where hilbertIdx = max (boundDepthObjDeBr t) (boundDepthPropDeBr p) + 1
 
-subset :: ObjDeBr -> ObjDeBr -> PropDeBr
+--subset :: ObjDeBr -> ObjDeBr -> PropDeBr
 
 -- For this to be a proper usage,
--- neither a or b can bind the outer quantifier.
+-- neither a or b can bind the outer quantifier (i.e. they cannot bind idx).
 -- It is not an actual programmatic errof if this condition is not met,
 -- but the result won't be representable using subset notation,
 -- and when corresponding output is shown, subset notation
 -- will NOT be used. Essentially improper usage results in a
 -- GIGO situation.
 
-subset a b = Forall (Bound idx `In` a :->: Bound idx `In` b)
-    where idx = max (boundDepthObjDeBr a) (boundDepthObjDeBr b)
+--subset a b = Forall (Bound idx `In` a :->: Bound idx `In` b)
+--    where idx = max (boundDepthObjDeBr a) (boundDepthObjDeBr b)
+
+
+subset :: ObjDeBr -> ObjDeBr -> PropDeBr
+subset a b = aX 2 (propDeBrSubX 1 (propDeBrSubX 0 (X 2 `In` X 1 :->: X 2 `In` X 0) b) a)
 
 
 strictSubset :: ObjDeBr -> ObjDeBr -> PropDeBr
-strictSubset a b = (subset a b) :&&: (Neg (a :==: b))
+strictSubset a b = subset a b :&&: Neg (a :==: b)
+
+notSubset :: ObjDeBr -> ObjDeBr -> PropDeBr
+notSubset a b = Neg (subset a b)
+
+-- The following function projects the first element of a pair.
+-- For this representation to work as intended within this system's indexing convention,
+-- 'pair' should not contain bound variable indicies d and d+1.
+-- Violating this precondition might lead to unintended variable capture or meaning (GIGO).
+
+-- pairFirst' :: ObjDeBr -> ObjDeBr
+--pairFirst' pair = Hilbert (Exists (pair :==: Pair (Bound (d + 1)) (Bound d)))
+--    where d = boundDepthObjDeBr pair
 
 
+pairFirst :: ObjDeBr -> ObjDeBr
+pairFirst pair = hX 2 (eX 1 (propDeBrSubX 0 (X 0 :==: Pair (X 2) (X 1)) pair))
+
+
+relDomain :: ObjDeBr -> ObjDeBr
+relDomain s = Hilbert $ Forall
+                       (    (Bound (d+1) `In` Bound (d+2))  -- x ∈ D
+                       :<->:                             -- iff
+                            Exists (Pair (Bound (d+1)) (Bound d) `In` s) -- exists y such that <x, y> in s
+                       )
+   where
+    -- Calculate base depth based on free vars/bindings within 's'
+    d = boundDepthObjDeBr s
+    -- Note: Assumes 's' itself doesn't contain indices d, d+1, d+2
+    -- in a way that clashes, similar to preconditions for subset.
+    -- Indices used:
+    -- d   represents 'y' bound by Exists
+    -- d+1 represents 'x' bound by Forall
+    -- d+2 represents 'D' (the domain set) bound by Hilbert
+
+--relDomain' :: ObjDeBr -> ObjDeBr
+--relDomain s = 
+
+
+-- let us assume that f is a pair
+-- of form Pair(t,z) where t is a function in set theory
+-- (a set of pairs serving as the function) as conventionally
+-- understood, and z is the co-domain, being a non-strict
+-- superset of the image.
+-- Note that this is just a helper function. It doesn't test
+-- that f really is a function. It also depends on pairFirst working correctly.
+--
+-- >> Precondition Note for Indexing <<
+-- This helper calculates d = max (boundDepthObjDeBr f + 2) (boundDepthObjDeBr x).
+-- It uses `Bound d` for the 'y' variable (the function result y=f(x))
+-- bound by the `Hilbert` operator.
+-- For this representation to work reliably within this system's indexing convention:
+-- 1. The term `f` should NOT already contain free occurrences of `Bound dp_f` or `Bound (dp_f + 1)`,
+--    where `dp_f = boundDepthObjDeBr f` (these indices are used internally by `pairFirst f`).
+-- 2. Neither the term `f` nor the term `x` should contain free occurrences of `Bound d`,
+--    where `d` is the calculated index `max (boundDepthObjDeBr f + 2) (boundDepthObjDeBr x)`.
+-- Violating these preconditions might lead to unintended variable capture or meaning (GIGO).
+--
+(.@.) :: ObjDeBr -> ObjDeBr -> ObjDeBr
+f .@. x = Hilbert ( Pair x (Bound d) `In` pairFirst f )
+           -- Calculate index 'd' for 'y' (bound by Hilbert) using the specific rule for this helper
+           where d = max (boundDepthObjDeBr f + 2) (boundDepthObjDeBr x)
+           -- Here Hilbert binds 'y', represented by 'Bound d' inside the property
+           -- The property is P(y) = <x, y> ∈ f_graph (where f_graph = pairFirst f).
 
 
 instance ZFC.LogicSent PropDeBr ObjDeBr where

@@ -140,7 +140,7 @@ testMoreComplexNesting = do
     -- Add as fake prop and print
     fakePropM s3
     s3Show <- showPropM s3
-    remarkM $ "Input: aX 2 ( eX 1 ( eXBang 0 ( (X 2 :==: X 1) :&&: (X 1 :==: X 0) ) ) )"
+    remarkM "Input: aX 2 ( eX 1 ( eXBang 0 ( (X 2 :==: X 1) :&&: (X 1 :==: X 0) ) ) )"
     remarkM $ "Printed: " <> s3Show   
     
     remarkM "--- More Complex Nesting Test Complete ---"
@@ -156,7 +156,7 @@ testNonSequentialIndices = do
     -- Add as fake prop and print
     fakePropM s4
     s4Show <- showPropM s4
-    remarkM $ "Input: aX 5 ( eXBang 2 ( aX 7 ( (X 5 :==: X 2) :||: (X 2 :==: X 7) ) ) )"
+    remarkM "Input: aX 5 ( eXBang 2 ( aX 7 ( (X 5 :==: X 2) :||: (X 2 :==: X 7) ) ) )"
     remarkM $ "Printed: " <> s4Show
 
     remarkM "--- Non-Sequential Indices Test Complete ---"
@@ -173,7 +173,7 @@ testSetBuilder = do
     -- Define the source set N
     let setN = Constant "N"
     -- Define the property P(x) as x = x.
-    let propertyP = (X 0 :==: X 0)
+    let propertyP = X 0 :==: X 0
 
     -- Construct the term representing { x ∈ N | x = x }
     let setBuilt = builderX 0 setN propertyP
@@ -207,12 +207,12 @@ testComplexSetBuilder = do
           aX 0 -- Binds y as X 0
              ( (X 0 `In` setM) -- y in M
                :->:            -- implies
-               (eX 2          -- exists z as X 2
+               eX 2          -- exists z as X 2
                   ( (X 2 `In` setP) -- z in P
                     :&&:            -- and
                     (Pair (X 1) (X 0) :==: X 2) -- <x, y> = z
                   )
-               )
+               
              )
 
     -- Construct the term representing the set using index 1 for 'x'
@@ -228,9 +228,9 @@ testComplexSetBuilder = do
     setBuiltShow <- showObjM setBuiltComplex -- Use showObjM
 
     -- Use actual Unicode characters in the remark strings
-    remarkM $ "Input Term (Conceptual): { x ∈ N | ∀y (y ∈ M → ∃z (z ∈ P ∧ <x, y> = z)) }"
+    remarkM "Input Term (Conceptual): { x ∈ N | ∀y (y ∈ M → ∃z (z ∈ P ∧ <x, y> = z)) }"
     remarkM $ "Constructed Term (via builderX): " <> setBuiltShow
-    remarkM $ "----> Expected future output: {𝑥₁ ∈ N | ∀𝑥₀((𝑥₀ ∈ M) → ∃𝑥₂( (𝑥₂ ∈ P) ∧ (<𝑥₁, 𝑥₀> = 𝑥₂)))}"
+    remarkM "----> Expected future output: {𝑥₁ ∈ N | ∀𝑥₀((𝑥₀ ∈ M) → ∃𝑥₂( (𝑥₂ ∈ P) ∧ (<𝑥₁, 𝑥₀> = 𝑥₂)))}"
     remarkM "--- Complex Set Builder Test Complete ---"
     return ()
 
@@ -256,7 +256,7 @@ testComplexSubsetNotation = do
     (addedProp1, _) <- fakePropM subPropAB
     printedOutput1 <- showPropM addedProp1
     remarkM $ "Actual printed output (Test 1): " <> printedOutput1
-    remarkM $ "(Should be A ⊆ B)"
+    remarkM "(Should be A ⊆ B)"
 
     -- 4. Test 2: Subset notation within a conjunction: (A ⊆ B) ∧ (B ⊆ C)
     remarkM "Test 2: Subset notation within conjunction (A ⊆ B) ∧ (B ⊆ C)"
@@ -267,14 +267,14 @@ testComplexSubsetNotation = do
     printedOutputConj <- showPropM addedConjProp
     remarkM $ "Actual printed output (Test 2): " <> printedOutputConj
     -- Note: Depending on operator precedence for ∧ and ⊆, parentheses might appear
-    remarkM $ "(Should look like (A ⊆ B) ∧ (B ⊆ C) or similar)"
+    remarkM "(Should look like (A ⊆ B) ∧ (B ⊆ C) or similar)"
 
     -- 5. Test 3: Using a set builder expression {x ∈ N | x ≥ 5} ⊆ N
     remarkM "Test 3: Checking print for {x ∈ N | x ≥ 5} ⊆ N"
     -- Ensure N constant is added (done above)
     let five = Integ 5
     -- Define the property P(x) as x >= 5, using X 0 for the bound variable 'x'
-    let propertyP = (X 0 :>=: five)
+    let propertyP = X 0 :>=: five
     -- Construct the set {x ∈ N | x ≥ 5} using builderX with index 0
     let setBuilderA = builderX 0 setN propertyP -- Defined in Langs/BasicUntyped.hs
     -- Create the subset proposition: {x ∈ N | x ≥ 5} ⊆ N
@@ -283,80 +283,191 @@ testComplexSubsetNotation = do
     (addedPropBuilder, _) <- fakePropM subPropBuilder
     printedOutputBuilder <- showPropM addedPropBuilder
     remarkM $ "Actual printed output (Test 3): " <> printedOutputBuilder
-    remarkM $ "(Should look like {𝑥₀ ∈ N | 𝑥₀ ≥ 5} ⊆ N or similar)"
+    remarkM "(Should look like {𝑥₀ ∈ N | 𝑥₀ ≥ 5} ⊆ N or similar)"
 
     remarkM "--- Complex Subset Notation Test Complete ---"
     return ()
-
 
 testStrictSubsetNotation :: ProofGenTStd () [PredRuleDeBr] PropDeBr Text IO ()
 testStrictSubsetNotation = do
     remarkM "--- Testing Strict Subset Notation (⊂) ---"
 
-    -- Define set constants
+    -- 1. Define constants
     let setA = Constant "A"
     let setB = Constant "B"
+    let setN = Constant "N"
 
-    -- Add constants to proof state
+    -- 2. Add constants to proof state
     fakeConstM "A" ()
     fakeConstM "B" ()
+    fakeConstM "N" ()
 
-    -- Test 1: Basic strict subset A ⊂ B (using the helper function)
-    remarkM "Test 1: Basic strict subset A ⊂ B (using helper)"
-    -- This helper creates: (subset setA setB) :&&: Neg (setA :==: setB)
+    -- 3. Test 1: Basic strict subset A ⊂ B
+    remarkM "Test 1: Basic strict subset A ⊂ B"
+    -- This assumes strictSubset a b = subset a b :&&: Neg (a :==: b)
     let strictSubProp1 = strictSubset setA setB
-
     (addedProp1, _) <- fakePropM strictSubProp1
     printedOutput1 <- showPropM addedProp1
     remarkM $ "Actual printed output (Test 1): " <> printedOutput1
-    remarkM $ "(Should be A ⊂ B)"
+    remarkM "(Should be A ⊂ B)"
 
-    -- Test 2: Test fallback for the Definition 2 pattern when precondition fails
-    remarkM "Test 2: Testing fallback for Def 2 structure (should NOT use ⊂)"
-    -- Create structure: (subset H H) ∧ (Exists y (y ∈ Bound 1 ∧ y ∉ H))
-    -- where H = Hilbert (Bound 0 :==: C).
-    -- This should fail the 'not (termB contains Bound 1)' check in 'andBuild'.
-    fakeConstM "C" ()
-    let setH = Hilbert (Bound 0 :==: Constant "C") -- max depth 1
-    let termBound1 = Bound 1                     -- This IS Bound 1
+    -- 4. Test 2: Strict subset with set builder {x ∈ N | x ≥ 5} ⊂ N
+    remarkM "Test 2: Strict subset involving a Set Builder expression"
+    let five = Integ 5
+    let propertyP = X 0 :>=: five
+    let setBuilderA = builderX 0 setN propertyP -- {x ∈ N | x ≥ 5}
+    -- Create the strict subset proposition: {x ∈ N | x ≥ 5} ⊂ N
+    let strictSubPropBuilder = strictSubset setBuilderA setN
+    (addedPropBuilder, _) <- fakePropM strictSubPropBuilder
+    printedOutputBuilder <- showPropM addedPropBuilder
+    remarkM $ "Actual printed output (Test 2): " <> printedOutputBuilder
+    remarkM "(Should look like {𝑥₀ ∈ N | 𝑥₀ ≥ 5} ⊂ N or similar)"
 
-    -- Manually construct subset H H: Forall (Bound 1 In H :->: Bound 1 In H)
-    let idx_sub = max (boundDepthObjDeBr setH) (boundDepthObjDeBr setH) -- = 1
-    let subPropHH = Forall ( (Bound idx_sub `In` setH) :->: (Bound idx_sub `In` setH) )
-
-    -- Manually construct Exists part: Exists (Bound 1 In termBound1 && not (Bound 1 In setH))
-    let idx_ex = max (boundDepthObjDeBr termBound1) (boundDepthObjDeBr setH) -- = 1
-    let exists_inner = (Bound idx_ex `In` termBound1) :&&: Neg (Bound idx_ex `In` setH)
-    let exists_part = Exists exists_inner -- Exists ( (Bound 1 In Bound 1) && Neg (Bound 1 In setH) )
-
-    -- Combine them
-    let complexConj = subPropHH :&&: exists_part
-
-    remarkM $ "Constructed PropDeBr (Test 2): " <> (pack $ show complexConj) -- Raw view
-
-    -- Check conditions manually via remarks for clarity
-    remarkM $ "Manual check of 'andBuild' conditions for Def 2 pattern:"
-    remarkM $ "  idx1=1, a1=setH, idx2=1, a2=setH"
-    remarkM $ "  idx3=1, a3=termBound1, idx4=1, a4=setH"
-    remarkM $ "  Checks:"
-    remarkM $ "    idx1==max(d H,d H)? -> 1==1 PASS"
-    remarkM $ "    idx2==idx1? -> 1==1 PASS"
-    remarkM $ "    idx1==idx3? -> 1==1 PASS"
-    remarkM $ "    idx1==idx4? -> 1==1 PASS"
-    remarkM $ "    a2==a3? -> setH == termBound1? -> FAIL" -- Corrected term check fails here anyway
-    remarkM $ "    a1==a4? -> setH == setH? -> PASS"
-    remarkM $ "    not(a1 contains idx1)? -> not(setH contains 1)? -> PASS"
-    remarkM $ "    not(a2 contains idx1)? -> not(setH contains 1)? -> PASS"
-    remarkM $ "  (Note: Even if term checks were a2==a3 and a1==a4, the precondition check on a3=termBound1 would fail as 'termBound1 contains 1')"
-
-
-    -- Add the proposition and get the printed output
-    (addedProp2, _) <- fakePropM complexConj
-    printedOutput2 <- showPropM addedProp2
-    remarkM $ "Actual printed output (Test 2): " <> printedOutput2
-    remarkM $ "(Should use default ∀, ∧, ∃ notations, NOT ⊂)"
+    -- 5. Test 3: A structure that should NOT use the ⊂ notation
+    remarkM "Test 3: Structure that should NOT print as ⊂ (using A=A instead of Not(A=B))"
+    -- Example: (A ⊆ B) ∧ (A = A) -- Does not match Neg(A==B)
+    (eqAA, _) <- eqReflM setA -- Prove A = A using EqRefl rule
+    let subPropAB = subset setA setB -- A ⊆ B part
+    let nonStrictSubProp = subPropAB :&&: eqAA -- Combine with A=A
+    (addedProp3, _) <- fakePropM nonStrictSubProp
+    printedOutput3 <- showPropM addedProp3
+    remarkM $ "Actual printed output (Test 3): " <> printedOutput3
+    remarkM "(Should be (A ⊆ B) ∧ (A = A) or similar, *NOT* A ⊂ B)"
 
     remarkM "--- Strict Subset Notation Test Complete ---"
+    return ()
+
+
+testNotSubsetNotation :: ProofGenTStd () [PredRuleDeBr] PropDeBr Text IO ()
+testNotSubsetNotation = do
+    remarkM "--- Testing Not Subset Notation (⊈) ---"
+
+    -- 1. Define constants
+    let setA = Constant "A"
+    let setB = Constant "B"
+    let setN = Constant "N"
+
+    -- 2. Add constants to proof state
+    fakeConstM "A" ()
+    fakeConstM "B" ()
+    fakeConstM "N" ()
+
+    -- 3. Test 1: Basic not subset A ⊈ B
+    remarkM "Test 1: Basic not subset A ⊈ B"
+    -- Assumes notSubset a b = Neg (subset a b)
+    let notSubProp1 = notSubset setA setB
+    (addedProp1, _) <- fakePropM notSubProp1
+    printedOutput1 <- showPropM addedProp1
+    remarkM $ "Actual printed output (Test 1): " <> printedOutput1
+    remarkM "(Should be A ⊈ B)"
+
+    -- 4. Test 2: Not subset with set builder {x ∈ N | x ≥ 5} ⊈ N
+    remarkM "Test 2: Not subset involving a Set Builder expression"
+    let five = Integ 5
+    let propertyP = X 0 :>=: five
+    let setBuilderA = builderX 0 setN propertyP -- {x ∈ N | x ≥ 5}
+    -- Create the not subset proposition: {x ∈ N | x ≥ 5} ⊈ N
+    let notSubPropBuilder = notSubset setBuilderA setN
+    (addedPropBuilder, _) <- fakePropM notSubPropBuilder
+    printedOutputBuilder <- showPropM addedPropBuilder
+    remarkM $ "Actual printed output (Test 2): " <> printedOutputBuilder
+    remarkM "(Should look like {𝑥₀ ∈ N | 𝑥₀ ≥ 5} ⊈ N or similar)"
+
+    -- 5. Test 3: A structure that should NOT use the ⊈ notation
+    remarkM "Test 3: Structure that should NOT print as ⊈"
+    -- Example: Neg (A ⊂ B) -- Should print as ¬(A ⊂ B), not A ⊈ B
+    let strictSubProp = strictSubset setA setB -- Assuming this helper exists and works
+    let negStrictSubProp = Neg strictSubProp
+    (addedProp3, _) <- fakePropM negStrictSubProp
+    printedOutput3 <- showPropM addedProp3
+    remarkM $ "Actual printed output (Test 3): " <> printedOutput3
+    remarkM "(Should be ¬(A ⊂ B) or similar, *NOT* related to ⊈)"
+
+    remarkM "--- Not Subset Notation Test Complete ---"
+    return ()
+
+
+testFuncAppNotation :: ProofGenTStd () [PredRuleDeBr] PropDeBr Text IO ()
+testFuncAppNotation = do
+    remarkM "--- Testing Function Application Notation f(x) ---"
+
+    -- 1. Define constants
+    let f = Constant "MyFunc" -- Represents Pair(graph, codomain)
+    let g = Constant "MyG"    -- Another function
+    let x = Constant "MyInput"
+    let y = Constant "MyOutput" -- For placeholder equality
+
+    -- 2. Add constants to proof state
+    fakeConstM "MyFunc" ()
+    fakeConstM "MyG" ()
+    fakeConstM "MyInput" ()
+    fakeConstM "MyOutput" ()
+    -- Ensure 'pairFirst' and '(.@.)' are defined/accessible in Langs.BasicUntyped
+
+    -- 3. Test 1: Basic Application f(x)
+    remarkM "Test 1: Basic Application f(x)"
+    let appTerm1 = f .@. x
+    let eqProp1 = appTerm1 :==: y
+    (addedProp1, _) <- fakePropM eqProp1 -- Add dummy equality
+    printedOutput1 <- showPropM addedProp1 -- Get printed string
+    remarkM $ "Actual printed output (Test 1): " <> printedOutput1
+    remarkM "(Should look like MyFunc(MyInput) = MyOutput)"
+
+    -- 4. Test 2: Nested Application g(f(x))
+    remarkM "Test 2: Nested Application g(f(x))"
+    let appTerm2 = g .@. appTerm1 -- Apply g to result of f(x)
+    let eqProp2 = appTerm2 :==: y
+    (addedProp2, _) <- fakePropM eqProp2
+    printedOutput2 <- showPropM addedProp2
+    remarkM $ "Actual printed output (Test 2): " <> printedOutput2
+    remarkM "(Should look like MyG(MyFunc(MyInput)) = MyOutput)"
+
+    -- 5. Test 3: Corrected Negative Control - Hilbert term NOT matching f(x) structure
+    remarkM "Test 3: Hilbert term NOT matching f(x) structure (Corrected)"
+    -- Example: εz . (z == x) -- This is structurally valid & different from f(x) pattern
+    let d_test3 = max (boundDepthObjDeBr f) (boundDepthObjDeBr x) -- d=0 for consts
+    -- Term: Hilbert represents εz, Bound d_test3 represents z.
+    let nonAppTerm = Hilbert (Bound d_test3 :==: x) -- εz.(z = MyInput)
+    -- Create dummy equality: (εz.(z = MyInput)) == MyOutput
+    let eqProp3 = nonAppTerm :==: y
+    (addedProp3, _) <- fakePropM eqProp3
+    printedOutput3 <- showPropM addedProp3
+    remarkM $ "Actual printed output (Test 3 - Corrected): " <> printedOutput3
+    remarkM "(Should use default ε notation, e.g., ε𝑥₀(𝑥₀ = MyInput) = MyOutput)"
+
+    remarkM "--- Function Application Notation Test Complete ---"
+    return ()
+
+testHelperPreconditionViolation :: ProofGenTStd () [PredRuleDeBr] PropDeBr Text IO ()
+testHelperPreconditionViolation = do
+    remarkM "--- Testing Helper Precondition Violation ---"
+    let setN = Constant "N"
+    let constC = Constant "C"
+    let setB = Constant "B"
+
+    fakeConstM "N" ()
+    fakeConstM "C" ()
+    fakeConstM "B" ()
+
+    -- Construct A = {x ∈ N | x = C} using builderX
+    -- This term 'setA' contains Bound 1 internally. Its depth is 1.
+    let setA = builderX 0 setN (X 0 :==: constC)
+    setAShow <- showObjM setA -- See the structure (likely involves Bound 1)
+    remarkM $ "Constructed setA = " <> setAShow
+
+    -- Construct subset A B
+    -- This calculates idx = max(depth A, depth B) = max(1, 0) = 1.
+    -- Precondition requires A not contain Bound 1, but it does.
+    let violatingSubsetProp = subset setA setB
+    remarkM "Constructed 'subset setA setB'. Precondition (A must not contain Bound 1) is VIOLATED."
+
+    -- Add it to the proof state. It might pass checkSanity if the check isn't perfect,
+    -- but it represents a violation of the helper's intended use conditions.
+    (addedProp, _) <- fakePropM violatingSubsetProp
+    printedProp <- showPropM addedProp
+    remarkM $ "Resulting PropDeBr structure (printed form): " <> printedProp
+    remarkM "(Check if it printed using ⊆ or fallback ∀ notation)"
+    remarkM "--- Precondition Violation Test Complete ---"
     return ()
 
 main :: IO ()
@@ -505,9 +616,18 @@ main = do
     (aStrict, bStrict, cStrict, dStrict) <- runProofGeneratorT testStrictSubsetNotation
     (putStrLn . unpack . showPropDeBrStepsBase) cStrict -- Print results
 
-    -- ... (rest of main) ...
-    return ()
 
+    print "TEST NOT SUBSET NOTATION BEGIN-------------------------------------"
+    (aNSub, bNSub, cNSub, dNSub) <- runProofGeneratorT testNotSubsetNotation
+    (putStrLn . unpack . showPropDeBrStepsBase) cNSub -- Print results
+
+    print "TEST FUNC APP NOTATION BEGIN-------------------------------------"
+    (aFunc, bFunc, cFunc, dFunc) <- runProofGeneratorT testFuncAppNotation
+    (putStrLn . unpack . showPropDeBrStepsBase) cFunc -- Print results
+    -- ... (rest of main) ...
+
+    (aFunc, bFunc, cFunc, dFunc) <- runProofGeneratorT testHelperPreconditionViolation    
+    (putStrLn . unpack . showPropDeBrStepsBase) cFunc -- Print results
     -- ... (rest of main) ...
     return ()
 
@@ -526,17 +646,17 @@ testSubsetInternalBinding = do
     --    because max depth of setA is 1.
     let subProp = subset setA setA
 
-    remarkM $ "Constructed PropDeBr: Forall ((Bound 1 `In` Hilbert (Bound 0 :==: Constant \"C\")) :->: (Bound 1 `In` Hilbert (Bound 0 :==: Constant \"C\")))"
+    remarkM "Constructed PropDeBr: Forall ((Bound 1 `In` Hilbert (Bound 0 :==: Constant \"C\")) :->: (Bound 1 `In` Hilbert (Bound 0 :==: Constant \"C\")))"
 
     -- 3. Manually trace the conditions from your 'toSubexpParseTree'/'abuild' logic:
-    remarkM $ "Checking conditions for '⊆' shorthand manually:"
-    remarkM $ "  Pattern: Forall (Bound idx1 `In` a1 :->: Bound idx2 `In` a2)"
-    remarkM $ "  Here: idx1=1, a1=setA, idx2=1, a2=setA."
-    remarkM $ "  Condition 1: idx1 == max(depth a1, depth a2)? -> 1 == max(1, 1)? -> PASS"
-    remarkM $ "  Condition 2: idx2 == idx1? -> 1 == 1? -> PASS"
-    remarkM $ "  Condition 3: not (a1 contains Bound idx1)? -> not (setA contains Bound 1)? -> not (False)? -> PASS"
-    remarkM $ "  Condition 4: not (a2 contains Bound idx1)? -> not (setA contains Bound 1)? -> not (False)? -> PASS"
-    remarkM $ "Conclusion based on checks: All conditions PASS. Shorthand '⊆' should apply."
+    remarkM "Checking conditions for '⊆' shorthand manually:"
+    remarkM "  Pattern: Forall (Bound idx1 `In` a1 :->: Bound idx2 `In` a2)"
+    remarkM "  Here: idx1=1, a1=setA, idx2=1, a2=setA."
+    remarkM "  Condition 1: idx1 == max(depth a1, depth a2)? -> 1 == max(1, 1)? -> PASS"
+    remarkM "  Condition 2: idx2 == idx1? -> 1 == 1? -> PASS"
+    remarkM "  Condition 3: not (a1 contains Bound idx1)? -> not (setA contains Bound 1)? -> not (False)? -> PASS"
+    remarkM "  Condition 4: not (a2 contains Bound idx1)? -> not (setA contains Bound 1)? -> not (False)? -> PASS"
+    remarkM "Conclusion based on checks: All conditions PASS. Shorthand '⊆' should apply."
 
     -- 4. Add the proposition to the proof state using fakePropM
     (addedProp, _) <- fakePropM subProp
