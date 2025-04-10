@@ -643,11 +643,18 @@ testSubsetInternalBinding = do
     -- 2. Construct the subset proposition: subset setA setA
     --    Based on your 'subset' function, this creates:
     --    Forall ( (Bound 1 `In` setA) :->: (Bound 1 `In` setA) )
-    --    because max depth of setA is 1.
+    --    because max depth of setA is 1
+    
+    u <- showObjM setA
+    
+    
     let subProp = subset setA setA
 
-    remarkM "Constructed PropDeBr: Forall ((Bound 1 `In` Hilbert (Bound 0 :==: Constant \"C\")) :->: (Bound 1 `In` Hilbert (Bound 0 :==: Constant \"C\")))"
+    v <- showPropM subProp
 
+
+    remarkM "Constructed PropDeBr: Forall ((Bound 1 `In` Hilbert (Bound 0 :==: Constant \"C\")) :->: (Bound 1 `In` Hilbert (Bound 0 :==: Constant \"C\")))"
+    remarkM $ "It looks like this... " <> v
     -- 3. Manually trace the conditions from your 'toSubexpParseTree'/'abuild' logic:
     remarkM "Checking conditions for '⊆' shorthand manually:"
     remarkM "  Pattern: Forall (Bound idx1 `In` a1 :->: Bound idx2 `In` a2)"
@@ -657,6 +664,11 @@ testSubsetInternalBinding = do
     remarkM "  Condition 3: not (a1 contains Bound idx1)? -> not (setA contains Bound 1)? -> not (False)? -> PASS"
     remarkM "  Condition 4: not (a2 contains Bound idx1)? -> not (setA contains Bound 1)? -> not (False)? -> PASS"
     remarkM "Conclusion based on checks: All conditions PASS. Shorthand '⊆' should apply."
+
+
+    remarkM $ "The Bound depth of the hilbert subexpression is: " <> pack (show (boundDepthObjDeBr setA))
+    v <- showPropM (eX 2 (X 2 `In` X 1 :->: X 2 `In` X 0))
+    remarkM $ "The Base template is: " <> v
 
     -- 4. Add the proposition to the proof state using fakePropM
     (addedProp, _) <- fakePropM subProp

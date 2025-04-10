@@ -53,6 +53,7 @@ import Control.Monad.RWS
     ( MonadReader(ask), runRWS, MonadWriter(tell), RWS )
 import Text.XHtml (sub)
 import qualified Internal.StdPattern
+import Distribution.Backpack.ConfiguredComponent (newPackageDepsBehaviour)
 
 
 
@@ -106,7 +107,7 @@ subexpParseTreeBoundDepth sub = case sub of
     BinaryOp _ sub1 sub2 -> max (subexpParseTreeBoundDepth sub1) (subexpParseTreeBoundDepth sub2)
     UnaryOp _ sub1 -> subexpParseTreeBoundDepth sub1
     Binding _ sub1 -> 1 + subexpParseTreeBoundDepth sub1
-    HilbertShort idxs -> length idxs
+    HilbertShort idxs -> 0
     ParseTreeConst const -> 0
     ParseTreeFreeVar idx -> 0
     ParseTreeBoundVar idx -> 0
@@ -115,6 +116,7 @@ subexpParseTreeBoundDepth sub = case sub of
     Tuple as -> maximum $ Prelude.map subexpParseTreeBoundDepth as
     ParseTreeF -> 0
     ParseTreeInt _ -> 0
+    Builder sub1 sub2 -> 1 + max (subexpParseTreeBoundDepth sub1) (subexpParseTreeBoundDepth sub2)
     FuncApp sub1 sub2 -> max (subexpParseTreeBoundDepth sub1) (subexpParseTreeBoundDepth sub2)
 
 
@@ -322,7 +324,7 @@ boundDepthObjDeBr obj = case obj of
 
 
 boundDepthPropDeBr :: PropDeBr -> Int
-boundDepthPropDeBr p = case p of
+boundDepthPropDeBr prop = case prop of
     Neg p -> boundDepthPropDeBr p
     (:&&:) p1 p2 -> max (boundDepthPropDeBr p1) (boundDepthPropDeBr p2)
     (:||:) p1 p2 -> max (boundDepthPropDeBr p1) (boundDepthPropDeBr p2)
@@ -759,23 +761,6 @@ instance PL.LogicSent PropDeBr () where
    
 
 
-
-
-
-
-objDeBrXInside :: Int -> ObjDeBr -> Bool
-objDeBrXInside subidx obj =
-    case obj of
-        Integ num -> False
-        Constant const -> False
-        Hilbert p -> propDeBrXInside subidx p
-        Bound i -> False
-        V i -> False
-        X idx | idx == subidx -> True
-              | otherwise -> False
-        Pair a b -> objDeBrXInside subidx a|| objDeBrXInside subidx b
-
-
 propDeBrBoundVarInside :: PropDeBr -> Int -> Bool
 propDeBrBoundVarInside prop idx = case prop of
     Neg p -> propDeBrBoundVarInside p idx
@@ -789,6 +774,23 @@ propDeBrBoundVarInside prop idx = case prop of
     Exists p -> propDeBrBoundVarInside p idx
     (:>=:) o1 o2 -> objDeBrBoundVarInside o1 idx || objDeBrBoundVarInside o2 idx
     false -> False
+
+
+
+objDeBrXInside :: Int -> ObjDeBr -> Bool
+objDeBrXInside subidx obj =
+    case obj of
+        Integ num -> False
+        Constant const -> False
+        Hilbert p -> propDeBrXInside subidx p
+        Bound i -> False
+        V i -> False
+        X idx | idx == subidx -> True
+              | otherwise -> False
+        Pair a b -> objDeBrXInside subidx a || objDeBrXInside subidx b
+
+
+
 
 propDeBrXInside :: Int -> PropDeBr -> Bool
 propDeBrXInside subidx prop = case prop of
@@ -807,62 +809,78 @@ propDeBrXInside subidx prop = case prop of
 
 
 
-objDeBrSubX' :: Int -> Int -> ObjDeBr -> ObjDeBr -> ObjDeBr
-objDeBrSubX' subidx boundvarOffsetThreshold obj t = case obj of
+objDeBrSubX' :: Int -> ObjDeBr -> ObjDeBr -> Int -> ObjDeBr
+objDeBrSubX' subidx substitution template threshold = case template of
     Integ num -> Integ num
     Constant const -> Constant const
-    Hilbert p -> Hilbert (propDeBrSubX' subidx (calcBVOThreshold p) p t)                            
-    Bound idx
-                | idx >= boundvarOffsetThreshold -> Bound (idx + termDepth)
-                | otherwise -> Bound idx
-           --      | idx==boundVarIdx -> t
-           --      | idx >= boundvarOffsetThreshold -> Bound (idx + termDepth)
-           --      | idx < boundVarIdx -> Bound idx
+    Hilbert p -> Hilbert $ propDeBrSubX' subidx substitution p newThreshold
+      where
+         newThreshold = 
+            if propDeBrXInside subidx p then
+                threshold - 1
+            else
+                threshold
 
+                                    
+    Bound idx -> if idx < threshold  then
+          Bound idx
+        else
+          Bound (idx+termDepth)
+        where
+            termDepth = boundDepthObjDeBr substitution
     V idx -> V idx
     X idx 
-        | idx == subidx -> t
+        | idx == subidx -> substitution
         | otherwise -> X idx
-    Pair o1 o2 -> Pair (objDeBrSubX' subidx boundvarOffsetThreshold o1 t) (objDeBrSubX' subidx boundvarOffsetThreshold o2 t)
-  where
-        termDepth = boundDepthObjDeBr t
-        calcBVOThreshold p = if propDeBrXInside subidx p then
-                                  boundDepthPropDeBr p
-                             else boundvarOffsetThreshold
+    Pair o1 o2 -> 
+        Pair (objDeBrSubX' subidx substitution o1 threshold) (objDeBrSubX' subidx substitution o2 threshold) where
+      
+        
 
 
 
 
 
 
-propDeBrSubX' :: Int -> Int -> PropDeBr -> ObjDeBr -> PropDeBr
-propDeBrSubX' subidx boundvarOffsetThreshold prop t = case prop of
-    Neg p -> Neg (propDeBrSubX' subidx boundvarOffsetThreshold p t)
-    (:&&:) p1 p2 ->  (:&&:) (propDeBrSubX' subidx boundvarOffsetThreshold p1 t) (propDeBrSubX' subidx boundvarOffsetThreshold p2 t) 
-    (:||:) p1 p2 ->  (:||:) (propDeBrSubX' subidx boundvarOffsetThreshold p1 t) (propDeBrSubX' subidx boundvarOffsetThreshold p2 t) 
-    (:->:) p1 p2 ->  (:->:) (propDeBrSubX' subidx boundvarOffsetThreshold p1 t) (propDeBrSubX' subidx boundvarOffsetThreshold p2 t)
-    (:<->:) p1 p2 ->  (:<->:) (propDeBrSubX' subidx boundvarOffsetThreshold p1 t) (propDeBrSubX' subidx boundvarOffsetThreshold p2 t)
-    (:==:) o1 o2 -> (:==:) (objDeBrSubX' subidx boundvarOffsetThreshold o1 t) (objDeBrSubX' subidx boundvarOffsetThreshold o2 t)   
-    In o1 o2 -> In (objDeBrSubX' subidx boundvarOffsetThreshold o1 t) (objDeBrSubX' subidx boundvarOffsetThreshold o2 t)  
-    Forall p -> Forall (propDeBrSubX' subidx (calcBVOThreshold p) p t)
-    Exists p -> Exists (propDeBrSubX' subidx (calcBVOThreshold p) p t)
-    (:>=:) o1 o2 -> (:>=:) (objDeBrSubX' subidx boundvarOffsetThreshold o1 t) (objDeBrSubX' subidx boundvarOffsetThreshold o2 t)
+
+propDeBrSubX' :: Int -> ObjDeBr -> PropDeBr -> Int -> PropDeBr
+propDeBrSubX' subidx t template threshold = case template of
+    Neg p -> Neg $ propDeBrSubX' subidx t p threshold
+    (:&&:) p1 p2 -> propDeBrSubX' subidx t p1 threshold :&&: propDeBrSubX' subidx t p2 threshold
+    (:||:) p1 p2 ->  propDeBrSubX' subidx t p1 threshold :||: propDeBrSubX' subidx t p2 threshold
+    (:->:) p1 p2 ->  propDeBrSubX' subidx t p1 threshold :->: propDeBrSubX' subidx t p2 threshold
+    (:<->:) p1 p2 ->  propDeBrSubX' subidx t p1 threshold :<->: propDeBrSubX' subidx t p2 threshold
+
+    (:==:) o1 o2 ->  objDeBrSubX' subidx t o1 threshold :==: objDeBrSubX' subidx t o2 threshold
+    In o1 o2 ->  objDeBrSubX' subidx t o1 threshold `In` objDeBrSubX' subidx t o2 threshold
+    Forall p -> Forall $ propDeBrSubX' subidx t p newThreshold
+       where
+           newThreshold = 
+            if propDeBrXInside subidx p then
+                threshold - 1
+            else
+                threshold
+    Exists p -> Exists $ propDeBrSubX' subidx t p newThreshold
+       where
+           newThreshold = 
+            if propDeBrXInside subidx p then
+                threshold - 1
+            else
+                threshold
+    (:>=:) o1 o2 -> objDeBrSubX' subidx t o1 threshold :>=: objDeBrSubX' subidx t o2 threshold
     F -> F
-  where
-          calcBVOThreshold p = if propDeBrXInside subidx p then
-                                      boundDepthPropDeBr p
-                               else boundvarOffsetThreshold 
-
 
 objDeBrSubX :: Int -> ObjDeBr -> ObjDeBr -> ObjDeBr
-objDeBrSubX subidx t obj = objDeBrSubX' subidx calcBVOThreshold obj t
-   where 
-                 boundDepth = boundDepthObjDeBr obj
-                 calcBVOThreshold = if objDeBrBoundVarInside obj boundDepth then
-                                      boundDepth
-                                  else 
-                                      boundDepth + 1
+objDeBrSubX subidx t template = 
+    objDeBrSubX' subidx t template startThreshold
+       where
+          startThreshold = boundDepthObjDeBr template
 
+propDeBrSubX :: Int -> ObjDeBr -> PropDeBr -> PropDeBr
+propDeBrSubX subidx t template = 
+    propDeBrSubX' subidx t template startThreshold
+       where
+          startThreshold = boundDepthPropDeBr template
 
 
 -- | Applies a list of substitutions [(Index, Term)] to an ObjDeBr term.
@@ -884,14 +902,7 @@ objDeBrSubXs substitutions initialObj =
 
 
 
-propDeBrSubX :: Int -> ObjDeBr -> PropDeBr -> PropDeBr
-propDeBrSubX subidx t prop = propDeBrSubX' subidx calcBVOThreshold prop t
-   where 
-                 boundDepth = boundDepthPropDeBr prop 
-                 calcBVOThreshold = if propDeBrBoundVarInside prop boundDepth then
-                                      boundDepth
-                                  else 
-                                      boundDepth + 1
+
 
 
 
@@ -1372,16 +1383,17 @@ builderX :: Int -> ObjDeBr -> PropDeBr -> ObjDeBr
 -- situation.
                        
                           
-builderX idx t p = Hilbert $ aX idx $ X idx `In` Bound hilbertIdx :<->: p :&&: X idx `In` t
+builderX idx t p = Hilbert $ aX idx $ X idx `In` Bound hilbertIdx :->: p :&&: X idx `In` t
      where hilbertIdx = max (boundDepthObjDeBr t) (boundDepthPropDeBr p) + 1
 
 
 -- For intended usage,
 -- a and b should both not have any template variables occuring within it.
--- If they do, they can effectively result in variable capture, if consumed,
--- or an insane sentence, it left unconsumed. Consider this a GIGO situation.
+-- If they do, they can effectively result in variable capture, if they are consumed,
+-- or an insane sentence, if any are left unconsumed. Consider this a GIGO situation.
 subset :: ObjDeBr -> ObjDeBr -> PropDeBr
-subset a b = propDeBrSubXs [(1,a),(0,b)] (aX 2 (X 2 `In` X 1 :->: X 2 `In` X 0))
+subset a b = propDeBrSubXs [(1,a),(0,b)] 
+          (eX 2 (X 2 `In` X 1 :->: X 2 `In` X 0))
 
 
 strictSubset :: ObjDeBr -> ObjDeBr -> PropDeBr
@@ -1392,8 +1404,8 @@ notSubset a b = Neg (subset a b)
 
 -- The following function projects the first element of a pair.
 -- For intended usage, pair should not have any template variables occuring within it.
--- If it does, it can effectively result in variable capture, if consumed,
--- or an insane sentence, it left unconsumed. Consider this a GIGO situation.
+-- If it does, it can effectively result in variable capture, if they are consumed,
+-- or an insane sentence, if any are left unconsumed. Consider this a GIGO situation.
 pairFirst :: ObjDeBr -> ObjDeBr
 pairFirst pair = objDeBrSubX 0 pair (hX 2 (eX 1 (X 0 :==: Pair (X 2) (X 1))))
 
