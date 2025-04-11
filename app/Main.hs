@@ -387,56 +387,6 @@ testNotSubsetNotation = do
     return ()
 
 
-testFuncAppNotation :: ProofGenTStd () [PredRuleDeBr] PropDeBr Text IO ()
-testFuncAppNotation = do
-    remarkM "--- Testing Function Application Notation f(x) ---"
-
-    -- 1. Define constants
-    let f = Constant "MyFunc" -- Represents Pair(graph, codomain)
-    let g = Constant "MyG"    -- Another function
-    let x = Constant "MyInput"
-    let y = Constant "MyOutput" -- For placeholder equality
-
-    -- 2. Add constants to proof state
-    fakeConstM "MyFunc" ()
-    fakeConstM "MyG" ()
-    fakeConstM "MyInput" ()
-    fakeConstM "MyOutput" ()
-    -- Ensure 'pairFirst' and '(.@.)' are defined/accessible in Langs.BasicUntyped
-
-    -- 3. Test 1: Basic Application f(x)
-    remarkM "Test 1: Basic Application f(x)"
-    let appTerm1 = f .@. x
-    let eqProp1 = appTerm1 :==: y
-    (addedProp1, _) <- fakePropM eqProp1 -- Add dummy equality
-    printedOutput1 <- showPropM addedProp1 -- Get printed string
-    remarkM $ "Actual printed output (Test 1): " <> printedOutput1
-    remarkM "(Should look like MyFunc(MyInput) = MyOutput)"
-
-    -- 4. Test 2: Nested Application g(f(x))
-    remarkM "Test 2: Nested Application g(f(x))"
-    let appTerm2 = g .@. appTerm1 -- Apply g to result of f(x)
-    let eqProp2 = appTerm2 :==: y
-    (addedProp2, _) <- fakePropM eqProp2
-    printedOutput2 <- showPropM addedProp2
-    remarkM $ "Actual printed output (Test 2): " <> printedOutput2
-    remarkM "(Should look like MyG(MyFunc(MyInput)) = MyOutput)"
-
-    -- 5. Test 3: Corrected Negative Control - Hilbert term NOT matching f(x) structure
-    remarkM "Test 3: Hilbert term NOT matching f(x) structure (Corrected)"
-    -- Example: εz . (z == x) -- This is structurally valid & different from f(x) pattern
-    let d_test3 = max (boundDepthObjDeBr f) (boundDepthObjDeBr x) -- d=0 for consts
-    -- Term: Hilbert represents εz, Bound d_test3 represents z.
-    let nonAppTerm = Hilbert (Bound d_test3 :==: x) -- εz.(z = MyInput)
-    -- Create dummy equality: (εz.(z = MyInput)) == MyOutput
-    let eqProp3 = nonAppTerm :==: y
-    (addedProp3, _) <- fakePropM eqProp3
-    printedOutput3 <- showPropM addedProp3
-    remarkM $ "Actual printed output (Test 3 - Corrected): " <> printedOutput3
-    remarkM "(Should use default ε notation, e.g., ε𝑥₀(𝑥₀ = MyInput) = MyOutput)"
-
-    remarkM "--- Function Application Notation Test Complete ---"
-    return ()
 
 testHelperPreconditionViolation :: ProofGenTStd () [PredRuleDeBr] PropDeBr Text IO ()
 testHelperPreconditionViolation = do
@@ -491,7 +441,7 @@ main = do
     let f = parseForall x1
     case f of
         Just (f,()) -> do
-            let term1 = Hilbert (Integ 0 `In` Integ 0)
+            let term1 = hX 0 (Integ 0 `In` Integ 0)
             let fNew = f term1
             (print.show) fNew
         Nothing -> print "parse failed!"
@@ -608,10 +558,6 @@ main = do
     (aCSub, bCSub, cCSub, dCSub) <- runProofGeneratorT testComplexSubsetNotation
     (putStrLn . unpack . showPropDeBrStepsBase) cCSub -- Print results
 
-    print "TEST SUBSET INTERNAL BINDING BEGIN-------------------------------------"
-    (aIB, bIB, cIB, dIB) <- runProofGeneratorT testSubsetInternalBinding
-    (putStrLn . unpack . showPropDeBrStepsBase) cIB -- Print results
-
     print "TEST STRICT SUBSET NOTATION BEGIN-------------------------------------"
     (aStrict, bStrict, cStrict, dStrict) <- runProofGeneratorT testStrictSubsetNotation
     (putStrLn . unpack . showPropDeBrStepsBase) cStrict -- Print results
@@ -621,66 +567,9 @@ main = do
     (aNSub, bNSub, cNSub, dNSub) <- runProofGeneratorT testNotSubsetNotation
     (putStrLn . unpack . showPropDeBrStepsBase) cNSub -- Print results
 
-    print "TEST FUNC APP NOTATION BEGIN-------------------------------------"
-    (aFunc, bFunc, cFunc, dFunc) <- runProofGeneratorT testFuncAppNotation
-    (putStrLn . unpack . showPropDeBrStepsBase) cFunc -- Print results
-    -- ... (rest of main) ...
-
     return ()
 
-testSubsetInternalBinding :: ProofGenTStd () [PredRuleDeBr] PropDeBr Text IO ()
-testSubsetInternalBinding = do
-    remarkM "--- Testing Subset Notation with Internal Binding ---"
 
-    -- 1. Define a constant C and the term A = {y | exists x (y = C)}
-    --    (Represented by Hilbert (Bound 0 :==: Constant "C"))
-    fakeConstM "C" ()
-    let setA = Hilbert (Bound 0 :==: Constant "C")
-
-    -- 2. Construct the subset proposition: subset setA setA
-    --    Based on your 'subset' function, this creates:
-    --    Forall ( (Bound 1 `In` setA) :->: (Bound 1 `In` setA) )
-    --    because max depth of setA is 1
-    
-    u <- showObjM setA
-    
-    
-    let subProp = subset setA setA
-
-    v <- showPropM subProp
-
-
-    remarkM "Constructed PropDeBr: Forall ((Bound 1 `In` Hilbert (Bound 0 :==: Constant \"C\")) :->: (Bound 1 `In` Hilbert (Bound 0 :==: Constant \"C\")))"
-    remarkM $ "It looks like this... " <> v
-    -- 3. Manually trace the conditions from your 'toSubexpParseTree'/'abuild' logic:
-    remarkM "Checking conditions for '⊆' shorthand manually:"
-    remarkM "  Pattern: Forall (Bound idx1 `In` a1 :->: Bound idx2 `In` a2)"
-    remarkM "  Here: idx1=1, a1=setA, idx2=1, a2=setA."
-    remarkM "  Condition 1: idx1 == max(depth a1, depth a2)? -> 1 == max(1, 1)? -> PASS"
-    remarkM "  Condition 2: idx2 == idx1? -> 1 == 1? -> PASS"
-    remarkM "  Condition 3: not (a1 contains Bound idx1)? -> not (setA contains Bound 1)? -> not (False)? -> PASS"
-    remarkM "  Condition 4: not (a2 contains Bound idx1)? -> not (setA contains Bound 1)? -> not (False)? -> PASS"
-    remarkM "Conclusion based on checks: All conditions PASS. Shorthand '⊆' should apply."
-
-
-    remarkM $ "The Bound depth of the hilbert subexpression is: " <> pack (show (boundDepthObjDeBr setA))
-    v <- showPropM (eX 2 (X 2 `In` X 1 :->: X 2 `In` X 0))
-    remarkM $ "The Base template is: " <> v
-
-    -- 4. Add the proposition to the proof state using fakePropM
-    (addedProp, _) <- fakePropM subProp
-
-    -- 5. Get the actual printed output using showPropM
-    printedOutput <- showPropM addedProp
-
-    -- 6. Display the expected vs. actual output
-    --    We use showObjM to print setA cleanly in the expected output remark
-    setAShow <- showObjM setA
-    remarkM $ "Expected output based on implemented condition check: " <> setAShow <> " ⊆ " <> setAShow
-    remarkM $ "Actual printed output: " <> printedOutput
-
-    remarkM "--- Internal Binding Subset Test Complete ---"
-    return ()
 
 testprog::ProofGenTStd () [PredRuleDeBr] PropDeBr Text IO ()
 testprog = do
