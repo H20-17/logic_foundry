@@ -166,73 +166,6 @@ testNonSequentialIndices = do
 
 
 
-testSetBuilder :: ProofGenTStd () [PredRuleDeBr] PropDeBr Text IO ()
-testSetBuilder = do
-    remarkM "--- Testing Set Builder Notation ---"
-
-    -- Define the source set N
-    let setN = Constant "N"
-    -- Define the property P(x) as x = x.
-    let propertyP = X 0 :==: X 0
-
-    -- Construct the term representing { x ∈ N | x = x }
-    let setBuilt = builderX 0 setN propertyP
-
-    -- Add N as a fake constant for context
-    fakeConstM "N" ()
-    -- Add the constructed set as a fake proposition/term to see it printed
-    -- (We need a way to print ObjDeBr - using fakePropM on an equality
-    -- with the set might work, or if you have a dedicated Obj print)
-    -- Let's just create an equality for printing purposes:
-    setBuiltShow <- showObjM setBuilt
-    remarkM $ "Set Builder: " <> setBuiltShow
-    remarkM "--- Set Builder Notation Test Complete ---"
-    return ()
-
-testComplexSetBuilder :: ProofGenTStd () [PredRuleDeBr] PropDeBr Text IO ()
-testComplexSetBuilder = do
-    remarkM "--- Testing Complex Set Builder Notation ---"
-
-    -- Define set names
-    let setN = Constant "N"
-    let setM = Constant "M"
-    let setP = Constant "P"
-
-    -- Define the property P(x), where x corresponds to X 1 (chosen index for builderX)
-    -- The property is: ∀y (y ∈ M → ∃z (z ∈ P ∧ <x, y> = z))
-    -- Let y be X 0 (bound by aX 0)
-    -- Let z be X 2 (bound by eX 2)
-    -- x is X 1 (the variable bound by builderX 1)
-    let propertyP =
-          aX 0 -- Binds y as X 0
-             ( (X 0 `In` setM) -- y in M
-               :->:            -- implies
-               eX 2          -- exists z as X 2
-                  ( (X 2 `In` setP) -- z in P
-                    :&&:            -- and
-                    (Pair (X 1) (X 0) :==: X 2) -- <x, y> = z
-                  )
-               
-             )
-
-    -- Construct the term representing the set using index 1 for 'x'
-    let setBuiltComplex = builderX 1 setN propertyP
-
-    -- Add constants for context
-    fakeConstM "N" ()
-    fakeConstM "M" ()
-    fakeConstM "P" ()
-
-    -- Print the constructed term (e.g., via an equality)
-    (eqProp, _) <- fakePropM (setBuiltComplex :==: setBuiltComplex)
-    setBuiltShow <- showObjM setBuiltComplex -- Use showObjM
-
-    -- Use actual Unicode characters in the remark strings
-    remarkM "Input Term (Conceptual): { x ∈ N | ∀y (y ∈ M → ∃z (z ∈ P ∧ <x, y> = z)) }"
-    remarkM $ "Constructed Term (via builderX): " <> setBuiltShow
-    remarkM "----> Expected future output: {𝑥₁ ∈ N | ∀𝑥₀((𝑥₀ ∈ M) → ∃𝑥₂( (𝑥₂ ∈ P) ∧ (<𝑥₁, 𝑥₀> = 𝑥₂)))}"
-    remarkM "--- Complex Set Builder Test Complete ---"
-    return ()
 
 testComplexSubsetNotation :: ProofGenTStd () [PredRuleDeBr] PropDeBr Text IO ()
 testComplexSubsetNotation = do
@@ -420,11 +353,97 @@ testHelperPreconditionViolation = do
     remarkM "--- Precondition Violation Test Complete ---"
     return ()
 
+
+testBuilderXSuite :: ProofGenTStd () [PredRuleDeBr] PropDeBr Text IO ()
+testBuilderXSuite = do
+    remarkM "--- Starting New builderX Test Suite ---"
+
+    -- Prerequisite Constants
+    fakeConstM "N" () -- Natural numbers (example source set)
+    fakeConstM "M" () -- Another example set
+    fakeConstM "C" () -- A specific constant element
+    let setN = Constant "N"
+    let setM = Constant "M"
+    let constC = Constant "C"
+    let int5 = Integ 5
+
+    -- Test 1: Simple Predicate (x >= 5)
+    remarkM "Test 1: Simple Predicate { x ∈ N | x ≥ 5 }"
+    let prop1 = X 0 :>=: int5
+    let builtSet1 = builderX 0 setN prop1
+    builtSet1Show <- showObjM builtSet1
+    remarkM $ "Constructed (idx=0): " <> builtSet1Show
+    remarkM "(Expected: {𝑥₀ ∈ N | 𝑥₀ ≥ 5})"
+
+    -- Test 2: Predicate with Equality (x == C)
+    remarkM "Test 2: Predicate with Equality { x ∈ N | x == C }"
+    let prop2 = X 0 :==: constC
+    let builtSet2 = builderX 0 setN prop2
+    builtSet2Show <- showObjM builtSet2
+    remarkM $ "Constructed (idx=0): " <> builtSet2Show
+    remarkM "(Expected: {𝑥₀ ∈ N | 𝑥₀ = C})"
+
+    -- Test 3: Using a different index (idx=1)
+    remarkM "Test 3: Using Different Index { x ∈ N | x ≥ 5 }"
+    let prop3 = X 1 :>=: int5 -- Using X 1 now
+    let builtSet3 = builderX 1 setN prop3 -- Using index 1
+    builtSet3Show <- showObjM builtSet3
+    remarkM $ "Constructed (idx=1): " <> builtSet3Show
+    remarkM "(Expected: {𝑥₁ ∈ N | 𝑥₁ ≥ 5})"
+
+    -- Test 4: Predicate with nested quantifiers (∀y (y ∈ M -> x = y))
+    remarkM "Test 4: Nested Quantifier in Predicate { x ∈ N | ∀y (y ∈ M → x = y) }"
+    -- Predicate: aX 1 ( (X 1 `In` setM) :->: (X 0 :==: X 1) )
+    -- Here, x is X 0 (bound by builderX), y is X 1 (bound by aX)
+    let prop4 = aX 1 ( (X 1 `In` setM) :->: (X 0 :==: X 1) )
+    let builtSet4 = builderX 0 setN prop4 -- Using index 0 for x
+    builtSet4Show <- showObjM builtSet4
+    remarkM $ "Constructed (idx=0): " <> builtSet4Show
+    remarkM "(Expected: {𝑥₀ ∈ N | ∀𝑥₁((𝑥₁ ∈ M) → (𝑥₀ = 𝑥₁))})"
+
+    -- Test 5: Complex Predicate with Existential Quantifier
+    remarkM "Test 5: Complex Predicate { x ∈ N | ∃y (y ∈ M ∧ x = <y, C>) }"
+    -- Predicate: eX 1 ( (X 1 `In` setM) :&&: (X 0 :==: Pair (X 1) constC) )
+    -- Here, x is X 0 (bound by builderX), y is X 1 (bound by eX)
+    let prop5 = eX 1 ( (X 1 `In` setM) :&&: (X 0 :==: Pair (X 1) constC) )
+    let builtSet5 = builderX 0 setN prop5 -- Using index 0 for x
+    builtSet5Show <- showObjM builtSet5
+    remarkM $ "Constructed (idx=0): " <> builtSet5Show
+    remarkM "(Expected: {𝑥₀ ∈ N | ∃𝑥₁((𝑥₁ ∈ M) ∧ (𝑥₀ = <𝑥₁, C>))})"
+
+    -- Test 6: Using a different source set M
+    remarkM "Test 6: Different Source Set { x ∈ M | x == C }"
+    let prop6 = X 0 :==: constC
+    let builtSet6 = builderX 0 setM prop6 -- Source set is M
+    builtSet6Show <- showObjM builtSet6
+    remarkM $ "Constructed (idx=0): " <> builtSet6Show
+    remarkM "(Expected: {𝑥₀ ∈ M | 𝑥₀ = C})"
+
+    -- Test 7: Predicate always true (using x == x)
+    remarkM "Test 7: Predicate Always True { x ∈ N | x == x }"
+    let prop7 = X 0 :==: X 0
+    let builtSet7 = builderX 0 setN prop7
+    builtSet7Show <- showObjM builtSet7
+    remarkM $ "Constructed (idx=0): " <> builtSet7Show
+    remarkM "(Expected: {𝑥₀ ∈ N | 𝑥₀ = 𝑥₀})"
+
+    -- Test 8: Predicate involving other template variables (if needed later)
+    -- remarkM "Test 8: Predicate with other X vars - Placeholder"
+    -- let prop8 = (X 0 :==: X 99) -- Example, assuming X 99 is defined elsewhere
+    -- let builtSet8 = builderX 0 setN prop8
+    -- builtSet8Show <- showObjM builtSet8
+    -- remarkM $ "Constructed (idx=0): " <> builtSet8Show
+    -- remarkM "(Shows interaction with other template vars if applicable)"
+
+    remarkM "--- builderX Test Suite Complete ---"
+    return ()
+
+
+
+
 main :: IO ()
 main = do
-    print "TEST SET BUILDER BEGIN-------------------------------------"
-    (aSB, bSB, cSB, dSB) <- runProofGeneratorT testSetBuilder
-    (putStrLn . unpack . showPropDeBrStepsBase) cSB
+
     let y0 = (Integ 0 :==: Integ 0) :->: (Integ 99 :==: Integ 99)
     let y1 = Integ 0 :==: Integ 0
     let y2 = (Integ 99 :==: Integ 99) :->: (Integ 1001 :==: Integ 1001)
@@ -549,10 +568,6 @@ main = do
     (aNS, bNS, cNS, dNS) <- runProofGeneratorT testNonSequentialIndices
     (putStrLn . unpack . showPropDeBrStepsBase) cNS
 
-    print "TEST COMPLEX SET BUILDER BEGIN-------------------------------------"
-    (aCSB, bCSB, cCSB, dCSB) <- runProofGeneratorT testComplexSetBuilder
-    (putStrLn . unpack . showPropDeBrStepsBase) cCSB
-
 
     print "TEST COMPLEX SUBSET NOTATION BEGIN-------------------------------------"
     (aCSub, bCSub, cCSub, dCSub) <- runProofGeneratorT testComplexSubsetNotation
@@ -565,6 +580,10 @@ main = do
 
     print "TEST NOT SUBSET NOTATION BEGIN-------------------------------------"
     (aNSub, bNSub, cNSub, dNSub) <- runProofGeneratorT testNotSubsetNotation
+    (putStrLn . unpack . showPropDeBrStepsBase) cNSub -- Print results
+
+    print "TEST builderX BEGIN-------------------------------------"
+    (aNSub, bNSub, cNSub, dNSub) <- runProofGeneratorT testBuilderXSuite
     (putStrLn . unpack . showPropDeBrStepsBase) cNSub -- Print results
 
     return ()
