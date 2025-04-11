@@ -773,7 +773,7 @@ propDeBrBoundVarInside prop idx = case prop of
     Forall p -> propDeBrBoundVarInside p idx
     Exists p -> propDeBrBoundVarInside p idx
     (:>=:) o1 o2 -> objDeBrBoundVarInside o1 idx || objDeBrBoundVarInside o2 idx
-    false -> False
+    F -> False
 
 
 
@@ -790,6 +790,45 @@ objDeBrXInside subidx obj =
         Pair a b -> objDeBrXInside subidx a || objDeBrXInside subidx b
 
 
+objDeBrCalcShift :: Int -> Int -> Int -> ObjDeBr -> Int
+objDeBrCalcShift currentDepth substitutionDepth templateVarIdx obj =
+      case obj of
+        Integ num -> 0
+        Constant const -> 0
+        Hilbert p -> propDeBrCalcShift (currentDepth - 1) substitutionDepth templateVarIdx p 
+        Bound i -> 0
+        V i -> 0
+        X idx | idx == templateVarIdx -> if
+                     currentDepth < substitutionDepth
+                then
+                     substitutionDepth - currentDepth
+                else
+                     0
+              | otherwise -> 0
+        Pair o1 o2 -> max (objDeBrCalcShift currentDepth substitutionDepth templateVarIdx o1)
+                     (objDeBrCalcShift currentDepth substitutionDepth templateVarIdx o2)
+
+propDeBrCalcShift :: Int -> Int -> Int -> PropDeBr -> Int
+propDeBrCalcShift currentDepth substitutionDepth templateVarIdx prop =
+    case prop of
+        Neg p -> propDeBrCalcShift (currentDepth - 1) substitutionDepth templateVarIdx p
+        (:&&:) p1 p2 -> max (propDeBrCalcShift currentDepth substitutionDepth templateVarIdx p1)
+                     (propDeBrCalcShift currentDepth substitutionDepth templateVarIdx p2)
+        (:||:) p1 p2 -> max (propDeBrCalcShift currentDepth substitutionDepth templateVarIdx p1)
+                     (propDeBrCalcShift currentDepth substitutionDepth templateVarIdx p2)
+        (:->:) p1 p2 -> max (propDeBrCalcShift currentDepth substitutionDepth templateVarIdx p1)
+                     (propDeBrCalcShift currentDepth substitutionDepth templateVarIdx p2)
+        (:<->:) p1 p2 -> max (propDeBrCalcShift currentDepth substitutionDepth templateVarIdx p1)
+                     (propDeBrCalcShift currentDepth substitutionDepth templateVarIdx p2)
+        (:==:) o1 o2 -> max (objDeBrCalcShift currentDepth substitutionDepth templateVarIdx o1)
+                     (objDeBrCalcShift currentDepth substitutionDepth templateVarIdx o2)
+        In o1 o2 -> max (objDeBrCalcShift currentDepth substitutionDepth templateVarIdx o1)
+                     (objDeBrCalcShift currentDepth substitutionDepth templateVarIdx o2)
+        Forall p -> propDeBrCalcShift (currentDepth - 1) substitutionDepth templateVarIdx p 
+        Exists p -> propDeBrCalcShift (currentDepth - 1) substitutionDepth templateVarIdx p 
+        (:>=:) o1 o2 -> max (objDeBrCalcShift currentDepth substitutionDepth templateVarIdx o1)
+                     (objDeBrCalcShift currentDepth substitutionDepth templateVarIdx o2)
+        F -> 0
 
 
 propDeBrXInside :: Int -> PropDeBr -> Bool
@@ -809,31 +848,26 @@ propDeBrXInside subidx prop = case prop of
 
 
 
-objDeBrSubX' :: Int -> ObjDeBr -> ObjDeBr -> Int -> ObjDeBr
-objDeBrSubX' subidx substitution template threshold = case template of
+objDeBrSubX' :: Int -> ObjDeBr -> ObjDeBr -> Int -> Map Int Int -> ObjDeBr
+objDeBrSubX' subidx substitution template currentDepth shiftMap = case template of
     Integ num -> Integ num
     Constant const -> Constant const
-    Hilbert p -> Hilbert $ propDeBrSubX' subidx substitution p newThreshold
+    Hilbert p -> Hilbert $ propDeBrSubX' subidx substitution p newDepth newShiftMap
       where
-         newThreshold = 
-            if propDeBrXInside subidx p then
-                threshold - 1
-            else
-                threshold
-
-                                    
-    Bound idx -> if idx < threshold  then
-          Bound idx
-        else
-          Bound (idx+termDepth)
-        where
-            termDepth = boundDepthObjDeBr substitution
+        newDepth = currentDepth - 1
+        substitutionDepth = boundDepthObjDeBr substitution
+        newShiftMapEntry = propDeBrCalcShift newDepth substitutionDepth subidx p
+        newShiftMap = Data.Map.insert newDepth newShiftMapEntry shiftMap       
+    Bound idx -> Bound (idx + shift)
+       where
+           shift = shiftMap!idx
     V idx -> V idx
     X idx 
         | idx == subidx -> substitution
         | otherwise -> X idx
     Pair o1 o2 -> 
-        Pair (objDeBrSubX' subidx substitution o1 threshold) (objDeBrSubX' subidx substitution o2 threshold) where
+        Pair (objDeBrSubX' subidx substitution o1 currentDepth shiftMap) 
+                (objDeBrSubX' subidx substitution o2 currentDepth shiftMap)
       
         
 
@@ -843,44 +877,51 @@ objDeBrSubX' subidx substitution template threshold = case template of
 
 
 
-propDeBrSubX' :: Int -> ObjDeBr -> PropDeBr -> Int -> PropDeBr
-propDeBrSubX' subidx t template threshold = case template of
-    Neg p -> Neg $ propDeBrSubX' subidx t p threshold
-    (:&&:) p1 p2 -> propDeBrSubX' subidx t p1 threshold :&&: propDeBrSubX' subidx t p2 threshold
-    (:||:) p1 p2 ->  propDeBrSubX' subidx t p1 threshold :||: propDeBrSubX' subidx t p2 threshold
-    (:->:) p1 p2 ->  propDeBrSubX' subidx t p1 threshold :->: propDeBrSubX' subidx t p2 threshold
-    (:<->:) p1 p2 ->  propDeBrSubX' subidx t p1 threshold :<->: propDeBrSubX' subidx t p2 threshold
+propDeBrSubX' :: Int -> ObjDeBr -> PropDeBr -> Int -> Map Int Int -> PropDeBr
+propDeBrSubX' subidx substitution template currentDepth shiftMap  = case template of
+    Neg p -> Neg $ propDeBrSubX' subidx substitution p currentDepth shiftMap
+    (:&&:) p1 p2 -> (propDeBrSubX' subidx substitution p1 currentDepth shiftMap) :&&: 
+                (propDeBrSubX' subidx substitution p2 currentDepth shiftMap)
+    (:||:) p1 p2 ->  (propDeBrSubX' subidx substitution p1 currentDepth shiftMap) :||: 
+                (propDeBrSubX' subidx substitution p2 currentDepth shiftMap)
+    (:->:) p1 p2 ->  (propDeBrSubX' subidx substitution p1 currentDepth shiftMap) :->: 
+                (propDeBrSubX' subidx substitution p2 currentDepth shiftMap)
+    (:<->:) p1 p2 -> (propDeBrSubX' subidx substitution p1 currentDepth shiftMap) :<->: 
+                (propDeBrSubX' subidx substitution p2 currentDepth shiftMap)
 
-    (:==:) o1 o2 ->  objDeBrSubX' subidx t o1 threshold :==: objDeBrSubX' subidx t o2 threshold
-    In o1 o2 ->  objDeBrSubX' subidx t o1 threshold `In` objDeBrSubX' subidx t o2 threshold
-    Forall p -> Forall $ propDeBrSubX' subidx t p newThreshold
-       where
-           newThreshold = 
-            if propDeBrXInside subidx p then
-                threshold - 1
-            else
-                threshold
-    Exists p -> Exists $ propDeBrSubX' subidx t p newThreshold
-       where
-           newThreshold = 
-            if propDeBrXInside subidx p then
-                threshold - 1
-            else
-                threshold
-    (:>=:) o1 o2 -> objDeBrSubX' subidx t o1 threshold :>=: objDeBrSubX' subidx t o2 threshold
+    (:==:) o1 o2 ->  (objDeBrSubX' subidx substitution o1 currentDepth shiftMap) :==: 
+                (objDeBrSubX' subidx substitution o2 currentDepth shiftMap)
+    In o1 o2 ->  (objDeBrSubX' subidx substitution o1 currentDepth shiftMap) `In`
+                (objDeBrSubX' subidx substitution o2 currentDepth shiftMap)
+    Forall p -> Forall $ propDeBrSubX' subidx substitution p newDepth newShiftMap
+      where
+        newDepth = currentDepth - 1
+        substitutionDepth = boundDepthObjDeBr substitution
+        newShiftMapEntry = propDeBrCalcShift newDepth substitutionDepth subidx p
+        newShiftMap = Data.Map.insert newDepth newShiftMapEntry shiftMap 
+    Exists p -> Exists $ propDeBrSubX' subidx substitution p newDepth newShiftMap
+      where
+        newDepth = currentDepth - 1
+        substitutionDepth = boundDepthObjDeBr substitution
+        newShiftMapEntry = propDeBrCalcShift newDepth substitutionDepth subidx p
+        newShiftMap = Data.Map.insert newDepth newShiftMapEntry shiftMap 
+    (:>=:) o1 o2 -> (objDeBrSubX' subidx substitution o1 currentDepth shiftMap) :>=:
+                (objDeBrSubX' subidx substitution o2 currentDepth shiftMap)
     F -> F
 
 objDeBrSubX :: Int -> ObjDeBr -> ObjDeBr -> ObjDeBr
-objDeBrSubX subidx t template = 
-    objDeBrSubX' subidx t template startThreshold
+objDeBrSubX subidx substitution template = 
+    objDeBrSubX' subidx substitution template startDepth startMap
        where
-          startThreshold = boundDepthObjDeBr template
+          startDepth = boundDepthObjDeBr template
+          startMap = mempty
 
 propDeBrSubX :: Int -> ObjDeBr -> PropDeBr -> PropDeBr
-propDeBrSubX subidx t template = 
-    propDeBrSubX' subidx t template startThreshold
+propDeBrSubX subidx substitution template = 
+    propDeBrSubX' subidx substitution template startDepth startMap
        where
-          startThreshold = boundDepthPropDeBr template
+          startDepth = boundDepthPropDeBr template
+          startMap = mempty
 
 
 -- | Applies a list of substitutions [(Index, Term)] to an ObjDeBr term.
@@ -1370,22 +1411,12 @@ isFunction t = isRelation t :&&:
 builderX :: Int -> ObjDeBr -> PropDeBr -> ObjDeBr
 
 -- Assumes that t is a term with no template variables.
--- and p is predicate template with X i as a template variable and
--- no other template variables. Free variables allowed.
--- For this to be a proper usage, p cannot bind the outer hilbert
--- quantifier variable, and t cannot
--- bind X i or the outer hilbert quantifier variable. 
--- It is not an actual programmatic error if these conditions
--- are not met, but the result won't be representable in set
--- builder notation, and when corresponding output is shown, 
--- set builder notation
--- will NOT be used. Essentially, improper usage results in a GIGO
--- situation.
-                       
-                          
-builderX idx t p = Hilbert $ aX idx $ X idx `In` Bound hilbertIdx :->: p :&&: X idx `In` t
-     where hilbertIdx = max (boundDepthObjDeBr t) (boundDepthPropDeBr p) + 1
+-- and p is predicate template with X idx as a template variable and
+-- no other template variables. Neither p nor t need to be closed, and the resulting
+-- expression can be open, so that it's open variables can be bound in a larger expression.
+-- Free variables (e.g. Freevar n) allowed.
 
+builderX idx t p = objDeBrSubX (idx + 2) t (hX (idx + 1) (aX idx (X idx `In` X (idx + 1) :<->: p :&&: X idx `In` X (idx + 2)))) 
 
 -- For intended usage,
 -- a and b should both not have any template variables occuring within it.
@@ -1393,7 +1424,7 @@ builderX idx t p = Hilbert $ aX idx $ X idx `In` Bound hilbertIdx :->: p :&&: X 
 -- or an insane sentence, if any are left unconsumed. Consider this a GIGO situation.
 subset :: ObjDeBr -> ObjDeBr -> PropDeBr
 subset a b = propDeBrSubXs [(1,a),(0,b)] 
-          (eX 2 (X 2 `In` X 1 :->: X 2 `In` X 0))
+          (aX 2 (X 2 `In` X 1 :->: X 2 `In` X 0))
 
 
 strictSubset :: ObjDeBr -> ObjDeBr -> PropDeBr
@@ -1410,8 +1441,8 @@ pairFirst :: ObjDeBr -> ObjDeBr
 pairFirst pair = objDeBrSubX 0 pair (hX 2 (eX 1 (X 0 :==: Pair (X 2) (X 1))))
 
 
-relDomain :: ObjDeBr -> ObjDeBr
-relDomain s = Hilbert $ Forall
+relDomain' :: ObjDeBr -> ObjDeBr
+relDomain' s = Hilbert $ Forall
                        (    (Bound (d+1) `In` Bound (d+2))  -- x ∈ D
                        :<->:                             -- iff
                             Exists (Pair (Bound (d+1)) (Bound d) `In` s) -- exists y such that <x, y> in s
@@ -1426,8 +1457,10 @@ relDomain s = Hilbert $ Forall
     -- d+1 represents 'x' bound by Forall
     -- d+2 represents 'D' (the domain set) bound by Hilbert
 
---relDomain' :: ObjDeBr -> ObjDeBr
---relDomain s = 
+relDomain :: ObjDeBr -> ObjDeBr
+relDomain s = objDeBrSubX 0 s (hX 1(aX 2 ((X 2) `In` (X 1))  -- x ∈ D
+                       :<->:                             -- iff
+                            eX 3 (Pair (X 2) (X 3) `In` X 0)))
 
 
 -- let us assume that f is a pair
@@ -1449,23 +1482,35 @@ relDomain s = Hilbert $ Forall
 --    where `d` is the calculated index `max (boundDepthObjDeBr f + 2) (boundDepthObjDeBr x)`.
 -- Violating these preconditions might lead to unintended variable capture or meaning (GIGO).
 --
-(.@.) :: ObjDeBr -> ObjDeBr -> ObjDeBr
-f .@. x = Hilbert ( Pair x (Bound d) `In` pairFirst f )
+--(.@.) :: ObjDeBr -> ObjDeBr -> ObjDeBr
+--f .@. x = Hilbert ( Pair x (Bound d) `In` pairFirst f )
            -- Calculate index 'd' for 'y' (bound by Hilbert) using the specific rule for this helper
-           where d = max (boundDepthObjDeBr f + 2) (boundDepthObjDeBr x)
+--           where d = max (boundDepthObjDeBr f + 2) (boundDepthObjDeBr x)
            -- Here Hilbert binds 'y', represented by 'Bound d' inside the property
            -- The property is P(y) = <x, y> ∈ f_graph (where f_graph = pairFirst f).
+
+(.@.) :: ObjDeBr -> ObjDeBr -> ObjDeBr
+f .@. x = objDeBrSubXs [(0,f),(1,x)] (hX 2 ( Pair (X 1) (X 2) `In` pairFirst (X 0) ))
+
 
 
 instance ZFC.LogicSent PropDeBr ObjDeBr where
     emptySetAxiom :: PropDeBr
     emptySetAxiom = eX 0 $ Neg $ aX 1 $ X 1 `In` X 0
-    specAxiom :: ObjDeBr -> PropDeBr -> PropDeBr
+    specAxiom :: Int -> ObjDeBr -> PropDeBr -> PropDeBr
+
+
+    --specAxiom t p = eX 0 $ aX 1 $ X 1 `In` X 0 :<->: p :&&: X 1 `In` t
     -- specification axiom composed from term t and predicate P(x)
-    specAxiom t p = eX 0 $ aX 1 $ X 1 `In` X 0 :<->: p :&&: X 1 `In` t
-    replaceAxiom:: ObjDeBr -> PropDeBr -> PropDeBr
-    replaceAxiom t p = aX 0 (X 0 `In` t :->: eXBang 1 p)
-                         :->: eX 2 (aX 1 (X 1 `In` X 2 :<->: eX 0 (X 0 `In` t :&&: p)))  
+
+    specAxiom idx t p = propDeBrSubX (idx+2) t (eX (idx + 1) $ aX idx $ X idx `In` X (idx + 1) :<->: p :&&: X idx `In` X (idx + 2))
+    replaceAxiom:: Int -> ObjDeBr -> PropDeBr -> PropDeBr
+    --replaceAxiom t p = aX 0 (X 0 `In` t :->: eXBang 1 p)
+    --                     :->: eX 2 (aX 1 (X 1 `In` X 2 :<->: eX 0 (X 0 `In` t :&&: p)))
+    replaceAxiom idx t p = propDeBrSubX (idx+2) t (
+                              aX 0 (X 0 `In` X (idx + 2) :->: eXBang 1 p)
+                                   :->: eX 2 (aX 1 (X 1 `In` X 2 :<->: eX 0 (X 0 `In` X (idx + 2) :&&: p)))
+                           )  
       
  
 

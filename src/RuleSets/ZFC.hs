@@ -83,8 +83,8 @@ class LogicTerm t where
 
 class (PREDL.LogicSent s t ()) => LogicSent s t | s ->t where
    emptySetAxiom :: s
-   specAxiom :: t -> s -> s
-   replaceAxiom :: t -> s -> s
+   specAxiom :: Int -> t -> s -> s
+   replaceAxiom :: Int -> t -> s -> s
    parseIn :: s -> Maybe (t, t)
    memberOf :: t -> t -> s
 
@@ -114,8 +114,8 @@ data LogicRule s sE t  where
     TheoremM :: TheoremAlgSchema () [LogicRule s sE t ] s Text () -> 
                              LogicRule s sE t
     EmptySet :: LogicRule s sE t
-    Specification :: t -> s -> LogicRule s sE t
-    Replacement :: t -> s -> LogicRule s sE t
+    Specification :: Int -> t -> s -> LogicRule s sE t
+    Replacement :: Int -> t -> s -> LogicRule s sE t
     deriving(Show)
 
 
@@ -213,16 +213,16 @@ instance PREDL.LogicRuleClass [LogicRule s sE t] s t () sE Text where
 
 class LogicRuleClass r s sE t | r->s, r->sE, r->t where
      emptySet :: r
-     specification :: t -> s -> r
-     replacement :: t -> s -> r
+     specification :: Int -> t -> s -> r
+     replacement :: Int -> t -> s -> r
 
 instance LogicRuleClass [LogicRule s sE t] s sE t where
      emptySet :: [LogicRule s sE t]
      emptySet = [EmptySet]
-     specification :: t -> s -> [LogicRule s sE t]
-     specification t s = [Specification t s]
-     replacement :: t ->  s -> [LogicRule s sE t]
-     replacement t s = [Replacement t s]
+     specification :: Int -> t -> s -> [LogicRule s sE t]
+     specification idx t s = [Specification idx t s]
+     replacement :: Int -> t ->  s -> [LogicRule s sE t]
+     replacement idx t s = [Replacement idx t s]
 
 
 
@@ -261,8 +261,8 @@ runProofAtomic rule context state  =
           EmptySet -> do
                let step = PrfStdStepStep emptySetAxiom "AXIOM_EMPTYSET" []
                return (Just emptySetAxiom, Nothing, step)
-          Specification t s -> do
-               -- s can have instances of "X 0" template variables in it,
+          Specification idx t s -> do
+               -- s can have instances of "X idx" template variables in it,
                -- but not other X n instances. 
                -- How the replacementAxiom function is defined should take
                -- take advantage of that, replacing X 0 with a bound variable. Sanity checking for closure
@@ -280,12 +280,12 @@ runProofAtomic rule context state  =
 
                -- Build an instance of the replacement axiom
                -- using the term t and the sentence s
-               let specAx = specAxiom t s
+               let specAx = specAxiom idx t s
 
 
                let step = PrfStdStepStep specAx "AXIOM_SPECIFICATION" []
                return (Just specAx, Nothing, step)
-          Replacement t s -> do
+          Replacement idx t s -> do
                -- s can have  "X 0" and "X 1" variables in it
                -- How the replacementAxiom function is defined should take
                -- take advantage of that, replacing X 0 
@@ -300,7 +300,7 @@ runProofAtomic rule context state  =
                -- check that the template 
                -- Build an instance of the replacement axiom
                -- using the term t and the sentence s
-               let replAx = replaceAxiom t s
+               let replAx = replaceAxiom idx t s
 
                -- Check the that template (when X 0 and X 1 both have type ()) is sane and closed
 
@@ -406,9 +406,9 @@ emptySetM = standardRuleM emptySet
 specificationM, replacementM :: (Monad m, Show sE, Typeable sE, Show s, Typeable s, Show eL, Typeable eL,
        MonadThrow m, Show o, Typeable o, Show tType, Typeable tType, TypedSent o tType sE s,
        Monoid (PrfStdState s o tType), ProofStd s eL [LogicRule s sE t] o tType, StdPrfPrintMonad s o tType m    )
-       => t -> s -> ProofGenTStd tType [LogicRule s sE t] s o m (s,[Int])
-specificationM t s = standardRuleM (specification t s)
-replacementM t s = standardRuleM (replacement t s)
+       => Int -> t -> s -> ProofGenTStd tType [LogicRule s sE t] s o m (s,[Int])
+specificationM idx t s = standardRuleM (specification idx t s)
+replacementM idx t s = standardRuleM (replacement idx t s)
 
 
 data MetaRuleError s where

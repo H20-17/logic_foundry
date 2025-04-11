@@ -626,9 +626,6 @@ main = do
     (putStrLn . unpack . showPropDeBrStepsBase) cFunc -- Print results
     -- ... (rest of main) ...
 
-    (aFunc, bFunc, cFunc, dFunc) <- runProofGeneratorT testHelperPreconditionViolation    
-    (putStrLn . unpack . showPropDeBrStepsBase) cFunc -- Print results
-    -- ... (rest of main) ...
     return ()
 
 testSubsetInternalBinding :: ProofGenTStd () [PredRuleDeBr] PropDeBr Text IO ()
