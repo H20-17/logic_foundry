@@ -137,8 +137,8 @@ data LogicRule s sE o t tType  where
     EqRefl :: t -> LogicRule s sE o t tType
     EqSym :: s -> LogicRule s sE o t tType
     EqTrans :: s -> s -> LogicRule s sE o t tType
-    EqSubst :: s -> s -> LogicRule s sE o t tType 
-       -- Template P(X 0), Equality a == b
+    EqSubst :: Int -> s -> s -> LogicRule s sE o t tType 
+       -- Template P(X idx), Equality a == b
     deriving(Show)
 
 
@@ -222,7 +222,7 @@ class LogicRuleClass r s t tType sE o | r->s, r->o, r->tType, r->sE, r->t where
      eqRefl :: t -> r
      eqSym :: s -> r
      eqTrans :: s -> s -> r
-     eqSubst :: s -> s -> r
+     eqSubst :: Int -> s -> s -> r
 
 
 instance LogicRuleClass [LogicRule s sE o t tType ] s t tType sE o where
@@ -244,8 +244,8 @@ instance LogicRuleClass [LogicRule s sE o t tType ] s t tType sE o where
      eqSym s = [EqSym s]
      eqTrans :: s -> s -> [LogicRule s sE o t tType]
      eqTrans s1 s2 = [EqTrans s1 s2]
-     eqSubst :: s -> s -> [LogicRule s sE o t tType]
-     eqSubst s1 s2 = [EqSubst s1 s2]
+     eqSubst :: Int -> s -> s -> [LogicRule s sE o t tType]
+     eqSubst idx s1 s2 = [EqSubst idx s1 s2]
 
 
 
@@ -373,7 +373,7 @@ runProofAtomic rule context state  =
               -- Construct the transitive sentence (a .==. c)
               let transSent = termA .==. termC
               return (Just transSent, Nothing, PrfStdStepStep transSent "EQ_TRANS" [eqSent1Idx, eqSent2Idx])
-          EqSubst templateSent eqSent -> do
+          EqSubst idx templateSent eqSent -> do
               -- Check if equality sentence a == b is proven
               eqSentIdx <- maybe (throwError $ LogicErrEqSubstEqNotProven eqSent)
                                  return (Data.Map.lookup eqSent (provenSents state))
@@ -390,11 +390,12 @@ runProofAtomic rule context state  =
               termTypeA <- left PredProofTermSanity eitherTermType        
 
               -- Sanity check the template with the type of termA as the template var type.
-              let tmpltSanityErrorA = checkSanity [termTypeA] varStack constDict templateSent
+              let templateVarTypeDict = Data.Map.insert idx termTypeA mempty
+              let tmpltSanityErrorA = checkSanity templateVarTypeDict varStack constDict templateSent
               maybe (return ()) (throwError . LogicErrEqSubstTemplateSanityA templateSent termTypeA) tmpltSanityErrorA
 
               -- Instantiate the template with termA to get P(a)
-              let sourceSent = substX0 templateSent termA
+              let sourceSent = substX idx templateSent termA
 
               -- Check if the instantiated source sentence P(a) is proven
               sourceSentIdx <- maybe (throwError $ LogicErrEqSubstSourceNotProven sourceSent)
@@ -412,7 +413,7 @@ runProofAtomic rule context state  =
 
 
               -- Perform the substitution in the template with termB to get P(b)
-              let resultSent = substX0 templateSent termB
+              let resultSent = substX idx templateSent termB
 
 
               return (Just resultSent, Nothing, PrfStdStepStep resultSent "EQ_SUBST" [sourceSentIdx, eqSentIdx])
@@ -560,7 +561,7 @@ eiHilbertM sent = do
          return (instantiated,idx,hilbertObj)
 
 
-eqTransM, eqSubstM :: (Monad m, LogicSent s t tType , TypeableTerm t o tType sE, Show s,
+eqTransM :: (Monad m, LogicSent s t tType , TypeableTerm t o tType sE, Show s,
              Typeable s, Show sE, Typeable sE, MonadThrow m, Show o, Typeable o, Show t, Typeable t,
              Show tType, Typeable tType, TypedSent o tType sE s, Monoid (PrfStdState s o tType),
              StdPrfPrintMonad s o tType m, StdPrfPrintMonad s o tType (Either SomeException),
@@ -568,7 +569,17 @@ eqTransM, eqSubstM :: (Monad m, LogicSent s t tType , TypeableTerm t o tType sE,
              Typeable eL, Monoid r)
            => s -> s -> ProofGenTStd tType r s o m (s,[Int])
 eqTransM eqSent1 eqSent2 = standardRuleM (eqTrans eqSent1 eqSent2)
-eqSubstM templateSent eqSent = standardRuleM (eqSubst templateSent eqSent)
+
+
+
+eqSubstM :: (Monad m, LogicSent s t tType , TypeableTerm t o tType sE, Show s,
+             Typeable s, Show sE, Typeable sE, MonadThrow m, Show o, Typeable o, Show t, Typeable t,
+             Show tType, Typeable tType, TypedSent o tType sE s, Monoid (PrfStdState s o tType),
+             StdPrfPrintMonad s o tType m, StdPrfPrintMonad s o tType (Either SomeException),
+             Monoid (PrfStdContext tType), LogicRuleClass r s t tType sE o, ProofStd s eL r o tType, Show eL,
+             Typeable eL, Monoid r)
+           => Int -> s -> s -> ProofGenTStd tType r s o m (s,[Int])
+eqSubstM idx templateSent eqSent = standardRuleM (eqSubst idx templateSent eqSent)
 
 eqReflM :: (Monad m, LogicSent s t tType , TypeableTerm t o tType sE, Show s,
             Typeable s, Show sE, Typeable sE, MonadThrow m, Show o, Typeable o, Show t, Typeable t,
@@ -895,7 +906,7 @@ class (PL.LogicSent s tType) => LogicSent s t tType | s ->tType, s ->t, s->t whe
     reverseParseQuantToHilbert :: (t->s) -> tType -> t
     -- create generalization from sentence, var type, and free var index.
     createForall ::s -> tType -> Int -> s
-    substX0 :: s -> t -> s
+    substX :: Int -> s -> t -> s
  
 
 

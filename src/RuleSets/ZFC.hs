@@ -84,7 +84,7 @@ class LogicTerm t where
 class (PREDL.LogicSent s t ()) => LogicSent s t | s ->t where
    emptySetAxiom :: s
    specAxiom :: Int -> t -> s -> s
-   replaceAxiom :: Int -> t -> s -> s
+   replaceAxiom :: Int -> Int -> t -> s -> s
    parseIn :: s -> Maybe (t, t)
    memberOf :: t -> t -> s
 
@@ -115,7 +115,7 @@ data LogicRule s sE t  where
                              LogicRule s sE t
     EmptySet :: LogicRule s sE t
     Specification :: Int -> t -> s -> LogicRule s sE t
-    Replacement :: Int -> t -> s -> LogicRule s sE t
+    Replacement :: Int -> Int -> t -> s -> LogicRule s sE t
     deriving(Show)
 
 
@@ -214,15 +214,15 @@ instance PREDL.LogicRuleClass [LogicRule s sE t] s t () sE Text where
 class LogicRuleClass r s sE t | r->s, r->sE, r->t where
      emptySet :: r
      specification :: Int -> t -> s -> r
-     replacement :: Int -> t -> s -> r
+     replacement :: Int -> Int -> t -> s -> r
 
 instance LogicRuleClass [LogicRule s sE t] s sE t where
      emptySet :: [LogicRule s sE t]
      emptySet = [EmptySet]
      specification :: Int -> t -> s -> [LogicRule s sE t]
      specification idx t s = [Specification idx t s]
-     replacement :: Int -> t ->  s -> [LogicRule s sE t]
-     replacement idx t s = [Replacement idx t s]
+     replacement :: Int -> Int -> t ->  s -> [LogicRule s sE t]
+     replacement idx1 idx2 t s = [Replacement idx1 idx2 t s]
 
 
 
@@ -272,11 +272,13 @@ runProofAtomic rule context state  =
 
 
                -- Check that t is a closed and sane term and also get it's type
-               left (LogicErrSpecTermNotClosedSane t) (getTypeTerm [] [] constDict t)
+               let tmpltVarTypeDict = Data.Map.insert idx () mempty
+               left (LogicErrSpecTermNotClosedSane t) (getTypeTerm tmpltVarTypeDict [] constDict t)
 
-               -- Check the that template (when X 0 has type ()) is sane and closed
+               -- Check the that template (when X idx has type ()) is sane and closed
+               
                maybe (return ()) (throwError . LogicErrSpecTmpltNotSane s)
-                     (checkSanity [()] [] constDict s)
+                     (checkSanity tmpltVarTypeDict [] constDict s)
 
                -- Build an instance of the replacement axiom
                -- using the term t and the sentence s
@@ -285,7 +287,7 @@ runProofAtomic rule context state  =
 
                let step = PrfStdStepStep specAx "AXIOM_SPECIFICATION" []
                return (Just specAx, Nothing, step)
-          Replacement idx t s -> do
+          Replacement idx1 idx2 t s -> do
                -- s can have  "X 0" and "X 1" variables in it
                -- How the replacementAxiom function is defined should take
                -- take advantage of that, replacing X 0 
@@ -294,19 +296,20 @@ runProofAtomic rule context state  =
                -- No other variables are in the term.
 
                -- Check that t is a closed and sane term.
-               left (LogicErrSpecTermNotClosedSane t) (getTypeTerm [] [] constDict t)
+               let tmpltVarTypeDict = Data.Map.fromList [(idx1,()),(idx2,())]
+               left (LogicErrSpecTermNotClosedSane t) (getTypeTerm tmpltVarTypeDict [] constDict t)
 
 
                -- check that the template 
                -- Build an instance of the replacement axiom
                -- using the term t and the sentence s
-               let replAx = replaceAxiom idx t s
+               let replAx = replaceAxiom idx1 idx2 t s
 
                -- Check the that template (when X 0 and X 1 both have type ()) is sane and closed
 
-
+               
                maybe (return ()) (throwError . LogicErrReplTmpltNotSane s) (
-                            checkSanity [(),()] [] constDict s)
+                            checkSanity tmpltVarTypeDict [] constDict s)
 
                let step = PrfStdStepStep replAx "AXIOM_REPLACEMENT" []
                return (Just replAx, Nothing, step)
@@ -403,12 +406,20 @@ emptySetM :: (Monad m, Show sE, Typeable sE, Show s, Typeable s, Show eL, Typeab
 emptySetM = standardRuleM emptySet
 
 
-specificationM, replacementM :: (Monad m, Show sE, Typeable sE, Show s, Typeable s, Show eL, Typeable eL,
+specificationM :: (Monad m, Show sE, Typeable sE, Show s, Typeable s, Show eL, Typeable eL,
        MonadThrow m, Show o, Typeable o, Show tType, Typeable tType, TypedSent o tType sE s,
        Monoid (PrfStdState s o tType), ProofStd s eL [LogicRule s sE t] o tType, StdPrfPrintMonad s o tType m    )
        => Int -> t -> s -> ProofGenTStd tType [LogicRule s sE t] s o m (s,[Int])
 specificationM idx t s = standardRuleM (specification idx t s)
-replacementM idx t s = standardRuleM (replacement idx t s)
+
+
+
+replacementM :: (Monad m, Show sE, Typeable sE, Show s, Typeable s, Show eL, Typeable eL,
+       MonadThrow m, Show o, Typeable o, Show tType, Typeable tType, TypedSent o tType sE s,
+       Monoid (PrfStdState s o tType), ProofStd s eL [LogicRule s sE t] o tType, StdPrfPrintMonad s o tType m    )
+       => Int -> Int -> t -> s -> ProofGenTStd tType [LogicRule s sE t] s o m (s,[Int])
+replacementM idx1 idx2 t s = standardRuleM (replacement idx1 idx2 t s)
+
 
 
 data MetaRuleError s where

@@ -110,7 +110,7 @@ testEqualityRules = do
     eqShow <- showPropM eqSent
     remarkM $ "Assuming equality: " <> eqShow <> " at index " <> pack (show eqIdx)
     -- Perform substitution
-    (substSent, substIdx) <- eqSubstM template eqSent -- Use the template, not the source sentence here
+    (substSent, substIdx) <- eqSubstM 0 template eqSent -- Use the template, not the source sentence here
     substShow <- showPropM substSent
     remarkM $ "Proved subst: " <> substShow <> " at index " <> pack (show substIdx)
 
@@ -480,7 +480,7 @@ main = do
     let y2 = (Integ 99 :==: Integ 99) :->: (Integ 1001 :==: Integ 1001)
     let x0 = eX 0 (aX 0 ((Integ 0 :==: V 102) :&&: (X 0 `In` X 1)) :&&: (X 1 `In` X 1))
     let x1 = aX 3 (aX 2 (aX 1 ((X 3 :==: X 2) :&&: aX 0 (X 0 :==: X 1))))
-    (print . show) (checkSanity [] [(),()] mempty x0)
+    --(print . show) (checkSanity [] [(),()] mempty x0)
     print "X1" 
 
     (putStrLn . show) x1

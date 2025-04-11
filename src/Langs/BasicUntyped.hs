@@ -615,15 +615,15 @@ data DeBrSe where
 
 
 
-checkSanityObjDeBr :: ObjDeBr -> Int -> Int -> Set Text -> Set Int -> Maybe DeBrSe
+checkSanityObjDeBr :: ObjDeBr -> Int -> Set Int -> Set Text -> Set Int -> Maybe DeBrSe
 
-checkSanityObjDeBr obj varStackHeight templateVarCount constSet boundSet = case obj of
+checkSanityObjDeBr obj varStackHeight tmpltVarIndices constSet boundSet = case obj of
      Integ num -> Nothing
      Constant name -> if name `Set.member` constSet then
                            Nothing
                        else
                            (return . ObjDeBrSeConstNotDefd) name
-     Hilbert prop -> checkSanityPropDeBr prop varStackHeight templateVarCount constSet 
+     Hilbert prop -> checkSanityPropDeBr prop varStackHeight tmpltVarIndices constSet 
                             (Set.insert (boundDepthPropDeBr prop) boundSet )
      Bound idx -> 
         if idx `Set.member` boundSet then
@@ -636,12 +636,12 @@ checkSanityObjDeBr obj varStackHeight templateVarCount constSet boundSet = case 
         else
             (return . ObjDeBrFreeVarIdx) idx
      X idx -> 
-        if idx >= 0 && idx < templateVarCount then
+        if idx >= 0 && idx `Set.member` tmpltVarIndices then
             Nothing
         else
             (return . ObjDeBrTemplateVarIdx) idx
-     Pair a b -> checkSanityObjDeBr a varStackHeight templateVarCount constSet boundSet
-                 <|> checkSanityObjDeBr b varStackHeight templateVarCount constSet boundSet
+     Pair a b -> checkSanityObjDeBr a varStackHeight tmpltVarIndices constSet boundSet
+                 <|> checkSanityObjDeBr b varStackHeight tmpltVarIndices constSet boundSet
 
 boundDecrementObjDeBr :: Int -> ObjDeBr -> ObjDeBr
 boundDecrementObjDeBr idx obj = case obj of
@@ -671,38 +671,38 @@ boundDecrementPropDeBr idx prop = case prop of
 
 
 
-checkSanityPropDeBr :: PropDeBr -> Int -> Int -> Set Text -> Set Int -> Maybe DeBrSe
-checkSanityPropDeBr prop freevarStackHeight templateVarCount consts boundVars = 
+checkSanityPropDeBr :: PropDeBr -> Int -> Set Int -> Set Text -> Set Int -> Maybe DeBrSe
+checkSanityPropDeBr prop freevarStackHeight tmpltVarIndices consts boundVars = 
       case prop of
-        Neg p -> checkSanityPropDeBr p freevarStackHeight templateVarCount consts boundVars
-        (:&&:) p1 p2 -> checkSanityPropDeBr p1 freevarStackHeight templateVarCount consts boundVars
-                         <|> checkSanityPropDeBr p2 freevarStackHeight templateVarCount consts boundVars
-        (:||:) p1 p2 -> checkSanityPropDeBr p1 freevarStackHeight templateVarCount consts boundVars
-                         <|> checkSanityPropDeBr p2 freevarStackHeight templateVarCount consts boundVars
-        (:->:)  p1 p2 -> checkSanityPropDeBr p1 freevarStackHeight templateVarCount consts boundVars
-                         <|> checkSanityPropDeBr p2 freevarStackHeight templateVarCount consts boundVars
-        (:<->:) p1 p2 -> checkSanityPropDeBr p1 freevarStackHeight templateVarCount consts boundVars
-                         <|> checkSanityPropDeBr p2 freevarStackHeight templateVarCount consts boundVars
-        In o1 o2 -> checkSanityObjDeBr o1 freevarStackHeight templateVarCount consts boundVars
-                         <|> checkSanityObjDeBr o2 freevarStackHeight templateVarCount consts boundVars
-        (:==:) o1 o2 -> checkSanityObjDeBr o1 freevarStackHeight templateVarCount consts boundVars
-                         <|> checkSanityObjDeBr o2 freevarStackHeight templateVarCount consts boundVars
-        Forall prop -> checkSanityPropDeBr prop freevarStackHeight templateVarCount consts
+        Neg p -> checkSanityPropDeBr p freevarStackHeight tmpltVarIndices consts boundVars
+        (:&&:) p1 p2 -> checkSanityPropDeBr p1 freevarStackHeight tmpltVarIndices consts boundVars
+                         <|> checkSanityPropDeBr p2 freevarStackHeight tmpltVarIndices consts boundVars
+        (:||:) p1 p2 -> checkSanityPropDeBr p1 freevarStackHeight tmpltVarIndices consts boundVars
+                         <|> checkSanityPropDeBr p2 freevarStackHeight tmpltVarIndices consts boundVars
+        (:->:)  p1 p2 -> checkSanityPropDeBr p1 freevarStackHeight tmpltVarIndices consts boundVars
+                         <|> checkSanityPropDeBr p2 freevarStackHeight tmpltVarIndices consts boundVars
+        (:<->:) p1 p2 -> checkSanityPropDeBr p1 freevarStackHeight tmpltVarIndices consts boundVars
+                         <|> checkSanityPropDeBr p2 freevarStackHeight tmpltVarIndices consts boundVars
+        In o1 o2 -> checkSanityObjDeBr o1 freevarStackHeight tmpltVarIndices consts boundVars
+                         <|> checkSanityObjDeBr o2 freevarStackHeight tmpltVarIndices consts boundVars
+        (:==:) o1 o2 -> checkSanityObjDeBr o1 freevarStackHeight tmpltVarIndices consts boundVars
+                         <|> checkSanityObjDeBr o2 freevarStackHeight tmpltVarIndices consts boundVars
+        Forall prop -> checkSanityPropDeBr prop freevarStackHeight tmpltVarIndices consts
                             (Set.insert (boundDepthPropDeBr prop) boundVars )
-        Exists prop -> checkSanityPropDeBr prop freevarStackHeight templateVarCount consts
+        Exists prop -> checkSanityPropDeBr prop freevarStackHeight tmpltVarIndices consts
                             (Set.insert (boundDepthPropDeBr prop) boundVars )
-        (:>=:) o1 o2 -> checkSanityObjDeBr o1 freevarStackHeight templateVarCount consts boundVars
-                         <|> checkSanityObjDeBr o2 freevarStackHeight templateVarCount consts boundVars
+        (:>=:) o1 o2 -> checkSanityObjDeBr o1 freevarStackHeight tmpltVarIndices consts boundVars
+                         <|> checkSanityObjDeBr o2 freevarStackHeight tmpltVarIndices consts boundVars
         F -> Nothing
 
 
 
 instance TypeableTerm ObjDeBr Text () DeBrSe where
  
-     getTypeTerm :: [()] -> [()] -> Map Text () -> ObjDeBr -> Either DeBrSe ()
+     getTypeTerm :: Map Int () -> [()] -> Map Text () -> ObjDeBr -> Either DeBrSe ()
      getTypeTerm ts vs constDict term = 
          maybe (return ()) throwError (checkSanityObjDeBr term (Prelude.length vs) 
-                        (Prelude.length ts) (keysSet constDict) mempty)
+                        (Data.Map.keysSet ts) (keysSet constDict) mempty)
      const2Term :: Text -> ObjDeBr
      const2Term = Constant
      free2Term :: Int -> ObjDeBr
@@ -710,10 +710,10 @@ instance TypeableTerm ObjDeBr Text () DeBrSe where
 
 
 instance TypedSent  Text () DeBrSe PropDeBr where
-    checkSanity :: [()] -> [()] -> Map Text () -> PropDeBr -> Maybe DeBrSe
+    checkSanity :: Map Int () -> [()] -> Map Text () -> PropDeBr -> Maybe DeBrSe
     checkSanity tsTypes freeVarStack constDict prop = checkSanityPropDeBr
         prop (Prelude.length freeVarStack) 
-        (Prelude.length tsTypes)  (keysSet constDict) mempty
+        (Data.Map.keysSet tsTypes)  (keysSet constDict) mempty
 
 
 
@@ -880,19 +880,19 @@ objDeBrSubX' subidx substitution template currentDepth shiftMap = case template 
 propDeBrSubX' :: Int -> ObjDeBr -> PropDeBr -> Int -> Map Int Int -> PropDeBr
 propDeBrSubX' subidx substitution template currentDepth shiftMap  = case template of
     Neg p -> Neg $ propDeBrSubX' subidx substitution p currentDepth shiftMap
-    (:&&:) p1 p2 -> (propDeBrSubX' subidx substitution p1 currentDepth shiftMap) :&&: 
-                (propDeBrSubX' subidx substitution p2 currentDepth shiftMap)
-    (:||:) p1 p2 ->  (propDeBrSubX' subidx substitution p1 currentDepth shiftMap) :||: 
-                (propDeBrSubX' subidx substitution p2 currentDepth shiftMap)
-    (:->:) p1 p2 ->  (propDeBrSubX' subidx substitution p1 currentDepth shiftMap) :->: 
-                (propDeBrSubX' subidx substitution p2 currentDepth shiftMap)
-    (:<->:) p1 p2 -> (propDeBrSubX' subidx substitution p1 currentDepth shiftMap) :<->: 
-                (propDeBrSubX' subidx substitution p2 currentDepth shiftMap)
+    (:&&:) p1 p2 -> propDeBrSubX' subidx substitution p1 currentDepth shiftMap :&&: 
+                propDeBrSubX' subidx substitution p2 currentDepth shiftMap
+    (:||:) p1 p2 ->  propDeBrSubX' subidx substitution p1 currentDepth shiftMap :||: 
+                propDeBrSubX' subidx substitution p2 currentDepth shiftMap
+    (:->:) p1 p2 -> propDeBrSubX' subidx substitution p1 currentDepth shiftMap :->: 
+                propDeBrSubX' subidx substitution p2 currentDepth shiftMap
+    (:<->:) p1 p2 -> propDeBrSubX' subidx substitution p1 currentDepth shiftMap :<->: 
+                propDeBrSubX' subidx substitution p2 currentDepth shiftMap
 
-    (:==:) o1 o2 ->  (objDeBrSubX' subidx substitution o1 currentDepth shiftMap) :==: 
-                (objDeBrSubX' subidx substitution o2 currentDepth shiftMap)
-    In o1 o2 ->  (objDeBrSubX' subidx substitution o1 currentDepth shiftMap) `In`
-                (objDeBrSubX' subidx substitution o2 currentDepth shiftMap)
+    (:==:) o1 o2 ->  objDeBrSubX' subidx substitution o1 currentDepth shiftMap :==: 
+                objDeBrSubX' subidx substitution o2 currentDepth shiftMap
+    In o1 o2 -> objDeBrSubX' subidx substitution o1 currentDepth shiftMap `In`
+                objDeBrSubX' subidx substitution o2 currentDepth shiftMap
     Forall p -> Forall $ propDeBrSubX' subidx substitution p newDepth newShiftMap
       where
         newDepth = currentDepth - 1
@@ -905,8 +905,8 @@ propDeBrSubX' subidx substitution template currentDepth shiftMap  = case templat
         substitutionDepth = boundDepthObjDeBr substitution
         newShiftMapEntry = propDeBrCalcShift newDepth substitutionDepth subidx p
         newShiftMap = Data.Map.insert newDepth newShiftMapEntry shiftMap 
-    (:>=:) o1 o2 -> (objDeBrSubX' subidx substitution o1 currentDepth shiftMap) :>=:
-                (objDeBrSubX' subidx substitution o2 currentDepth shiftMap)
+    (:>=:) o1 o2 -> objDeBrSubX' subidx substitution o1 currentDepth shiftMap :>=:
+                objDeBrSubX' subidx substitution o2 currentDepth shiftMap
     F -> F
 
 objDeBrSubX :: Int -> ObjDeBr -> ObjDeBr -> ObjDeBr
@@ -1048,8 +1048,8 @@ instance PREDL.LogicSent PropDeBr ObjDeBr ()  where
                 _ -> Nothing
     (.==.) :: ObjDeBr -> ObjDeBr -> PropDeBr
     (.==.) = (:==:)
-    substX0 :: PropDeBr -> ObjDeBr -> PropDeBr
-    substX0 template obj = propDeBrSubX 0 obj template
+    substX :: Int -> PropDeBr -> ObjDeBr -> PropDeBr
+    substX idx template obj = propDeBrSubX idx obj template
 
 
     
@@ -1410,18 +1410,15 @@ isFunction t = isRelation t :&&:
 
 builderX :: Int -> ObjDeBr -> PropDeBr -> ObjDeBr
 
--- Assumes that t is a term with no template variables.
--- and p is predicate template with X idx as a template variable and
--- no other template variables. Neither p nor t need to be closed, and the resulting
--- expression can be open, so that it's open variables can be bound in a larger expression.
--- Free variables (e.g. Freevar n) allowed.
+-- t is a term and p is predicate template with X idx as a template variable and
+-- no other template variables. Both t and X can have other template variables.
+-- If t has X idx as a template variable it will remain unconsumed in the resulting expression.
+-- Template variables with negative indices should not be used.
 
-builderX idx t p = objDeBrSubX (idx + 2) t (hX (idx + 1) (aX idx (X idx `In` X (idx + 1) :<->: p :&&: X idx `In` X (idx + 2)))) 
 
--- For intended usage,
--- a and b should both not have any template variables occuring within it.
--- If they do, they can effectively result in variable capture, if they are consumed,
--- or an insane sentence, if any are left unconsumed. Consider this a GIGO situation.
+builderX idx t p = objDeBrSubX (-2) t (hX (-1) (aX idx (X idx `In` X (-1) :<->: p :&&: X idx `In` X (-2)))) 
+
+
 subset :: ObjDeBr -> ObjDeBr -> PropDeBr
 subset a b = propDeBrSubXs [(1,a),(0,b)] 
           (aX 2 (X 2 `In` X 1 :->: X 2 `In` X 0))
@@ -1433,32 +1430,14 @@ strictSubset a b = subset a b :&&: Neg (a :==: b)
 notSubset :: ObjDeBr -> ObjDeBr -> PropDeBr
 notSubset a b = Neg (subset a b)
 
--- The following function projects the first element of a pair.
--- For intended usage, pair should not have any template variables occuring within it.
--- If it does, it can effectively result in variable capture, if they are consumed,
--- or an insane sentence, if any are left unconsumed. Consider this a GIGO situation.
+
 pairFirst :: ObjDeBr -> ObjDeBr
 pairFirst pair = objDeBrSubX 0 pair (hX 2 (eX 1 (X 0 :==: Pair (X 2) (X 1))))
 
 
-relDomain' :: ObjDeBr -> ObjDeBr
-relDomain' s = Hilbert $ Forall
-                       (    (Bound (d+1) `In` Bound (d+2))  -- x ∈ D
-                       :<->:                             -- iff
-                            Exists (Pair (Bound (d+1)) (Bound d) `In` s) -- exists y such that <x, y> in s
-                       )
-   where
-    -- Calculate base depth based on free vars/bindings within 's'
-    d = boundDepthObjDeBr s
-    -- Note: Assumes 's' itself doesn't contain indices d, d+1, d+2
-    -- in a way that clashes, similar to preconditions for subset.
-    -- Indices used:
-    -- d   represents 'y' bound by Exists
-    -- d+1 represents 'x' bound by Forall
-    -- d+2 represents 'D' (the domain set) bound by Hilbert
 
 relDomain :: ObjDeBr -> ObjDeBr
-relDomain s = objDeBrSubX 0 s (hX 1(aX 2 ((X 2) `In` (X 1))  -- x ∈ D
+relDomain s = objDeBrSubX 0 s (hX 1(aX 2 (X 2 `In` X 1)  -- x ∈ D
                        :<->:                             -- iff
                             eX 3 (Pair (X 2) (X 3) `In` X 0)))
 
@@ -1471,23 +1450,7 @@ relDomain s = objDeBrSubX 0 s (hX 1(aX 2 ((X 2) `In` (X 1))  -- x ∈ D
 -- Note that this is just a helper function. It doesn't test
 -- that f really is a function. It also depends on pairFirst working correctly.
 --
--- >> Precondition Note for Indexing <<
--- This helper calculates d = max (boundDepthObjDeBr f + 2) (boundDepthObjDeBr x).
--- It uses `Bound d` for the 'y' variable (the function result y=f(x))
--- bound by the `Hilbert` operator.
--- For this representation to work reliably within this system's indexing convention:
--- 1. The term `f` should NOT already contain free occurrences of `Bound dp_f` or `Bound (dp_f + 1)`,
---    where `dp_f = boundDepthObjDeBr f` (these indices are used internally by `pairFirst f`).
--- 2. Neither the term `f` nor the term `x` should contain free occurrences of `Bound d`,
---    where `d` is the calculated index `max (boundDepthObjDeBr f + 2) (boundDepthObjDeBr x)`.
--- Violating these preconditions might lead to unintended variable capture or meaning (GIGO).
---
---(.@.) :: ObjDeBr -> ObjDeBr -> ObjDeBr
---f .@. x = Hilbert ( Pair x (Bound d) `In` pairFirst f )
-           -- Calculate index 'd' for 'y' (bound by Hilbert) using the specific rule for this helper
---           where d = max (boundDepthObjDeBr f + 2) (boundDepthObjDeBr x)
-           -- Here Hilbert binds 'y', represented by 'Bound d' inside the property
-           -- The property is P(y) = <x, y> ∈ f_graph (where f_graph = pairFirst f).
+
 
 (.@.) :: ObjDeBr -> ObjDeBr -> ObjDeBr
 f .@. x = objDeBrSubXs [(0,f),(1,x)] (hX 2 ( Pair (X 1) (X 2) `In` pairFirst (X 0) ))
@@ -1504,13 +1467,16 @@ instance ZFC.LogicSent PropDeBr ObjDeBr where
     -- specification axiom composed from term t and predicate P(x)
 
     specAxiom idx t p = propDeBrSubX (idx+2) t (eX (idx + 1) $ aX idx $ X idx `In` X (idx + 1) :<->: p :&&: X idx `In` X (idx + 2))
-    replaceAxiom:: Int -> ObjDeBr -> PropDeBr -> PropDeBr
+    replaceAxiom:: Int -> Int -> ObjDeBr -> PropDeBr -> PropDeBr
     --replaceAxiom t p = aX 0 (X 0 `In` t :->: eXBang 1 p)
     --                     :->: eX 2 (aX 1 (X 1 `In` X 2 :<->: eX 0 (X 0 `In` t :&&: p)))
-    replaceAxiom idx t p = propDeBrSubX (idx+2) t (
-                              aX 0 (X 0 `In` X (idx + 2) :->: eXBang 1 p)
-                                   :->: eX 2 (aX 1 (X 1 `In` X 2 :<->: eX 0 (X 0 `In` X (idx + 2) :&&: p)))
-                           )  
+    replaceAxiom idx1 idx2 t p = propDeBrSubX (-1) t (
+                              aX idx1 (X idx1 `In` t :->: eXBang 1 p)
+                                     :->: eX (-2) (aX idx1 (X idx1 `In` X (-2) :<->: eX idx2 (X idx2 `In` X (-1) :&&: p)))
+                          )                                           
+                              
+            
+                           
       
  
 
