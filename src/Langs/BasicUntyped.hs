@@ -1694,7 +1694,7 @@ f .@. x = objDeBrSubXs [(0,f),(1,x)] (hX 2 ( Pair (X 1) (X 2) `In` pairFirstTemp
 compositionTemplate :: ObjDeBr
 compositionTemplate =
    hX 99 $
-     aX 11 $
+     aX 11
        ( (X 99 .@. X 11) -- h(x)
           :==: -- ==
           (X 1 .@. (X 2 .@. X 11)) -- f(g(x))
@@ -1738,7 +1738,7 @@ instance ZFC.LogicSent PropDeBr ObjDeBr where
     replaceAxiom :: Int -> Int -> ObjDeBr -> PropDeBr -> PropDeBr
     replaceAxiom idx1 idx2 t p =
     -- Substitute the actual term 't' for the internal placeholder 'XInternal 1'
-        propDeBrSubXInt 1 t $
+        propDeBrSubXInt 1 t
            (
               -- Premise: Forall a (a in t -> Exists! b P(a,b))
               -- Uses user's 'aX' and 'eXBang' as they operate on user template 'p' with user indices X idx1, X idx2
