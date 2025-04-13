@@ -25,7 +25,8 @@ module Langs.BasicUntyped (
     boundDepthPropDeBr,
     notSubset,
     pairFirst,
-    (.@.)
+    (.@.),
+    (.:.)
 ) where
 import Control.Monad ( unless )
 import Data.List (intersperse)
@@ -57,6 +58,7 @@ import Distribution.Backpack.ConfiguredComponent (newPackageDepsBehaviour)
 
 
 
+
 data PropDeBr where
       Neg :: PropDeBr -> PropDeBr
       (:&&:)  :: PropDeBr -> PropDeBr -> PropDeBr
@@ -70,7 +72,7 @@ data PropDeBr where
       Exists :: PropDeBr -> PropDeBr
       (:>=:) :: ObjDeBr -> ObjDeBr -> PropDeBr
       F :: PropDeBr
-    deriving (Eq, Ord)
+    deriving (Show, Eq, Ord)
 
 
 infixr 3 :&&:
@@ -198,62 +200,98 @@ propDeBrHasBoundVar sub idx = case sub of
     F -> False
 
 
+-- Swaps Bound fromIdx to Bound toIdx within a PropDeBr
+swapBoundIndexProp :: Int -> Int -> PropDeBr -> PropDeBr
+swapBoundIndexProp fromIdx toIdx p = case p of
+    Neg q -> Neg (swapBoundIndexProp fromIdx toIdx q)
+    (:&&:) p1 p2 -> (:&&:) (swapBoundIndexProp fromIdx toIdx p1) (swapBoundIndexProp fromIdx toIdx p2)
+    (:||:) p1 p2 -> (:||:) (swapBoundIndexProp fromIdx toIdx p1) (swapBoundIndexProp fromIdx toIdx p2)
+    (:->:) p1 p2 -> (:->:) (swapBoundIndexProp fromIdx toIdx p1) (swapBoundIndexProp fromIdx toIdx p2)
+    (:<->:) p1 p2 -> (:<->:) (swapBoundIndexProp fromIdx toIdx p1) (swapBoundIndexProp fromIdx toIdx p2)
+    (:==:) o1 o2 -> (:==:) (swapBoundIndexObj fromIdx toIdx o1) (swapBoundIndexObj fromIdx toIdx o2)
+    In o1 o2 -> In (swapBoundIndexObj fromIdx toIdx o1) (swapBoundIndexObj fromIdx toIdx o2)
+    Forall q -> Forall (swapBoundIndexProp fromIdx toIdx q) -- Recurses under binder
+    Exists q -> Exists (swapBoundIndexProp fromIdx toIdx q) -- Recurses under binder
+    (:>=:) o1 o2 -> (:>=:) (swapBoundIndexObj fromIdx toIdx o1) (swapBoundIndexObj fromIdx toIdx o2)
+    F -> F
+
+-- Swaps Bound fromIdx to Bound toIdx within an ObjDeBr
+swapBoundIndexObj :: Int -> Int -> ObjDeBr -> ObjDeBr
+swapBoundIndexObj fromIdx toIdx o = case o of
+    Integ num -> Integ num
+    Constant name -> Constant name
+    Hilbert p -> Hilbert (swapBoundIndexProp fromIdx toIdx p) -- Recurses into Hilbert predicate
+    Bound i -> if i == fromIdx then Bound toIdx else Bound i -- *** Perform swap if index matches ***
+    V i -> V i             -- Free variables are untouched
+    X i -> X i             -- Template variables are untouched
+    XInternal i -> XInternal i -- Internal template variables are untouched
+    Pair o1 o2 -> Pair (swapBoundIndexObj fromIdx toIdx o1) (swapBoundIndexObj fromIdx toIdx o2)
+
+-- Calculates depth, returning substitutionDepth if X targetIdx is found.
+boundDepthObjDeBrX :: Int -> Int -> ObjDeBr -> Int
+boundDepthObjDeBrX targetIdx substitutionDepth obj = case obj of
+    Integ num -> 0
+    Constant name -> 0
+    -- Use recursive call to the corresponding Prop version
+    Hilbert prop -> 1 + boundDepthPropDeBrX targetIdx substitutionDepth prop
+    Bound idx -> 0 -- Bound variables themselves have 0 depth contribution
+    V idx -> 0     -- Free variables have 0 depth contribution
+    X idx -> if idx == targetIdx then substitutionDepth else 0 -- *** Return substitutionDepth if target X found ***
+    XInternal idx -> 0 -- Ignore XInternal in this version
+    -- Use recursive calls for pairs
+    Pair a b -> max (boundDepthObjDeBrX targetIdx substitutionDepth a) (boundDepthObjDeBrX targetIdx substitutionDepth b)
+
+-- Calculates depth, returning substitutionDepth if X targetIdx is found.
+boundDepthPropDeBrX :: Int -> Int -> PropDeBr -> Int
+boundDepthPropDeBrX targetIdx substitutionDepth prop = case prop of
+    Neg p -> boundDepthPropDeBrX targetIdx substitutionDepth p
+    (:&&:) p1 p2 -> max (boundDepthPropDeBrX targetIdx substitutionDepth p1) (boundDepthPropDeBrX targetIdx substitutionDepth p2)
+    (:||:) p1 p2 -> max (boundDepthPropDeBrX targetIdx substitutionDepth p1) (boundDepthPropDeBrX targetIdx substitutionDepth p2)
+    (:->:) p1 p2 -> max (boundDepthPropDeBrX targetIdx substitutionDepth p1) (boundDepthPropDeBrX targetIdx substitutionDepth p2)
+    (:<->:) p1 p2 -> max (boundDepthPropDeBrX targetIdx substitutionDepth p1) (boundDepthPropDeBrX targetIdx substitutionDepth p2)
+    -- Use recursive call to the corresponding Obj version
+    (:==:) o1 o2 -> max (boundDepthObjDeBrX targetIdx substitutionDepth o1) (boundDepthObjDeBrX targetIdx substitutionDepth o2)
+    In o1 o2 -> max (boundDepthObjDeBrX targetIdx substitutionDepth o1) (boundDepthObjDeBrX targetIdx substitutionDepth o2)
+    -- Standard depth increase for binders, using recursive call
+    Forall p -> 1 + boundDepthPropDeBrX targetIdx substitutionDepth p
+    Exists p -> 1 + boundDepthPropDeBrX targetIdx substitutionDepth p
+    -- Use recursive call to the corresponding Obj version
+    (:>=:) o1 o2 -> max (boundDepthObjDeBrX targetIdx substitutionDepth o1) (boundDepthObjDeBrX targetIdx substitutionDepth o2)
+    F -> 0
+
+-- Calculates depth, returning substitutionDepth if XInternal targetIdx is found.
+boundDepthObjDeBrXInt :: Int -> Int -> ObjDeBr -> Int
+boundDepthObjDeBrXInt targetIdx substitutionDepth obj = case obj of
+    Integ num -> 0
+    Constant name -> 0
+    -- Use recursive call to the corresponding Prop version
+    Hilbert prop -> 1 + boundDepthPropDeBrXInt targetIdx substitutionDepth prop
+    Bound idx -> 0
+    V idx -> 0
+    X idx -> 0 -- Ignore regular X in this version
+    XInternal idx -> if idx == targetIdx then substitutionDepth else 0 -- *** Return substitutionDepth if target XInternal found ***
+    -- Use recursive calls for pairs
+    Pair a b -> max (boundDepthObjDeBrXInt targetIdx substitutionDepth a) (boundDepthObjDeBrXInt targetIdx substitutionDepth b)
+
+-- Calculates depth, returning substitutionDepth if XInternal targetIdx is found.
+boundDepthPropDeBrXInt :: Int -> Int -> PropDeBr -> Int
+boundDepthPropDeBrXInt targetIdx substitutionDepth prop = case prop of
+    Neg p -> boundDepthPropDeBrXInt targetIdx substitutionDepth p
+    (:&&:) p1 p2 -> max (boundDepthPropDeBrXInt targetIdx substitutionDepth p1) (boundDepthPropDeBrXInt targetIdx substitutionDepth p2)
+    (:||:) p1 p2 -> max (boundDepthPropDeBrXInt targetIdx substitutionDepth p1) (boundDepthPropDeBrXInt targetIdx substitutionDepth p2)
+    (:->:) p1 p2 -> max (boundDepthPropDeBrXInt targetIdx substitutionDepth p1) (boundDepthPropDeBrXInt targetIdx substitutionDepth p2)
+    (:<->:) p1 p2 -> max (boundDepthPropDeBrXInt targetIdx substitutionDepth p1) (boundDepthPropDeBrXInt targetIdx substitutionDepth p2)
+    -- Use recursive call to the corresponding Obj version
+    (:==:) o1 o2 -> max (boundDepthObjDeBrXInt targetIdx substitutionDepth o1) (boundDepthObjDeBrXInt targetIdx substitutionDepth o2)
+    In o1 o2 -> max (boundDepthObjDeBrXInt targetIdx substitutionDepth o1) (boundDepthObjDeBrXInt targetIdx substitutionDepth o2)
+    -- Standard depth increase for binders, using recursive call
+    Forall p -> 1 + boundDepthPropDeBrXInt targetIdx substitutionDepth p
+    Exists p -> 1 + boundDepthPropDeBrXInt targetIdx substitutionDepth p
+    -- Use recursive call to the corresponding Obj version
+    (:>=:) o1 o2 -> max (boundDepthObjDeBrXInt targetIdx substitutionDepth o1) (boundDepthObjDeBrXInt targetIdx substitutionDepth o2)
+    F -> 0
 
 
-
-
--- instance SubexpDeBr ObjDeBr where
---    toSubexpParseTree :: ObjDeBr -> Map PropDeBr [Int]  -> SubexpParseTree
---    toSubexpParseTree obj dict = case obj of
---        Integ i -> ParseTreeInt i
---        Constant c -> ParseTreeConst c
---        Hilbert p -> case Data.Map.lookup (Exists p) dict of
---            Just idxs -> HilbertShort idxs
---            Nothing -> case p of
---                Forall (Bound a `In` Bound b :<->: q :&&: Bound c `In` t) -> 
---                    if a == pDepth - 1 
---                        && c == a 
---                        && b == pDepth 
---                        && not (propDeBrBoundVarInside q b) 
---                        && not (objDeBrBoundVarInside t a) 
---                        && not (objDeBrBoundVarInside t b) then
---                               Builder tTree (sbParseTreeNormalize (pDepth-1) qTree)
---                        -- For this to be a proper usage, q cannot bind b, and t cannot
---                        -- bind a or b.
---                        -- so we have to check for this before using the builder notation.
---                        -- If either of these two conditions are not met and we used
---                        -- the builder notation, then we would would lose
---                        -- quantifiers that are quantifying over b or a.
---                    else 
---                        Binding "ε" (sbParseTreeNormalize pDepth pTree) 
---                          where
---                            pDepth = boundDepthPropDeBr p
---                            pTree = toSubexpParseTree p dict
---                            tTree = toSubexpParseTree t dict
---                            qTree = toSubexpParseTree q dict
---                Pair x (Bound d) `In` (Hilbert (Exists ( f :==: Pair (Bound dp_fPlus1) (Bound dp_f) ))) ->
---                    if    d == max (boundDepthObjDeBr f + 2) (boundDepthObjDeBr x)
---                       && dp_f == boundDepthObjDeBr f
---                       && dp_fPlus1 == dp_f + 1
---                       && not (objDeBrBoundVarInside f dp_f)
---                       && not (objDeBrBoundVarInside f (dp_f+1))
---                       && not (objDeBrBoundVarInside f d)
---                       && not (objDeBrBoundVarInside x d)
---                   then
---                       FuncApp (toSubexpParseTree f dict) (toSubexpParseTree x dict)
---                   else
---                       Binding  "ε" (sbParseTreeNormalize pDepth pTree)  
---                           where
---                            pDepth = boundDepthPropDeBr p
---                            pTree = toSubexpParseTree p dict
---                _ -> Binding "ε" (sbParseTreeNormalize pDepth pTree) 
---                          where
---                            pDepth = boundDepthPropDeBr p
---                            pTree = toSubexpParseTree p dict
---        Bound i -> ParseTreeBoundVar i
---        V i -> ParseTreeFreeVar i
---        X i -> ParseTreeX i
---        Pair a b -> Tuple [toSubexpParseTree a dict,toSubexpParseTree b dict]
         
 instance SubexpDeBr ObjDeBr where
     toSubexpParseTree :: ObjDeBr -> Map PropDeBr [Int] -> SubexpParseTree
@@ -426,6 +464,7 @@ instance SubexpDeBr PropDeBr where
                             pDepth = boundDepthPropDeBr p
                             pTree = toSubexpParseTree pDecremented dict
                             pDecremented = boundDecrementPropDeBr depth p
+
             _ -> defaultP
          where
            defaultP = Binding "∃" (sbParseTreeNormalize pDepth pTree) 
@@ -547,14 +586,14 @@ showSubexpParseTree sub = case sub of
     prec opSymb = snd $ binaryOpData!opSymb
 
 
-instance Show ObjDeBr where
-    show :: ObjDeBr -> String
-    show obj = unpack $ showSubexpParseTree $ toSubexpParseTree obj mempty                         
+--instance Show ObjDeBr where
+--    show :: ObjDeBr -> String
+--    show obj = unpack $ showSubexpParseTree $ toSubexpParseTree obj mempty                         
 
 
-instance Show PropDeBr where
-    show :: PropDeBr -> String
-    show obj = unpack $ showSubexpParseTree $ toSubexpParseTree obj mempty
+--instance Show PropDeBr where
+--    show :: PropDeBr -> String
+--    show obj = unpack $ showSubexpParseTree $ toSubexpParseTree obj mempty
 
 
 showObj :: Map PropDeBr [Int] -> ObjDeBr -> Text
@@ -615,7 +654,7 @@ data ObjDeBr where
 
     Pair :: ObjDeBr -> ObjDeBr -> ObjDeBr
 
-    deriving (Eq, Ord)
+    deriving (Eq, Ord, Show)
 
 
 
@@ -810,48 +849,24 @@ objDeBrXInside subidx obj =
         V i -> False
         X idx | idx == subidx -> True
               | otherwise -> False
+        XInternal idx -> False
         Pair a b -> objDeBrXInside subidx a || objDeBrXInside subidx b
 
+objDeBrXInsideInt :: Int -> ObjDeBr -> Bool
+objDeBrXInsideInt subidx obj =
+    case obj of
+        Integ num -> False
+        Constant const -> False
+        Hilbert p -> propDeBrXInsideInt subidx p
+        Bound i -> False
+        V i -> False
+        XInternal idx | idx == subidx -> True
+              | otherwise -> False
+        X idx -> False
+        Pair a b -> objDeBrXInsideInt subidx a || objDeBrXInsideInt subidx b
 
-objDeBrCalcShift :: Int -> Int -> Int -> ObjDeBr -> Int
-objDeBrCalcShift currentDepth substitutionDepth templateVarIdx obj =
-      case obj of
-        Integ num -> 0
-        Constant const -> 0
-        Hilbert p -> propDeBrCalcShift (currentDepth - 1) substitutionDepth templateVarIdx p 
-        Bound i -> 0
-        V i -> 0
-        X idx | idx == templateVarIdx -> if
-                     currentDepth < substitutionDepth
-                then
-                     substitutionDepth - currentDepth
-                else
-                     0
-              | otherwise -> 0
-        Pair o1 o2 -> max (objDeBrCalcShift currentDepth substitutionDepth templateVarIdx o1)
-                     (objDeBrCalcShift currentDepth substitutionDepth templateVarIdx o2)
 
-propDeBrCalcShift :: Int -> Int -> Int -> PropDeBr -> Int
-propDeBrCalcShift currentDepth substitutionDepth templateVarIdx prop =
-    case prop of
-        Neg p -> propDeBrCalcShift (currentDepth - 1) substitutionDepth templateVarIdx p
-        (:&&:) p1 p2 -> max (propDeBrCalcShift currentDepth substitutionDepth templateVarIdx p1)
-                     (propDeBrCalcShift currentDepth substitutionDepth templateVarIdx p2)
-        (:||:) p1 p2 -> max (propDeBrCalcShift currentDepth substitutionDepth templateVarIdx p1)
-                     (propDeBrCalcShift currentDepth substitutionDepth templateVarIdx p2)
-        (:->:) p1 p2 -> max (propDeBrCalcShift currentDepth substitutionDepth templateVarIdx p1)
-                     (propDeBrCalcShift currentDepth substitutionDepth templateVarIdx p2)
-        (:<->:) p1 p2 -> max (propDeBrCalcShift currentDepth substitutionDepth templateVarIdx p1)
-                     (propDeBrCalcShift currentDepth substitutionDepth templateVarIdx p2)
-        (:==:) o1 o2 -> max (objDeBrCalcShift currentDepth substitutionDepth templateVarIdx o1)
-                     (objDeBrCalcShift currentDepth substitutionDepth templateVarIdx o2)
-        In o1 o2 -> max (objDeBrCalcShift currentDepth substitutionDepth templateVarIdx o1)
-                     (objDeBrCalcShift currentDepth substitutionDepth templateVarIdx o2)
-        Forall p -> propDeBrCalcShift (currentDepth - 1) substitutionDepth templateVarIdx p 
-        Exists p -> propDeBrCalcShift (currentDepth - 1) substitutionDepth templateVarIdx p 
-        (:>=:) o1 o2 -> max (objDeBrCalcShift currentDepth substitutionDepth templateVarIdx o1)
-                     (objDeBrCalcShift currentDepth substitutionDepth templateVarIdx o2)
-        F -> 0
+
 
 
 propDeBrXInside :: Int -> PropDeBr -> Bool
@@ -866,237 +881,249 @@ propDeBrXInside subidx prop = case prop of
     Forall p -> propDeBrXInside subidx p
     Exists p -> propDeBrXInside subidx p
     (:>=:) o1 o2 -> objDeBrXInside subidx o1 || objDeBrXInside subidx o2
-    false -> False
+    F -> False
 
--- Internal Shift Calculation (Adapted for XInternal)
--- Calculates the necessary shift for Bound variables when substituting under binders,
--- triggered by the presence of XInternal subidxInternal.
-objDeBrCalcShiftInternal :: Int -> Int -> Int -> ObjDeBr -> Int
-objDeBrCalcShiftInternal currentDepth substitutionDepth templateVarIdxInternal obj =
-      case obj of
-        Integ num -> 0
-        Constant const -> 0
-        Hilbert p -> propDeBrCalcShiftInternal (currentDepth - 1) substitutionDepth templateVarIdxInternal p
-        Bound i -> 0
-        V i -> 0
-        X idx -> 0 -- Regular X doesn't trigger shift in this version
-        XInternal idx | idx == templateVarIdxInternal ->
-                       if currentDepth < substitutionDepth
-                       then substitutionDepth - currentDepth
-                       else 0
-                    | otherwise -> 0
-        Pair o1 o2 -> max (objDeBrCalcShiftInternal currentDepth substitutionDepth templateVarIdxInternal o1)
-                         (objDeBrCalcShiftInternal currentDepth substitutionDepth templateVarIdxInternal o2)
+propDeBrXInsideInt :: Int -> PropDeBr -> Bool
+propDeBrXInsideInt subidx prop = case prop of
+    Neg p -> propDeBrXInsideInt subidx p
+    (:&&:) p1 p2 -> propDeBrXInsideInt subidx p1 || propDeBrXInsideInt subidx p2
+    (:||:) p1 p2 -> propDeBrXInsideInt subidx p1 || propDeBrXInsideInt subidx p2
+    (:->:) p1 p2 -> propDeBrXInsideInt subidx p1 || propDeBrXInsideInt subidx p2
+    (:<->:) p1 p2 -> propDeBrXInsideInt subidx p1 || propDeBrXInsideInt subidx p2
+    (:==:) o1 o2 -> objDeBrXInsideInt subidx o1  || objDeBrXInsideInt subidx o2
+    In o1 o2 -> objDeBrXInsideInt subidx o1 || objDeBrXInsideInt subidx o2
+    Forall p -> propDeBrXInsideInt subidx p
+    Exists p -> propDeBrXInsideInt subidx p
+    (:>=:) o1 o2 -> objDeBrXInsideInt subidx o1 || objDeBrXInsideInt subidx o2
+    F -> False
 
-propDeBrCalcShiftInternal :: Int -> Int -> Int -> PropDeBr -> Int
-propDeBrCalcShiftInternal currentDepth substitutionDepth templateVarIdxInternal prop =
-    case prop of
-        Neg p -> propDeBrCalcShiftInternal (currentDepth - 1) substitutionDepth templateVarIdxInternal p
-        (:&&:) p1 p2 -> max (propDeBrCalcShiftInternal currentDepth substitutionDepth templateVarIdxInternal p1)
-                         (propDeBrCalcShiftInternal currentDepth substitutionDepth templateVarIdxInternal p2)
-        (:||:) p1 p2 -> max (propDeBrCalcShiftInternal currentDepth substitutionDepth templateVarIdxInternal p1)
-                         (propDeBrCalcShiftInternal currentDepth substitutionDepth templateVarIdxInternal p2)
-        (:->:) p1 p2 -> max (propDeBrCalcShiftInternal currentDepth substitutionDepth templateVarIdxInternal p1)
-                         (propDeBrCalcShiftInternal currentDepth substitutionDepth templateVarIdxInternal p2)
-        (:<->:) p1 p2 -> max (propDeBrCalcShiftInternal currentDepth substitutionDepth templateVarIdxInternal p1)
-                         (propDeBrCalcShiftInternal currentDepth substitutionDepth templateVarIdxInternal p2)
-        (:==:) o1 o2 -> max (objDeBrCalcShiftInternal currentDepth substitutionDepth templateVarIdxInternal o1)
-                         (objDeBrCalcShiftInternal currentDepth substitutionDepth templateVarIdxInternal o2)
-        In o1 o2 -> max (objDeBrCalcShiftInternal currentDepth substitutionDepth templateVarIdxInternal o1)
-                     (objDeBrCalcShiftInternal currentDepth substitutionDepth templateVarIdxInternal o2)
-        Forall p -> propDeBrCalcShiftInternal (currentDepth - 1) substitutionDepth templateVarIdxInternal p
-        Exists p -> propDeBrCalcShiftInternal (currentDepth - 1) substitutionDepth templateVarIdxInternal p
-        (:>=:) o1 o2 -> max (objDeBrCalcShiftInternal currentDepth substitutionDepth templateVarIdxInternal o1)
-                         (objDeBrCalcShiftInternal currentDepth substitutionDepth templateVarIdxInternal o2)
-        F -> 0
 
--- Internal Substitution Worker Functions (Adapted for XInternal)
-objDeBrSubXInternal' :: Int -> ObjDeBr -> ObjDeBr -> Int -> Map Int Int -> ObjDeBr
-objDeBrSubXInternal' subidxInternal substitution template currentDepth shiftMap = case template of
+
+-- targetIdx is the index of an internal template variable.
+-- substition is the term that the template variable will be substituted for
+-- template is the template containing the template variable.
+objDeBrSubXInt :: Int -> ObjDeBr -> ObjDeBr -> ObjDeBr
+objDeBrSubXInt targetIdx substitution template = case template of
     Integ num -> Integ num
     Constant const -> Constant const
-    Hilbert p -> Hilbert $ propDeBrSubXInternal' subidxInternal substitution p newDepth newShiftMap
+    Hilbert p -> 
+        Hilbert $ propDeBrSubXInt targetIdx substitution normalisedSubexp
       where
-        newDepth = currentDepth - 1
-        substitutionDepth = boundDepthObjDeBr substitution
-        -- Use internal shift calculation
-        newShiftMapEntry = propDeBrCalcShiftInternal newDepth substitutionDepth subidxInternal p
-        newShiftMap = Data.Map.insert newDepth newShiftMapEntry shiftMap
-    Bound idx -> Bound (idx + shift)
-       where
-           shift = shiftMap!idx -- Shift logic remains the same
+        boundDepth = boundDepthPropDeBr p
+        newBoundDepth = boundDepthPropDeBrXInt boundDepth subBoundDepth p
+        subBoundDepth = boundDepthObjDeBr substitution 
+        normalisedSubexp = swapBoundIndexProp boundDepth newBoundDepth p   
+    Bound idx -> Bound idx
     V idx -> V idx
-    X idx -> X idx -- Regular X is passed through unchanged
-    XInternal idx
-        | idx == subidxInternal -> substitution -- Substitute the target XInternal
-        | otherwise -> XInternal idx -- Other XInternal are passed through
-    Pair o1 o2 ->
-        Pair (objDeBrSubXInternal' subidxInternal substitution o1 currentDepth shiftMap)
-             (objDeBrSubXInternal' subidxInternal substitution o2 currentDepth shiftMap)
-
-propDeBrSubXInternal' :: Int -> ObjDeBr -> PropDeBr -> Int -> Map Int Int -> PropDeBr
-propDeBrSubXInternal' subidxInternal substitution template currentDepth shiftMap  = case template of
-    Neg p -> Neg $ propDeBrSubXInternal' subidxInternal substitution p currentDepth shiftMap
-    (:&&:) p1 p2 -> propDeBrSubXInternal' subidxInternal substitution p1 currentDepth shiftMap :&&:
-                    propDeBrSubXInternal' subidxInternal substitution p2 currentDepth shiftMap
-    (:||:) p1 p2 ->  propDeBrSubXInternal' subidxInternal substitution p1 currentDepth shiftMap :||:
-                     propDeBrSubXInternal' subidxInternal substitution p2 currentDepth shiftMap
-    (:->:) p1 p2 -> propDeBrSubXInternal' subidxInternal substitution p1 currentDepth shiftMap :->:
-                    propDeBrSubXInternal' subidxInternal substitution p2 currentDepth shiftMap
-    (:<->:) p1 p2 -> propDeBrSubXInternal' subidxInternal substitution p1 currentDepth shiftMap :<->:
-                     propDeBrSubXInternal' subidxInternal substitution p2 currentDepth shiftMap
-    (:==:) o1 o2 ->  objDeBrSubXInternal' subidxInternal substitution o1 currentDepth shiftMap :==:
-                     objDeBrSubXInternal' subidxInternal substitution o2 currentDepth shiftMap
-    In o1 o2 -> objDeBrSubXInternal' subidxInternal substitution o1 currentDepth shiftMap `In`
-                objDeBrSubXInternal' subidxInternal substitution o2 currentDepth shiftMap
-    Forall p -> Forall $ propDeBrSubXInternal' subidxInternal substitution p newDepth newShiftMap
-      where
-        newDepth = currentDepth - 1
-        substitutionDepth = boundDepthObjDeBr substitution
-        -- Use internal shift calculation
-        newShiftMapEntry = propDeBrCalcShiftInternal newDepth substitutionDepth subidxInternal p
-        newShiftMap = Data.Map.insert newDepth newShiftMapEntry shiftMap
-    Exists p -> Exists $ propDeBrSubXInternal' subidxInternal substitution p newDepth newShiftMap
-      where
-        newDepth = currentDepth - 1
-        substitutionDepth = boundDepthObjDeBr substitution
-        -- Use internal shift calculation
-        newShiftMapEntry = propDeBrCalcShiftInternal newDepth substitutionDepth subidxInternal p
-        newShiftMap = Data.Map.insert newDepth newShiftMapEntry shiftMap
-    (:>=:) o1 o2 -> objDeBrSubXInternal' subidxInternal substitution o1 currentDepth shiftMap :>=:
-                    objDeBrSubXInternal' subidxInternal substitution o2 currentDepth shiftMap
-    F -> F
-
--- Top-Level Substitution Functions (Using XInternal)
-objDeBrSubXInternal :: Int -> ObjDeBr -> ObjDeBr -> ObjDeBr
-objDeBrSubXInternal subidxInternal substitution template =
-    objDeBrSubXInternal' subidxInternal substitution template startDepth startMap
-       where
-          startDepth = boundDepthObjDeBr template -- Depth calculation is the same
-          startMap = mempty -- Initial shift map is empty
-
-propDeBrSubXInternal :: Int -> ObjDeBr -> PropDeBr -> PropDeBr
-propDeBrSubXInternal subidxInternal substitution template =
-    propDeBrSubXInternal' subidxInternal substitution template startDepth startMap
-       where
-          startDepth = boundDepthPropDeBr template -- Depth calculation is the same
-          startMap = mempty -- Initial shift map is empty
-
-
-objDeBrSubX' :: Int -> ObjDeBr -> ObjDeBr -> Int -> Map Int Int -> ObjDeBr
-objDeBrSubX' subidx substitution template currentDepth shiftMap = case template of
-    Integ num -> Integ num
-    Constant const -> Constant const
-    Hilbert p -> Hilbert $ propDeBrSubX' subidx substitution p newDepth newShiftMap
-      where
-        newDepth = currentDepth - 1
-        substitutionDepth = boundDepthObjDeBr substitution
-        newShiftMapEntry = propDeBrCalcShift newDepth substitutionDepth subidx p
-        newShiftMap = Data.Map.insert newDepth newShiftMapEntry shiftMap       
-    Bound idx -> Bound (idx + shift)
-       where
-           shift = shiftMap!idx
-    V idx -> V idx
-    X idx 
-        | idx == subidx -> substitution
-        | otherwise -> X idx
+    XInternal idx 
+        | idx == targetIdx -> substitution
+        | otherwise -> XInternal idx
+    X idx -> X idx
     Pair o1 o2 -> 
-        Pair (objDeBrSubX' subidx substitution o1 currentDepth shiftMap) 
-                (objDeBrSubX' subidx substitution o2 currentDepth shiftMap)
-      
-        
+        Pair (objDeBrSubXInt targetIdx substitution o1) 
+                (objDeBrSubXInt targetIdx substitution o2)
 
 
 
 
 
 
+-- targetIdx is the index of an intnernal template variable.
+-- substition is the term that the template variable will be substituted for
+-- template is the template containing the template variable.
+propDeBrSubXInt :: Int -> ObjDeBr -> PropDeBr -> PropDeBr
+propDeBrSubXInt targetIdx substitution template = case template of
+    Neg p -> Neg $ propDeBrSubXInt targetIdx substitution p
+    (:&&:) p1 p2 -> propDeBrSubXInt targetIdx substitution p1 :&&: 
+                propDeBrSubXInt targetIdx substitution p2
+    (:||:) p1 p2 ->  propDeBrSubXInt targetIdx substitution p1 :||: 
+                propDeBrSubXInt targetIdx substitution p2
+    (:->:) p1 p2 -> propDeBrSubXInt targetIdx substitution p1 :->: 
+                propDeBrSubXInt targetIdx substitution p2
+    (:<->:) p1 p2 -> propDeBrSubXInt targetIdx substitution p1 :<->: 
+                propDeBrSubXInt targetIdx substitution p2
 
-propDeBrSubX' :: Int -> ObjDeBr -> PropDeBr -> Int -> Map Int Int -> PropDeBr
-propDeBrSubX' subidx substitution template currentDepth shiftMap  = case template of
-    Neg p -> Neg $ propDeBrSubX' subidx substitution p currentDepth shiftMap
-    (:&&:) p1 p2 -> propDeBrSubX' subidx substitution p1 currentDepth shiftMap :&&: 
-                propDeBrSubX' subidx substitution p2 currentDepth shiftMap
-    (:||:) p1 p2 ->  propDeBrSubX' subidx substitution p1 currentDepth shiftMap :||: 
-                propDeBrSubX' subidx substitution p2 currentDepth shiftMap
-    (:->:) p1 p2 -> propDeBrSubX' subidx substitution p1 currentDepth shiftMap :->: 
-                propDeBrSubX' subidx substitution p2 currentDepth shiftMap
-    (:<->:) p1 p2 -> propDeBrSubX' subidx substitution p1 currentDepth shiftMap :<->: 
-                propDeBrSubX' subidx substitution p2 currentDepth shiftMap
-
-    (:==:) o1 o2 ->  objDeBrSubX' subidx substitution o1 currentDepth shiftMap :==: 
-                objDeBrSubX' subidx substitution o2 currentDepth shiftMap
-    In o1 o2 -> objDeBrSubX' subidx substitution o1 currentDepth shiftMap `In`
-                objDeBrSubX' subidx substitution o2 currentDepth shiftMap
-    Forall p -> Forall $ propDeBrSubX' subidx substitution p newDepth newShiftMap
+    (:==:) o1 o2 ->  objDeBrSubXInt targetIdx substitution o1 :==: 
+                objDeBrSubXInt targetIdx substitution o2
+    In o1 o2 -> objDeBrSubXInt targetIdx substitution o1 `In`
+                objDeBrSubXInt targetIdx substitution o2
+    Forall p -> Forall $ propDeBrSubXInt targetIdx substitution normalisedSubexp
       where
-        newDepth = currentDepth - 1
-        substitutionDepth = boundDepthObjDeBr substitution
-        newShiftMapEntry = propDeBrCalcShift newDepth substitutionDepth subidx p
-        newShiftMap = Data.Map.insert newDepth newShiftMapEntry shiftMap 
-    Exists p -> Exists $ propDeBrSubX' subidx substitution p newDepth newShiftMap
+        boundDepth = boundDepthPropDeBr p
+        newBoundDepth = boundDepthPropDeBrXInt boundDepth subBoundDepth p
+        subBoundDepth = boundDepthObjDeBr substitution 
+        normalisedSubexp = swapBoundIndexProp boundDepth newBoundDepth p  
+    Exists p -> Exists $ propDeBrSubXInt targetIdx substitution normalisedSubexp
       where
-        newDepth = currentDepth - 1
-        substitutionDepth = boundDepthObjDeBr substitution
-        newShiftMapEntry = propDeBrCalcShift newDepth substitutionDepth subidx p
-        newShiftMap = Data.Map.insert newDepth newShiftMapEntry shiftMap 
-    (:>=:) o1 o2 -> objDeBrSubX' subidx substitution o1 currentDepth shiftMap :>=:
-                objDeBrSubX' subidx substitution o2 currentDepth shiftMap
+        boundDepth = boundDepthPropDeBr p
+        newBoundDepth = boundDepthPropDeBrXInt boundDepth subBoundDepth p
+        subBoundDepth = boundDepthObjDeBr substitution 
+        normalisedSubexp = swapBoundIndexProp boundDepth newBoundDepth p  
+    (:>=:) o1 o2 -> objDeBrSubXInt targetIdx substitution o1 :>=:
+                objDeBrSubXInt targetIdx substitution o2
     F -> F
 
+
+-- Substitutes X targetIdx with substitution in an ObjDeBr.
+-- Directly parallels the user's provided objDeBrSubXInt logic.
+-- WARNING: Logic under Hilbert (and Forall/Exists in propDeBrSubX)
+-- may differ from standard capture-avoiding substitution.
 objDeBrSubX :: Int -> ObjDeBr -> ObjDeBr -> ObjDeBr
-objDeBrSubX subidx substitution template = 
-    objDeBrSubX' subidx substitution template startDepth startMap
-       where
-          startDepth = boundDepthObjDeBr template
-          startMap = mempty
+objDeBrSubX targetIdx substitution template = case template of
+    Integ num -> Integ num
+    Constant const -> Constant const
+    Hilbert p ->
+        Hilbert $ propDeBrSubX targetIdx substitution normalisedSubexp
+      where
+        boundDepth = boundDepthPropDeBr p
+        -- Parallel logic: Use boundDepthPropDeBrX, assuming 3 args needed
+        -- Note: Original user code for ...XInt seemed to have arg mismatch here.
+        -- Assuming intended use with targetIdx:
+        subBoundDepth = boundDepthObjDeBr substitution
+        newBoundDepth = boundDepthPropDeBrX targetIdx subBoundDepth p
+        normalisedSubexp = swapBoundIndexProp boundDepth newBoundDepth p
+    Bound idx -> Bound idx         -- Bound variables are untouched (mirroring user's ...XInt)
+    V idx -> V idx             -- Free variables are untouched
+    X idx
+        | idx == targetIdx -> substitution -- *** Substitute X targetIdx ***
+        | otherwise -> X idx
+    XInternal idx -> XInternal idx -- Leave XInternal alone
+    Pair o1 o2 ->
+        Pair (objDeBrSubX targetIdx substitution o1)
+             (objDeBrSubX targetIdx substitution o2)
 
+-- Substitutes X targetIdx with substitution in a PropDeBr.
+-- Directly parallels the user's provided propDeBrSubXInt logic.
+-- WARNING: Logic under Forall/Exists (and Hilbert in objDeBrSubX)
+-- may differ from standard capture-avoiding substitution.
 propDeBrSubX :: Int -> ObjDeBr -> PropDeBr -> PropDeBr
-propDeBrSubX subidx substitution template = 
-    propDeBrSubX' subidx substitution template startDepth startMap
-       where
-          startDepth = boundDepthPropDeBr template
-          startMap = mempty
+propDeBrSubX targetIdx substitution template = case template of
+    Neg p -> Neg $ propDeBrSubX targetIdx substitution p
+    (:&&:) p1 p2 -> propDeBrSubX targetIdx substitution p1 :&&:
+                    propDeBrSubX targetIdx substitution p2
+    (:||:) p1 p2 -> propDeBrSubX targetIdx substitution p1 :||:
+                    propDeBrSubX targetIdx substitution p2
+    (:->:) p1 p2 -> propDeBrSubX targetIdx substitution p1 :->:
+                    propDeBrSubX targetIdx substitution p2
+    (:<->:) p1 p2 -> propDeBrSubX targetIdx substitution p1 :<->:
+                     propDeBrSubX targetIdx substitution p2
+    (:==:) o1 o2 -> objDeBrSubX targetIdx substitution o1 :==:
+                    objDeBrSubX targetIdx substitution o2
+    In o1 o2 -> objDeBrSubX targetIdx substitution o1 `In`
+                objDeBrSubX targetIdx substitution o2
+    Forall p -> Forall $ propDeBrSubX targetIdx substitution normalisedSubexp
+      where
+        boundDepth = boundDepthPropDeBr p
+        -- Parallel logic: Use boundDepthPropDeBrX, assuming 3 args needed
+        -- Note: Original user code for ...XInt seemed to have arg mismatch here.
+        -- Assuming intended use with targetIdx:
+        subBoundDepth = boundDepthObjDeBr substitution
+        newBoundDepth = boundDepthPropDeBrX targetIdx subBoundDepth p
+        normalisedSubexp = swapBoundIndexProp boundDepth newBoundDepth p
+    Exists p -> Exists $ propDeBrSubX targetIdx substitution normalisedSubexp
+      where
+        boundDepth = boundDepthPropDeBr p
+        -- Parallel logic: Use boundDepthPropDeBrX, assuming 3 args needed
+        -- Note: Original user code for ...XInt seemed to have arg mismatch here.
+        -- Assuming intended use with targetIdx:
+        subBoundDepth = boundDepthObjDeBr substitution
+        newBoundDepth = boundDepthPropDeBrX targetIdx subBoundDepth p
+        normalisedSubexp = swapBoundIndexProp boundDepth newBoundDepth p
+    (:>=:) o1 o2 -> objDeBrSubX targetIdx substitution o1 :>=:
+                    objDeBrSubX targetIdx substitution o2
+    F -> F
 
 
+
+
+
+
+
+
+-- Swap X i to XInternal i recursively
+
+swapXtoXIntProp :: PropDeBr -> PropDeBr
+swapXtoXIntProp p = case p of
+    Neg q -> Neg (swapXtoXIntProp q)
+    (:&&:) p1 p2 -> (:&&:) (swapXtoXIntProp p1) (swapXtoXIntProp p2)
+    (:||:) p1 p2 -> (:||:) (swapXtoXIntProp p1) (swapXtoXIntProp p2)
+    (:->:) p1 p2 -> (:->:) (swapXtoXIntProp p1) (swapXtoXIntProp p2)
+    (:<->:) p1 p2 -> (:<->:) (swapXtoXIntProp p1) (swapXtoXIntProp p2)
+    (:==:) o1 o2 -> (:==:) (swapXtoXIntObj o1) (swapXtoXIntObj o2)
+    In o1 o2 -> In (swapXtoXIntObj o1) (swapXtoXIntObj o2)
+    Forall q -> Forall (swapXtoXIntProp q)
+    Exists q -> Exists (swapXtoXIntProp q)
+    (:>=:) o1 o2 -> (:>=:) (swapXtoXIntObj o1) (swapXtoXIntObj o2)
+    F -> F
+
+swapXtoXIntObj :: ObjDeBr -> ObjDeBr
+swapXtoXIntObj o = case o of
+    Integ num -> Integ num
+    Constant name -> Constant name
+    Hilbert p -> Hilbert (swapXtoXIntProp p)
+    Bound i -> Bound i         -- Bound variables are untouched
+    V i -> V i             -- Free variables are untouched
+    X i -> XInternal i     -- *** Swap X to XInternal ***
+    XInternal i -> XInternal i -- Leave existing XInternal alone
+    Pair o1 o2 -> Pair (swapXtoXIntObj o1) (swapXtoXIntObj o2)
+
+-- Swap XInternal i back to X i recursively
+
+swapXIntToXProp :: PropDeBr -> PropDeBr
+swapXIntToXProp p = case p of
+    Neg q -> Neg (swapXIntToXProp q)
+    (:&&:) p1 p2 -> (:&&:) (swapXIntToXProp p1) (swapXIntToXProp p2)
+    (:||:) p1 p2 -> (:||:) (swapXIntToXProp p1) (swapXIntToXProp p2)
+    (:->:) p1 p2 -> (:->:) (swapXIntToXProp p1) (swapXIntToXProp p2)
+    (:<->:) p1 p2 -> (:<->:) (swapXIntToXProp p1) (swapXIntToXProp p2)
+    (:==:) o1 o2 -> (:==:) (swapXIntToXObj o1) (swapXIntToXObj o2)
+    In o1 o2 -> In (swapXIntToXObj o1) (swapXIntToXObj o2)
+    Forall q -> Forall (swapXIntToXProp q)
+    Exists q -> Exists (swapXIntToXProp q)
+    (:>=:) o1 o2 -> (:>=:) (swapXIntToXObj o1) (swapXIntToXObj o2)
+    F -> F
+
+swapXIntToXObj :: ObjDeBr -> ObjDeBr
+swapXIntToXObj o = case o of
+    Integ num -> Integ num
+    Constant name -> Constant name
+    Hilbert p -> Hilbert (swapXIntToXProp p)
+    Bound i -> Bound i         -- Bound variables are untouched
+    V i -> V i             -- Free variables are untouched
+    X i -> X i             -- Leave existing X alone
+    XInternal i -> X i     -- *** Swap XInternal back to X ***
+    Pair o1 o2 -> Pair (swapXIntToXObj o1) (swapXIntToXObj o2)
 -- | Applies a list of substitutions [(Index, Term)] to an ObjDeBr term.
-objDeBrSubXs :: [(Int, ObjDeBr)]  -- List of (Index to replace, Substitution Term) pairs
-              -> ObjDeBr        -- Initial proposition template
-              -> ObjDeBr        -- Resulting proposition after all substitutions
-objDeBrSubXs substitutions initialObj =
-    -- Use foldl' to iteratively apply each substitution from the list
-    foldl' applySub initialObj substitutions
-  where
-    -- Helper function for the fold: applies one substitution step
-    applySub :: ObjDeBr          -- The object from the previous step
-             -> (Int, ObjDeBr)    -- The current substitution (idx, term)
-             -> ObjDeBr          -- The object after this substitution
-    applySub currentObj (idx, term) =
-        -- Call propDeBrSubX to substitute X idx with term in currentObj
-        objDeBrSubX idx term currentObj
+objDeBrSubXs :: [(Int, ObjDeBr)] -> ObjDeBr -> ObjDeBr
+objDeBrSubXs subs term =
+    -- 3. Finally, swap any remaining XInternal back to X in the overall result.
+    swapXIntToXObj $
+    -- 1. Sequentially apply each substitution using foldl.
+    foldl (\currentTerm (idx, substitutionTerm) ->
+             -- 2. Before substituting, protect X vars inside the substitutionTerm
+             --    by converting them to XInternal. Then use the original
+             --    objDeBrSubX, which only targets X idx and leaves XInternal alone.
+             objDeBrSubX idx (swapXtoXIntObj substitutionTerm) currentTerm
+          ) term subs
+
+-- Performs multiple substitutions simultaneously into a proposition.
+-- Uses the original propDeBrSubX function internally.
+propDeBrSubXs :: [(Int, ObjDeBr)] -> PropDeBr -> PropDeBr
+propDeBrSubXs subs prop =
+    -- 3. Finally, swap any remaining XInternal back to X in the overall result.
+    swapXIntToXProp $
+    -- 1. Sequentially apply each substitution using foldl.
+    foldl (\currentProp (idx, substitutionTerm) ->
+             -- 2. Before substituting, protect X vars inside the substitutionTerm.
+             --    Then use the original propDeBrSubX.
+             propDeBrSubX idx (swapXtoXIntObj substitutionTerm) currentProp
+          ) prop subs
 
 
 
 
 
 
-
-
--- | Applies a list of substitutions [(Index, Term)] to a PropDeBr term.
-propDeBrSubXs :: [(Int, ObjDeBr)]  -- List of (Index to replace, Substitution Term) pairs
-              -> PropDeBr        -- Initial proposition template
-              -> PropDeBr        -- Resulting proposition after all substitutions
-propDeBrSubXs substitutions initialProp =
-    -- Use foldl' to iteratively apply each substitution from the list
-    foldl' applySub initialProp substitutions
-  where
-    -- Helper function for the fold: applies one substitution step
-    applySub :: PropDeBr          -- The proposition from the previous step
-             -> (Int, ObjDeBr)    -- The current substitution (idx, term)
-             -> PropDeBr          -- The proposition after this substitution
-    applySub currentProp (idx, term) =
-        -- Call propDeBrSubX to substitute X idx with term in currentProp
-        propDeBrSubX idx term currentProp
 
 
 
@@ -1342,7 +1369,7 @@ objDeBrSubBoundVarToX0 boundVarIdx obj = case obj of
                    else Bound idx
     V idx -> V idx
     Pair o1 o2 -> Pair (objDeBrSubBoundVarToX0 boundVarIdx o1) 
-           (objDeBrSubBoundVarToX0 boundVarIdx o1) 
+           (objDeBrSubBoundVarToX0 boundVarIdx o2) 
  
 
 propDeBrSubBoundVarToX0 :: Int -> PropDeBr -> PropDeBr
@@ -1519,6 +1546,10 @@ xsubObjDeBrXInt o idx depth = case o of
 
 
 
+
+
+
+
 instance LogicConst Text where
     newConst :: Set Text -> Text
     newConst constSet = head $ Prelude.filter (`notMember` constSet) $ Prelude.map (\i -> pack ("c" ++ show i)) [0..]
@@ -1558,9 +1589,7 @@ eXBang idx p = eX idx (p :&&: aX idx (p :->: Bound depth :==: Bound (depth+1)))
     where
         depth = boundDepthPropDeBr p         
 
-eXBang' :: Int -> PropDeBr -> PropDeBr
-eXBang' idx p = eX idx (p :&&: aX idx (p :->: X idx :==: XInternal 0))
-    
+
 
 aX :: Int -> PropDeBr -> PropDeBr
 aX idx p = Forall $ xsubPropDeBr p idx (boundDepthPropDeBr p)
@@ -1572,7 +1601,8 @@ hX idx p = Hilbert (xsubPropDeBr p idx (boundDepthPropDeBr p))
 
 
 isPair :: ObjDeBr -> PropDeBr
-isPair t = eX 0 $ eX 1 $ t :==: Pair (X 0) (X 1)
+isPair t = propDeBrSubX 2 t $  eX 0 $ eX 1 $ X 2 :==: Pair (X 0) (X 1)
+
 
 isRelation :: ObjDeBr -> PropDeBr
 isRelation s = aX 0 $ X 0 `In` s :->: isPair (X 0)
@@ -1598,7 +1628,7 @@ builderX :: Int -> ObjDeBr -> PropDeBr -> ObjDeBr
 -- This version uses XInternal 1 and XInternal 2 internally.
 builderX idx t p =
     -- Substitute the source set 't' for the internal placeholder 'XInternal 2'
-    objDeBrSubXInternal 2 t $
+    objDeBrSubXInt 2 t $
     -- Create a Hilbert term binding the internal placeholder 'XInternal 1'
     -- (which represents the set being defined)
     hXInt 1 $
@@ -1624,6 +1654,11 @@ notSubset :: ObjDeBr -> ObjDeBr -> PropDeBr
 notSubset a b = Neg (subset a b)
 
 
+pairFirstTemplate :: ObjDeBr
+pairFirstTemplate = hX 2 (eX 1 (X 0 :==: Pair (X 2) (X 1)))
+                             --  f        -- fGraph Domain
+
+
 pairFirst :: ObjDeBr -> ObjDeBr
 pairFirst pair = objDeBrSubX 0 pair (hX 2 (eX 1 (X 0 :==: Pair (X 2) (X 1))))
 
@@ -1645,26 +1680,65 @@ relDomain s = objDeBrSubX 0 s (hX 1(aX 2 (X 2 `In` X 1)  -- x ∈ D
 --
 
 
+--(.@.) :: ObjDeBr -> ObjDeBr -> ObjDeBr
+--f .@. x = objDeBrSubXs [(0,f),(1,x)] (hX 2 ( Pair (X 1) (X 2) `In` pairFirst (X 0) ))
+
 (.@.) :: ObjDeBr -> ObjDeBr -> ObjDeBr
-f .@. x = objDeBrSubXs [(0,f),(1,x)] (hX 2 ( Pair (X 1) (X 2) `In` pairFirst (X 0) ))
+f .@. x = objDeBrSubXs [(0,f),(1,x)] (hX 2 ( Pair (X 1) (X 2) `In` pairFirstTemplate ))
+                                               --x        y             fGraph         
 
 
 
+-- Template representing the composition h = f o g, defined implicitly
+-- via the property: forall x ( h(x) == f(g(x)) )
+compositionTemplate :: ObjDeBr
+compositionTemplate =
+   hX 99 $
+     aX 11 $
+       ( (X 99 .@. X 11) -- h(x)
+          :==: -- ==
+          (X 1 .@. (X 2 .@. X 11)) -- f(g(x))
+       )
+
+
+infixr 9 .:. -- Same precedence and associativity as Haskell's .
+
+
+-- Infix operator for composition f .:. g = f o g
+-- Substitutes f and g into the compositionTemplate
+(.:.) :: ObjDeBr -> ObjDeBr -> ObjDeBr
+f .:. g = --objDeBrSubXs [(1, f), (2, g)] 
+  objDeBrSubXs [(1,f),(2,g)] compositionTemplate
+
+
+
+
+             
 instance ZFC.LogicSent PropDeBr ObjDeBr where
     emptySetAxiom :: PropDeBr
     emptySetAxiom = eX 0 $ Neg $ aX 1 $ X 1 `In` X 0
+
+
     specAxiom :: Int -> ObjDeBr -> PropDeBr -> PropDeBr
+    specAxiom idx t p =
+    -- Substitute the actual input set term 't' for the internal placeholder 'XInternal 1'
+        propDeBrSubXInt 1 t $
+            -- Assert the existence of the result set 'B', represented by internal placeholder 'XInternal 2'
+            -- Uses eXInt to bind this internal placeholder.
+            eXInt 2 $
+                -- Define the property of the result set 'B': Forall x...
+            --  Uses user's 'aX' to bind the user's template variable 'X idx'.
+                aX idx $
+                   -- x ∈ B  <-> ( P(x) ∧ x ∈ t )
+                   -- Uses X idx for 'x', XInternal 2 for 'B', XInternal 1 for 't'.
+                   (X idx `In` XInternal 2)
+                     :<->:
+                   (p :&&: (X idx `In` XInternal 1))
 
-
-    --specAxiom t p = eX 0 $ aX 1 $ X 1 `In` X 0 :<->: p :&&: X 1 `In` t
-    -- specification axiom composed from term t and predicate P(x)
-
-    specAxiom idx t p = propDeBrSubX (idx+2) t (eX (idx + 1) $ aX idx $ X idx `In` X (idx + 1) :<->: p :&&: X idx `In` X (idx + 2))
-   
     replaceAxiom :: Int -> Int -> ObjDeBr -> PropDeBr -> PropDeBr
     replaceAxiom idx1 idx2 t p =
     -- Substitute the actual term 't' for the internal placeholder 'XInternal 1'
-        propDeBrSubXInternal 1 t $
+        propDeBrSubXInt 1 t $
            (
               -- Premise: Forall a (a in t -> Exists! b P(a,b))
               -- Uses user's 'aX' and 'eXBang' as they operate on user template 'p' with user indices X idx1, X idx2

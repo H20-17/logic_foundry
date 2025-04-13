@@ -438,7 +438,57 @@ testBuilderXSuite = do
     remarkM "--- builderX Test Suite Complete ---"
     return ()
 
+testCompositionImplementation :: ProofGenTStd () [PredRuleDeBr] PropDeBr Text IO ()
+testCompositionImplementation = do
+    remarkM "--- Testing Composition Implementation ---"
 
+    -- Define simple functions and argument
+    let f = Constant "F"
+    let g = Constant "G"
+    let x = Constant "A"
+    fakeConstM "F" ()
+    fakeConstM "G" ()
+    fakeConstM "A" ()
+    remarkM $ "Using f = F, g = G, x = A"
+
+    -- 1. Calculate h = f .:. g using your definition
+    remarkM "Calculating h = f .:. g"
+    let h = f .:. g
+    remarkM "Did composition, I think"
+    remarkM "WHy won't h even show"
+    lift . putStrLn $ show h
+    lift . print $ "HELLO"
+
+    hShow <- showObjM h
+    remarkM $ "Constructed h: " <> hShow
+    --lift . putStrLn $ show h
+    --error "STOP HERE"
+    remarkM "(Note: This will be a complex Hilbert term based on compositionTemplate)"
+
+    -- 2. Calculate h .@. x
+    remarkM "Calculating h .@. x"
+    let applied_h = h .@. x
+    applied_h_Show <- showObjM applied_h
+    remarkM $ "Result (h .@. x): " <> applied_h_Show
+
+    -- 3. Calculate f .@. (g .@. x) separately
+    remarkM "Calculating f .@. (g .@. x) separately"
+    let applied_g = g .@. x
+    let expected_result = f .@. applied_g
+    expected_result_Show <- showObjM expected_result
+    remarkM $ "Expected (f .@. (g .@. x)): " <> expected_result_Show
+
+    -- 4. Compare (visually via remarks)
+    remarkM "--- Comparison ---"
+    remarkM $ "h .@. x             => " <> applied_h_Show
+    (lift . print . show)  expected_result
+    remarkM $ "f .@. (g .@. x)     => " <> expected_result_Show
+    remarkM "Check if the final term structures match."
+    remarkM "If they match, the composition definition works as expected for this case."
+    remarkM "If they differ, there might be a subtle issue in how h is constructed or how .@. interacts with it."
+
+    remarkM "--- Composition Implementation Test Complete ---"
+    return ()
 
 
 main :: IO ()
@@ -585,6 +635,12 @@ main = do
     print "TEST builderX BEGIN-------------------------------------"
     (aNSub, bNSub, cNSub, dNSub) <- runProofGeneratorT testBuilderXSuite
     (putStrLn . unpack . showPropDeBrStepsBase) cNSub -- Print results
+
+
+    print "TEST AICLAIMX BEGIN-------------------------------------"
+    (aNSub, bNSub, cNSub, dNSub) <- runProofGeneratorT testCompositionImplementation
+    (putStrLn . unpack . showPropDeBrStepsBase) cNSub -- Print results
+
 
     return ()
 
