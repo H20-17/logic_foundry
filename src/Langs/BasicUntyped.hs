@@ -49,7 +49,7 @@ import qualified RuleSets.PropLogic as PL
 import qualified RuleSets.PredLogic as PREDL
 import qualified RuleSets.ZFC as ZFC
 import RuleSets.PropLogic (LogicSent(parseIff))
-import RuleSets.ZFC (emptySetAxiom, specification,parseIn,memberOf)
+import RuleSets.ZFC (emptySetAxiom, specification,parseMemberOf,memberOf)
 import Control.Monad.State
 import Control.Monad.RWS
     ( MonadReader(ask), runRWS, MonadWriter(tell), RWS )
@@ -296,7 +296,7 @@ parsePairFirstExp :: ObjDeBr -> Maybe ObjDeBr
 parsePairFirstExp subexp = do
     (existsProp, norm1) <- parseHilbert subexp
     (eqProp, norm2) <- parseExists existsProp
-    (x, pairForm) <- parseEquality eqProp
+    (x, pairForm) <- parseEqual eqProp
     guard (not (objDeBrBoundVarInside x norm1))
     guard (not (objDeBrBoundVarInside x norm2))
     (x2, x3) <- parsePair pairForm
@@ -311,7 +311,7 @@ parseFuncApplication :: ObjDeBr -> Maybe (ObjDeBr, ObjDeBr)
 parseFuncApplication subexp = do
     (p, norm1) <- parseHilbert subexp
 
-    (obj1, obj2) <- parseIn2 p
+    (obj1, obj2) <- parseIn p
 
     (x, bound_d_obj) <- parsePair obj1
 
@@ -348,7 +348,7 @@ parseSetBuilder obj = do
     (lhs, rhs) <- parseBiconditional innerProp
 
     -- 4. Parse the LHS, expecting 'Bound a `In` Bound b'.
-    (bound_a_obj, bound_b_obj) <- parseIn2 lhs
+    (bound_a_obj, bound_b_obj) <-parseIn lhs
     a <- parseBound bound_a_obj -- Extract index 'a'
     -- Guard: Check that index 'a' matches the inner binding depth 'norm_f'.
     guard (a == norm_f)
@@ -364,7 +364,7 @@ parseSetBuilder obj = do
     guard (not (propDeBrBoundVarInside q norm_h))
 
     -- 6. Parse the second part of the conjunction, expecting 'Bound c `In` t'.
-    (bound_c_obj, t) <- parseIn2 in_c_t -- Extract 'Bound c' and the source set 't'.
+    (bound_c_obj, t) <-parseIn in_c_t -- Extract 'Bound c' and the source set 't'.
     c <- parseBound bound_c_obj -- Extract index 'c'.
     -- Guard: Check that index 'c' matches the inner binding depth 'norm_f' (it must equal 'a').
     guard (c == norm_f)
@@ -574,8 +574,8 @@ parseImplication p = case p of
     (a :->: b) -> Just (a,b)
     _ -> Nothing
 
-parseIn2 :: PropDeBr -> Maybe (ObjDeBr, ObjDeBr)
-parseIn2 p = case p of
+parseIn :: PropDeBr -> Maybe (ObjDeBr, ObjDeBr)
+parseIn p = case p of
     (a `In` b) -> Just (a, b)
     _ -> Nothing
 
@@ -585,10 +585,6 @@ parseNotIn p = case p of
     Neg (a `In` b) -> Just (a, b)
     _ -> Nothing
 
-parseEquality :: PropDeBr -> Maybe (ObjDeBr, ObjDeBr)
-parseEquality p = case p of
-    (a :==: b) -> Just (a,b)
-    _ -> Nothing
 
 -- Negation Shorthands & Default
 parseNotEqual :: PropDeBr -> Maybe (ObjDeBr, ObjDeBr)
@@ -601,11 +597,11 @@ parseSubset :: PropDeBr -> Maybe (ObjDeBr, ObjDeBr)
 parseSubset p = do
     (imp, norm1) <- parseForall2 p
     (xInA,xInB) <- parseImplication imp
-    (x,a) <- parseIn2 xInA
+    (x,a) <-parseIn xInA
     xIdx <- parseBound x
     guard (xIdx == norm1)
     guard (not (objDeBrBoundVarInside a norm1))
-    (x,b) <- parseIn2 xInB
+    (x,b) <-parseIn xInB
     xIdx <- parseBound x
     guard (xIdx == norm1)
     guard (not (objDeBrBoundVarInside b norm1))
@@ -658,7 +654,7 @@ parseExistsUnique subexp = do
     (p2,equality) <- parseImplication imp
     let p1Decremented = boundDecrementPropDeBr norm1 p1
     guard (p1Decremented == p2)
-    (x1,x2) <- parseEquality equality
+    (x1,x2) <- parseEqual equality
     guard (x2 == Bound norm1 && x1 == Bound norm2)
     return (p2,norm2)
 
@@ -704,8 +700,8 @@ instance SubexpDeBr PropDeBr where
         <|> parseDisjunction'   -- Other standard operators
         <|> parseImplication'
         <|> parseBiconditional'
-        <|> parseEquality'
-        <|> parseIn2'           -- Renamed
+        <|> parseEqual'
+        <|> parseIn'
         <|> parseGTE'
         <|> parseFalsum'        -- Falsum
 
@@ -756,11 +752,11 @@ instance SubexpDeBr PropDeBr where
       parseBiconditional' = do
           (a, b) <- parseBiconditional prop
           return $ BinaryOp "↔" (toSubexpParseTree a dict) (toSubexpParseTree b dict)
-      parseEquality' = do
-          (a, b) <- parseEquality prop
+      parseEqual' = do
+          (a, b) <- parseEqual prop
           return $ BinaryOp "=" (toSubexpParseTree a dict) (toSubexpParseTree b dict)
-      parseIn2' = do
-          (a, b) <- parseIn2 prop
+      parseIn' = do
+          (a, b) <-parseIn prop
           return $ BinaryOp "∈" (toSubexpParseTree a dict) (toSubexpParseTree b dict)
       parseGTE' = do
           (a, b) <- parseGTE prop
@@ -1501,9 +1497,7 @@ instance PREDL.LogicSent PropDeBr ObjDeBr ()  where
     reverseParseQuantToHilbert :: (ObjDeBr -> PropDeBr) -> () -> ObjDeBr
     reverseParseQuantToHilbert f () = hX 0 (f (X 0))
     parseEq :: PropDeBr -> Maybe (ObjDeBr, ObjDeBr)
-    parseEq p = case p of
-                (:==:) o1 o2 -> Just(o1,o2)
-                _ -> Nothing
+    parseEq  = parseEqual
     (.==.) :: ObjDeBr -> ObjDeBr -> PropDeBr
     (.==.) = (:==:)
     substX :: Int -> PropDeBr -> ObjDeBr -> PropDeBr

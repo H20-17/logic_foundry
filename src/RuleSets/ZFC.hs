@@ -85,7 +85,7 @@ class (PREDL.LogicSent s t ()) => LogicSent s t | s ->t where
    emptySetAxiom :: s
    specAxiom :: Int -> t -> s -> s
    replaceAxiom :: Int -> Int -> t -> s -> s
-   parseIn :: s -> Maybe (t, t)
+   parseMemberOf :: s -> Maybe (t, t)
    memberOf :: t -> t -> s
 
 
