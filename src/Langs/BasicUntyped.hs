@@ -1,3 +1,4 @@
+{-# LANGUAGE PatternGuards #-}
 module Langs.BasicUntyped (
     ObjDeBr(Integ,Constant,V,X,Pair),
     PropDeBr(Neg,(:&&:),(:||:),(:->:),(:<->:),(:==:),In,(:>=:),F),
@@ -28,7 +29,7 @@ module Langs.BasicUntyped (
     (.@.),
     (.:.)
 ) where
-import Control.Monad ( unless )
+import Control.Monad ( unless, guard )
 import Data.List (intersperse)
 import Data.Text (Text, pack, unpack,concat, lines,intercalate)
 import GHC.Generics (Associativity (NotAssociative, RightAssociative, LeftAssociative))
@@ -54,7 +55,7 @@ import Control.Monad.RWS
     ( MonadReader(ask), runRWS, MonadWriter(tell), RWS )
 import Text.XHtml (sub)
 import qualified Internal.StdPattern
-import Distribution.Backpack.ConfiguredComponent (newPackageDepsBehaviour)
+
 
 
 
@@ -113,7 +114,6 @@ subexpParseTreeBoundDepth sub = case sub of
     ParseTreeConst const -> 0
     ParseTreeFreeVar idx -> 0
     ParseTreeBoundVar idx -> 0
-
     ParseTreeX idx -> 0
     Tuple as -> maximum $ Prelude.map subexpParseTreeBoundDepth as
     ParseTreeF -> 0
@@ -292,63 +292,249 @@ boundDepthPropDeBrXInt targetIdx substitutionDepth prop = case prop of
     F -> 0
 
 
-        
+parsePairFirstExp :: ObjDeBr -> Maybe ObjDeBr
+parsePairFirstExp subexp = do
+    (existsProp, norm1) <- parseHilbert subexp
+    (eqProp, norm2) <- parseExists existsProp
+    (x, pairForm) <- parseEquality eqProp
+    guard (not (objDeBrBoundVarInside x norm1))
+    guard (not (objDeBrBoundVarInside x norm2))
+    (x2, x3) <- parsePair pairForm
+    x2Idx <- parseBound x2
+    guard (x2Idx == norm1)
+    x3Idx <- parseBound x3
+    guard (x3Idx == norm2)
+    return x
+
+
+parseFuncApplication :: ObjDeBr -> Maybe (ObjDeBr, ObjDeBr)
+parseFuncApplication subexp = do
+    (p, norm1) <- parseHilbert subexp
+
+    (obj1, obj2) <- parseIn2 p
+
+    (x, bound_d_obj) <- parsePair obj1
+
+    guard (not (objDeBrBoundVarInside x norm1))
+
+    d <- parseBound bound_d_obj
+    guard (d==norm1)
+    f <- parsePairFirstExp obj2
+    guard (not (objDeBrBoundVarInside f norm1))
+
+    return (f, x)
+
+
+-- | Parses an ObjDeBr term to see if it matches the specific structure
+--   generated for set builder notation: { x_a ∈ t | q(x_a) }
+--   which internally might look like: Hilbert (Forall (Bound a In Bound b :<->: q :&&: Bound c In t))
+--   Returns Maybe (SourceSet, Predicate, NormalizationDepth) on success.
+parseSetBuilder :: ObjDeBr -> Maybe (ObjDeBr, PropDeBr, Int)
+parseSetBuilder obj = do
+
+    -- 1. Ensure the outermost term is a Hilbert term.
+    --    Extract the inner proposition (forallProp) and the depth associated
+    --    with the Hilbert binder (norm_h). This corresponds to index 'b'.
+    (forallProp, norm_h) <- parseHilbert obj
+
+    -- 2. Ensure the proposition inside the Hilbert is a Forall quantifier.
+    --    Extract the body of the Forall (innerProp) and the depth associated
+    --    with the Forall binder (norm_f). This corresponds to indices 'a' and 'c'.
+    (innerProp, norm_f) <- parseForall2 forallProp
+
+    -- 3. Ensure the body of the Forall is a Biconditional (<->).
+    --    Split into the left-hand side (lhs: element inclusion) and
+    --    right-hand side (rhs: predicate and source set check).
+    (lhs, rhs) <- parseBiconditional innerProp
+
+    -- 4. Parse the LHS, expecting 'Bound a `In` Bound b'.
+    (bound_a_obj, bound_b_obj) <- parseIn2 lhs
+    a <- parseBound bound_a_obj -- Extract index 'a'
+    -- Guard: Check that index 'a' matches the inner binding depth 'norm_f'.
+    guard (a == norm_f)
+
+    b <- parseBound bound_b_obj -- Extract index 'b'
+    -- Guard: Check that index 'b' matches the outer binding depth 'norm_h'.
+    guard (b == norm_h)
+
+    -- 5. Parse the RHS, expecting 'q :&&: (Bound c `In` t)'.
+    (q, in_c_t) <- parseConjunction rhs -- Extract predicate 'q' and the 'In' expression.
+
+    -- Guard: Ensure the predicate 'q' does not capture the outer bound variable 'b'.
+    guard (not (propDeBrBoundVarInside q norm_h))
+
+    -- 6. Parse the second part of the conjunction, expecting 'Bound c `In` t'.
+    (bound_c_obj, t) <- parseIn2 in_c_t -- Extract 'Bound c' and the source set 't'.
+    c <- parseBound bound_c_obj -- Extract index 'c'.
+    -- Guard: Check that index 'c' matches the inner binding depth 'norm_f' (it must equal 'a').
+    guard (c == norm_f)
+
+    -- Guard: Ensure the source set 't' does not capture the outer bound variable 'b'.
+    guard (not (objDeBrBoundVarInside t norm_h))
+    -- Guard: Ensure the source set 't' does not capture the inner bound variable 'a'/'c'.
+    guard (not (objDeBrBoundVarInside t norm_f))
+
+    -- 7. If all parsing steps and guards succeed, return the extracted
+    --    source set 't', the predicate 'q', and the inner normalization depth 'norm_f'.
+    return (t, q, norm_f)
+
+
+
+parseHilbertShort :: ObjDeBr -> Map PropDeBr [Int] -> Maybe [Int]
+parseHilbertShort subexp dict = 
+    case subexp of
+        Hilbert p ->
+            maybe Nothing Just (Data.Map.lookup (Exists p) dict) 
+        _ -> Nothing
+
+
+parseHilbert :: ObjDeBr -> Maybe (PropDeBr, Int)
+parseHilbert subexp =            
+  case subexp of 
+     Hilbert p
+                -> Just $ (p, pDepth)
+            where
+             pDepth = boundDepthPropDeBr p
+     _ -> Nothing
+ 
+
+parseForall2 :: PropDeBr -> Maybe (PropDeBr, Int)
+parseForall2 subexp =            
+  case subexp of 
+     Forall p
+                -> Just $ (p, pDepth)
+            where
+             pDepth = boundDepthPropDeBr p
+     _ -> Nothing
+
+
+parseInteg :: ObjDeBr -> Maybe Int
+parseInteg subexp = case subexp of
+    Integ i -> Just i
+    _ -> Nothing
+
+
+
+parseConst :: ObjDeBr -> Maybe Text
+parseConst subexp = case subexp of
+    Constant c -> Just c
+    _ -> Nothing
+
+
+
+
+parseBound :: ObjDeBr -> Maybe Int
+parseBound subexp = case subexp of
+    Bound i -> Just i
+    _ -> Nothing
+
+parseV :: ObjDeBr -> Maybe Int
+parseV subexp = case subexp of
+    V i -> Just i
+    _ -> Nothing
+
+parsePair :: ObjDeBr ->  Maybe (ObjDeBr, ObjDeBr)
+parsePair subexp = case subexp of
+    Pair a b -> Just (a,b)
+    _ -> Nothing
+
+
+
+parseX :: ObjDeBr -> Maybe Int
+parseX subexp = case subexp of
+    X i -> Just i
+    _ -> Nothing
+
+
+parseEqual :: PropDeBr -> Maybe (ObjDeBr, ObjDeBr)
+parseEqual subexp = case subexp of
+    (:==:) ls rs -> Just (ls,rs)
+    _           -> Nothing
+
+parseComposition :: ObjDeBr -> Maybe (ObjDeBr, ObjDeBr)
+parseComposition obj = do
+    --not (objDeBrBoundVarInside a1 idx1)
+    (inner1, norm1) <- parseHilbert obj
+    (inner2, norm2) <- parseForall2 inner1
+    (ls,rs) <- parseEqual inner2
+    (h,x) <- parseFuncApplication ls
+    hIdx <- parseBound h
+    guard (hIdx == norm1)
+    xIdx <- parseBound x
+    guard (xIdx == norm2)
+    (f,gAtX) <- parseFuncApplication rs
+    guard (not (objDeBrBoundVarInside f norm1))
+    guard (not (objDeBrBoundVarInside f norm2))
+    (g,x) <- parseFuncApplication gAtX
+    xIdx <- parseBound x
+    guard (xIdx == norm2)
+    guard (not (objDeBrBoundVarInside g norm1))
+    guard (not (objDeBrBoundVarInside g norm2))
+    return (f,g)
+
+
+
+
 instance SubexpDeBr ObjDeBr where
     toSubexpParseTree :: ObjDeBr -> Map PropDeBr [Int] -> SubexpParseTree
-    toSubexpParseTree obj dict = case obj of
-        Integ i -> ParseTreeInt i
-        Constant c -> ParseTreeConst c
-        Bound i -> ParseTreeBoundVar i
-        V i -> ParseTreeFreeVar i
-        X i -> ParseTreeX i
-        Pair a b -> Tuple [toSubexpParseTree a dict, toSubexpParseTree b dict]
+    
 
-        Hilbert p ->
-            -- First, check if Exists p is proven, for the ε[line] shorthand
-            case Data.Map.lookup (Exists p) dict of
-                Just idxs -> HilbertShort idxs -- Use ε[line] shorthand
 
-                -- If Exists p is NOT proven, THEN check structure of p for other shorthands
-                Nothing ->
-                    case p of
-                        -- Pattern 1: Function Application (User's detailed version)
-                        Pair x (Bound d) `In` (Hilbert (Exists ( f :==: Pair (Bound dp1) (Bound dp0) ))) ->
-                            if    d == max (boundDepthObjDeBr f + 2) (boundDepthObjDeBr x)
-                               && dp0 == boundDepthObjDeBr f
-                               && dp1 == dp0 + 1
-                               && not (objDeBrBoundVarInside f dp0)
-                               && not (objDeBrBoundVarInside f dp1)
-                               && not (objDeBrBoundVarInside f d)
-                               && not (objDeBrBoundVarInside x d)
-                            then
-                               FuncApp (toSubexpParseTree f dict) (toSubexpParseTree x dict)
-                            else
-                               renderDefaultHilbert p -- Use local helper
 
-                        -- Pattern 2: Set Builder
-                        Forall (Bound a `In` Bound b :<->: q :&&: Bound c `In` t) ->
-                             let pDepth = boundDepthPropDeBr p
-                                 qTree = toSubexpParseTree q dict
-                             in if a == pDepth - 1
-                                   && c == a
-                                   && b == pDepth
-                                   && not (propDeBrBoundVarInside q b)
-                                   && not (objDeBrBoundVarInside t a)
-                                   && not (objDeBrBoundVarInside t b) then
-                                       Builder (toSubexpParseTree t dict) (sbParseTreeNormalize (pDepth-1) qTree)
-                                else
-                                   renderDefaultHilbert p -- Use local helper
+    toSubexpParseTree obj dict =
+         maybe (error $ "Ubable to parse term " <> show obj <> ". This shouldn't have happened.")
+             id fullParse 
+      where fullParse =
+             parseInteg'
+              <|> parseConst'
+              <|> parseBound'
+              <|> parseV'
+              <|> parseX'
+              <|> parsePair'
+              <|> parseHilbertShort'
+              <|> parseFuncApplication'
+              <|> parseComposition'
+              <|> parseSetBuilder'
+              <|> parseHilbert'
+       
+            parseFuncApplication' =
+               do
+                (f,x) <- parseFuncApplication obj
+                return $ FuncApp (toSubexpParseTree f dict) (toSubexpParseTree x dict)
+            parseSetBuilder' = do
+               (t,q,norm) <- parseSetBuilder obj
+               let qTree = toSubexpParseTree q dict
+               return $  Builder (toSubexpParseTree t dict) (sbParseTreeNormalize norm qTree)
+            parseHilbertShort' = do
+               idx <- parseHilbertShort obj dict
+               return $ HilbertShort idx
+            parseHilbert' = do
+               (inner, norm) <- parseHilbert obj
+               let pTree = toSubexpParseTree inner dict
+               return $ Binding "ε" (sbParseTreeNormalize norm pTree)
+            parseConst' = do
+               c <- parseConst obj
+               return $ ParseTreeConst c
+            parseBound' = do
+                i <- parseBound obj
+                return $ ParseTreeBoundVar i
+            parseV' = do
+                i <- parseV obj
+                return $ ParseTreeFreeVar i
+            parseX' = do
+                i <- parseX obj
+                return $ ParseTreeX i
+            parseInteg' = do
+                i <- parseInteg obj
+                return $ ParseTreeInt i
 
-                        -- Default for other Hilbert structures
-                        _ -> renderDefaultHilbert p -- Use local helper
-      where
-        -- Define renderDefaultHilbert locally within toSubexpParseTree
-        -- It can capture 'dict' from the outer scope.
-        renderDefaultHilbert :: PropDeBr -> SubexpParseTree
-        renderDefaultHilbert currentP = Binding "ε" (sbParseTreeNormalize pDepth pTree)
-            where
-                pDepth = boundDepthPropDeBr currentP
-                pTree = toSubexpParseTree currentP dict -- Use 'dict' from outer scope
+            parsePair' = do
+               (a,b) <- parsePair obj
+               return $ Tuple [toSubexpParseTree a dict, toSubexpParseTree b dict]
+            parseComposition' = do
+                (f,g) <- parseComposition obj
+                return $ BinaryOp "∘" (toSubexpParseTree f dict) (toSubexpParseTree g dict)
+
 
 boundDepthObjDeBr :: ObjDeBr -> Int
 boundDepthObjDeBr obj = case obj of
@@ -378,100 +564,210 @@ boundDepthPropDeBr prop = case prop of
     F -> 0
 
 
+parseConjunction :: PropDeBr -> Maybe (PropDeBr, PropDeBr)
+parseConjunction p = case p of
+    (a :&&: b) -> Just (a, b)
+    _ -> Nothing
+
+parseImplication :: PropDeBr -> Maybe (PropDeBr, PropDeBr)
+parseImplication p = case p of
+    (a :->: b) -> Just (a,b)
+    _ -> Nothing
+
+parseIn2 :: PropDeBr -> Maybe (ObjDeBr, ObjDeBr)
+parseIn2 p = case p of
+    (a `In` b) -> Just (a, b)
+    _ -> Nothing
+
+
+parseNotIn :: PropDeBr -> Maybe (ObjDeBr, ObjDeBr)
+parseNotIn p = case p of
+    Neg (a `In` b) -> Just (a, b)
+    _ -> Nothing
+
+parseEquality :: PropDeBr -> Maybe (ObjDeBr, ObjDeBr)
+parseEquality p = case p of
+    (a :==: b) -> Just (a,b)
+    _ -> Nothing
+
+-- Negation Shorthands & Default
+parseNotEqual :: PropDeBr -> Maybe (ObjDeBr, ObjDeBr)
+parseNotEqual p = case p of
+    Neg (a :==: b) -> Just (a, b)
+    _ -> Nothing
+
+
+parseSubset :: PropDeBr -> Maybe (ObjDeBr, ObjDeBr)
+parseSubset p = do
+    (imp, norm1) <- parseForall2 p
+    (xInA,xInB) <- parseImplication imp
+    (x,a) <- parseIn2 xInA
+    xIdx <- parseBound x
+    guard (xIdx == norm1)
+    guard (not (objDeBrBoundVarInside a norm1))
+    (x,b) <- parseIn2 xInB
+    xIdx <- parseBound x
+    guard (xIdx == norm1)
+    guard (not (objDeBrBoundVarInside b norm1))
+    return (a,b)
+
+
+parseStrictSubset :: PropDeBr -> Maybe (ObjDeBr, ObjDeBr)
+parseStrictSubset p = do
+    (forallImp,abIneq) <- parseConjunction p
+    (a,b) <- parseSubset forallImp
+    (a2,b2) <- parseNotEqual abIneq
+    guard (a2==a)
+    guard (b2==b)
+    return (a,b)
+
+parseNegation :: PropDeBr -> Maybe PropDeBr
+parseNegation p = case p of
+    Neg q -> Just q
+    _ -> Nothing
+
+
+
+parseNotSubset :: PropDeBr -> Maybe (ObjDeBr, ObjDeBr)
+parseNotSubset p = do
+   imp <- parseNegation p
+   (a,b) <- parseSubset imp
+   return (a,b)
+
+    
+
+
+
+
+
+parseDisjunction :: PropDeBr -> Maybe (PropDeBr, PropDeBr)
+parseDisjunction p = case p of
+    (a :||: b) -> Just (a,b)
+    _ -> Nothing
+
+parseExists :: PropDeBr -> Maybe (PropDeBr, Int)
+parseExists p = case p of
+    Exists inner -> Just (inner, boundDepthPropDeBr inner)
+    _ -> Nothing
+
+parseExistsUnique :: PropDeBr -> Maybe (PropDeBr, Int)
+parseExistsUnique subexp = do
+    (mainConj, norm1) <- parseExists subexp
+    (p1,forallImp) <- parseConjunction mainConj
+    (imp, norm2) <- parseForall2 forallImp
+    (p2,equality) <- parseImplication imp
+    let p1Decremented = boundDecrementPropDeBr norm1 p1
+    guard (p1Decremented == p2)
+    (x1,x2) <- parseEquality equality
+    guard (x2 == Bound norm1 && x1 == Bound norm2)
+    return (p2,norm2)
+
+
+parseBiconditional :: PropDeBr -> Maybe (PropDeBr, PropDeBr)
+parseBiconditional p = case p of
+    (a :<->: b) -> Just (a,b)
+    _ -> Nothing
+
+
+parseGTE :: PropDeBr -> Maybe (ObjDeBr, ObjDeBr)
+parseGTE p = case p of
+    (a :>=: b) -> Just (a, b)
+    _ -> Nothing
+
+parseFalsum :: PropDeBr -> Maybe ()
+parseFalsum p = case p of
+    F -> Just ()
+    _ -> Nothing
+
+
 instance SubexpDeBr PropDeBr where
   toSubexpParseTree :: PropDeBr -> Map PropDeBr [Int] -> SubexpParseTree
-  toSubexpParseTree prop dict = case prop of
-
-      Neg q -> case q of
-        -- Existing case for Inequality (≠)
-        o1 :==: o2 -> BinaryOp "≠" (toSubexpParseTree o1 dict) (toSubexpParseTree o2 dict)
-
-        -- Existing case for Not Member (∉)
-        In o1 o2 -> BinaryOp "∉" (toSubexpParseTree o1 dict) (toSubexpParseTree o2 dict)
-
-        -- >>> New case for Not Subset (⊈) <<<
-        -- Check if q matches the structure Forall(Bound idx `In` a :->: Bound idx `In` b)
-        Forall (Bound idx1 `In` a1 :->: Bound idx2 `In` a2) ->
-            -- Check if it matches the specific structure generated by your 'subset' helper
-            if idx1 == max (boundDepthObjDeBr a1) (boundDepthObjDeBr a2) -- Corrected depth check
-               && idx2 == idx1             -- Index consistency check
-               && not (objDeBrBoundVarInside a1 idx1) -- Precondition check on a1
-               && not (objDeBrBoundVarInside a2 idx1) -- Precondition check on a2
-            then
-               -- If it matches, render using the ⊈ symbol
-               BinaryOp "⊈" (toSubexpParseTree a1 dict) (toSubexpParseTree a2 dict)
-            else
-               -- If it's a Forall but doesn't match the subset conditions, render as ¬(∀...)
-               UnaryOp "¬" (toSubexpParseTree q dict) -- q is the Forall(...) expression
-
-        -- Fallback for any other Neg expression (e.g., ¬(A ∧ B))
-        _ -> UnaryOp "¬" (toSubexpParseTree q dict)
-
-      (:&&:) a b -> andBuild a b 
-        
-        
-        --BinaryOp "∧" (toSubexpParseTree a dict) (toSubexpParseTree b dict)
-
-
-      (:||:) a b -> BinaryOp "∨" (toSubexpParseTree a dict) (toSubexpParseTree b dict)
-      (:->:)  a b -> BinaryOp "→" (toSubexpParseTree a dict) (toSubexpParseTree b dict)
-      (:<->:) a b -> BinaryOp "↔"(toSubexpParseTree a dict) (toSubexpParseTree b dict)
-      (:==:) a b -> BinaryOp "=" (toSubexpParseTree a dict) (toSubexpParseTree b dict)
-      In a b -> BinaryOp "∈" (toSubexpParseTree a dict) (toSubexpParseTree b dict)
-      Forall a ->  abuild a
-      Exists a -> ebuild a
-      (:>=:) a b -> BinaryOp "≥" (toSubexpParseTree a dict) (toSubexpParseTree b dict)
-      F -> ParseTreeF
+  toSubexpParseTree prop dict =
+      maybe (error $ "Unable to parse proposition " <> show prop <> ". This shouldn't have happened.")
+          id fullParse
     where
-        andBuild (Forall (Bound idx1 `In` a1 :->: Bound idx2 `In` a2))
-                        (Neg (a3 :==: a4)) =
-                 if idx1 == max (boundDepthObjDeBr a1) (boundDepthObjDeBr a2)
-                    && idx2 == idx1
-                    && a1 == a3
-                    && a2 == a4
-                    && not (objDeBrBoundVarInside a1 idx1) 
-                    && not (objDeBrBoundVarInside a2 idx1)
-                 then
-                    BinaryOp "⊂" (toSubexpParseTree a1 dict) (toSubexpParseTree a2 dict)
-                 else
-                    andBuildDefault (Forall (Bound idx1 `In` a1 :->: Bound idx2 `In` a2))
-                         (Neg (a3 :==: a4))
-        andBuild a b = andBuildDefault a b                    
-        andBuildDefault a b = BinaryOp "∧" (toSubexpParseTree a dict) (toSubexpParseTree b dict)
-        
-        abuild a = case a of
-            Bound idx1 `In` a1 :->: Bound idx2 `In` a2 ->
-                 if idx1 == max (boundDepthObjDeBr a1) (boundDepthObjDeBr a2)
-                    && idx2 == idx1
-                    && not (objDeBrBoundVarInside a1 idx1) 
-                    && not (objDeBrBoundVarInside a2 idx1)
-                 then
-                    BinaryOp "⊆" (toSubexpParseTree a1 dict) (toSubexpParseTree a2 dict)
-                 else
-                    defaultExp
-            _ -> defaultExp
-          where
-            defaultExp = Binding "∀" (sbParseTreeNormalize pDepth pTree) 
-                  where
-                      pDepth = boundDepthPropDeBr a
-                      pTree = toSubexpParseTree a dict
-        ebuild a = case a of  
-            p :&&: q -> if Forall (pDecremented :->: Bound (depth - 1):==: Bound depth) == q then
-                            Binding "∃!" (sbParseTreeNormalize pDepth pTree)
-                        else
-                            defaultP
-                    where
-                            pDepth = boundDepthPropDeBr p
-                            pTree = toSubexpParseTree pDecremented dict
-                            pDecremented = boundDecrementPropDeBr depth p
+      fullParse =
+            parseNotEqual'      -- Negation shorthands first
+        <|> parseNotIn'
+        <|> parseNotSubset'
+        <|> parseNegation'      -- Default negation
 
-            _ -> defaultP
-         where
-           defaultP = Binding "∃" (sbParseTreeNormalize pDepth pTree) 
-                where
-                    pDepth = boundDepthPropDeBr a
-                    pTree = toSubexpParseTree a dict
-           depth = boundDepthPropDeBr a     
+        <|> parseStrictSubset'  -- Conjunction shorthand first
+        <|> parseConjunction'   -- Default conjunction
+
+        <|> parseSubset'        -- Forall shorthand first
+        <|> parseForall2'       -- Default forall
+
+        <|> parseExistsUnique'  -- Exists shorthand first
+        <|> parseExists'        -- Default exists
+
+        <|> parseDisjunction'   -- Other standard operators
+        <|> parseImplication'
+        <|> parseBiconditional'
+        <|> parseEquality'
+        <|> parseIn2'           -- Renamed
+        <|> parseGTE'
+        <|> parseFalsum'        -- Falsum
+
+      -- Helper functions using the basic parsers to build the tree
+      parseNotEqual' = do
+          (o1, o2) <- parseNotEqual prop
+          return $ BinaryOp "≠" (toSubexpParseTree o1 dict) (toSubexpParseTree o2 dict)
+      parseNotIn' = do
+          (o1, o2) <- parseNotIn prop
+          return $ BinaryOp "∉" (toSubexpParseTree o1 dict) (toSubexpParseTree o2 dict)
+      parseNotSubset' = do
+          (a1, a2) <- parseNotSubset prop
+          return $ BinaryOp "⊈" (toSubexpParseTree a1 dict) (toSubexpParseTree a2 dict)
+      parseNegation' = do
+          q <- parseNegation prop
+          return $ UnaryOp "¬" (toSubexpParseTree q dict)
+
+      parseStrictSubset' = do
+          (a1, a2) <- parseStrictSubset prop
+          return $ BinaryOp "⊂" (toSubexpParseTree a1 dict) (toSubexpParseTree a2 dict)
+      parseConjunction' = do
+          (a, b) <- parseConjunction prop
+          return $ BinaryOp "∧" (toSubexpParseTree a dict) (toSubexpParseTree b dict)
+
+      parseSubset' = do
+          (a1, a2) <- parseSubset prop
+          return $ BinaryOp "⊆" (toSubexpParseTree a1 dict) (toSubexpParseTree a2 dict)
+      parseForall2' = do
+          (inner, norm) <- parseForall2 prop
+          let pTree = toSubexpParseTree inner dict
+          return $ Binding "∀" (sbParseTreeNormalize norm pTree)
+
+      parseExistsUnique' = do
+          (innerP, norm) <- parseExistsUnique prop
+          let pTree = toSubexpParseTree innerP dict
+          return $ Binding "∃!" (sbParseTreeNormalize norm pTree)
+      parseExists' = do
+          (inner, norm) <- parseExists prop
+          let pTree = toSubexpParseTree inner dict
+          return $ Binding "∃" (sbParseTreeNormalize norm pTree)
+
+      parseDisjunction' = do
+          (a, b) <- parseDisjunction prop
+          return $ BinaryOp "∨" (toSubexpParseTree a dict) (toSubexpParseTree b dict)
+      parseImplication' = do
+          (a, b) <- parseImplication prop
+          return $ BinaryOp "→" (toSubexpParseTree a dict) (toSubexpParseTree b dict)
+      parseBiconditional' = do
+          (a, b) <- parseBiconditional prop
+          return $ BinaryOp "↔" (toSubexpParseTree a dict) (toSubexpParseTree b dict)
+      parseEquality' = do
+          (a, b) <- parseEquality prop
+          return $ BinaryOp "=" (toSubexpParseTree a dict) (toSubexpParseTree b dict)
+      parseIn2' = do
+          (a, b) <- parseIn2 prop
+          return $ BinaryOp "∈" (toSubexpParseTree a dict) (toSubexpParseTree b dict)
+      parseGTE' = do
+          (a, b) <- parseGTE prop
+          return $ BinaryOp "≥" (toSubexpParseTree a dict) (toSubexpParseTree b dict)
+      parseFalsum' = do
+          () <- parseFalsum prop
+          return $ ParseTreeF
  
 
 

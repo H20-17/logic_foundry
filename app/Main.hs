@@ -490,7 +490,140 @@ testCompositionImplementation = do
     remarkM "--- Composition Implementation Test Complete ---"
     return ()
 
+testShorthandRendering :: ProofGenTStd () [PredRuleDeBr] PropDeBr Text IO ()
+testShorthandRendering = do
+    remarkM "--- Testing Shorthand Rendering ---"
 
+    -- Setup Constants
+    let a = Constant "A"
+    let b = Constant "B"
+    let n = Constant "N"
+    let f = Constant "f"
+    let g = Constant "g"
+    let x = Constant "x" -- Placeholder for bound vars in remarks
+    let p = Constant "P" -- Placeholder for predicates
+    let zero = Integ 0
+    let five = Integ 5
+
+    fakeConstM "A" ()
+    fakeConstM "B" ()
+    fakeConstM "N" ()
+    fakeConstM "f" ()
+    fakeConstM "g" ()
+    -- No need to fakeConstM "x" or "P" as they are just illustrative
+
+    -- Test 1: Function Application (.@.) -> f(A)
+    remarkM "Test 1: f .@. A"
+    let app_f_a = f .@. a
+    app_f_a_show <- showObjM app_f_a
+    remarkM $ "  Input: f .@. A"
+    remarkM $ "  Actual:   " <> app_f_a_show
+    remarkM $ "  Expected: f(A)"
+
+    -- Test 2: Nested Function Application -> f(g(A))
+    remarkM "Test 2: f .@. (g .@. A)"
+    let app_f_ga = f .@. (g .@. a)
+    app_f_ga_show <- showObjM app_f_ga
+    remarkM $ "  Input: f .@. (g .@. A)"
+    remarkM $ "  Actual:   " <> app_f_ga_show
+    remarkM $ "  Expected: f(g(A))"
+
+    -- Test 3: Function Composition (.:.) -> f ∘ g
+    remarkM "Test 3: f .:. g"
+    let comp_f_g = f .:. g
+    comp_f_g_show <- showObjM comp_f_g
+    remarkM $ "  Input: f .:. g"
+    remarkM $ "  Actual:   " <> comp_f_g_show
+    remarkM $ "  Expected: f ∘ g"
+    -- Also test application of composed function
+    remarkM "Test 3b: (f .:. g) .@. A"
+    let app_comp_a = comp_f_g .@. a
+    app_comp_a_show <- showObjM app_comp_a
+    remarkM $ "  Input: (f .:. g) .@. A"
+    remarkM $ "  Actual:   " <> app_comp_a_show
+    remarkM $ "  Expected: (f ∘ g)(A)  (or similar based on FuncApp rendering)"
+
+
+    -- Test 4: Set Builder -> { x ∈ N | x ≥ 5 }
+    remarkM "Test 4: builderX 0 N (X 0 :>=: 5)"
+    let builder_n_ge_5 = builderX 0 n (X 0 :>=: five)
+    builder_n_ge_5_show <- showObjM builder_n_ge_5
+    remarkM $ "  Input: builderX 0 N (X 0 :>=: 5)"
+    remarkM $ "  Actual:   " <> builder_n_ge_5_show
+    remarkM $ "  Expected: {𝑥₀ ∈ N | 𝑥₀ ≥ 5}"
+
+    -- Test 5: Hilbert Epsilon Shorthand -> ε[index]
+    remarkM "Test 5: Hilbert ε shorthand (requires proven Exists)"
+    let hilbert_prop = X 0 :==: a -- Example property P(x) = (x == A)
+    let hilbert_term = hX 0 hilbert_prop -- εx.(x == A)
+    let exists_prop = eX 0 hilbert_prop -- ∃x.(x == A)
+    -- Fake prove Exists P
+    (fake_exists, fake_idx) <- fakePropM exists_prop
+    remarkM $ "  Faking proof of: " <> (pack.show) fake_exists  <> " at index " <> pack (show fake_idx)
+    -- Now render the Hilbert term, it should use the index
+    hilbert_term_short_show <- showObjM hilbert_term
+    remarkM $ "  Input: hX 0 (X 0 :==: A)  (after proving Exists)"
+    remarkM $ "  Actual:   " <> hilbert_term_short_show
+    remarkM $ "  Expected: ε" <> pack (show fake_idx) -- Adjust format if needed
+
+    -- Test 6: Default Hilbert -> εx.(...)
+    remarkM "Test 6: Default Hilbert ε binding"
+    let hilbert_term_default = hX 1 (X 1 :>=: zero) -- εx.(x >= 0)
+    hilbert_term_default_show <- showObjM hilbert_term_default
+    remarkM $ "  Input: hX 1 (X 1 :>=: 0)"
+    remarkM $ "  Actual:   " <> hilbert_term_default_show
+    remarkM $ "  Expected: ε𝑥₁(𝑥₁ ≥ 0)"
+
+    -- Test 7: Subset (⊆)
+    remarkM "Test 7: subset A B"
+    let subset_a_b = subset a b
+    subset_a_b_show <- showPropM subset_a_b
+    remarkM $ "  Input: subset A B"
+    remarkM $ "  Actual:   " <> subset_a_b_show
+    remarkM $ "  Expected: A ⊆ B"
+
+    -- Test 8: Strict Subset (⊂)
+    remarkM "Test 8: strictSubset A B"
+    let strictsubset_a_b = strictSubset a b
+    strictsubset_a_b_show <- showPropM strictsubset_a_b
+    remarkM $ "  Input: strictSubset A B"
+    remarkM $ "  Actual:   " <> strictsubset_a_b_show
+    remarkM $ "  Expected: A ⊂ B"
+
+    -- Test 9: Not Subset (⊈)
+    remarkM "Test 9: notSubset A B"
+    let notsubset_a_b = notSubset a b
+    notsubset_a_b_show <- showPropM notsubset_a_b
+    remarkM $ "  Input: notSubset A B"
+    remarkM $ "  Actual:   " <> notsubset_a_b_show
+    remarkM $ "  Expected: A ⊈ B"
+
+    -- Test 10: Exists Unique (∃!)
+    remarkM "Test 10: eXBang 0 (X 0 :==: A)"
+    let existsunique_a = eXBang 0 (X 0 :==: a)
+    existsunique_a_show <- showPropM existsunique_a
+    remarkM $ "  Input: eXBang 0 (X 0 :==: A)"
+    remarkM $ "  Actual:   " <> existsunique_a_show
+    remarkM $ "  Expected: ∃!𝑥₀(𝑥₀ = A)"
+
+    -- Test 11: Not Equal (≠)
+    remarkM "Test 11: A ./=. B"
+    let notequal_a_b = a ./=. b -- Or Neg (a :==: b)
+    notequal_a_b_show <- showPropM notequal_a_b
+    remarkM $ "  Input: A ./=. B"
+    remarkM $ "  Actual:   " <> notequal_a_b_show
+    remarkM $ "  Expected: A ≠ B"
+
+    -- Test 12: Not In (∉)
+    remarkM "Test 12: A `nIn` B"
+    let notin_a_b = a `nIn` b -- Or Neg (a `In` b)
+    notin_a_b_show <- showPropM notin_a_b
+    remarkM $ "  Input: A `nIn` B"
+    remarkM $ "  Actual:   " <> notin_a_b_show
+    remarkM $ "  Expected: A ∉ B"
+
+    remarkM "--- Shorthand Rendering Tests Complete ---"
+    return ()
 main :: IO ()
 main = do
 
@@ -640,6 +773,11 @@ main = do
     print "TEST AICLAIMX BEGIN-------------------------------------"
     (aNSub, bNSub, cNSub, dNSub) <- runProofGeneratorT testCompositionImplementation
     (putStrLn . unpack . showPropDeBrStepsBase) cNSub -- Print results
+
+    print "TEST SH BEGIN-------------------------------------"
+    (aNSub, bNSub, cNSub, dNSub) <- runProofGeneratorT testShorthandRendering
+    (putStrLn . unpack . showPropDeBrStepsBase) cNSub -- Print results
+
 
 
     return ()
