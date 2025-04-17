@@ -185,6 +185,7 @@ objDeBrBoundVarInside obj idx = case obj of
 
 
 
+
 propDeBrHasBoundVar :: PropDeBr -> Int -> Bool
 propDeBrHasBoundVar sub idx = case sub of
     Neg p -> propDeBrBoundVarInside p idx
@@ -945,7 +946,7 @@ data ObjDeBr where
     -- This constructor is not public facing.
 
     Pair :: ObjDeBr -> ObjDeBr -> ObjDeBr
-
+    Tupl :: [ObjDeBr] -> ObjDeBr
     deriving (Eq, Ord, Show)
 
 
@@ -1948,9 +1949,81 @@ pairFirstTemplate :: ObjDeBr
 pairFirstTemplate = hX 2 (eX 1 (X 0 :==: Pair (X 2) (X 1)))
                              --  f        -- fGraph Domain
 
+-- Helper function to apply a binder function (like eX or aX) for a list of indices.
+-- Relies on the binder function itself (e.g., eX, aX) correctly calculating the
+-- necessary depth and substituting X idx with the appropriate Bound depth index
+-- at each step of the fold.
+-- Binds indices from right-to-left (innermost binder corresponds to last index in list).
+multiBinder :: (Int -> PropDeBr -> PropDeBr) -> [Int] -> PropDeBr -> PropDeBr
+multiBinder binder indices body =
+    foldr binder body indices
+
+multiEx :: [Int] -> PropDeBr -> PropDeBr
+multiEx indices body = multiBinder eX indices body
+
+multiAx :: [Int] -> PropDeBr -> PropDeBr
+multiAx indices body = multiBinder aX indices body
+
+
+-- | Generates an ObjDeBr term representing the projection of the m-th element
+-- | from an n-tuple t. Uses a Hilbert expression internally.
+-- | project n m t = "the element r such that there exist y0..y(m-1),y(m+1)..y(n-1)
+-- |                where t = Tupl [y0, ..., y(m-1), r, y(m+1), ..., y(n-1)]"
+project :: Int -> Int -> ObjDeBr -> ObjDeBr
+project n m t =
+    -- n: the length of the tuple (integer)
+    -- m: the 0-based index to project (integer)
+    -- t: the tuple object (ObjDeBr)
+
+    -- Basic bounds check for the index
+    if m < 0 || m >= n then
+        error ("project: index " ++ show m ++ " out of bounds for length " ++ show n)
+    else
+        let
+            -- Choose indices for template variables used within the generated expression:
+            -- Index for the variable bound by hX (representing the result 'r')
+            resultIdx   = n
+            -- Index for the placeholder representing the input tuple 't'
+            tupleIdx    = n + 1
+            -- Indices for the existentially quantified variables 'yi' (0..n-1, excluding m)
+            otherIndices = [i | i <- [0 .. n-1], i /= m]
+
+            -- Construct the list of ObjDeBr arguments for the Tupl constructor
+            -- inside the logical formula. Uses X i for placeholder elements,
+            -- except at position m, where it uses X resultIdx.
+            -- Result: [X 0, ..., X (m-1), X n, X (m+1), ..., X (n-1)]
+            tuplArgs :: [ObjDeBr]
+            tuplArgs = [ if i == m then X resultIdx else X i | i <- [0 .. n-1] ]
+
+            -- Construct the core equality predicate: X_t == Tupl(...)
+            -- This compares the placeholder for the input tuple 't' (X tupleIdx)
+            -- with the tuple constructed from the template variables.
+            equalityBody :: PropDeBr
+            equalityBody = (X tupleIdx) :==: (Tupl tuplArgs) -- Assumes Tupl constructor exists
+
+            -- Construct the existentially quantified body using the multiEx helper:
+            -- Exists X0 ... Exists X(m-1) Exists X(m+1) ... Exists X(n-1) ( equalityBody )
+            quantifiedBody :: PropDeBr
+            quantifiedBody = multiEx otherIndices equalityBody -- Assumes multiEx helper exists
+
+            -- Construct the Hilbert expression template: hXn ( quantifiedBody )
+            -- This defines the result 'r' (represented by Xn) as the object satisfying
+            -- the quantified property.
+            hilbertTemplate :: ObjDeBr
+            hilbertTemplate = hX resultIdx quantifiedBody
+
+            -- Substitute the actual input tuple 't' for its placeholder X(n+1)
+            -- within the generated Hilbert expression template.
+            finalExpression :: ObjDeBr
+            finalExpression = objDeBrSubX tupleIdx t hilbertTemplate -- Assumes objDeBrSubX exists
+
+        in
+            finalExpression
+
 
 pairFirst :: ObjDeBr -> ObjDeBr
 pairFirst pair = objDeBrSubX 0 pair (hX 2 (eX 1 (X 0 :==: Pair (X 2) (X 1))))
+
 
 
 
