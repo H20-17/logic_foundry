@@ -418,6 +418,11 @@ runProofAtomic rule context state  =
 
               return (Just resultSent, Nothing, PrfStdStepStep resultSent "EQ_SUBST" [sourceSentIdx, eqSentIdx])
 
+
+
+
+
+
     where
         proven = (keysSet . provenSents) state
         constDict = fmap fst (consts state)

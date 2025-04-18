@@ -1,7 +1,7 @@
 {-# LANGUAGE PatternGuards #-}
 module Langs.BasicUntyped (
-    ObjDeBr(Integ,Constant,V,X,Pair),
-    PropDeBr(Neg,(:&&:),(:||:),(:->:),(:<->:),(:==:),In,(:>=:),F),
+    ObjDeBr(Integ,Constant,V,X,Pair,Tupl,Project),
+    PropDeBr(Neg,(:&&:),(:||:),(:->:),(:<->:),(:==:),In,(:>=:),F, IsTuple),
     DeBrSe(..),
     SubexpDeBr(..),
     PrfStdStepPredDeBr,
@@ -73,6 +73,7 @@ data PropDeBr where
       Exists :: PropDeBr -> PropDeBr
       (:>=:) :: ObjDeBr -> ObjDeBr -> PropDeBr
       F :: PropDeBr
+      IsTuple :: Int -> ObjDeBr -> PropDeBr
     deriving (Show, Eq, Ord)
 
 
@@ -947,6 +948,7 @@ data ObjDeBr where
 
     Pair :: ObjDeBr -> ObjDeBr -> ObjDeBr
     Tupl :: [ObjDeBr] -> ObjDeBr
+    Project :: ObjDeBr -> ObjDeBr
     deriving (Eq, Ord, Show)
 
 
