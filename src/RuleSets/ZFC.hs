@@ -4,6 +4,7 @@ module RuleSets.ZFC
     runProofAtomic, 
     LogicRuleClass(..),
     LogicSent(..),
+    LogicTerm(..),
      emptySetM,
      specificationM,
      replacementM,
@@ -82,6 +83,7 @@ class LogicTerm t where
    integer :: Int -> t
    parseTuple :: t -> Maybe [t]
    buildTuple :: [t] -> t
+   buildProject :: Int -> t -> t
 
 class (PREDL.LogicSent s t ()) => LogicSent s t | s ->t where
    emptySetAxiom :: s
@@ -89,7 +91,6 @@ class (PREDL.LogicSent s t ()) => LogicSent s t | s ->t where
    replaceAxiom :: Int -> Int -> t -> s -> s
    parseMemberOf :: s -> Maybe (t, t)
    memberOf :: t -> t -> s
-   buildProject :: Int -> t -> s
    buildIsTuple :: Int -> t -> s
 
 
@@ -218,7 +219,17 @@ instance PREDL.LogicRuleClass [LogicRule s sE t] s t () sE Text where
      eNegIntro s = [(PredRule . PREDL.ENegIntro) s]
      aNegIntro:: s -> [LogicRule s sE t]
      aNegIntro s = [(PredRule . PREDL.ANegIntro) s]
+     eqRefl :: t -> [LogicRule s sE t]
+     eqRefl t = [PredRule $ PREDL.EqRefl t]
 
+     eqSym :: s -> [LogicRule s sE t]
+     eqSym s = [PredRule $ PREDL.EqSym s]
+
+     eqTrans :: s -> s -> [LogicRule s sE t]
+     eqTrans s1 s2 = [PredRule $ PREDL.EqTrans s1 s2]
+
+     eqSubst :: Int -> s -> s -> [LogicRule s sE t]
+     eqSubst idx templateSent eqSent = [PredRule $ PREDL.EqSubst idx templateSent eqSent]
 
 class LogicRuleClass r s sE t | r->s, r->sE, r->t where
      emptySet :: r
@@ -243,7 +254,7 @@ runProofAtomic :: (
                Show t, Typeable t,
                StdPrfPrintMonad s Text () (Either SomeException),
                             PREDL.LogicSent s t (), LogicSent s t ,
-                            Eq t) =>
+                            Eq t, LogicTerm t) =>
                             LogicRule s sE t  ->
                             PrfStdContext () ->
                             PrfStdState s Text () ->
@@ -374,7 +385,7 @@ instance (Show sE, Typeable sE, Show s, Typeable s, TypedSent Text () sE s,
              StdPrfPrintMonad s Text () (Either SomeException),
              Monoid (PrfStdContext ()),
              PREDL.LogicSent s t (),
-             LogicSent s t, Eq t) 
+             LogicSent s t, Eq t, LogicTerm t) 
           => Proof (LogicError s sE t) 
              [LogicRule s sE t] 
              (PrfStdState s Text ()) 

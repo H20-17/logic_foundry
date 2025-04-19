@@ -405,7 +405,7 @@ testBuilderXSuite = do
     remarkM "Test 5: Complex Predicate { x ∈ N | ∃y (y ∈ M ∧ x = <y, C>) }"
     -- Predicate: eX 1 ( (X 1 `In` setM) :&&: (X 0 :==: Pair (X 1) constC) )
     -- Here, x is X 0 (bound by builderX), y is X 1 (bound by eX)
-    let prop5 = eX 1 ( (X 1 `In` setM) :&&: (X 0 :==: Pair (X 1) constC) )
+    let prop5 = eX 1 ( (X 1 `In` setM) :&&: (X 0 :==: Tupl [X 1, constC]) )
     let builtSet5 = builderX 0 setN prop5 -- Using index 0 for x
     builtSet5Show <- showObjM builtSet5
     remarkM $ "Constructed (idx=0): " <> builtSet5Show
@@ -458,6 +458,9 @@ testCompositionImplementation = do
     remarkM "WHy won't h even show"
     lift . putStrLn $ show h
     lift . print $ "HELLO"
+
+    let testthis = Project 0 f
+    hShow <- showObjM thistthis
 
     hShow <- showObjM h
     remarkM $ "Constructed h: " <> hShow

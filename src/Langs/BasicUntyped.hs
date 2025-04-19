@@ -1,7 +1,7 @@
 {-# LANGUAGE PatternGuards #-}
 module Langs.BasicUntyped (
-    ObjDeBr(Integ,Constant,V,X,Pair,Tupl,Project),
-    PropDeBr(Neg,(:&&:),(:||:),(:->:),(:<->:),(:==:),In,(:>=:),F, IsTuple),
+    ObjDeBr(Integ,Constant,V,X,Tupl,Project),
+    PropDeBr(Neg,(:&&:),(:||:),(:->:),(:<->:),(:==:),In,(:>=:),F,IsTuple),
     DeBrSe(..),
     SubexpDeBr(..),
     PrfStdStepPredDeBr,
@@ -29,7 +29,7 @@ module Langs.BasicUntyped (
     (.@.),
     (.:.)
 ) where
-import Control.Monad ( unless, guard )
+import Control.Monad ( unless, guard,msum )
 import Data.List (intersperse)
 import Data.Text (Text, pack, unpack,concat, lines,intercalate)
 import GHC.Generics (Associativity (NotAssociative, RightAssociative, LeftAssociative))
@@ -104,6 +104,10 @@ data SubexpParseTree where
     ParseTreeInt :: Int -> SubexpParseTree
     Builder :: SubexpParseTree -> SubexpParseTree -> SubexpParseTree
     FuncApp :: SubexpParseTree -> SubexpParseTree -> SubexpParseTree
+    IsTuplePred :: Int -> SubexpParseTree -> SubexpParseTree
+    TupleProject :: Int -> SubexpParseTree -> SubexpParseTree
+    TestText :: Text -> SubexpParseTree
+
 
 
 subexpParseTreeBoundDepth :: SubexpParseTree -> Int
@@ -121,8 +125,8 @@ subexpParseTreeBoundDepth sub = case sub of
     ParseTreeInt _ -> 0
     Builder sub1 sub2 -> 1 + max (subexpParseTreeBoundDepth sub1) (subexpParseTreeBoundDepth sub2)
     FuncApp sub1 sub2 -> max (subexpParseTreeBoundDepth sub1) (subexpParseTreeBoundDepth sub2)
-
-
+    IsTuplePred int sub -> subexpParseTreeBoundDepth sub
+    TupleProject int sub -> subexpParseTreeBoundDepth sub
 
 sbParseTreeNormalize :: Int -> SubexpParseTree -> SubexpParseTree
 -- Be ultra-careful with this function. It will probably break indexing if
@@ -150,7 +154,8 @@ sbParseTreeNormalize boundVarIdx sub =
             ParseTreeInt i -> ParseTreeInt i
             Builder sub1 sub2 -> Builder (sbParseTreeNormalize' depth sub1) (sbParseTreeNormalize' depth sub2)
             FuncApp sub1 sub2 -> FuncApp (sbParseTreeNormalize' depth sub1) (sbParseTreeNormalize' depth sub2)
-    
+            IsTuplePred n sub -> IsTuplePred n (sbParseTreeNormalize' depth sub)
+            TupleProject n obj -> TupleProject n (sbParseTreeNormalize' depth sub)
     
   
 
@@ -181,7 +186,8 @@ objDeBrBoundVarInside obj idx = case obj of
     Bound i -> idx == i
     V i -> False
     X i -> False
-    Pair a b -> objDeBrBoundVarInside a idx || objDeBrBoundVarInside b idx
+    Tupl as -> or $ Prelude.map (\a -> objDeBrBoundVarInside a idx) as
+    Project i tuple -> objDeBrBoundVarInside tuple idx
 
 
 
@@ -200,6 +206,11 @@ propDeBrHasBoundVar sub idx = case sub of
     Exists p -> propDeBrBoundVarInside p idx
     (:>=:) o1 o2 -> objDeBrBoundVarInside o1 idx || objDeBrBoundVarInside o2 idx
     F -> False
+    IsTuple n x ->
+        -- The Haskell Int 'n' cannot contain a bound variable.
+        -- Check only the ObjDeBr term 'x' using the corresponding helper.
+        objDeBrBoundVarInside x idx -- Assumes objDeBrBoundVarInside is defined and correct
+
 
 
 -- Swaps Bound fromIdx to Bound toIdx within a PropDeBr
@@ -216,6 +227,8 @@ swapBoundIndexProp fromIdx toIdx p = case p of
     Exists q -> Exists (swapBoundIndexProp fromIdx toIdx q) -- Recurses under binder
     (:>=:) o1 o2 -> (:>=:) (swapBoundIndexObj fromIdx toIdx o1) (swapBoundIndexObj fromIdx toIdx o2)
     F -> F
+    IsTuple n x -> IsTuple n (swapBoundIndexObj fromIdx toIdx x)
+
 
 -- Swaps Bound fromIdx to Bound toIdx within an ObjDeBr
 swapBoundIndexObj :: Int -> Int -> ObjDeBr -> ObjDeBr
@@ -227,7 +240,8 @@ swapBoundIndexObj fromIdx toIdx o = case o of
     V i -> V i             -- Free variables are untouched
     X i -> X i             -- Template variables are untouched
     XInternal i -> XInternal i -- Internal template variables are untouched
-    Pair o1 o2 -> Pair (swapBoundIndexObj fromIdx toIdx o1) (swapBoundIndexObj fromIdx toIdx o2)
+    Tupl os -> Tupl $ Prelude.map (swapBoundIndexObj fromIdx toIdx) os 
+    Project i tuple -> Project i (swapBoundIndexObj fromIdx toIdx tuple)
 
 -- Calculates depth, returning substitutionDepth if X targetIdx is found.
 boundDepthObjDeBrX :: Int -> Int -> ObjDeBr -> Int
@@ -240,8 +254,16 @@ boundDepthObjDeBrX targetIdx substitutionDepth obj = case obj of
     V idx -> 0     -- Free variables have 0 depth contribution
     X idx -> if idx == targetIdx then substitutionDepth else 0 -- *** Return substitutionDepth if target X found ***
     XInternal idx -> 0 -- Ignore XInternal in this version
-    -- Use recursive calls for pairs
-    Pair a b -> max (boundDepthObjDeBrX targetIdx substitutionDepth a) (boundDepthObjDeBrX targetIdx substitutionDepth b)
+    Tupl xs ->
+        -- Calculate the max depth needed by any element in the list xs.
+        -- If the list is empty, the depth is 0.
+        if null xs then
+            0
+        else
+            -- Recursively find the max depth required by any element
+            maximum $ Prelude.map (boundDepthObjDeBrX targetIdx substitutionDepth) xs
+    Project i tuple -> boundDepthObjDeBrX targetIdx substitutionDepth tuple
+
 
 -- Calculates depth, returning substitutionDepth if X targetIdx is found.
 boundDepthPropDeBrX :: Int -> Int -> PropDeBr -> Int
@@ -260,6 +282,7 @@ boundDepthPropDeBrX targetIdx substitutionDepth prop = case prop of
     -- Use recursive call to the corresponding Obj version
     (:>=:) o1 o2 -> max (boundDepthObjDeBrX targetIdx substitutionDepth o1) (boundDepthObjDeBrX targetIdx substitutionDepth o2)
     F -> 0
+    IsTuple n x -> boundDepthObjDeBrX targetIdx substitutionDepth x
 
 -- Calculates depth, returning substitutionDepth if XInternal targetIdx is found.
 boundDepthObjDeBrXInt :: Int -> Int -> ObjDeBr -> Int
@@ -273,7 +296,16 @@ boundDepthObjDeBrXInt targetIdx substitutionDepth obj = case obj of
     X idx -> 0 -- Ignore regular X in this version
     XInternal idx -> if idx == targetIdx then substitutionDepth else 0 -- *** Return substitutionDepth if target XInternal found ***
     -- Use recursive calls for pairs
-    Pair a b -> max (boundDepthObjDeBrXInt targetIdx substitutionDepth a) (boundDepthObjDeBrXInt targetIdx substitutionDepth b)
+ -- Added Tupl case:
+    Tupl xs ->
+        -- Calculate the max depth needed by any element in the list xs.
+        -- If the list is empty, the depth is 0.
+        if null xs then
+            0
+        else
+            -- Recursively find the max depth required by any element using ...XInt
+            maximum $ Prelude.map (boundDepthObjDeBrXInt targetIdx substitutionDepth) xs
+    Project n tuple -> boundDepthObjDeBrXInt targetIdx substitutionDepth tuple
 
 -- Calculates depth, returning substitutionDepth if XInternal targetIdx is found.
 boundDepthPropDeBrXInt :: Int -> Int -> PropDeBr -> Int
@@ -292,7 +324,7 @@ boundDepthPropDeBrXInt targetIdx substitutionDepth prop = case prop of
     -- Use recursive call to the corresponding Obj version
     (:>=:) o1 o2 -> max (boundDepthObjDeBrXInt targetIdx substitutionDepth o1) (boundDepthObjDeBrXInt targetIdx substitutionDepth o2)
     F -> 0
-
+    IsTuple n tuple -> boundDepthObjDeBrXInt targetIdx substitutionDepth tuple
 
 parsePairFirstExp :: ObjDeBr -> Maybe ObjDeBr
 parsePairFirstExp subexp = do
@@ -435,10 +467,17 @@ parseV subexp = case subexp of
     V i -> Just i
     _ -> Nothing
 
-parsePair :: ObjDeBr ->  Maybe (ObjDeBr, ObjDeBr)
-parsePair subexp = case subexp of
-    Pair a b -> Just (a,b)
+parseTupl :: ObjDeBr ->  Maybe [ObjDeBr]
+parseTupl subexp = case subexp of
+    Tupl xs -> Just xs
     _ -> Nothing
+
+
+parsePair :: ObjDeBr -> Maybe (ObjDeBr,ObjDeBr)
+parsePair subexp = do
+    list <- parseTupl subexp
+    guard (length(list) == 2)
+    return (list!!0,list!!1)
 
 
 
@@ -475,6 +514,19 @@ parseComposition obj = do
     return (f,g)
 
 
+parseProject :: ObjDeBr -> Maybe (Int, ObjDeBr)
+parseProject obj =
+    case obj of
+        Project n tuple -> Just (n,tuple)
+        _ -> Nothing
+
+
+parseIsTuple:: PropDeBr -> Maybe (Int, ObjDeBr)
+parseIsTuple p = 
+    case p of
+        IsTuple i tupleObj -> Just (i, tupleObj)
+        _ -> Nothing
+
 
 
 instance SubexpDeBr ObjDeBr where
@@ -492,7 +544,8 @@ instance SubexpDeBr ObjDeBr where
               <|> parseBound'
               <|> parseV'
               <|> parseX'
-              <|> parsePair'
+              <|> parseTuple'
+              <|> parseProject'
               <|> parseHilbertShort'
               <|> parseFuncApplication'
               <|> parseComposition'
@@ -530,12 +583,17 @@ instance SubexpDeBr ObjDeBr where
                 i <- parseInteg obj
                 return $ ParseTreeInt i
 
-            parsePair' = do
-               (a,b) <- parsePair obj
-               return $ Tuple [toSubexpParseTree a dict, toSubexpParseTree b dict]
+            parseTuple' = do
+               tuple <- parseTupl obj
+               return $ Tuple $ Prelude.map (\x -> toSubexpParseTree x dict) tuple
             parseComposition' = do
                 (f,g) <- parseComposition obj
                 return $ BinaryOp "∘" (toSubexpParseTree f dict) (toSubexpParseTree g dict)
+            parseProject' = do
+                (i, o) <- parseProject obj
+                --return $ ParseTreeInt 999
+                --error $ show obj <> " I " <> show i
+                return $ TupleProject i (toSubexpParseTree o dict)
 
 
 boundDepthObjDeBr :: ObjDeBr -> Int
@@ -547,8 +605,18 @@ boundDepthObjDeBr obj = case obj of
      V idx -> 0
      X idx -> 0
      XInternal idx -> 0
-     Pair a b -> max (boundDepthObjDeBr a) (boundDepthObjDeBr b)
+     Tupl xs ->
+         -- Depth is the maximum depth of any element in the list.
+         -- Return 0 for an empty tuple.
+         if null xs then
+             0
+         else
+             maximum $ Prelude.map boundDepthObjDeBr xs
 
+     -- Added Project case (Handles Project Int ObjDeBr):
+     Project i t ->
+         -- Depth depends only on the term 't', not the Int 'i'.
+         boundDepthObjDeBr t
 
 
 boundDepthPropDeBr :: PropDeBr -> Int
@@ -689,7 +757,7 @@ instance SubexpDeBr PropDeBr where
         <|> parseNotIn'
         <|> parseNotSubset'
         <|> parseNegation'      -- Default negation
-
+        <|> parseIsTuple'
         <|> parseStrictSubset'  -- Conjunction shorthand first
         <|> parseConjunction'   -- Default conjunction
 
@@ -706,6 +774,7 @@ instance SubexpDeBr PropDeBr where
         <|> parseIn'
         <|> parseGTE'
         <|> parseFalsum'        -- Falsum
+
 
       -- Helper functions using the basic parsers to build the tree
       parseNotEqual' = do
@@ -766,7 +835,9 @@ instance SubexpDeBr PropDeBr where
       parseFalsum' = do
           () <- parseFalsum prop
           return $ ParseTreeF
- 
+      parseIsTuple' = do
+          (n, tupleObj) <- parseIsTuple prop
+          return $ IsTuplePred n (toSubexpParseTree prop dict)
 
 
 
@@ -790,6 +861,8 @@ showSubexpParseTree sub = case sub of
               ParseTreeInt i -> showSubexpParseTree sub1
               Builder {} -> showSubexpParseTree sub1
               FuncApp {} -> showSubexpParseTree sub1
+              TupleProject {} -> showSubexpParseTree sub1
+              IsTuplePred {} -> showSubexpParseTree sub1
     BinaryOp opSymb sub1 sub2 ->
            case sub1 of
               UnaryOp _ _ -> showSubexpParseTree sub1
@@ -816,6 +889,9 @@ showSubexpParseTree sub = case sub of
               ParseTreeInt i -> showSubexpParseTree sub1
               Builder {} -> showSubexpParseTree sub1
               FuncApp {} -> showSubexpParseTree sub1
+              TupleProject {} -> showSubexpParseTree sub1
+              IsTuplePred {} -> showSubexpParseTree sub1
+
           <> " " <> opSymb <> " "
           <> case sub2 of
                UnaryOp _ _-> showSubexpParseTree sub2
@@ -841,6 +917,10 @@ showSubexpParseTree sub = case sub of
                ParseTreeInt i -> showSubexpParseTree sub2
                Builder {} -> showSubexpParseTree sub2
                FuncApp {} -> showSubexpParseTree sub2
+               TupleProject {} -> showSubexpParseTree sub2
+               IsTuplePred {} -> showSubexpParseTree sub2
+
+
     Binding quant sub1 -> quant <> "𝑥" <> showIndexAsSubscript idx <> "(" <> showSubexpParseTree sub1 <> ")"
         where
             idx = subexpParseTreeBoundDepth sub1 
@@ -872,8 +952,16 @@ showSubexpParseTree sub = case sub of
         HilbertShort _ -> showSubexpParseTree f <> "(" <> showSubexpParseTree x <> ")"
         Builder _ _ -> showSubexpParseTree f <> "(" <> showSubexpParseTree x <> ")"
         _ -> "(" <> showSubexpParseTree f <> ")" <> "(" <> showSubexpParseTree x <> ")"
+    TupleProject idx obj -> "𝛑" <> showIndexAsSubscript idx 
+                               <> "(" <> showSubexpParseTree obj <> ")"
+    IsTuplePred idx p -> "Tᴜᴘʟᴇ"
+                 <> showIndexAsSubscript idx 
+                 <> "(" 
+                 <> showSubexpParseTree p
+                 <> ")"
 
-  where
+
+  where 
     showHierarchalIdxAsSubscript :: [Int] -> Text
     showHierarchalIdxAsSubscript idxs = Data.Text.concat (intersperse "." (Prelude.map showIndexAsSubscript idxs))
     assoc opSymb = fst $ binaryOpData!opSymb
@@ -946,9 +1034,8 @@ data ObjDeBr where
     -- consumption of template variables in certain cases.
     -- This constructor is not public facing.
 
-    Pair :: ObjDeBr -> ObjDeBr -> ObjDeBr
     Tupl :: [ObjDeBr] -> ObjDeBr
-    Project :: ObjDeBr -> ObjDeBr
+    Project :: Int -> ObjDeBr -> ObjDeBr
     deriving (Eq, Ord, Show)
 
 
@@ -997,8 +1084,15 @@ checkSanityObjDeBr obj varStackHeight tmpltVarIndices constSet boundSet = case o
             Nothing
         else
             (return . ObjDeBrTemplateVarIdx) idx
-     Pair a b -> checkSanityObjDeBr a varStackHeight tmpltVarIndices constSet boundSet
-                 <|> checkSanityObjDeBr b varStackHeight tmpltVarIndices constSet boundSet
+     Tupl xs ->
+         -- Check sanity of all elements recursively.
+         -- Use msum (or asum) to return the *first* error found, or Nothing if all are sane.
+         msum $ Prelude.map (\x -> checkSanityObjDeBr x varStackHeight tmpltVarIndices constSet boundSet) xs
+     Project i t ->
+         -- The Haskell Int 'i' is meta-level and doesn't affect object-level sanity.
+         -- Just check the sanity of the ObjDeBr term 't'.
+         checkSanityObjDeBr t varStackHeight tmpltVarIndices constSet boundSet    
+
 
 boundDecrementObjDeBr :: Int -> ObjDeBr -> ObjDeBr
 boundDecrementObjDeBr idx obj = case obj of
@@ -1008,7 +1102,15 @@ boundDecrementObjDeBr idx obj = case obj of
      Bound i -> if i == idx then Bound (i - 1) else Bound i
      V i -> V i
      X i -> X i
-     Pair a b -> Pair (boundDecrementObjDeBr idx a) (boundDecrementObjDeBr idx b)
+     Tupl xs ->
+         -- Apply the decrement recursively to each element in the list
+         Tupl $ Prelude.map (boundDecrementObjDeBr idx) xs
+
+     -- Added Project case (Handles Project Int ObjDeBr):
+     Project i t ->
+         -- Apply decrement recursively within the ObjDeBr term 't',
+         -- but leave the Haskell Int index 'i' unchanged.
+         Project i (boundDecrementObjDeBr idx t)
 
 
 
@@ -1145,7 +1247,15 @@ objDeBrXInside subidx obj =
         X idx | idx == subidx -> True
               | otherwise -> False
         XInternal idx -> False
-        Pair a b -> objDeBrXInside subidx a || objDeBrXInside subidx b
+        Tupl xs ->
+            -- True if X subidx is inside ANY element of the list xs
+            any (objDeBrXInside subidx) xs
+            -- Alternatively: or $ map (objDeBrXInside subidx) xs
+
+        -- Added Project case (Handles Project Int ObjDeBr):
+        Project i t ->
+            -- Check only within the ObjDeBr term 't'
+            objDeBrXInside subidx t
 
 objDeBrXInsideInt :: Int -> ObjDeBr -> Bool
 objDeBrXInsideInt subidx obj =
@@ -1158,7 +1268,15 @@ objDeBrXInsideInt subidx obj =
         XInternal idx | idx == subidx -> True
               | otherwise -> False
         X idx -> False
-        Pair a b -> objDeBrXInsideInt subidx a || objDeBrXInsideInt subidx b
+        Tupl xs ->
+            -- True if XInternal subidx is inside ANY element of the list xs
+            any (objDeBrXInsideInt subidx) xs
+            -- Alternatively: or $ map (objDeBrXInsideInt subidx) xs
+
+        -- Added Project case (Handles Project Int ObjDeBr):
+        Project i t ->
+            -- Check only within the ObjDeBr term 't'
+            objDeBrXInsideInt subidx t
 
 
 
@@ -1214,11 +1332,15 @@ objDeBrSubXInt targetIdx substitution template = case template of
         | idx == targetIdx -> substitution
         | otherwise -> XInternal idx
     X idx -> X idx
-    Pair o1 o2 -> 
-        Pair (objDeBrSubXInt targetIdx substitution o1) 
-                (objDeBrSubXInt targetIdx substitution o2)
+    Tupl xs ->
+        -- Apply the substitution recursively to each element in the list
+        Tupl $ Prelude.map (objDeBrSubXInt targetIdx substitution) xs
 
-
+    -- Added Project case (Handles Project Int ObjDeBr):
+    Project i t ->
+        -- Substitute recursively within the ObjDeBr term 't',
+        -- but leave the Haskell Int index 'i' unchanged.
+        Project i (objDeBrSubXInt targetIdx substitution t)
 
 
 
@@ -1257,6 +1379,10 @@ propDeBrSubXInt targetIdx substitution template = case template of
     (:>=:) o1 o2 -> objDeBrSubXInt targetIdx substitution o1 :>=:
                 objDeBrSubXInt targetIdx substitution o2
     F -> F
+    IsTuple n x ->
+        -- Substitute recursively only within the ObjDeBr term 'x',
+        -- leaving the Haskell Int 'n' unchanged.
+        IsTuple n (objDeBrSubXInt targetIdx substitution x)
 
 
 -- Substitutes X targetIdx with substitution in an ObjDeBr.
@@ -1283,9 +1409,15 @@ objDeBrSubX targetIdx substitution template = case template of
         | idx == targetIdx -> substitution -- *** Substitute X targetIdx ***
         | otherwise -> X idx
     XInternal idx -> XInternal idx -- Leave XInternal alone
-    Pair o1 o2 ->
-        Pair (objDeBrSubX targetIdx substitution o1)
-             (objDeBrSubX targetIdx substitution o2)
+    Tupl xs ->
+        -- Apply the substitution recursively to each element in the list
+        Tupl $ Prelude.map (objDeBrSubX targetIdx substitution) xs
+
+    -- Added Project case (Handles Project Int ObjDeBr):
+    Project i t ->
+        -- Substitute recursively within the ObjDeBr term 't',
+        -- but leave the Haskell Int index 'i' unchanged.
+        Project i (objDeBrSubX targetIdx substitution t)
 
 -- Substitutes X targetIdx with substitution in a PropDeBr.
 -- Directly parallels the user's provided propDeBrSubXInt logic.
@@ -1328,6 +1460,11 @@ propDeBrSubX targetIdx substitution template = case template of
                     objDeBrSubX targetIdx substitution o2
     F -> F
 
+    IsTuple n x ->
+        -- Substitute recursively only within the ObjDeBr term 'x',
+        -- leaving the Haskell Int 'n' unchanged.
+        IsTuple n (objDeBrSubX targetIdx substitution x)
+
 
 
 
@@ -1350,6 +1487,10 @@ swapXtoXIntProp p = case p of
     Exists q -> Exists (swapXtoXIntProp q)
     (:>=:) o1 o2 -> (:>=:) (swapXtoXIntObj o1) (swapXtoXIntObj o2)
     F -> F
+    IsTuple n x ->
+        -- Apply swap recursively only within the ObjDeBr term 'x',
+        -- leave the Haskell Int 'n' alone.
+        IsTuple n (swapXtoXIntObj x) -- Assuming swapXtoXIntObj is defined
 
 swapXtoXIntObj :: ObjDeBr -> ObjDeBr
 swapXtoXIntObj o = case o of
@@ -1360,7 +1501,18 @@ swapXtoXIntObj o = case o of
     V i -> V i             -- Free variables are untouched
     X i -> XInternal i     -- *** Swap X to XInternal ***
     XInternal i -> XInternal i -- Leave existing XInternal alone
-    Pair o1 o2 -> Pair (swapXtoXIntObj o1) (swapXtoXIntObj o2)
+
+
+    Tupl xs ->
+        -- Apply the swap recursively to each element in the list
+        Tupl $ Prelude.map swapXtoXIntObj xs
+
+    -- Added Project case (Handles Project Int ObjDeBr):
+    Project i t ->
+        -- Apply swap recursively within the ObjDeBr term 't',
+        -- but leave the Haskell Int index 'i' unchanged.
+        Project i (swapXtoXIntObj t)
+
 
 -- Swap XInternal i back to X i recursively
 
@@ -1377,6 +1529,12 @@ swapXIntToXProp p = case p of
     Exists q -> Exists (swapXIntToXProp q)
     (:>=:) o1 o2 -> (:>=:) (swapXIntToXObj o1) (swapXIntToXObj o2)
     F -> F
+    IsTuple n x ->
+        -- Apply swap recursively only within the ObjDeBr term 'x',
+        -- leave the Haskell Int 'n' alone.
+        IsTuple n (swapXIntToXObj x) -- Assuming swapXIntToXObj is defined
+
+
 
 swapXIntToXObj :: ObjDeBr -> ObjDeBr
 swapXIntToXObj o = case o of
@@ -1387,7 +1545,18 @@ swapXIntToXObj o = case o of
     V i -> V i             -- Free variables are untouched
     X i -> X i             -- Leave existing X alone
     XInternal i -> X i     -- *** Swap XInternal back to X ***
-    Pair o1 o2 -> Pair (swapXIntToXObj o1) (swapXIntToXObj o2)
+    Tupl xs ->
+        -- Apply the swap recursively to each element in the list
+        Tupl $ Prelude.map swapXIntToXObj xs
+
+    -- Added Project case (Handles Project Int ObjDeBr):
+    Project i t ->
+        -- Apply swap recursively within the ObjDeBr term 't',
+        -- but leave the Haskell Int index 'i' unchanged.
+        Project i (swapXIntToXObj t)
+
+
+
 -- | Applies a list of substitutions [(Index, Term)] to an ObjDeBr term.
 objDeBrSubXs :: [(Int, ObjDeBr)] -> ObjDeBr -> ObjDeBr
 objDeBrSubXs subs term =
@@ -1433,8 +1602,15 @@ objDeBrApplyUG obj freevarIdx boundvarIdx =
                                Bound boundvarIdx
                            else
                                V idx
-        Pair a b -> Pair (objDeBrApplyUG a freevarIdx boundvarIdx) (objDeBrApplyUG b freevarIdx boundvarIdx)
+        Tupl xs ->
+            -- Apply the substitution recursively to each element in the list
+            Tupl $ Prelude.map (\x -> objDeBrApplyUG x freevarIdx boundvarIdx) xs
 
+        -- Added Project case (Handles Project Int ObjDeBr):
+        Project i t ->
+            -- Apply substitution recursively within the tuple term 't',
+            -- but leave the Haskell Int index 'i' unchanged.
+            Project i (objDeBrApplyUG t freevarIdx boundvarIdx)
 
 
 propDeBrApplyUG :: PropDeBr -> Int -> Int -> PropDeBr
@@ -1451,6 +1627,10 @@ propDeBrApplyUG prop freevarIdx boundvarIdx =
         Exists p -> Exists (propDeBrApplyUG p freevarIdx boundvarIdx)
         (:>=:) o1 o2 -> (:>=:) (objDeBrApplyUG o1 freevarIdx boundvarIdx) (objDeBrApplyUG o2 freevarIdx boundvarIdx)
         F -> F
+        IsTuple n x ->
+            -- Apply substitution recursively only within the ObjDeBr term 'x',
+            -- leave the Haskell Int 'n' alone.
+            IsTuple n (objDeBrApplyUG x freevarIdx boundvarIdx) -- Assuming objDeBrApplyUG is defined and updated
 
 
 boundExpToFunc :: PropDeBr -> ObjDeBr -> PropDeBr
@@ -1661,9 +1841,16 @@ objDeBrSubBoundVarToX0 boundVarIdx obj = case obj of
     Bound idx -> if idx == boundVarIdx then X 0
                    else Bound idx
     V idx -> V idx
-    Pair o1 o2 -> Pair (objDeBrSubBoundVarToX0 boundVarIdx o1) 
-           (objDeBrSubBoundVarToX0 boundVarIdx o2) 
- 
+    Tupl xs ->
+        -- Apply the substitution recursively to each element in the list
+        Tupl $ Prelude.map (objDeBrSubBoundVarToX0 boundVarIdx) xs
+
+    -- Added Project case (Handles Project Int ObjDeBr):
+    Project i t ->
+        -- Apply substitution recursively within the ObjDeBr term 't',
+        -- but leave the Haskell Int index 'i' unchanged.
+        Project i (objDeBrSubBoundVarToX0 boundVarIdx t)
+
 
 propDeBrSubBoundVarToX0 :: Int -> PropDeBr -> PropDeBr
 propDeBrSubBoundVarToX0 boundVarIdx prop = case prop of
@@ -1679,6 +1866,10 @@ propDeBrSubBoundVarToX0 boundVarIdx prop = case prop of
     Forall p -> Forall (propDeBrSubBoundVarToX0 boundVarIdx p)
     Exists p -> Exists (propDeBrSubBoundVarToX0 boundVarIdx p)
     a :>=: b -> objDeBrSubBoundVarToX0 boundVarIdx a :>=: objDeBrSubBoundVarToX0 boundVarIdx b
+    IsTuple n x ->
+        -- Apply substitution recursively only within the ObjDeBr term 'x',
+        -- leave the Haskell Int 'n' alone.
+        IsTuple n (objDeBrSubBoundVarToX0 boundVarIdx x) -- Assuming objDeBrSubBoundVarToX0 is defined and updated
 
     F -> F
                 
@@ -1788,6 +1979,10 @@ xsubPropDeBr p idx depth = case p of
     Exists p -> Exists (xsubPropDeBr p idx depth)
     (:>=:) o1 o2 -> (:>=:) (xsubObjDeBr o1 idx depth) (xsubObjDeBr o2 idx depth)
     F -> F
+    IsTuple n x ->
+        -- Apply substitution recursively only within the ObjDeBr term 'x',
+        -- leave the Haskell Int 'n' alone.
+        IsTuple n (xsubObjDeBr x idx depth) -- Assuming xsubObjDeBr is defined and updated
 
 
 xsubObjDeBr :: ObjDeBr -> Int -> Int -> ObjDeBr
@@ -1802,7 +1997,15 @@ xsubObjDeBr o idx depth = case o of
             else
                 X i
     XInternal i -> XInternal i
-    Pair o1 o2 -> Pair (xsubObjDeBr o1 idx depth) (xsubObjDeBr o2 idx depth)
+    Tupl xs ->
+        -- Apply the substitution recursively to each element in the list
+        Tupl $ Prelude.map (\x -> xsubObjDeBr x idx depth) xs
+    Project i t ->
+        -- Substitute recursively within the tuple term 't',
+        -- but leave the Haskell Int index 'i' unchanged.
+        Project i (xsubObjDeBr t idx depth)
+
+    
 
 
 -- Substitutes XInternal idx with Bound depth in a PropDeBr expression.
@@ -1820,6 +2023,11 @@ xsubPropDeBrXInt p idx depth = case p of
     Exists q -> Exists (xsubPropDeBrXInt q idx depth) -- Depth decreases implicitly in recursive calls if needed, handled by caller usually
     (:>=:) o1 o2 -> (:>=:) (xsubObjDeBrXInt o1 idx depth) (xsubObjDeBrXInt o2 idx depth)
     F -> F
+    IsTuple n x ->
+        -- Apply substitution recursively only within the ObjDeBr term 'x',
+        -- leave the Haskell Int 'n' alone.
+        IsTuple n (xsubObjDeBrXInt x idx depth) -- Assuming xsubObjDeBrXInt is defined and updated
+
 
 -- Substitutes XInternal idx with Bound depth in an ObjDeBr expression.
 -- Leaves regular X idx variables untouched.
@@ -1835,7 +2043,15 @@ xsubObjDeBrXInt o idx depth = case o of
                        Bound depth -- Substitute the target XInternal index with Bound depth
                    else
                        XInternal i -- Leave other XInternal indices alone
-    Pair o1 o2 -> Pair (xsubObjDeBrXInt o1 idx depth) (xsubObjDeBrXInt o2 idx depth)
+
+    Tupl xs ->
+        -- Apply the substitution recursively to each element in the list
+        Tupl $ Prelude.map (\x -> xsubObjDeBrXInt x idx depth) xs
+    Project i t ->
+        -- Substitute recursively within the tuple term 't',
+        -- but leave the Haskell Int index 'i' unchanged.
+        Project i (xsubObjDeBrXInt t idx depth)
+
 
 
 
@@ -1893,8 +2109,23 @@ hX idx p = Hilbert (xsubPropDeBr p idx (boundDepthPropDeBr p))
 
 
 
+isTuple :: Int -> ObjDeBr -> PropDeBr
+isTuple i obj = propDeBrSubX i obj $ multiEx idxs 
+      (X i :==: (Tupl [X j | j <- idxs ]))
+      where idxs = [0 .. i-1]
+
+
+
+
 isPair :: ObjDeBr -> PropDeBr
-isPair t = propDeBrSubX 2 t $  eX 0 $ eX 1 $ X 2 :==: Pair (X 0) (X 1)
+isPair t = isTuple 2 t
+
+
+
+--isPair t = propDeBrSubX 2 t $  eX 0 $ eX 1 $ X 2 :==: Tupl [X 0,X 1]
+
+
+
 
 
 isRelation :: ObjDeBr -> PropDeBr
@@ -1903,7 +2134,7 @@ isRelation s = aX 0 $ X 0 `In` s :->: isPair (X 0)
 
 isFunction :: ObjDeBr -> PropDeBr
 isFunction t = isRelation t :&&: 
-          aX 0 ( X 0 `In` relDomain t :->: eXBang 1 $ Pair (X 0) (X 1) `In` t)
+          aX 0 ( X 0 `In` relDomain t :->: eXBang 1 $ Tupl [X 0, X 1] `In` t)
 
 --propIsFuncOnSet :: ObjDeBr -> PropDeBr -> PropDeBr
 --propIsFuncOnSet t p = 
@@ -1947,9 +2178,6 @@ notSubset :: ObjDeBr -> ObjDeBr -> PropDeBr
 notSubset a b = Neg (subset a b)
 
 
-pairFirstTemplate :: ObjDeBr
-pairFirstTemplate = hX 2 (eX 1 (X 0 :==: Pair (X 2) (X 1)))
-                             --  f        -- fGraph Domain
 
 -- Helper function to apply a binder function (like eX or aX) for a list of indices.
 -- Relies on the binder function itself (e.g., eX, aX) correctly calculating the
@@ -2024,7 +2252,7 @@ project n m t =
 
 
 pairFirst :: ObjDeBr -> ObjDeBr
-pairFirst pair = objDeBrSubX 0 pair (hX 2 (eX 1 (X 0 :==: Pair (X 2) (X 1))))
+pairFirst pair = Project 0 pair
 
 
 
@@ -2032,7 +2260,7 @@ pairFirst pair = objDeBrSubX 0 pair (hX 2 (eX 1 (X 0 :==: Pair (X 2) (X 1))))
 relDomain :: ObjDeBr -> ObjDeBr
 relDomain s = objDeBrSubX 0 s (hX 1(aX 2 (X 2 `In` X 1)  -- x ∈ D
                        :<->:                             -- iff
-                            eX 3 (Pair (X 2) (X 3) `In` X 0)))
+                            eX 3 (Tupl [X 2, X 3] `In` X 0)))
 
 
 -- let us assume that f is a pair
@@ -2046,7 +2274,7 @@ relDomain s = objDeBrSubX 0 s (hX 1(aX 2 (X 2 `In` X 1)  -- x ∈ D
 
 
 (.@.) :: ObjDeBr -> ObjDeBr -> ObjDeBr
-f .@. x = objDeBrSubXs [(0,f),(1,x)] (hX 2 ( Pair (X 1) (X 2) `In` pairFirst (X 0) ))
+f .@. x = objDeBrSubXs [(0,f),(1,x)] (hX 2 ( Tupl [X 1, X 2] `In` pairFirst (X 0) ))
 
 
 
@@ -2073,7 +2301,13 @@ f .:. g = --objDeBrSubXs [(1, f), (2, g)]
   objDeBrSubXs [(1,f),(2,g)] compositionTemplate
 
 
-
+instance ZFC.LogicTerm ObjDeBr where
+    parseTuple :: ObjDeBr -> Maybe [ObjDeBr]
+    parseTuple = parseTupl
+    buildTuple :: [ObjDeBr] -> ObjDeBr
+    buildTuple = Tupl
+    buildProject :: Int -> ObjDeBr -> ObjDeBr
+    buildProject = Project
 
              
 instance ZFC.LogicSent PropDeBr ObjDeBr where
@@ -2117,7 +2351,9 @@ instance ZFC.LogicSent PropDeBr ObjDeBr where
                         eX idx2 ( (X idx2 `In` XInternal 1) :&&: p )
                       )
                     )
-        )              
+        )
+    buildIsTuple :: Int -> ObjDeBr -> PropDeBr
+    buildIsTuple = IsTuple        
                               
             
                            
