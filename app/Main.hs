@@ -459,7 +459,7 @@ testCompositionImplementation = do
     lift . putStrLn $ show h
     lift . print $ "HELLO"
 
-    let testthis = Project 0 f
+    let testthis = project 2 0 f
 
     shitShow <- showObjM testthis
 
@@ -630,6 +630,89 @@ testShorthandRendering = do
 
     remarkM "--- Shorthand Rendering Tests Complete ---"
     return ()
+
+testProjectShorthandParsing :: ProofGenTStd () [PredRuleDeBr] PropDeBr Text IO ()
+testProjectShorthandParsing = do
+    remarkM "--- Testing Project Shorthand Parsing (via Rendering) ---"
+
+    -- Setup Constants and Variables
+    let tupleA = Constant "MyTupleA"
+    let tupleB = Constant "MyTupleB"
+    let constA = Constant "A"
+    let constB = Constant "B"
+    let constC = Constant "C"
+
+    fakeConstM "MyTupleA" ()
+    fakeConstM "MyTupleB" ()
+    fakeConstM "A" ()
+    fakeConstM "B" ()
+    fakeConstM "C" ()
+
+    -- == Positive Cases ==
+
+    -- Test 1: Simple 2-tuple, project index 0
+    remarkM "Test 1: Project 2 0 MyTupleA"
+    let proj_2_0_A = project 2 0 tupleA -- Generate term using helper
+    proj_2_0_A_show <- showObjM proj_2_0_A
+    remarkM $ "  Input:    project 2 0 MyTupleA"
+    remarkM $ "  Actual:   " <> proj_2_0_A_show
+    remarkM $ "  Expected: π₀(MyTupleA)"
+
+    -- Test 2: Simple 2-tuple, project index 1
+    remarkM "Test 2: Project 2 1 MyTupleA"
+    let proj_2_1_A = project 2 1 tupleA
+    proj_2_1_A_show <- showObjM proj_2_1_A
+    remarkM $ "  Input:    project 2 1 MyTupleA"
+    remarkM $ "  Actual:   " <> proj_2_1_A_show
+    remarkM $ "  Expected: π₁(MyTupleA)"
+
+    -- Test 3: 3-tuple, project index 1
+    remarkM "Test 3: Project 3 1 MyTupleB"
+    let proj_3_1_B = project 3 1 tupleB
+    proj_3_1_B_show <- showObjM proj_3_1_B
+    remarkM $ "  Input:    project 3 1 MyTupleB"
+    remarkM $ "  Actual:   " <> proj_3_1_B_show
+    remarkM $ "  Expected: π₁(MyTupleB)"
+
+    -- Test 4: Nested projection (term `t` is itself a projection)
+    remarkM "Test 4: Project 2 0 (project 2 1 MyTupleA)"
+    let inner_proj = project 2 1 tupleA
+    let outer_proj = project 2 0 inner_proj
+    outer_proj_show <- showObjM outer_proj
+    remarkM $ "  Input:    project 2 0 (project 2 1 MyTupleA)"
+    remarkM $ "  Actual:   " <> outer_proj_show
+    remarkM $ "  Expected: π₀(π₁(MyTupleA))"
+
+    -- Test 5: A standard Hilbert term that doesn't match the project structure
+    remarkM "Test 5: Standard Hilbert term hX 0 (X 0 :==: Constant A)"
+    let simpleHilbert = hX 0 (X 0 :==: constA)
+    simpleHilbert_show <- showObjM simpleHilbert
+    remarkM $ "  Input:    hX 0 (X 0 :==: Constant A)"
+    remarkM $ "  Actual:   " <> simpleHilbert_show
+    remarkM $ "  Expected: ε𝑥₀(𝑥₀ = A)  (or similar default Hilbert rendering, NOT π)"
+
+    -- == Negative Cases (Should Fail Parsing) ==
+
+    -- Test 6 (Negative Case - RHS Not a Tuple)
+    remarkM "Test 6: Hilbert term where RHS of equality is not a Tuple"
+    let nonTupleRHS = hX 1 ( eX 0 ( Constant "A" :==: Constant "B" ) )
+    nonTupleRHS_show <- showObjM nonTupleRHS
+    remarkM $ "  Input:    hX 1 ( eX 0 ( Constant \"A\" :==: Constant \"B\" ) )"
+    remarkM $ "  Actual:   " <> nonTupleRHS_show
+    remarkM $ "  Expected: ε𝑥₁(∃𝑥₀(A = B)) (Default Hilbert rendering, NOT π)"
+
+    -- Test 7 (Negative Case - Body Not Equality)
+    remarkM "Test 7: Hilbert term where body inside Exists is not an Equality"
+    let nonEqBody = hX 1 ( eX 0 ( Neg ( Constant "A" :==: Tupl [X 1, X 0] ) ) )
+    nonEqBody_show <- showObjM nonEqBody
+    remarkM $ "  Input:    hX 1 ( eX 0 ( Neg ( Constant \"A\" :==: Tupl [X 1, X 0] ) ) )"
+    remarkM $ "  Actual:   " <> nonEqBody_show
+    remarkM $ "  Expected: ε𝑥₁(∃𝑥₀(¬(A = (𝑥₁,𝑥₀)))) (Default Hilbert rendering, NOT π)"
+
+
+    remarkM "--- Project Shorthand Parsing Tests Complete ---"
+    return ()
+
 main :: IO ()
 main = do
 
@@ -784,7 +867,9 @@ main = do
     (aNSub, bNSub, cNSub, dNSub) <- runProofGeneratorT testShorthandRendering
     (putStrLn . unpack . showPropDeBrStepsBase) cNSub -- Print results
 
-
+    print "TEST PROJECT SHORTHAND PARSING BEGIN-------------------------------------"
+    (aPrj, bPrj, cPrj, dPrj) <- runProofGeneratorT testProjectShorthandParsing
+    (putStrLn . unpack . showPropDeBrStepsBase) cPrj -- Print results
 
     return ()
 
