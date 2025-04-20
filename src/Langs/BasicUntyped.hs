@@ -1,7 +1,7 @@
 {-# LANGUAGE PatternGuards #-}
 module Langs.BasicUntyped (
     ObjDeBr(Integ,Constant,V,X,Tupl,Project),
-    PropDeBr(Neg,(:&&:),(:||:),(:->:),(:<->:),(:==:),In,(:>=:),F,IsTuple),
+    PropDeBr(Neg,(:&&:),(:||:),(:->:),(:<->:),(:==:),In,(:>=:),F),
     DeBrSe(..),
     SubexpDeBr(..),
     PrfStdStepPredDeBr,
@@ -73,7 +73,6 @@ data PropDeBr where
       Exists :: PropDeBr -> PropDeBr
       (:>=:) :: ObjDeBr -> ObjDeBr -> PropDeBr
       F :: PropDeBr
-      IsTuple :: Int -> ObjDeBr -> PropDeBr
     deriving (Show, Eq, Ord)
 
 
@@ -104,7 +103,6 @@ data SubexpParseTree where
     ParseTreeInt :: Int -> SubexpParseTree
     Builder :: SubexpParseTree -> SubexpParseTree -> SubexpParseTree
     FuncApp :: SubexpParseTree -> SubexpParseTree -> SubexpParseTree
-    IsTuplePred :: Int -> SubexpParseTree -> SubexpParseTree
     TupleProject :: Int -> SubexpParseTree -> SubexpParseTree
     TestText :: Text -> SubexpParseTree
 
@@ -125,7 +123,6 @@ subexpParseTreeBoundDepth sub = case sub of
     ParseTreeInt _ -> 0
     Builder sub1 sub2 -> 1 + max (subexpParseTreeBoundDepth sub1) (subexpParseTreeBoundDepth sub2)
     FuncApp sub1 sub2 -> max (subexpParseTreeBoundDepth sub1) (subexpParseTreeBoundDepth sub2)
-    IsTuplePred int sub -> subexpParseTreeBoundDepth sub
     TupleProject int sub -> subexpParseTreeBoundDepth sub
 
 sbParseTreeNormalize :: Int -> SubexpParseTree -> SubexpParseTree
@@ -154,7 +151,6 @@ sbParseTreeNormalize boundVarIdx sub =
             ParseTreeInt i -> ParseTreeInt i
             Builder sub1 sub2 -> Builder (sbParseTreeNormalize' depth sub1) (sbParseTreeNormalize' depth sub2)
             FuncApp sub1 sub2 -> FuncApp (sbParseTreeNormalize' depth sub1) (sbParseTreeNormalize' depth sub2)
-            IsTuplePred n sub -> IsTuplePred n (sbParseTreeNormalize' depth sub)
             TupleProject n obj -> TupleProject n (sbParseTreeNormalize' depth sub)
     
   
@@ -206,10 +202,7 @@ propDeBrHasBoundVar sub idx = case sub of
     Exists p -> propDeBrBoundVarInside p idx
     (:>=:) o1 o2 -> objDeBrBoundVarInside o1 idx || objDeBrBoundVarInside o2 idx
     F -> False
-    IsTuple n x ->
-        -- The Haskell Int 'n' cannot contain a bound variable.
-        -- Check only the ObjDeBr term 'x' using the corresponding helper.
-        objDeBrBoundVarInside x idx -- Assumes objDeBrBoundVarInside is defined and correct
+
 
 
 
@@ -227,7 +220,7 @@ swapBoundIndexProp fromIdx toIdx p = case p of
     Exists q -> Exists (swapBoundIndexProp fromIdx toIdx q) -- Recurses under binder
     (:>=:) o1 o2 -> (:>=:) (swapBoundIndexObj fromIdx toIdx o1) (swapBoundIndexObj fromIdx toIdx o2)
     F -> F
-    IsTuple n x -> IsTuple n (swapBoundIndexObj fromIdx toIdx x)
+
 
 
 -- Swaps Bound fromIdx to Bound toIdx within an ObjDeBr
@@ -282,7 +275,6 @@ boundDepthPropDeBrX targetIdx substitutionDepth prop = case prop of
     -- Use recursive call to the corresponding Obj version
     (:>=:) o1 o2 -> max (boundDepthObjDeBrX targetIdx substitutionDepth o1) (boundDepthObjDeBrX targetIdx substitutionDepth o2)
     F -> 0
-    IsTuple n x -> boundDepthObjDeBrX targetIdx substitutionDepth x
 
 -- Calculates depth, returning substitutionDepth if XInternal targetIdx is found.
 boundDepthObjDeBrXInt :: Int -> Int -> ObjDeBr -> Int
@@ -324,10 +316,10 @@ boundDepthPropDeBrXInt targetIdx substitutionDepth prop = case prop of
     -- Use recursive call to the corresponding Obj version
     (:>=:) o1 o2 -> max (boundDepthObjDeBrXInt targetIdx substitutionDepth o1) (boundDepthObjDeBrXInt targetIdx substitutionDepth o2)
     F -> 0
-    IsTuple n tuple -> boundDepthObjDeBrXInt targetIdx substitutionDepth tuple
 
-parsePairFirstExp :: ObjDeBr -> Maybe ObjDeBr
-parsePairFirstExp subexp = do
+
+parsePairFirstExp' :: ObjDeBr -> Maybe ObjDeBr
+parsePairFirstExp' subexp = do
     (existsProp, norm1) <- parseHilbert subexp
     (eqProp, norm2) <- parseExists existsProp
     (x, pairForm) <- parseEqual eqProp
@@ -339,6 +331,12 @@ parsePairFirstExp subexp = do
     x3Idx <- parseBound x3
     guard (x3Idx == norm2)
     return x
+
+parsePairFirstExp :: ObjDeBr -> Maybe ObjDeBr
+parsePairFirstExp subexp = do
+    (i,tupleObj) <- parseProject subexp
+    guard (i==0)
+    return tupleObj
 
 
 parseFuncApplication :: ObjDeBr -> Maybe (ObjDeBr, ObjDeBr)
@@ -519,13 +517,8 @@ parseProject obj =
     case obj of
         Project n tuple -> Just (n,tuple)
         _ -> Nothing
+-- parseProject :: ObjDeBr -> Maybe (Int, ObjDeBr)
 
-
-parseIsTuple:: PropDeBr -> Maybe (Int, ObjDeBr)
-parseIsTuple p = 
-    case p of
-        IsTuple i tupleObj -> Just (i, tupleObj)
-        _ -> Nothing
 
 
 
@@ -757,7 +750,6 @@ instance SubexpDeBr PropDeBr where
         <|> parseNotIn'
         <|> parseNotSubset'
         <|> parseNegation'      -- Default negation
-        <|> parseIsTuple'
         <|> parseStrictSubset'  -- Conjunction shorthand first
         <|> parseConjunction'   -- Default conjunction
 
@@ -835,9 +827,7 @@ instance SubexpDeBr PropDeBr where
       parseFalsum' = do
           () <- parseFalsum prop
           return $ ParseTreeF
-      parseIsTuple' = do
-          (n, tupleObj) <- parseIsTuple prop
-          return $ IsTuplePred n (toSubexpParseTree prop dict)
+
 
 
 
@@ -862,7 +852,6 @@ showSubexpParseTree sub = case sub of
               Builder {} -> showSubexpParseTree sub1
               FuncApp {} -> showSubexpParseTree sub1
               TupleProject {} -> showSubexpParseTree sub1
-              IsTuplePred {} -> showSubexpParseTree sub1
     BinaryOp opSymb sub1 sub2 ->
            case sub1 of
               UnaryOp _ _ -> showSubexpParseTree sub1
@@ -890,7 +879,6 @@ showSubexpParseTree sub = case sub of
               Builder {} -> showSubexpParseTree sub1
               FuncApp {} -> showSubexpParseTree sub1
               TupleProject {} -> showSubexpParseTree sub1
-              IsTuplePred {} -> showSubexpParseTree sub1
 
           <> " " <> opSymb <> " "
           <> case sub2 of
@@ -918,7 +906,6 @@ showSubexpParseTree sub = case sub of
                Builder {} -> showSubexpParseTree sub2
                FuncApp {} -> showSubexpParseTree sub2
                TupleProject {} -> showSubexpParseTree sub2
-               IsTuplePred {} -> showSubexpParseTree sub2
 
 
     Binding quant sub1 -> quant <> "𝑥" <> showIndexAsSubscript idx <> "(" <> showSubexpParseTree sub1 <> ")"
@@ -954,11 +941,7 @@ showSubexpParseTree sub = case sub of
         _ -> "(" <> showSubexpParseTree f <> ")" <> "(" <> showSubexpParseTree x <> ")"
     TupleProject idx obj -> "𝛑" <> showIndexAsSubscript idx 
                                <> "(" <> showSubexpParseTree obj <> ")"
-    IsTuplePred idx p -> "Tᴜᴘʟᴇ"
-                 <> showIndexAsSubscript idx 
-                 <> "(" 
-                 <> showSubexpParseTree p
-                 <> ")"
+
 
 
   where 
@@ -1379,10 +1362,7 @@ propDeBrSubXInt targetIdx substitution template = case template of
     (:>=:) o1 o2 -> objDeBrSubXInt targetIdx substitution o1 :>=:
                 objDeBrSubXInt targetIdx substitution o2
     F -> F
-    IsTuple n x ->
-        -- Substitute recursively only within the ObjDeBr term 'x',
-        -- leaving the Haskell Int 'n' unchanged.
-        IsTuple n (objDeBrSubXInt targetIdx substitution x)
+
 
 
 -- Substitutes X targetIdx with substitution in an ObjDeBr.
@@ -1460,10 +1440,6 @@ propDeBrSubX targetIdx substitution template = case template of
                     objDeBrSubX targetIdx substitution o2
     F -> F
 
-    IsTuple n x ->
-        -- Substitute recursively only within the ObjDeBr term 'x',
-        -- leaving the Haskell Int 'n' unchanged.
-        IsTuple n (objDeBrSubX targetIdx substitution x)
 
 
 
@@ -1487,10 +1463,7 @@ swapXtoXIntProp p = case p of
     Exists q -> Exists (swapXtoXIntProp q)
     (:>=:) o1 o2 -> (:>=:) (swapXtoXIntObj o1) (swapXtoXIntObj o2)
     F -> F
-    IsTuple n x ->
-        -- Apply swap recursively only within the ObjDeBr term 'x',
-        -- leave the Haskell Int 'n' alone.
-        IsTuple n (swapXtoXIntObj x) -- Assuming swapXtoXIntObj is defined
+
 
 swapXtoXIntObj :: ObjDeBr -> ObjDeBr
 swapXtoXIntObj o = case o of
@@ -1529,10 +1502,7 @@ swapXIntToXProp p = case p of
     Exists q -> Exists (swapXIntToXProp q)
     (:>=:) o1 o2 -> (:>=:) (swapXIntToXObj o1) (swapXIntToXObj o2)
     F -> F
-    IsTuple n x ->
-        -- Apply swap recursively only within the ObjDeBr term 'x',
-        -- leave the Haskell Int 'n' alone.
-        IsTuple n (swapXIntToXObj x) -- Assuming swapXIntToXObj is defined
+
 
 
 
@@ -1627,10 +1597,7 @@ propDeBrApplyUG prop freevarIdx boundvarIdx =
         Exists p -> Exists (propDeBrApplyUG p freevarIdx boundvarIdx)
         (:>=:) o1 o2 -> (:>=:) (objDeBrApplyUG o1 freevarIdx boundvarIdx) (objDeBrApplyUG o2 freevarIdx boundvarIdx)
         F -> F
-        IsTuple n x ->
-            -- Apply substitution recursively only within the ObjDeBr term 'x',
-            -- leave the Haskell Int 'n' alone.
-            IsTuple n (objDeBrApplyUG x freevarIdx boundvarIdx) -- Assuming objDeBrApplyUG is defined and updated
+
 
 
 boundExpToFunc :: PropDeBr -> ObjDeBr -> PropDeBr
@@ -1866,11 +1833,6 @@ propDeBrSubBoundVarToX0 boundVarIdx prop = case prop of
     Forall p -> Forall (propDeBrSubBoundVarToX0 boundVarIdx p)
     Exists p -> Exists (propDeBrSubBoundVarToX0 boundVarIdx p)
     a :>=: b -> objDeBrSubBoundVarToX0 boundVarIdx a :>=: objDeBrSubBoundVarToX0 boundVarIdx b
-    IsTuple n x ->
-        -- Apply substitution recursively only within the ObjDeBr term 'x',
-        -- leave the Haskell Int 'n' alone.
-        IsTuple n (objDeBrSubBoundVarToX0 boundVarIdx x) -- Assuming objDeBrSubBoundVarToX0 is defined and updated
-
     F -> F
                 
                 
@@ -1979,10 +1941,7 @@ xsubPropDeBr p idx depth = case p of
     Exists p -> Exists (xsubPropDeBr p idx depth)
     (:>=:) o1 o2 -> (:>=:) (xsubObjDeBr o1 idx depth) (xsubObjDeBr o2 idx depth)
     F -> F
-    IsTuple n x ->
-        -- Apply substitution recursively only within the ObjDeBr term 'x',
-        -- leave the Haskell Int 'n' alone.
-        IsTuple n (xsubObjDeBr x idx depth) -- Assuming xsubObjDeBr is defined and updated
+
 
 
 xsubObjDeBr :: ObjDeBr -> Int -> Int -> ObjDeBr
@@ -2023,10 +1982,7 @@ xsubPropDeBrXInt p idx depth = case p of
     Exists q -> Exists (xsubPropDeBrXInt q idx depth) -- Depth decreases implicitly in recursive calls if needed, handled by caller usually
     (:>=:) o1 o2 -> (:>=:) (xsubObjDeBrXInt o1 idx depth) (xsubObjDeBrXInt o2 idx depth)
     F -> F
-    IsTuple n x ->
-        -- Apply substitution recursively only within the ObjDeBr term 'x',
-        -- leave the Haskell Int 'n' alone.
-        IsTuple n (xsubObjDeBrXInt x idx depth) -- Assuming xsubObjDeBrXInt is defined and updated
+
 
 
 -- Substitutes XInternal idx with Bound depth in an ObjDeBr expression.
@@ -2254,7 +2210,8 @@ project n m t =
 pairFirst :: ObjDeBr -> ObjDeBr
 pairFirst pair = Project 0 pair
 
-
+--pairFirst :: ObjDeBr -> ObjDeBr
+--pairFirst pair = objDeBrSubX 0 pair (hX 2 (eX 1 (X 0 :==: Tupl [X 2,X 1])))
 
 
 relDomain :: ObjDeBr -> ObjDeBr
@@ -2352,8 +2309,7 @@ instance ZFC.LogicSent PropDeBr ObjDeBr where
                       )
                     )
         )
-    buildIsTuple :: Int -> ObjDeBr -> PropDeBr
-    buildIsTuple = IsTuple        
+     
                               
             
                            

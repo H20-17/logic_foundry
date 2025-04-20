@@ -460,7 +460,10 @@ testCompositionImplementation = do
     lift . print $ "HELLO"
 
     let testthis = Project 0 f
-    hShow <- showObjM testthis
+
+    shitShow <- showObjM testthis
+
+    remarkM $ shitShow <> "YEAHYEAH"
 
     hShow <- showObjM h
     remarkM $ "Constructed h: " <> hShow

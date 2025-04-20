@@ -91,7 +91,7 @@ class (PREDL.LogicSent s t ()) => LogicSent s t | s ->t where
    replaceAxiom :: Int -> Int -> t -> s -> s
    parseMemberOf :: s -> Maybe (t, t)
    memberOf :: t -> t -> s
-   buildIsTuple :: Int -> t -> s
+
 
 
 
@@ -124,7 +124,6 @@ data LogicRule s sE t  where
     EmptySet :: LogicRule s sE t
     Specification :: Int -> t -> s -> LogicRule s sE t
     Replacement :: Int -> Int -> t -> s -> LogicRule s sE t
-    BuildIsTuple :: t -> LogicRule s sE t
     BuildProject :: t -> Int -> LogicRule s sE t
     deriving(Show)
 
@@ -334,23 +333,6 @@ runProofAtomic rule context state  =
                let step = PrfStdStepStep replAx "AXIOM_REPLACEMENT" []
                return (Just replAx, Nothing, step)
 
-          BuildIsTuple tupleTerm -> do -- Using Either Monad's do-notation
-             -- 1. Check SANITY of 'tupleTerm'. Throw error if Left.
-             --    We ignore the Right tType result using (\_ -> return ()).
-             left (LogicErrTupleNotSane tupleTerm) $
-                 getTypeTerm mempty varStack constDict tupleTerm
-
-             -- 2. Attempt to parse 'tupleTerm'. Throw error if Nothing.
-             elements <- maybe (throwError $ LogicErrNotATuple tupleTerm) return $
-                    parseTuple tupleTerm
-
-             -- 3. If both checks passed, proceed:
-             let n = length elements
-             let resultProp = buildIsTuple n tupleTerm
-
-             -- 4. Return success
-             return (Just resultProp, Nothing, PrfStdStepStep resultProp "BUILD_IS_TUPLE" [])
-
           BuildProject tupleTerm index -> do -- Using Either Monad's do-notation
              -- 1. Check SANITY of 'tupleTerm'
                left (LogicErrTupleNotSane tupleTerm) $
@@ -367,7 +349,7 @@ runProofAtomic rule context state  =
 
                let resultTerm = buildProject index tupleTerm
 
-               let resultProp = resultTerm .==. resultTerm
+               let resultProp = resultTerm .==. (elements !! index)
 
                return (Just resultProp, Nothing, PrfStdStepStep resultProp "BUILD_PROJECT" [])          
 
