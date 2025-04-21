@@ -124,7 +124,6 @@ data LogicRule s sE t  where
     EmptySet :: LogicRule s sE t
     Specification :: Int -> t -> s -> LogicRule s sE t
     Replacement :: Int -> Int -> t -> s -> LogicRule s sE t
-    BuildProject :: t -> Int -> LogicRule s sE t
     deriving(Show)
 
 
@@ -331,27 +330,7 @@ runProofAtomic rule context state  =
                             checkSanity tmpltVarTypeDict [] constDict s)
 
                let step = PrfStdStepStep replAx "AXIOM_REPLACEMENT" []
-               return (Just replAx, Nothing, step)
-
-          BuildProject tupleTerm index -> do -- Using Either Monad's do-notation
-             -- 1. Check SANITY of 'tupleTerm'
-               left (LogicErrTupleNotSane tupleTerm) $
-                 getTypeTerm mempty varStack constDict tupleTerm
-
-               -- 2. Attempt to parse 'tupleTerm'
-               elements <- maybe (throwError $ LogicErrNotATuple tupleTerm) return $
-                         parseTuple tupleTerm
-
-            -- 3. If checks passed, proceed with bounds check etc.
-               let n = length elements
-               unless (index >= 0 && index < n) $
-                 throwError $ LogicErrIndexOutOfBounds index n tupleTerm
-
-               let resultTerm = buildProject index tupleTerm
-
-               let resultProp = resultTerm .==. (elements !! index)
-
-               return (Just resultProp, Nothing, PrfStdStepStep resultProp "BUILD_PROJECT" [])          
+               return (Just replAx, Nothing, step)      
 
     where
         proven = (keysSet . provenSents) state
