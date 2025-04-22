@@ -1,5 +1,6 @@
 {-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE DoAndIfThenElse #-}
 
 module Main where
 
@@ -438,117 +439,123 @@ testBuilderXSuite = do
     remarkM "--- builderX Test Suite Complete ---"
     return ()
 
+
 testCompositionImplementation :: ProofGenTStd () [PredRuleDeBr] PropDeBr Text IO ()
 testCompositionImplementation = do
-    remarkM "--- Testing Composition Implementation ---"
+    remarkM "--- Testing Composition Implementation (with Tupl [dom, cod, graph] assumption) ---"
 
     -- Define simple functions and argument
+    -- NOTE: We assume f and g are now represented as triples Tupl[dom,cod,graph]
+    -- For this test, we still use Constants, assuming they represent such triples.
     let f = Constant "F"
     let g = Constant "G"
     let x = Constant "A"
-    fakeConstM "F" ()
-    fakeConstM "G" ()
-    fakeConstM "A" ()
+    fakeConstM "F" () -- Represents function F as Tupl[DomF, CodF, GraphF]
+    fakeConstM "G" () -- Represents function G as Tupl[DomG, CodG, GraphG]
+    fakeConstM "A" () -- Represents argument A
     remarkM $ "Using f = F, g = G, x = A"
 
-    -- 1. Calculate h = f .:. g using your definition
+    -- 1. Calculate h = f .:. g using the definition based on compositionTemplate
     remarkM "Calculating h = f .:. g"
-    let h = f .:. g
-    remarkM "Did composition, I think"
-    remarkM "WHy won't h even show"
-    lift . putStrLn $ show h
-    lift . print $ "HELLO"
-
-    let testthis = project 2 0 f
-
-    shitShow <- showObjM testthis
-
-    remarkM $ shitShow <> "YEAHYEAH"
-
+    let h = f .:. g -- Assumes .:. uses compositionTemplate which uses the new .@.
     hShow <- showObjM h
     remarkM $ "Constructed h: " <> hShow
-    --lift . putStrLn $ show h
-    --error "STOP HERE"
-    remarkM "(Note: This will be a complex Hilbert term based on compositionTemplate)"
+    remarkM "(Note: This will be a complex Hilbert term based on compositionTemplate and the new .@.)"
 
-    -- 2. Calculate h .@. x
+    -- 2. Calculate h .@. x using the new .@. definition
     remarkM "Calculating h .@. x"
+    -- This now uses: objDeBrSubXs [(0,h),(1,x)] (hX 2 ( Tupl [X 1, X 2] `In` tripletLast (X 0) ))
     let applied_h = h .@. x
     applied_h_Show <- showObjM applied_h
     remarkM $ "Result (h .@. x): " <> applied_h_Show
+    remarkM "(Note: This involves substituting h and x into the .@. template containing tripletLast)"
 
-    -- 3. Calculate f .@. (g .@. x) separately
+    -- 3. Calculate f .@. (g .@. x) separately using the new .@.
     remarkM "Calculating f .@. (g .@. x) separately"
+    -- Inner application: g .@. x
     let applied_g = g .@. x
+    applied_g_Show <- showObjM applied_g
+    remarkM $ "  Inner (g .@. x): " <> applied_g_Show
+    -- Outer application: f .@. applied_g
     let expected_result = f .@. applied_g
     expected_result_Show <- showObjM expected_result
-    remarkM $ "Expected (f .@. (g .@. x)): " <> expected_result_Show
+    remarkM $ "  Outer f .@. (g .@. x): " <> expected_result_Show
 
     -- 4. Compare (visually via remarks)
     remarkM "--- Comparison ---"
     remarkM $ "h .@. x             => " <> applied_h_Show
-    (lift . print . show)  expected_result
     remarkM $ "f .@. (g .@. x)     => " <> expected_result_Show
-    remarkM "Check if the final term structures match."
-    remarkM "If they match, the composition definition works as expected for this case."
-    remarkM "If they differ, there might be a subtle issue in how h is constructed or how .@. interacts with it."
+    remarkM "Check if the final term structures match visually."
+    remarkM "WARNING: Visual comparison of these complex Hilbert terms might be difficult."
+    remarkM "Consider adding a formal proof step to check equality if possible."
+    remarkM "If they differ structurally, there might be an issue in how .:. or .@. interacts with the substitutions."
 
     remarkM "--- Composition Implementation Test Complete ---"
     return ()
 
 testShorthandRendering :: ProofGenTStd () [PredRuleDeBr] PropDeBr Text IO ()
 testShorthandRendering = do
-    remarkM "--- Testing Shorthand Rendering ---"
+    remarkM "--- Testing Shorthand Rendering (Post Function Triple Change) ---"
 
     -- Setup Constants
     let a = Constant "A"
     let b = Constant "B"
     let n = Constant "N"
+    -- Assume f, g represent function triples Tupl[_, _, _]
     let f = Constant "f"
     let g = Constant "g"
-    let x = Constant "x" -- Placeholder for bound vars in remarks
-    let p = Constant "P" -- Placeholder for predicates
-    let zero = Integ 0
-    let five = Integ 5
+    let x_arg = Constant "x_arg" -- Argument for functions
 
     fakeConstM "A" ()
     fakeConstM "B" ()
     fakeConstM "N" ()
-    fakeConstM "f" ()
-    fakeConstM "g" ()
-    -- No need to fakeConstM "x" or "P" as they are just illustrative
+    fakeConstM "f" () -- Represents function f
+    fakeConstM "g" () -- Represents function g
+    fakeConstM "x_arg" () -- Represents an argument
 
-    -- Test 1: Function Application (.@.) -> f(A)
-    remarkM "Test 1: f .@. A"
-    let app_f_a = f .@. a
-    app_f_a_show <- showObjM app_f_a
-    remarkM $ "  Input: f .@. A"
-    remarkM $ "  Actual:   " <> app_f_a_show
-    remarkM $ "  Expected: f(A)"
+    let five = Integ 5
+    let zero = Integ 0
 
-    -- Test 2: Nested Function Application -> f(g(A))
-    remarkM "Test 2: f .@. (g .@. A)"
-    let app_f_ga = f .@. (g .@. a)
-    app_f_ga_show <- showObjM app_f_ga
-    remarkM $ "  Input: f .@. (g .@. A)"
-    remarkM $ "  Actual:   " <> app_f_ga_show
-    remarkM $ "  Expected: f(g(A))"
+    -- Test 1: Function Application (.@.) -> f(x_arg)
+    remarkM "Test 1: f .@. x_arg"
+    -- Uses the new .@. definition internally
+    let app_f_x = f .@. x_arg
+    app_f_x_show <- showObjM app_f_x
+    remarkM $ "  Input Term (structure depends on new .@.): f .@. x_arg"
+    remarkM $ "  Actual Rendered:   " <> app_f_x_show
+    remarkM $ "  Expected Rendered: f(x_arg)"
+    remarkM $ "  (Success depends on parseFuncApplication recognizing the new structure)"
+
+    -- Test 2: Nested Function Application -> f(g(x_arg))
+    remarkM "Test 2: f .@. (g .@. x_arg)"
+    let app_g_x = g .@. x_arg
+    let app_f_gx = f .@. app_g_x
+    app_f_gx_show <- showObjM app_f_gx
+    remarkM $ "  Input Term: f .@. (g .@. x_arg)"
+    remarkM $ "  Actual Rendered:   " <> app_f_gx_show
+    remarkM $ "  Expected Rendered: f(g(x_arg))"
+    remarkM $ "  (Success depends on parseFuncApplication recognizing nested new structures)"
 
     -- Test 3: Function Composition (.:.) -> f ∘ g
     remarkM "Test 3: f .:. g"
+    -- Assumes .:. uses compositionTemplate which uses the new .@.
     let comp_f_g = f .:. g
     comp_f_g_show <- showObjM comp_f_g
-    remarkM $ "  Input: f .:. g"
-    remarkM $ "  Actual:   " <> comp_f_g_show
-    remarkM $ "  Expected: f ∘ g"
-    -- Also test application of composed function
-    remarkM "Test 3b: (f .:. g) .@. A"
-    let app_comp_a = comp_f_g .@. a
-    app_comp_a_show <- showObjM app_comp_a
-    remarkM $ "  Input: (f .:. g) .@. A"
-    remarkM $ "  Actual:   " <> app_comp_a_show
-    remarkM $ "  Expected: (f ∘ g)(A)  (or similar based on FuncApp rendering)"
+    remarkM $ "  Input Term (structure depends on new .@. via template): f .:. g"
+    remarkM $ "  Actual Rendered:   " <> comp_f_g_show
+    remarkM $ "  Expected Rendered: f ∘ g"
+    remarkM $ "  (Success depends on parseComposition recognizing the template structure)"
 
+    -- Test 3b: Apply composed function -> (f ∘ g)(x_arg)
+    remarkM "Test 3b: (f .:. g) .@. x_arg"
+    let app_comp_x = comp_f_g .@. x_arg
+    app_comp_x_show <- showObjM app_comp_x
+    remarkM $ "  Input Term: (f .:. g) .@. x_arg"
+    remarkM $ "  Actual Rendered:   " <> app_comp_x_show
+    remarkM $ "  Expected Rendered: (f ∘ g)(x_arg)"
+    remarkM $ "  (Success depends on parseFuncApplication recognizing the composed structure)"
+
+    -- == Other tests remain largely the same, as they don't depend on the function representation ==
 
     -- Test 4: Set Builder -> { x ∈ N | x ≥ 5 }
     remarkM "Test 4: builderX 0 N (X 0 :>=: 5)"
@@ -563,10 +570,9 @@ testShorthandRendering = do
     let hilbert_prop = X 0 :==: a -- Example property P(x) = (x == A)
     let hilbert_term = hX 0 hilbert_prop -- εx.(x == A)
     let exists_prop = eX 0 hilbert_prop -- ∃x.(x == A)
-    -- Fake prove Exists P
     (fake_exists, fake_idx) <- fakePropM exists_prop
-    remarkM $ "  Faking proof of: " <> (pack.show) fake_exists  <> " at index " <> pack (show fake_idx)
-    -- Now render the Hilbert term, it should use the index
+    exists_show <- showPropM fake_exists -- Show the prop being faked
+    remarkM $ "  Faking proof of: " <> exists_show  <> " at index " <> pack (show fake_idx)
     hilbert_term_short_show <- showObjM hilbert_term
     remarkM $ "  Input: hX 0 (X 0 :==: A)  (after proving Exists)"
     remarkM $ "  Actual:   " <> hilbert_term_short_show
@@ -630,6 +636,10 @@ testShorthandRendering = do
 
     remarkM "--- Shorthand Rendering Tests Complete ---"
     return ()
+
+
+
+
 
 testProjectShorthandParsing :: ProofGenTStd () [PredRuleDeBr] PropDeBr Text IO ()
 testProjectShorthandParsing = do
@@ -713,8 +723,104 @@ testProjectShorthandParsing = do
     remarkM "--- Project Shorthand Parsing Tests Complete ---"
     return ()
 
+
+-- Test function for the shorthand rendering of Cartesian Product (A × B)
+testCrossProductRendering :: ProofGenTStd () [PredRuleDeBr] PropDeBr Text IO ()
+testCrossProductRendering = do
+    remarkM "--- Testing Cross Product Shorthand Rendering (A × B) ---"
+
+    -- Setup Constants for sets
+    let setA = Constant "A"
+    let setB = Constant "B"
+    let setC = Constant "C" -- For comparison
+
+    fakeConstM "A" ()
+    fakeConstM "B" ()
+    fakeConstM "C" ()
+
+    -- == Positive Case: Render term created by crossProd helper ==
+    remarkM "Test 1: Rendering term generated by crossProd A B"
+    let prodAB = crossProd setA setB -- Use the helper function
+    actualOutput <- showObjM prodAB     -- Use showObjM to trigger rendering
+    let expectedOutput = "A × B"      -- Define the expected string output
+
+    remarkM $ "  Input Term: crossProd A B"
+    -- remarkM $ "  Internal Structure (for info): " <> (pack $ show prodAB) -- Uncomment to see raw structure if needed
+    remarkM $ "  Actual Rendered Output:   " <> actualOutput
+    remarkM $ "  Expected Rendered Output: " <> expectedOutput
+
+    -- Check if rendering matches expectation
+    if actualOutput == expectedOutput then
+        do 
+            remarkM "  Check: Rendering matches expected output. PASSED."
+            remarkM "  (Requires parseCrossProduct logic within toSubexpParseTree to be correct)"
+    else
+        do 
+            remarkM "  Check: Rendering does NOT match expected output. FAILED."
+            remarkM "  (Check parseCrossProduct logic within toSubexpParseTree and showSubexpParseTree formatting)"
+
+    -- == Negative Case (Optional): Ensure unrelated terms don't render as cross product ==
+    remarkM "Test 2: Rendering a simple Tuple (A, B)"
+    let tupleTerm = Tupl [setA, setB]
+    tupleOutput <- showObjM tupleTerm
+    let expectedTupleOutput = "(A,B)" -- Or similar based on your tuple rendering
+    remarkM $ "  Input Term: Tupl [A, B]"
+    remarkM $ "  Actual Rendered Output: " <> tupleOutput
+    remarkM $ "  Expected Rendered Output (e.g.): " <> expectedTupleOutput
+    if tupleOutput /= expectedOutput && tupleOutput == expectedTupleOutput then
+         remarkM "  Check: Rendering is not 'A × B' and matches tuple format. PASSED."
+    else
+         remarkM "  Check: Rendering is incorrect. FAILED."
+
+
+    remarkM "--- Cross Product Rendering Tests Complete ---"
+    return ()
+
+
+-- Test function for the shorthand rendering of FUNCS(A,B)
+testFuncsSetRendering :: ProofGenTStd () [PredRuleDeBr] PropDeBr Text IO ()
+testFuncsSetRendering = do
+    remarkM "--- Testing FUNCS(A,B) Shorthand Rendering ---"
+
+    -- Setup Constants for sets
+    let setA = Constant "A"
+    let setB = Constant "B"
+
+    fakeConstM "A" ()
+    fakeConstM "B" ()
+
+    -- == Positive Case: Render term created by funcsSet helper ==
+    remarkM "Test 1: Rendering term generated by funcsSet A B"
+    let funcsAB = funcsSet setA setB -- Use the helper function
+
+    actualOutput <- showObjM funcsAB     -- Use showObjM to trigger rendering
+    -- Note: Expecting FUNCS((A,B)) based on default FuncApp/Tuple rendering
+    let expectedOutput = "FUNCS((A,B))"
+
+    remarkM $ "  Input Term: funcsSet A B"
+    -- remarkM $ "  Internal Structure (for info): " <> (pack $ show funcsAB) -- Uncomment if needed
+    remarkM $ "  Actual Rendered Output:   " <> actualOutput
+    remarkM $ "  Expected Rendered Output: " <> expectedOutput
+
+    -- Check if rendering matches expectation
+    if actualOutput == expectedOutput then
+        do
+          remarkM "  Check: Rendering matches expected output. PASSED."
+          remarkM "  (Requires parseFuncsSet logic within toSubexpParseTree to be correct)"
+    else
+        do
+          remarkM $ "  Check: Rendering does NOT match expected output. FAILED."
+          remarkM "  (Check parseFuncsSet logic and showSubexpParseTree formatting for FuncApp/Tuple)"
+
+    remarkM "--- FUNCS(A,B) Rendering Tests Complete ---"
+    return ()
+
+
+
 main :: IO ()
 main = do
+
+
 
     let y0 = (Integ 0 :==: Integ 0) :->: (Integ 99 :==: Integ 99)
     let y1 = Integ 0 :==: Integ 0
@@ -870,6 +976,17 @@ main = do
     print "TEST PROJECT SHORTHAND PARSING BEGIN-------------------------------------"
     (aPrj, bPrj, cPrj, dPrj) <- runProofGeneratorT testProjectShorthandParsing
     (putStrLn . unpack . showPropDeBrStepsBase) cPrj -- Print results
+
+
+    print "TEST CROSS PRODUCT PARSING BEGIN-------------------------------------"
+    (aXP, bXP, cXP, dXP) <- runProofGeneratorT testCrossProductRendering
+    (putStrLn . unpack . showPropDeBrStepsBase) cXP -- Print results
+
+
+    print "TEST FUNCS(A,B) RENDERING BEGIN-------------------------------------"
+    (aFSR, bFSR, cFSR, dFSR) <- runProofGeneratorT testFuncsSetRendering
+    (putStrLn . unpack . showPropDeBrStepsBase) cFSR -- Print results
+
 
     return ()
 

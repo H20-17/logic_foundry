@@ -1,7 +1,7 @@
 {-# LANGUAGE PatternGuards #-}
 module Langs.BasicUntyped (
-    ObjDeBr(Integ,Constant,V,X,Tupl),
-    PropDeBr(Neg,(:&&:),(:||:),(:->:),(:<->:),(:==:),In,(:>=:),F),
+    ObjDeBr(Integ,Constant,V,X,Tupl,Hilbert, Bound),
+    PropDeBr(Neg,(:&&:),(:||:),(:->:),(:<->:),(:==:),In,(:>=:),F,Exists),
     DeBrSe(..),
     SubexpDeBr(..),
     PrfStdStepPredDeBr,
@@ -29,10 +29,14 @@ module Langs.BasicUntyped (
     (.@.),
     (.:.),
     project,
-    objDeBrSubX
+    objDeBrSubX,
+    crossProd,
+    funcsSet,
+    parseProjectHilbert
+
 ) where
 import Control.Monad ( unless, guard,msum )
-import Data.List (intersperse,findIndex, partition,sort)
+import Data.List (intersperse,findIndex, partition,sort,find)
 import Data.Text (Text, pack, unpack,concat, lines,intercalate)
 import GHC.Generics (Associativity (NotAssociative, RightAssociative, LeftAssociative))
 import Data.Map
@@ -57,6 +61,7 @@ import Control.Monad.RWS
     ( MonadReader(ask), runRWS, MonadWriter(tell), RWS )
 import Text.XHtml (sub)
 import qualified Internal.StdPattern
+import Data.Maybe (isJust)
 
 
 
@@ -153,8 +158,7 @@ sbParseTreeNormalize boundVarIdx sub =
             ParseTreeInt i -> ParseTreeInt i
             Builder sub1 sub2 -> Builder (sbParseTreeNormalize' depth sub1) (sbParseTreeNormalize' depth sub2)
             FuncApp sub1 sub2 -> FuncApp (sbParseTreeNormalize' depth sub1) (sbParseTreeNormalize' depth sub2)
-            TupleProject n obj -> TupleProject n (sbParseTreeNormalize' depth sub)
-    
+            TupleProject n obj -> TupleProject n (sbParseTreeNormalize' depth obj)
   
 
 class SubexpDeBr sub where
@@ -167,7 +171,11 @@ binaryOpInData :: [(Text,(Associativity,Int))]
 binaryOpInData = [("=",(NotAssociative,5)),("→",(RightAssociative,1)),("↔",(RightAssociative,1)),("∈",(NotAssociative,5)),("∧",(RightAssociative,4)),("∨",(RightAssociative,3)),
      ("≥",(NotAssociative,5)),
      ("≠",(NotAssociative,5)),("∉",(NotAssociative,5)),
-     ("⊆",(NotAssociative,5)),("⊂",(NotAssociative,5)),("⊈",(NotAssociative,5)) ]
+     ("⊆",(NotAssociative,5)),("⊂",(NotAssociative,5)),("⊈",(NotAssociative,5)), 
+     ("∘",(RightAssociative,9)),
+     ("×",(NotAssociative,7))
+     
+     ]
 
 
 --The Int is it's precedence number.
@@ -318,19 +326,6 @@ boundDepthPropDeBrXInt targetIdx substitutionDepth prop = case prop of
     F -> 0
 
 
-parsePairFirstExp' :: ObjDeBr -> Maybe ObjDeBr
-parsePairFirstExp' subexp = do
-    (existsProp, norm1) <- parseHilbert subexp
-    (eqProp, norm2) <- parseExists existsProp
-    (x, pairForm) <- parseEqual eqProp
-    guard (not (objDeBrBoundVarInside x norm1))
-    guard (not (objDeBrBoundVarInside x norm2))
-    (x2, x3) <- parsePair pairForm
-    x2Idx <- parseBound x2
-    guard (x2Idx == norm1)
-    x3Idx <- parseBound x3
-    guard (x3Idx == norm2)
-    return x
 
 parsePairFirstExp :: ObjDeBr -> Maybe ObjDeBr
 parsePairFirstExp subexp = do
@@ -339,8 +334,8 @@ parsePairFirstExp subexp = do
     return tupleObj
 
 
-parseFuncApplication :: ObjDeBr -> Maybe (ObjDeBr, ObjDeBr)
-parseFuncApplication subexp = do
+parseFuncApplication' :: ObjDeBr -> Maybe (ObjDeBr, ObjDeBr)
+parseFuncApplication' subexp = do
     (p, norm1) <- parseHilbert subexp
 
     (obj1, obj2) <- parseIn p
@@ -355,6 +350,53 @@ parseFuncApplication subexp = do
     guard (not (objDeBrBoundVarInside f norm1))
 
     return (f, x)
+
+
+
+-- Parses a term to see if it matches the structure created by function application (f .@. x).
+-- If it matches, returns Just (the_function_term, the_argument_term). Otherwise, returns Nothing.
+--
+-- Expected Structure:
+-- Hilbert p'
+-- where p' has the form: (Tupl [arg_term, Bound bound_idx] `In` graph_term)
+-- and graph_term has the structure created by (project 3 2 func_triple_term)
+-- and bound_idx is the index associated with the Hilbert binding (obtained via parseHilbert).
+--
+parseFuncApplication :: ObjDeBr -> Maybe (ObjDeBr, ObjDeBr)
+parseFuncApplication obj = do
+    -- 1. Match the Hilbert structure: Hilbert p'
+    --    parseHilbert returns the inner proposition 'p'' and 'bound_idx'.
+    --    'bound_idx' is the index used for the Bound variable associated with this Hilbert node.
+    (inner_prop, bound_idx) <- parseHilbert obj
+
+    -- 2. Match the 'In' structure within the inner proposition: tuple_term `In` graph_term
+    (tuple_term, graph_term) <- parseIn inner_prop
+
+    -- 3. Match the tuple structure: Tupl [ arg_term, result_var ]
+    args <- parseTupl tuple_term
+    guard (length args == 2)
+    let arg_term = args !! 0        -- Potential argument 'x'
+    let result_var = args !! 1     -- Potential bound variable 'y'
+
+    -- 4. Verify the result_var is the Bound variable with the index from the Hilbert binding
+    result_idx_parsed <- parseBound result_var
+    guard (result_idx_parsed == bound_idx) -- Check if the bound index matches
+
+    -- 5. Verify the graph_term corresponds to a projection of index 2 from a 3-tuple.
+    --    Use parseProjectHilbert to recognize the projection structure and extract the original function triple.
+    (projection_index, func_triple_term) <- parseProjectHilbert graph_term
+    guard (projection_index == 2) -- Check it's the graph projection (index 2)
+
+    -- Optional but recommended: Check that the extracted argument and function terms
+    -- do not contain the bound variable from the outer Hilbert term.
+    guard (not (objDeBrBoundVarInside arg_term bound_idx))
+    guard (not (objDeBrBoundVarInside func_triple_term bound_idx))
+
+    -- 6. If all checks pass, return the extracted function and argument terms
+    return (func_triple_term, arg_term)
+
+
+
 
 
 -- | Parses an ObjDeBr term to see if it matches the specific structure
@@ -479,6 +521,8 @@ parsePair subexp = do
 
 
 
+
+
 parseX :: ObjDeBr -> Maybe Int
 parseX subexp = case subexp of
     X i -> Just i
@@ -490,8 +534,8 @@ parseEqual subexp = case subexp of
     (:==:) ls rs -> Just (ls,rs)
     _           -> Nothing
 
-parseComposition :: ObjDeBr -> Maybe (ObjDeBr, ObjDeBr)
-parseComposition obj = do
+parseComposition' :: ObjDeBr -> Maybe (ObjDeBr, ObjDeBr)
+parseComposition' obj = do
     --not (objDeBrBoundVarInside a1 idx1)
     (inner1, norm1) <- parseHilbert obj
     (inner2, norm2) <- parseForall2 inner1
@@ -511,6 +555,51 @@ parseComposition obj = do
     guard (not (objDeBrBoundVarInside g norm2))
     return (f,g)
 
+parseComposition :: ObjDeBr -> Maybe (ObjDeBr, ObjDeBr)
+parseComposition obj = do
+    -- 1. Expect hX h_idx (...)
+    (body, hIdx) <- parseHilbert obj
+
+    -- 2. Expect body to be prop1 :&&: prop2
+    (prop1_parsed, prop2_parsed) <- parseConjunction body
+
+    -- 3. Minimally check prop1 structure: (X hIdx) `In` some_set
+    --    We don't need to fully deconstruct/verify the set expression here,
+    --    just ensure the left side of 'In' is the correctly bound 'h'.
+    (h_check, _funcs_set_check) <- parseIn prop1_parsed
+    hIdx_check <- parseBound h_check
+    guard (hIdx_check == hIdx) -- Make sure 'h' in prop1 is the one bound by hX
+
+    -- 4. Deconstruct prop2: aX x_idx ( L :==: R )
+    (equalityExpr, xIdx) <- parseForall2 prop2_parsed
+    (ls, rs) <- parseEqual equalityExpr
+
+    -- 5. Deconstruct LHS of equality: h .@. x
+    (h_term_ls, x_term_ls) <- parseFuncApplication ls
+    hIdx_ls <- parseBound h_term_ls
+    guard (hIdx_ls == hIdx) -- Check h index matches hX binder
+    xIdx_ls <- parseBound x_term_ls
+    guard (xIdx_ls == xIdx) -- Check x index matches aX binder
+
+    -- 6. Deconstruct RHS of equality: f .@. (g .@. x)
+    --    Extract f first
+    (f, gAtX) <- parseFuncApplication rs
+    --    Check f doesn't contain free h (hIdx) or x (xIdx) variables
+    guard (not (objDeBrBoundVarInside f hIdx))
+    guard (not (objDeBrBoundVarInside f xIdx))
+
+    --    Extract g from g .@. x
+    (g, x_term_rs) <- parseFuncApplication gAtX
+    --    Check g doesn't contain free h (hIdx) or x (xIdx) variables
+    guard (not (objDeBrBoundVarInside g hIdx))
+    guard (not (objDeBrBoundVarInside g xIdx))
+    --    Check the argument x matches the bound x
+    xIdx_rs <- parseBound x_term_rs
+    guard (xIdx_rs == xIdx) -- Check x index matches aX binder
+
+    -- 7. If all checks passed, return the extracted f and g
+    return (f, g)
+
 
 
 
@@ -525,8 +614,8 @@ parseExistsChain prop = fmap g (go prop 0)
     go p quantifierCount =
       case p of
         Exists inner ->
-          go inner (quantifierCount + 1) -- Prepend depth
-        _ -> Just (p, quantifierCount) -- Reverse to get outer-to-inner depths
+          go inner (quantifierCount + 1) -- Increment quantifier count
+        _ -> Just (p, quantifierCount)
     g (p, quantifierCount) = (p, quantifierCount, boundDepthPropDeBr p)
 
 
@@ -545,12 +634,17 @@ parseProjectHilbert obj = do
     --    Get body, count of quantifiers (k), and depth of body (d)
     (equalityBody, quantifierCount, d) <- parseExistsChain p
 
+
+
+
     -- 3. Parse the Equality: lhs == rhs
     (lhs, rhs) <- parseEqual equalityBody
     let recovered_t = lhs -- Treat lhs as the recovered original term t
 
     -- 4. Parse the RHS Tuple: Tupl [arg0, ..., argN-1]
     parsedArgs <- parseTupl rhs
+    
+
     let n = length parsedArgs -- This is the tuple length
 
     -- == Structural Guards (Removed norm_h == n check) ==
@@ -567,16 +661,235 @@ parseProjectHilbert obj = do
     guard (length other_args == quantifierCount)
 
     actualIndices <- mapM parseBound other_args
+
+
     let expectedIndices = [d .. d + quantifierCount - 1]
     guard (sort actualIndices == expectedIndices)
 
     -- == Validation Checks on recovered_t (lhs) ==
     guard (not (objDeBrBoundVarInside recovered_t norm_h))
     guard (all (\idx -> not (objDeBrBoundVarInside recovered_t idx)) expectedIndices)
-
     -- 8. Return result: projection index m and the recovered term t
+
     return (m, recovered_t)
 
+
+
+
+
+parseCrossProduct :: ObjDeBr -> Maybe (ObjDeBr, ObjDeBr)
+parseCrossProduct obj = do
+    -- 1. Match outer Hilbert: Hilbert p'
+    --    'bound_idx_S' is the index for the Bound var representing the product set S.
+    (p', bound_idx_S) <- parseHilbert obj
+
+    -- 2. Match first Forall (binder for 'x')
+    (prop1, idx_x) <- parseForall2 p'
+
+    -- 3. Match second Forall (binder for 'y')
+    (bicond, idx_y) <- parseForall2 prop1
+
+    -- 4. Match Biconditional: lhs :<->: rhs
+    (lhs, rhs) <- parseBiconditional bicond
+
+    -- 5. Match LHS Conjunction: conj1 :&&: conj2
+    (conj1, conj2) <- parseConjunction lhs
+
+    -- 6. Match first conjunct: bound_x `In` set_A
+    (bound_x_lhs, set_A) <- parseIn conj1
+    bound_x_idx_lhs <- parseBound bound_x_lhs
+    guard (bound_x_idx_lhs == idx_x) -- Check index matches 'x' binder
+
+    -- 7. Match second conjunct: bound_y `In` set_B
+    (bound_y_lhs, set_B) <- parseIn conj2
+    bound_y_idx_lhs <- parseBound bound_y_lhs
+    guard (bound_y_idx_lhs == idx_y) -- Check index matches 'y' binder
+
+    -- 8. Match RHS In: pair_term `In` bound_S_rhs
+    (pair_term, bound_S_rhs) <- parseIn rhs
+
+    -- 9. Match pair tuple: Tupl [bound_x_rhs, bound_y_rhs]
+    pair_args <- parseTupl pair_term
+    guard (length pair_args == 2)
+    let bound_x_rhs = pair_args !! 0
+    let bound_y_rhs = pair_args !! 1
+
+    -- 10. Check indices within the pair tuple match binders 'x' and 'y'
+    bound_x_idx_rhs <- parseBound bound_x_rhs
+    bound_y_idx_rhs <- parseBound bound_y_rhs
+    guard (bound_x_idx_rhs == idx_x)
+    guard (bound_y_idx_rhs == idx_y)
+
+    -- 11. Check the set on the RHS is the Bound variable for the product set S
+    bound_S_idx_rhs <- parseBound bound_S_rhs
+    guard (bound_S_idx_rhs == bound_idx_S)
+
+    -- Optional: Sanity checks for variable capture
+    guard (not (objDeBrBoundVarInside set_A idx_x || objDeBrBoundVarInside set_A idx_y || objDeBrBoundVarInside set_A bound_idx_S))
+    guard (not (objDeBrBoundVarInside set_B idx_x || objDeBrBoundVarInside set_B idx_y || objDeBrBoundVarInside set_B bound_idx_S))
+
+    -- 12. If all checks pass, return the extracted original ObjDeBr terms for set A and set B
+    return (set_A, set_B)
+
+
+parseIsTupleApp :: PropDeBr -> Maybe (Int, ObjDeBr)
+parseIsTupleApp prop = do
+    -- 1. Parse the chain of Exists quantifiers.
+    (equalityBody, n, base_depth) <- parseExistsChain prop -- Returns (body, count, depth)
+
+    -- 2. Parse the innermost body as an equality: term' == tuple_term
+    (term', tuple_term) <- parseEqual equalityBody
+
+    -- 3. Parse the RHS of the equality as a tuple: Tupl [arg_0, ..., arg_n_1]
+    args <- parseTupl tuple_term
+    guard (length args == n) -- Check if tuple length matches quantifier count
+
+    -- 4. Verify that each argument 'arg_i' in the tuple is the correct Bound variable.
+    --    The i-th argument (args !! i) should be Bound(base_depth + n - 1 - i)
+    --    due to the order 'foldr eX' binds variables.
+    let checkArgIndexed i arg = case arg of
+            Bound actualIdx -> Just (actualIdx == (base_depth + n - 1 - i))
+            _               -> Just False -- Argument is not a Bound var
+
+    -- Check if all arguments match their expected Bound index using the corrected logic.
+    allMatch <- sequence $ zipWith checkArgIndexed [0..] args
+    guard (all id allMatch) -- This guard is now logically correct.
+
+    -- 5. Optional Sanity Check: Ensure 'term'' doesn't capture binders.
+    --    The expected indices are base_depth to base_depth + n - 1
+    let boundIndicesRange = [base_depth .. base_depth + n - 1]
+    guard (all (\idx -> not (objDeBrBoundVarInside term' idx)) boundIndicesRange)
+
+    -- 6. If all checks passed, return the tuple length 'n' and the term 'term''
+    return (n, term')
+
+
+-- Helper function to collect all top-level conjuncts from a PropDeBr
+-- Handles right-associativity: A && (B && C) -> [A, B, C]
+getAllConjuncts :: PropDeBr -> [PropDeBr]
+getAllConjuncts (p :&&: q) = p : getAllConjuncts q
+getAllConjuncts p          = [p] -- Base case: not a conjunction
+
+
+-- Parses a proposition 'prop' to see if it matches the structure
+-- created by 'isFunc f setA setB'. Extracts Just (f, setA, setB) on success.
+parseIsFunc :: PropDeBr -> Maybe (ObjDeBr, ObjDeBr, ObjDeBr)
+parseIsFunc prop = do
+    -- 1. Get all conjuncts
+    let conjuncts = getAllConjuncts prop
+
+    -- 2. Find the domain equality: (project 3 0 f) == setA
+    let findDomEq conjunct = do
+            (lhs, targetSetA) <- parseEqual conjunct
+            (idx, f1)         <- parseProjectHilbert lhs
+            guard (idx == 0)
+            return (f1, targetSetA) -- Result is Maybe (ObjDeBr, ObjDeBr)
+    -- Use '<-' to unwrap the Maybe and bind the tuple to maybe_f_A
+
+    maybe_f_A <- find (isJust . findDomEq) conjuncts >>= findDomEq
+
+    -- 3. Find the codomain equality: (project 3 1 f) == setB
+    let findCodEq conjunct = do
+            (lhs, targetSetB) <- parseEqual conjunct
+            (idx, f2)         <- parseProjectHilbert lhs
+            guard (idx == 1)
+            return (f2, targetSetB) -- Result is Maybe (ObjDeBr, ObjDeBr)
+    -- Use '<-' to unwrap the Maybe and bind the tuple to maybe_f_B
+
+
+    maybe_f_B <- find (isJust . findCodEq) conjuncts >>= findCodEq
+
+    -- 4. Extract results using 'let' since maybe_f_A and maybe_f_B are now plain tuples
+    let (f1, setA) = maybe_f_A
+    let (f2, setB) = maybe_f_B
+
+    -- 5. Check that the 'f' extracted from both equalities is the same term
+    guard (f1 == f2)
+    let funcTerm = f1 -- Use f1 as the definitive function term
+
+    -- 6. Check for the presence and correctness of the isTuple 3 f condition
+    let findIsTuple3 conjunct = do
+            (tupleSize, termChecked) <- parseIsTupleApp conjunct
+            guard (tupleSize == 3)
+            return termChecked
+
+    -- Use '<-' to unwrap the Maybe and bind the term to maybe_f_tuple
+    maybe_f_tuple <- find (isJust . findIsTuple3) conjuncts >>= findIsTuple3
+    -- Check the term from isTuple matches our funcTerm
+
+
+    guard (maybe_f_tuple == funcTerm)
+
+    -- 7. If all key checks passed, return the extracted f, setA, setB
+    return (funcTerm, setA, setB)
+
+
+-- | Constructs the ObjDeBr term representing the set of functions from A to B.
+--   Assumes functions are represented as Tupl[dom, cod, graph].
+--   Uses Hilbert operator and the 3-argument isFunc predicate:
+--   FUNCS(A,B) = hX S (forall f (f in S <-> isFunc(f, A, B)))
+funcsSet :: ObjDeBr -> ObjDeBr -> ObjDeBr
+funcsSet setA setB =
+    let
+        -- Choose distinct indices for template variables
+        setA_idx = 0 -- Placeholder for input setA
+        setB_idx = 1 -- Placeholder for input setB
+        f_idx    = 2 -- Placeholder for the function variable 'f'
+        s_idx    = 3 -- Placeholder for the set 'S' being defined by hX
+
+        -- The core property defining membership in the set S:
+        -- f ∈ S ↔ isFunc(f, A, B)
+        -- where f = X f_idx, S = X s_idx, A = X setA_idx, B = X setB_idx
+        propTemplate = (X f_idx `In` X s_idx) :<->: isFunc (X f_idx) (X setA_idx) (X setB_idx)
+
+        -- The quantified property: ∀f ( P(f, S, A, B) )
+        quantifiedProp = aX f_idx propTemplate
+
+        -- The Hilbert term template defining S: hX S ( ∀f P(f, S, A, B) )
+        hilbertTemplate = hX s_idx quantifiedProp
+
+    -- Substitute the actual setA and setB into the template
+    in objDeBrSubXs [(setA_idx, setA), (setB_idx, setB)] hilbertTemplate
+
+parseFuncsSet :: ObjDeBr -> Maybe (ObjDeBr, ObjDeBr)
+parseFuncsSet obj = do
+    -- 1. Match outer Hilbert: Hilbert p'
+    --    'idx_S' is the index for the Bound variable representing the set S (FUNCS(A,B)).
+    (p', idx_S) <- parseHilbert obj -- Changed obj to prop
+
+    -- 2. Match the Forall: Forall prop_f
+    --    'idx_f' is the index for the Bound variable representing the function 'f'.
+    (prop_f, idx_f) <- parseForall2 p'
+
+    -- 3. Match the Biconditional: f_in_S :<->: isFunc_call_prop
+    (f_in_S, isFunc_call_prop) <- parseBiconditional prop_f
+
+    -- 4. Check LHS: bound_f_lhs `In` bound_S_lhs
+    (bound_f_lhs, bound_S_lhs) <- parseIn f_in_S
+    bound_f_idx_lhs <- parseBound bound_f_lhs
+    bound_S_idx_lhs <- parseBound bound_S_lhs
+    guard (bound_f_idx_lhs == idx_f) -- Check 'f' index matches Forall binder
+    guard (bound_S_idx_lhs == idx_S) -- Check 'S' index matches Hilbert binder
+
+    -- 5. Parse the RHS using the 'parseIsFunc' helper.
+    --    This should extract the function term, domain set, and codomain set
+    --    as they appear inside the isFunc(...) proposition.
+
+    (funcTerm_from_isFunc, setA, setB) <- parseIsFunc isFunc_call_prop
+
+
+
+    -- 6. Verify that the function term extracted by parseIsFunc is indeed
+    --    the Bound variable bound by the Forall quantifier.
+    bound_f_idx_rhs <- parseBound funcTerm_from_isFunc
+    guard (bound_f_idx_rhs == idx_f)
+
+    -- 7. Optional: Sanity checks for variable capture in setA and setB.
+    guard (not (objDeBrBoundVarInside setA idx_f || objDeBrBoundVarInside setA idx_S))
+    guard (not (objDeBrBoundVarInside setB idx_f || objDeBrBoundVarInside setB idx_S))
+
+    -- 8. If all checks pass, return Just (setA, setB)
+    return (setA, setB)
 
 
 
@@ -596,9 +909,11 @@ instance SubexpDeBr ObjDeBr where
               <|> parseV'
               <|> parseX'
               <|> parseTuple'
+              <|> parseFuncsSet'
               <|> parseProject'
               <|> parseHilbertShort'
               <|> parseFuncApplication'
+              <|> parseCrossProduct'
               <|> parseComposition'
               <|> parseSetBuilder'
               <|> parseHilbert'
@@ -617,6 +932,7 @@ instance SubexpDeBr ObjDeBr where
             parseHilbert' = do
                (inner, norm) <- parseHilbert obj
                let pTree = toSubexpParseTree inner dict
+               let normalized = sbParseTreeNormalize norm pTree
                return $ Binding "ε" (sbParseTreeNormalize norm pTree)
             parseConst' = do
                c <- parseConst obj
@@ -642,10 +958,16 @@ instance SubexpDeBr ObjDeBr where
                 return $ BinaryOp "∘" (toSubexpParseTree f dict) (toSubexpParseTree g dict)
             parseProject' = do
                 (i, o) <- parseProjectHilbert obj
-                --return $ ParseTreeInt 999
-                --error $ show obj <> " I " <> show i
-                return $ TupleProject i (toSubexpParseTree o dict)
-
+                let pTree = toSubexpParseTree o dict
+                return $ TupleProject i (pTree)
+            parseCrossProduct' = do
+                (a,b) <- parseCrossProduct obj
+                return $ BinaryOp "×" (toSubexpParseTree a dict) (toSubexpParseTree b dict)
+            parseFuncsSet'= do
+                (a,b) <- parseFuncsSet obj
+                let treeA = toSubexpParseTree a dict
+                let treeB = toSubexpParseTree b dict
+                return $ FuncApp (ParseTreeConst "𝗙𝗨𝗡𝗖𝗦") (Tuple [treeA, treeB])
 
 boundDepthObjDeBr :: ObjDeBr -> Int
 boundDepthObjDeBr obj = case obj of
@@ -2208,8 +2530,52 @@ project n m t =
             finalExpression
 
 
+-- | Predicate: Checks if an ObjDeBr term 'f' represents a function
+--   structured as Tupl [dom, cod, graph], AND that its declared
+--   domain is equal to 'setA' and its declared codomain is equal to 'setB'.
+isFunc :: ObjDeBr -> ObjDeBr -> ObjDeBr -> PropDeBr
+isFunc f setA setB =
+    -- Condition 1: f must be a 3-tuple
+    isTuple 3 f :&&:
+    let
+        -- Condition 2: Extract components from the triple f
+        -- These are terms within the logical formula being built.
+        dom   = project 3 0 f
+        cod   = project 3 1 f
+        graph = project 3 2 f
+
+        -- Condition 3: Declared domain in f must equal the provided setA
+        cond3 = (dom :==: setA)
+
+        -- Condition 4: Declared codomain in f must equal the provided setB
+        cond4 = (cod :==: setB)
+
+        -- Condition 5: The 'graph' component must be a relation (set of pairs)
+        cond5 = isRelation graph
+
+        -- Condition 6: The 'graph' must be a subset of the Cartesian product
+        --              of the triple's declared domain and codomain.
+        --              This checks internal consistency of the triple.
+        prodDomCod =  crossProd dom cod
+        cond6 = subset graph prodDomCod
+
+        -- Condition 7: Functionality property over the declared domain 'dom'.
+        --              Forall x (x In dom -> Exists! y (<x,y> In graph))
+        --              Ensures each element in the declared domain maps to exactly one element.
+        cond7 = aX 0 ( (X 0 `In` dom) :->: (eXBang 1 (Tupl [X 0, X 1] `In` graph)) )
+
+    -- Combine all conditions using logical AND
+    in
+        cond3 :&&: cond4 :&&: cond5 :&&: cond6 :&&: cond7
+
+
+
+
 pairFirst :: ObjDeBr -> ObjDeBr
 pairFirst pair = project 2 0 pair
+
+
+
 
 --pairFirst :: ObjDeBr -> ObjDeBr
 --pairFirst pair = objDeBrSubX 0 pair (hX 2 (eX 1 (X 0 :==: Tupl [X 2,X 1])))
@@ -2230,17 +2596,23 @@ relDomain s = objDeBrSubX 0 s (hX 1(aX 2 (X 2 `In` X 1)  -- x ∈ D
 -- that f really is a function. It also depends on pairFirst working correctly.
 --
 
+tripletLast :: ObjDeBr -> ObjDeBr
+tripletLast triplet = project 3 2 triplet
+
+
 
 (.@.) :: ObjDeBr -> ObjDeBr -> ObjDeBr
-f .@. x = objDeBrSubXs [(0,f),(1,x)] (hX 2 ( Tupl [X 1, X 2] `In` pairFirst (X 0) ))
+f .@. x = objDeBrSubXs [(0,f),(1,x)] (hX 2 ( Tupl [X 1, X 2] `In` tripletLast (X 0) ))
 
+--f .@. x = objDeBrSubXs [(0, project 3 2 f), (1, x)] (hX 2 ( Tupl [X 1, X 2] `In` X 0 ))
 
+--f .@. x = objDeBrSubXs [(0,f),(1,x)] 
 
 
 -- Template representing the composition h = f o g, defined implicitly
 -- via the property: forall x ( h(x) == f(g(x)) )
-compositionTemplate :: ObjDeBr
-compositionTemplate =
+compositionTemplate' :: ObjDeBr
+compositionTemplate' =
    hX 99 $
      aX 11
        ( (X 99 .@. X 11) -- h(x)
@@ -2248,6 +2620,18 @@ compositionTemplate =
           (X 1 .@. (X 2 .@. X 11)) -- f(g(x))
        )
 
+
+compositionTemplate :: ObjDeBr
+compositionTemplate =
+    let
+        f_idx = 1; g_idx = 2; h_idx = 99; x_idx = 11
+        f_term = X f_idx; g_term = X g_idx; h_term = X h_idx; x_term = X x_idx
+        dom_g = project 3 0 g_term
+        cod_f = project 3 1 f_term
+        funcs_set = funcsSet dom_g cod_f
+        prop1 = h_term `In` funcs_set
+        prop2 = aX x_idx ( (h_term .@. x_term) :==: (f_term .@. (g_term .@. x_term)) )
+    in hX h_idx (prop1 :&&: prop2)
 
 infixr 9 .:. -- Same precedence and associativity as Haskell's .
 
@@ -2257,6 +2641,17 @@ infixr 9 .:. -- Same precedence and associativity as Haskell's .
 (.:.) :: ObjDeBr -> ObjDeBr -> ObjDeBr
 f .:. g = --objDeBrSubXs [(1, f), (2, g)] 
   objDeBrSubXs [(1,f),(2,g)] compositionTemplate
+
+
+
+
+
+
+crossProd :: ObjDeBr -> ObjDeBr -> ObjDeBr
+crossProd a b = objDeBrSubXs [(0,a),(1,b)] (hX 2 (multiAx [3,4]
+              (X 3 `In` X 0 :&&: X 4 `In` X 1 :<->:
+            Tupl [X 3, X 4] `In` X 2)))
+
 
 
 instance ZFC.LogicTerm ObjDeBr where
