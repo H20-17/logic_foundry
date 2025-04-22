@@ -2546,8 +2546,6 @@ f .:. g = --objDeBrSubXs [(1, f), (2, g)]
 
 
 
-
-
 crossProd :: ObjDeBr -> ObjDeBr -> ObjDeBr
 crossProd a b = objDeBrSubXs [(0,a),(1,b)] (hX 2 (multiAx [3,4]
               (X 3 `In` X 0 :&&: X 4 `In` X 1 :<->:
