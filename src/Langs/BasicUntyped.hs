@@ -32,8 +32,6 @@ module Langs.BasicUntyped (
     objDeBrSubX,
     crossProd,
     funcsSet,
-    parseProjectHilbert
-
 ) where
 import Control.Monad ( unless, guard,msum )
 import Data.List (intersperse,findIndex, partition,sort,find)
@@ -193,24 +191,6 @@ objDeBrBoundVarInside obj idx = case obj of
     V i -> False
     X i -> False
     Tupl as -> or $ Prelude.map (\a -> objDeBrBoundVarInside a idx) as
-
-
-
-
-
-propDeBrHasBoundVar :: PropDeBr -> Int -> Bool
-propDeBrHasBoundVar sub idx = case sub of
-    Neg p -> propDeBrBoundVarInside p idx
-    (:&&:) p1 p2 -> propDeBrBoundVarInside p1 idx || propDeBrBoundVarInside p2 idx
-    (:||:) p1 p2 -> propDeBrBoundVarInside p1 idx || propDeBrBoundVarInside p2 idx
-    (:->:)  p1 p2 -> propDeBrBoundVarInside p1 idx || propDeBrBoundVarInside p2 idx
-    (:<->:) p1 p2 -> propDeBrBoundVarInside p1 idx || propDeBrBoundVarInside p2 idx
-    (:==:) o1 o2 -> objDeBrBoundVarInside o1 idx || objDeBrBoundVarInside o2 idx
-    In o1 o2 -> objDeBrBoundVarInside o1 idx || objDeBrBoundVarInside o2 idx
-    Forall p -> propDeBrBoundVarInside p idx
-    Exists p -> propDeBrBoundVarInside p idx
-    (:>=:) o1 o2 -> objDeBrBoundVarInside o1 idx || objDeBrBoundVarInside o2 idx
-    F -> False
 
 
 
@@ -1534,41 +1514,36 @@ instance PL.LogicSent PropDeBr () where
   (.&&.) = (:&&:)
 
   parseAdj :: PropDeBr -> Maybe (PropDeBr, PropDeBr)
-  parseAdj p = case p of
-                 (:&&:) p1 p2 -> Just (p1,p2) 
-                 _ -> Nothing
+  parseAdj = parseConjunction
 
   (.->.) :: PropDeBr -> PropDeBr -> PropDeBr
   (.->.) = (:->:)
 
   parse_implication :: PropDeBr -> Maybe (PropDeBr, PropDeBr)
-  parse_implication p = case p of
-                 (:->:) p1 p2 -> Just (p1,p2) 
-                 _ -> Nothing
+  parse_implication = parseImplication
 
 
   neg :: PropDeBr -> PropDeBr
   neg = Neg
 
   parseNeg :: PropDeBr -> Maybe PropDeBr
-  parseNeg p = case p of
-    Neg p1 -> Just p1
-    _ -> Nothing
+  parseNeg = parseNegation
 
   (.||.) :: PropDeBr -> PropDeBr -> PropDeBr
   (.||.) = (:||:)
   parseDisj :: PropDeBr -> Maybe (PropDeBr, PropDeBr)
-  parseDisj p = case p of
-                 (:||:) p1 p2 -> Just(p1,p2)
-                 _ -> Nothing
+  parseDisj = parseDisjunction
+
+
   false :: PropDeBr
   false = F
+
   (.<->.) :: PropDeBr -> PropDeBr -> PropDeBr
   (.<->.) = (:<->:)
+
+
   parseIff  :: PropDeBr -> Maybe (PropDeBr, PropDeBr)
-  parseIff p = case p of
-                (:<->:) p1 p2 -> Just(p1,p2)
-                _ -> Nothing
+  parseIff = parseBiconditional
    
 
 
@@ -1588,70 +1563,6 @@ propDeBrBoundVarInside prop idx = case prop of
 
 
 
-objDeBrXInside :: Int -> ObjDeBr -> Bool
-objDeBrXInside subidx obj =
-    case obj of
-        Integ num -> False
-        Constant const -> False
-        Hilbert p -> propDeBrXInside subidx p
-        Bound i -> False
-        V i -> False
-        X idx | idx == subidx -> True
-              | otherwise -> False
-        XInternal idx -> False
-        Tupl xs ->
-            -- True if X subidx is inside ANY element of the list xs
-            any (objDeBrXInside subidx) xs
-            -- Alternatively: or $ map (objDeBrXInside subidx) xs
-
-objDeBrXInsideInt :: Int -> ObjDeBr -> Bool
-objDeBrXInsideInt subidx obj =
-    case obj of
-        Integ num -> False
-        Constant const -> False
-        Hilbert p -> propDeBrXInsideInt subidx p
-        Bound i -> False
-        V i -> False
-        XInternal idx | idx == subidx -> True
-              | otherwise -> False
-        X idx -> False
-        Tupl xs ->
-            -- True if XInternal subidx is inside ANY element of the list xs
-            any (objDeBrXInsideInt subidx) xs
-            -- Alternatively: or $ map (objDeBrXInsideInt subidx) xs
-
-
-
-
-
-
-propDeBrXInside :: Int -> PropDeBr -> Bool
-propDeBrXInside subidx prop = case prop of
-    Neg p -> propDeBrXInside subidx p
-    (:&&:) p1 p2 -> propDeBrXInside subidx p1 || propDeBrXInside subidx p2
-    (:||:) p1 p2 -> propDeBrXInside subidx p1 || propDeBrXInside subidx p2
-    (:->:) p1 p2 -> propDeBrXInside subidx p1 || propDeBrXInside subidx p2
-    (:<->:) p1 p2 -> propDeBrXInside subidx p1 || propDeBrXInside subidx p2
-    (:==:) o1 o2 -> objDeBrXInside subidx o1  || objDeBrXInside subidx o2
-    In o1 o2 -> objDeBrXInside subidx o1 || objDeBrXInside subidx o2
-    Forall p -> propDeBrXInside subidx p
-    Exists p -> propDeBrXInside subidx p
-    (:>=:) o1 o2 -> objDeBrXInside subidx o1 || objDeBrXInside subidx o2
-    F -> False
-
-propDeBrXInsideInt :: Int -> PropDeBr -> Bool
-propDeBrXInsideInt subidx prop = case prop of
-    Neg p -> propDeBrXInsideInt subidx p
-    (:&&:) p1 p2 -> propDeBrXInsideInt subidx p1 || propDeBrXInsideInt subidx p2
-    (:||:) p1 p2 -> propDeBrXInsideInt subidx p1 || propDeBrXInsideInt subidx p2
-    (:->:) p1 p2 -> propDeBrXInsideInt subidx p1 || propDeBrXInsideInt subidx p2
-    (:<->:) p1 p2 -> propDeBrXInsideInt subidx p1 || propDeBrXInsideInt subidx p2
-    (:==:) o1 o2 -> objDeBrXInsideInt subidx o1  || objDeBrXInsideInt subidx o2
-    In o1 o2 -> objDeBrXInsideInt subidx o1 || objDeBrXInsideInt subidx o2
-    Forall p -> propDeBrXInsideInt subidx p
-    Exists p -> propDeBrXInsideInt subidx p
-    (:>=:) o1 o2 -> objDeBrXInsideInt subidx o1 || objDeBrXInsideInt subidx o2
-    F -> False
 
 
 
@@ -2609,16 +2520,6 @@ f .@. x = objDeBrSubXs [(0,f),(1,x)] (hX 2 ( Tupl [X 1, X 2] `In` tripletLast (X
 --f .@. x = objDeBrSubXs [(0,f),(1,x)] 
 
 
--- Template representing the composition h = f o g, defined implicitly
--- via the property: forall x ( h(x) == f(g(x)) )
-compositionTemplate' :: ObjDeBr
-compositionTemplate' =
-   hX 99 $
-     aX 11
-       ( (X 99 .@. X 11) -- h(x)
-          :==: -- ==
-          (X 1 .@. (X 2 .@. X 11)) -- f(g(x))
-       )
 
 
 compositionTemplate :: ObjDeBr
