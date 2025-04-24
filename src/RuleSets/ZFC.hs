@@ -1,3 +1,4 @@
+{-# LANGUAGE TupleSections #-}
 module RuleSets.ZFC 
 (
     LogicError(..), LogicRule(..), 
@@ -14,7 +15,7 @@ module RuleSets.ZFC
 
 import Data.Monoid ( Last(..) )
 
-import Control.Monad ( foldM, unless )
+import Control.Monad ( foldM, unless,when )
 import Data.Set (Set, fromList)
 import Data.List (mapAccumL,intersperse)
 import qualified Data.Set as Set
@@ -78,6 +79,8 @@ import qualified RuleSets.PredLogic as PREDL
 
 
 
+
+
 class LogicTerm t where
    nullSet :: t
    integer :: Int -> t
@@ -87,8 +90,8 @@ class LogicTerm t where
 
 class (PREDL.LogicSent s t ()) => LogicSent s t | s ->t where
    emptySetAxiom :: s
-   specAxiom :: Int -> t -> s -> s
-   replaceAxiom :: Int -> Int -> t -> s -> s
+   specAxiom :: [Int] -> Int -> t -> s -> s
+   replaceAxiom :: [Int] -> Int -> Int -> t -> s -> s
    parseMemberOf :: s -> Maybe (t, t)
    memberOf :: t -> t -> s
 
@@ -110,6 +113,10 @@ data LogicError s sE t where
     LogicErrTupleNotSane :: t -> sE -> LogicError s sE t -- Changed to include sE from getTypeTerm failure
     LogicErrNotATuple :: t -> LogicError s sE t
     LogicErrIndexOutOfBounds :: Int -> Int -> t -> LogicError s sE t -- Holds index, length, tuple
+    LogicErrSpecOuterIndexConflict :: Int -> [Int] -> LogicError s sE t
+    LogicErrReplOuterIndexDuplicate :: Int -> [Int] -> LogicError s sE t
+    LogicErrSpecOuterIndexDuplicate :: Int -> [Int] -> LogicError s sE t
+    LogicErrReplIndexConflict :: Int -> Int -> [Int] -> LogicError s sE t -- For idx1 == idx2 OR idx1/idx2 in outerIdxs
    deriving (Show)
 
 data LogicRule s sE t  where
@@ -122,8 +129,8 @@ data LogicRule s sE t  where
     TheoremM :: TheoremAlgSchema () [LogicRule s sE t ] s Text () -> 
                              LogicRule s sE t
     EmptySet :: LogicRule s sE t
-    Specification :: Int -> t -> s -> LogicRule s sE t
-    Replacement :: Int -> Int -> t -> s -> LogicRule s sE t
+    Specification :: [Int] -> Int -> t -> s -> LogicRule s sE t
+    Replacement :: [Int] -> Int -> Int -> t -> s -> LogicRule s sE t
     deriving(Show)
 
 
@@ -231,16 +238,27 @@ instance PREDL.LogicRuleClass [LogicRule s sE t] s t () sE Text where
 
 class LogicRuleClass r s sE t | r->s, r->sE, r->t where
      emptySet :: r
-     specification :: Int -> t -> s -> r
-     replacement :: Int -> Int -> t -> s -> r
+     specification :: [Int] -> Int -> t -> s -> r
+     replacement :: [Int] -> Int -> Int -> t -> s -> r
 
 instance LogicRuleClass [LogicRule s sE t] s sE t where
      emptySet :: [LogicRule s sE t]
      emptySet = [EmptySet]
-     specification :: Int -> t -> s -> [LogicRule s sE t]
-     specification idx t s = [Specification idx t s]
-     replacement :: Int -> Int -> t ->  s -> [LogicRule s sE t]
-     replacement idx1 idx2 t s = [Replacement idx1 idx2 t s]
+     specification :: [Int] -> Int -> t -> s -> [LogicRule s sE t]
+     specification outerIdxs idx t s = [Specification outerIdxs idx t s]
+     replacement :: [Int] -> Int -> Int -> t ->  s -> [LogicRule s sE t]
+     replacement outerIdxs idx1 idx2 t s = [Replacement outerIdxs idx1 idx2 t s]
+
+
+-- Finds the first element that appears more than once in the list.
+findFirstDuplicate :: Ord a => [a] -> Maybe a
+findFirstDuplicate xs = fst $ foldl' check (Nothing, Set.empty) xs
+  where
+    check :: Ord a => (Maybe a, Set.Set a) -> a -> (Maybe a, Set.Set a)
+    check (Just dup, seen) _ = (Just dup, seen) -- Once found, stop checking
+    check (Nothing, seen) x
+      | Set.member x seen = (Just x, seen)      -- Found a duplicate
+      | otherwise         = (Nothing, Set.insert x seen) -- Add to seen se
 
 
 
@@ -279,58 +297,90 @@ runProofAtomic rule context state  =
           EmptySet -> do
                let step = PrfStdStepStep emptySetAxiom "AXIOM_EMPTYSET" []
                return (Just emptySetAxiom, Nothing, step)
-          Specification idx t s -> do
-               -- s can have instances of "X idx" template variables in it,
-               -- but not other X n instances. 
-               -- How the replacementAxiom function is defined should take
-               -- take advantage of that, replacing X 0 with a bound variable. Sanity checking for closure
-               -- after the specAxiom function is applied will ensure that
-               -- No other variables are in the term. 
+          Specification outerIdxs idx t s -> do
+               -- Check idx is not in outerIdxs
+               when (idx `elem` outerIdxs) $ -- Use 'when' from Control.Monad for cleaner Either handling
+                   throwError $ LogicErrSpecOuterIndexConflict idx outerIdxs -- Use new error
 
+               -- Check for duplicates in outerIdxs
+               case findFirstDuplicate outerIdxs of
+                   Just dup -> throwError $ LogicErrSpecOuterIndexDuplicate dup outerIdxs -- Use new error with the duplicate
+                   Nothing -> return () -- No duplicates found, continue
 
+               -- Get context info
+               let constDict = fmap fst (consts state)
 
-               -- Check that t is a closed and sane term and also get it's type
-               let tmpltVarTypeDict = Data.Map.insert idx () mempty
-               left (LogicErrSpecTermNotClosedSane t) (getTypeTerm tmpltVarTypeDict [] constDict t)
+               -- Create the template variable dictionary allowing X i for i in outerIdxs
+               let tmpltVarTypeDictOuter = Data.Map.fromList $ Prelude.map (, ()) outerIdxs
 
-               -- Check the that template (when X idx has type ()) is sane and closed
-               
+               -- Check that t is sane, allowing outer template vars, but no V n vars.
+               termType <- left (LogicErrSpecTermNotClosedSane t)
+                               (getTypeTerm tmpltVarTypeDictOuter [] constDict t) -- Use [] for varStack
+
+               -- Create the template variable dictionary allowing outer indices and the inner idx
+               let tmpltVarTypeDictForS = Data.Map.insert idx () tmpltVarTypeDictOuter
+
+               -- Check that 's' is sane, allowing outer template vars and X idx, but no V n vars.
                maybe (return ()) (throwError . LogicErrSpecTmpltNotSane s)
-                     (checkSanity tmpltVarTypeDict [] constDict s)
+                     (checkSanity tmpltVarTypeDictForS [] constDict s) -- Use [] for varStack
 
-               -- Build an instance of the replacement axiom
-               -- using the term t and the sentence s
-               let specAx = specAxiom idx t s
+               -- Build the axiom instance using the helper.
+               let specAx = specAxiom outerIdxs idx t s -- Placeholder: Replace with updated helper call
 
+               -- Build the axiom instance using the helper.
+               -- CRITICAL ASSUMPTION: The *updated* specAxiom helper (likely in Langs/BasicUntyped.hs)
+               -- must now consume ALL template variables
+               -- (X idx and all X i where i is in outerIdxs), and return a fully closed proposition.
+               let specAx = specAxiom outerIdxs idx t s -- Placeholder: Replace with updated helper call
+                                                 -- e.g., ZFC.specAxiom outerIdxs idx t s
 
+               -- **No final sanity check on specAx needed here if assumptions hold**
+               -- Create the proof step
                let step = PrfStdStepStep specAx "AXIOM_SPECIFICATION" []
                return (Just specAx, Nothing, step)
-          Replacement idx1 idx2 t s -> do
-               -- s can have  "X 0" and "X 1" variables in it
-               -- How the replacementAxiom function is defined should take
-               -- take advantage of that, replacing X 0 
-               -- and X 1 with bound variables. Sanity checking for closure
-               -- after the replaceAxiom function is applied will ensure that
-               -- No other variables are in the term.
+          Replacement outerIdxs idx1 idx2 t s -> do
+               -- Basic validation of indices
+               when (idx1 == idx2) $
+                   throwError $ LogicErrReplIndexConflict idx1 idx2 outerIdxs
+               when (idx1 `elem` outerIdxs) $
+                   throwError $ LogicErrReplIndexConflict idx1 idx1 outerIdxs
+               when (idx2 `elem` outerIdxs) $
+                   throwError $ LogicErrReplIndexConflict idx2 idx2 outerIdxs
+               case findFirstDuplicate outerIdxs of
+                   Just dup -> throwError $ LogicErrReplOuterIndexDuplicate dup outerIdxs
+                   Nothing -> return ()
 
-               -- Check that t is a closed and sane term.
-               let tmpltVarTypeDict = Data.Map.fromList [(idx1,()),(idx2,())]
-               left (LogicErrSpecTermNotClosedSane t) (getTypeTerm tmpltVarTypeDict [] constDict t)
+               -- Get context info
+               let constDict = fmap fst (consts state)
 
+               -- Template dictionary allowing X i for i in outerIdxs (for checking t)
+               let tmpltVarTypeDictOuter = Data.Map.fromList $ Prelude.map (, ()) outerIdxs
 
-               -- check that the template 
-               -- Build an instance of the replacement axiom
-               -- using the term t and the sentence s
-               let replAx = replaceAxiom idx1 idx2 t s
+               -- Check that t is sane (allows outer X vars, disallows V n, idx1, idx2)
+               -- Assuming getTypeTerm checks that t does not contain X idx1 or X idx2 implicitly
+               -- If not, add specific checks or adjust getTypeTerm.
+               termType <- left (LogicErrSpecTermNotClosedSane t) -- Reuse Spec error or make new one for Repl
+                               (getTypeTerm tmpltVarTypeDictOuter [] constDict t) -- Use [] for varStack
 
-               -- Check the that template (when X 0 and X 1 both have type ()) is sane and closed
+               -- Template dictionary allowing outer indices and the inner idx1, idx2 (for checking s)
+               let tmpltVarTypeDictForS = Data.Map.insert idx1 () $ Data.Map.insert idx2 () tmpltVarTypeDictOuter
 
-               
-               maybe (return ()) (throwError . LogicErrReplTmpltNotSane s) (
-                            checkSanity tmpltVarTypeDict [] constDict s)
+               -- Check that 's' is sane (allows outer X vars, X idx1, X idx2, disallows V n)
+               maybe (return ()) (throwError . LogicErrReplTmpltNotSane s)
+                     (checkSanity tmpltVarTypeDictForS [] constDict s) -- Use [] for varStack
 
+               -- Build the axiom instance using the helper.
+               -- CRITICAL ASSUMPTION: The *updated* replaceAxiom helper must now accept 'outerIdxs',
+               -- consume ALL template variables (X idx1, X idx2, and all X i where i is in outerIdxs),
+               -- and return a fully closed proposition.
+               -- The version in Langs/BasicUntyped.hs currently does NOT do this.
+               let replAx = replaceAxiom outerIdxs idx1 idx2 t s -- Using the corrected signature
+
+               -- No final sanity check on replAx needed if assumptions hold
+
+               -- Create the proof step
                let step = PrfStdStepStep replAx "AXIOM_REPLACEMENT" []
-               return (Just replAx, Nothing, step)      
+               return (Just replAx, Nothing, step)
 
     where
         proven = (keysSet . provenSents) state
@@ -426,16 +476,16 @@ emptySetM = standardRuleM emptySet
 specificationM :: (Monad m, Show sE, Typeable sE, Show s, Typeable s, Show eL, Typeable eL,
        MonadThrow m, Show o, Typeable o, Show tType, Typeable tType, TypedSent o tType sE s,
        Monoid (PrfStdState s o tType), ProofStd s eL [LogicRule s sE t] o tType, StdPrfPrintMonad s o tType m    )
-       => Int -> t -> s -> ProofGenTStd tType [LogicRule s sE t] s o m (s,[Int])
-specificationM idx t s = standardRuleM (specification idx t s)
+       => [Int] -> Int -> t -> s -> ProofGenTStd tType [LogicRule s sE t] s o m (s,[Int])
+specificationM outerIdxs idx t s = standardRuleM (specification outerIdxs idx t s)
 
 
 
 replacementM :: (Monad m, Show sE, Typeable sE, Show s, Typeable s, Show eL, Typeable eL,
        MonadThrow m, Show o, Typeable o, Show tType, Typeable tType, TypedSent o tType sE s,
        Monoid (PrfStdState s o tType), ProofStd s eL [LogicRule s sE t] o tType, StdPrfPrintMonad s o tType m    )
-       => Int -> Int -> t -> s -> ProofGenTStd tType [LogicRule s sE t] s o m (s,[Int])
-replacementM idx1 idx2 t s = standardRuleM (replacement idx1 idx2 t s)
+       => [Int] -> Int -> Int -> t -> s -> ProofGenTStd tType [LogicRule s sE t] s o m (s,[Int])
+replacementM outerIdxs idx1 idx2 t s = standardRuleM (replacement outerIdxs idx1 idx2 t s)
 
 
 

@@ -2566,43 +2566,115 @@ instance ZFC.LogicSent PropDeBr ObjDeBr where
     emptySetAxiom = eX 0 $ Neg $ aX 1 $ X 1 `In` X 0
 
 
-    specAxiom :: Int -> ObjDeBr -> PropDeBr -> PropDeBr
-    specAxiom idx t p =
-    -- Substitute the actual input set term 't' for the internal placeholder 'XInternal 1'
-        propDeBrSubXInt 1 t $
-            -- Assert the existence of the result set 'B', represented by internal placeholder 'XInternal 2'
-            -- Uses eXInt to bind this internal placeholder.
-            eXInt 2 $
-                -- Define the property of the result set 'B': Forall x...
-            --  Uses user's 'aX' to bind the user's template variable 'X idx'.
-                aX idx $
-                   -- x ∈ B  <-> ( P(x) ∧ x ∈ t )
-                   -- Uses X idx for 'x', XInternal 2 for 'B', XInternal 1 for 't'.
-                   (X idx `In` XInternal 2)
-                     :<->:
-                   (p :&&: (X idx `In` XInternal 1))
+    specAxiom :: [Int] -> Int -> ObjDeBr -> PropDeBr -> PropDeBr
+    specAxiom outerIdxs idx t p_template =
+        let
+            -- Use fixed internal indices for placeholders.
+            internalTIdx = 1 -- Placeholder index for the source set 't' (XInternal 1)
+            internalBIdx = 2 -- Placeholder index for the resulting set 'B' (XInternal 2)
 
-    replaceAxiom :: Int -> Int -> ObjDeBr -> PropDeBr -> PropDeBr
-    replaceAxiom idx1 idx2 t p =
-    -- Substitute the actual term 't' for the internal placeholder 'XInternal 1'
-        propDeBrSubXInt 1 t
-           (
-              -- Premise: Forall a (a in t -> Exists! b P(a,b))
-              -- Uses user's 'aX' and 'eXBang' as they operate on user template 'p' with user indices X idx1, X idx2
-              -- Uses 'XInternal 1' as the placeholder for 't' before substitution
-              aX idx1 ( (X idx1 `In` XInternal 1) :->: eXBang idx2 p )
-                :->:
-              -- Conclusion: Exists B (Forall a (a in B <-> Exists b (b in t AND P(a,b))))
-              -- Uses internal 'eXInt' to bind the result set placeholder 'XInternal 2'
-              -- Uses user's 'aX' and 'eX' for user variables X idx1, X idx2
-              -- Uses 'XInternal 1' for placeholder 't', 'XInternal 2' for placeholder 'B'
-              eXInt 2 (
-                    aX idx1 ( (X idx1 `In` XInternal 2)
-                        :<->:
-                        eX idx2 ( (X idx2 `In` XInternal 1) :&&: p )
-                      )
-                    )
-        )
+            -- Core axiom structure template:
+            -- x ∈ B ↔ ( P(x) ∧ x ∈ t_placeholder )
+            -- Using X idx for 'x', XInternal internalBIdx for 'B', XInternal internalTIdx for 't'.
+            core_prop_template :: PropDeBr
+            core_prop_template = (X idx `In` XInternal internalBIdx)
+                             :<->:
+                             (p_template :&&: (X idx `In` XInternal internalTIdx))
+
+            -- Universally quantify over 'x' (represented by X idx)
+            quantified_over_x :: PropDeBr
+            quantified_over_x = aX idx core_prop_template
+
+            -- Existentially quantify over the resulting set 'B' (represented by XInternal internalBIdx)
+            quantified_over_B :: PropDeBr
+            quantified_over_B = eXInt internalBIdx quantified_over_x
+
+            -- **Step 1 (Corrected Order):** Substitute the actual source set term 't'
+            -- for the internal placeholder XInternal internalTIdx using propDeBrSubXInt.
+            -- The result 'axiom_body_with_t' now contains the actual term 't',
+            -- potentially including X i variables from outerIdxs originating from both p_template and t.
+            axiom_body_with_t :: PropDeBr
+            axiom_body_with_t = propDeBrSubXInt internalTIdx t quantified_over_B
+
+            -- **Step 2 (Corrected Order):** Universally quantify over all outer parameter indices (outerIdxs).
+            -- multiAx applies aX i for each i in outerIdxs to 'axiom_body_with_t'.
+            -- This binds all remaining X i variables (from p_template and the substituted t).
+            closed_axiom :: PropDeBr
+            closed_axiom = multiAx outerIdxs axiom_body_with_t
+
+        in
+            closed_axiom
+
+    replaceAxiom :: [Int] -> Int -> Int -> ObjDeBr -> PropDeBr -> PropDeBr
+    replaceAxiom outerIdxs idx1 idx2 t p_template =
+        -- outerIdxs: Indices of template variables (X i) acting as parameters.
+        -- idx1: Index for variable 'a' in P(a, b).
+        -- idx2: Index for variable 'b' in P(a, b).
+        -- t: The source set term (may contain X i for i in outerIdxs).
+        -- p_template: The predicate template P(a,b) (may contain X idx1, X idx2, and X i).
+
+        let
+            -- Use fixed internal indices for placeholders.
+            internalTIdx = 1 -- Placeholder index for the source set 't' (XInternal 1)
+            internalBIdx = 2 -- Placeholder index for the resulting set 'B' (XInternal 2)
+
+            -- === Build Premise Template ===
+            -- Template for: ∃!b P(a, b)
+            -- Uses X idx1 for 'a', X idx2 for 'b', p_template for P.
+            exists_unique_b = eXBang idx2 p_template
+
+            -- Template for: a ∈ t → ∃!b P(a, b)
+            -- Uses X idx1 for 'a', XInternal internalTIdx for 't'.
+            implication_in_premise = (X idx1 `In` XInternal internalTIdx) :->: exists_unique_b
+
+            -- Template for Premise: ∀a (a ∈ t → ∃!b P(a, b))
+            -- Uses aX to bind X idx1. Contains XInternal internalTIdx and outer X i's.
+            premise_template :: PropDeBr
+            premise_template = aX idx1 implication_in_premise
+
+
+            -- === Build Conclusion Template ===
+            -- Template for: b ∈ t ∧ P(a, b)
+            -- Uses X idx1 for 'a', X idx2 for 'b', XInternal internalTIdx for 't'.
+            conjunction_in_conclusion = (X idx2 `In` XInternal internalTIdx) :&&: p_template
+
+            -- Template for: ∃b (b ∈ t ∧ P(a, b))
+            -- Uses eX to bind X idx2. Contains X idx1, XInternal internalTIdx, and outer X i's.
+            exists_b_in_conclusion = eX idx2 conjunction_in_conclusion
+
+            -- Template for: a ∈ B ↔ ∃b (b ∈ t ∧ P(a, b))
+            -- Uses X idx1 for 'a', XInternal internalBIdx for 'B'.
+            bicond_in_conclusion = (X idx1 `In` XInternal internalBIdx) :<->: exists_b_in_conclusion
+
+            -- Template for: ∀a (a ∈ B ↔ ∃b (b ∈ t ∧ P(a, b)))
+            -- Uses aX to bind X idx1. Contains XInternal internalBIdx, XInternal internalTIdx, and outer X i's.
+            forall_a_in_conclusion = aX idx1 bicond_in_conclusion
+
+            -- Template for Conclusion: ∃B ∀a (a ∈ B ↔ ∃b (b ∈ t ∧ P(a, b)))
+            -- Uses eXInt to bind XInternal internalBIdx. Contains XInternal internalTIdx and outer X i's.
+            conclusion_template :: PropDeBr
+            conclusion_template = eXInt internalBIdx forall_a_in_conclusion
+
+
+            -- === Assemble and Finalize ===
+            -- Template for the full axiom: Premise → Conclusion
+            -- Contains XInternal internalTIdx and outer X i's.
+            axiom_template_pre_subst :: PropDeBr
+            axiom_template_pre_subst = premise_template :->: conclusion_template
+
+            -- **Step 1:** Substitute the actual source set term 't' for the internal placeholder XInternal internalTIdx.
+            -- The result 'axiom_body_with_t' now contains 't' (potentially with outer X i's)
+            -- and any outer X i's from the original p_template.
+            axiom_body_with_t :: PropDeBr
+            axiom_body_with_t = propDeBrSubXInt internalTIdx t axiom_template_pre_subst
+
+            -- **Step 2:** Universally quantify over all outer parameter indices (outerIdxs).
+            -- multiAx binds all remaining X i variables.
+            closed_axiom :: PropDeBr
+            closed_axiom = multiAx outerIdxs axiom_body_with_t
+
+        in
+            closed_axiom
      
                               
             
