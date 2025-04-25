@@ -1,20 +1,5 @@
-{-# LANGUAGE PatternGuards #-}
+{-# LANGUAGE LambdaCase #-}
 module Langs.Internal.BasicUntyped.Shorthands (
-    ObjDeBr(Integ,Constant,V,X,Tupl,Hilbert, Bound),
-    PropDeBr(Neg,(:&&:),(:||:),(:->:),(:<->:),(:==:),In,(:>=:),F,Exists),
-    DeBrSe(..),
-    PrfStdStepPredDeBr,
-    PropErrDeBr,
-    PropRuleDeBr,
-    PredErrDeBr,
-    PredRuleDeBr,
-    showPropDeBrStepsBase,
-    showPropDeBrStepsBaseM,
-    eX, hX, aX,
-    showProp,
-    showObj,
-    showPropM,
-    showObjM,
     eXBang,
     (./=.),
     builderX,
@@ -31,14 +16,24 @@ module Langs.Internal.BasicUntyped.Shorthands (
     objDeBrSubX,
     crossProd,
     funcsSet,
+    parseFuncApplication,
+    parseSetBuilder,
+    parseHilbertShort,
+    parseNotEqual,
+    parseNotIn,
+    parseNotSubset,
+    parseStrictSubset,
+    parseSubset,
+    parseExistsUnique,
+    parseComposition,
+    parseProjectHilbert,
+    parseCrossProduct,
+    parseFuncsSet
 ) where
 import Langs.Internal.BasicUntyped.Core
-import Control.Monad ( unless, guard,msum )
+import Control.Monad ( unless, guard,msum, zipWithM )
 import Data.List (intersperse,findIndex, partition,sort,find)
-import Data.Text (Text, pack, unpack,concat, lines,intercalate)
 import GHC.Generics (Associativity (NotAssociative, RightAssociative, LeftAssociative))
-import Data.Map
-    ( (!), foldrWithKey, fromList, insert, keysSet, lookup, map, Map )
 import Data.Set(Set, notMember)
 import qualified Data.Set as Set (fromList,insert,member)
 import Control.Applicative ( Alternative((<|>)) )
@@ -65,160 +60,6 @@ import Data.Text (Text, pack, unpack,concat, lines,intercalate)
 import Data.Map
     ( (!), foldrWithKey, fromList, insert, keysSet, lookup, map, Map )
 
-data SubexpParseTree where
-    BinaryOp :: Text -> SubexpParseTree -> SubexpParseTree -> SubexpParseTree
-    UnaryOp :: Text -> SubexpParseTree ->SubexpParseTree
-    Binding :: Text -> SubexpParseTree -> SubexpParseTree
-    HilbertShort :: [Int] -> SubexpParseTree
-    ParseTreeConst :: Text -> SubexpParseTree
-    ParseTreeFreeVar :: Int -> SubexpParseTree
-    ParseTreeBoundVar :: Int -> SubexpParseTree
-    ParseTreeX :: Int -> SubexpParseTree
-    Tuple :: [SubexpParseTree] -> SubexpParseTree
-    ParseTreeF :: SubexpParseTree
-    ParseTreeInt :: Int -> SubexpParseTree
-    Builder :: SubexpParseTree -> SubexpParseTree -> SubexpParseTree
-    FuncApp :: SubexpParseTree -> SubexpParseTree -> SubexpParseTree
-    TupleProject :: Int -> SubexpParseTree -> SubexpParseTree
-    TestText :: Text -> SubexpParseTree
-
-
-
-subexpParseTreeBoundDepth :: SubexpParseTree -> Int
-subexpParseTreeBoundDepth sub = case sub of
-    BinaryOp _ sub1 sub2 -> max (subexpParseTreeBoundDepth sub1) (subexpParseTreeBoundDepth sub2)
-    UnaryOp _ sub1 -> subexpParseTreeBoundDepth sub1
-    Binding _ sub1 -> 1 + subexpParseTreeBoundDepth sub1
-    HilbertShort idxs -> 0
-    ParseTreeConst const -> 0
-    ParseTreeFreeVar idx -> 0
-    ParseTreeBoundVar idx -> 0
-    ParseTreeX idx -> 0
-    Tuple as -> maximum $ Prelude.map subexpParseTreeBoundDepth as
-    ParseTreeF -> 0
-    ParseTreeInt _ -> 0
-    Builder sub1 sub2 -> 1 + max (subexpParseTreeBoundDepth sub1) (subexpParseTreeBoundDepth sub2)
-    FuncApp sub1 sub2 -> max (subexpParseTreeBoundDepth sub1) (subexpParseTreeBoundDepth sub2)
-    TupleProject int sub -> subexpParseTreeBoundDepth sub
-
-sbParseTreeNormalize :: Int -> SubexpParseTree -> SubexpParseTree
--- Be ultra-careful with this function. It will probably break indexing if
--- boundVarIdx is greater than than subepParseTreeDepth sub.
-sbParseTreeNormalize boundVarIdx sub =
-       sbParseTreeNormalize' (subexpParseTreeBoundDepth sub) sub
-    where
-        sbParseTreeNormalize' :: Int -> SubexpParseTree -> SubexpParseTree
-        sbParseTreeNormalize' depth sub = case sub of
-            BinaryOp opSymb sub1 sub2 -> BinaryOp opSymb (sbParseTreeNormalize' depth sub1)
-                            (sbParseTreeNormalize' depth sub2)
-            UnaryOp opSymb sub1 -> UnaryOp opSymb (sbParseTreeNormalize' depth sub1)
-            Binding quant sub1 -> Binding quant (sbParseTreeNormalize' depth sub1)
-            HilbertShort idxs -> HilbertShort idxs
-            ParseTreeConst const -> ParseTreeConst const
-            ParseTreeFreeVar idx -> ParseTreeFreeVar idx
-            ParseTreeBoundVar idx -> if idx == boundVarIdx then
-                                          ParseTreeBoundVar depth
-                                        else
-                                            ParseTreeBoundVar idx
-
-            Tuple as -> Tuple $ Prelude.map (sbParseTreeNormalize' depth) as
-            ParseTreeX idx -> ParseTreeX idx
-            ParseTreeF -> ParseTreeF
-            ParseTreeInt i -> ParseTreeInt i
-            Builder sub1 sub2 -> Builder (sbParseTreeNormalize' depth sub1) (sbParseTreeNormalize' depth sub2)
-            FuncApp sub1 sub2 -> FuncApp (sbParseTreeNormalize' depth sub1) (sbParseTreeNormalize' depth sub2)
-            TupleProject n obj -> TupleProject n (sbParseTreeNormalize' depth obj)
-  
-
-class SubexpDeBr sub where
-    toSubexpParseTree :: sub -> Map PropDeBr [Int] -> SubexpParseTree
-
-
-data SubexpParseTree where
-    BinaryOp :: Text -> SubexpParseTree -> SubexpParseTree -> SubexpParseTree
-    UnaryOp :: Text -> SubexpParseTree ->SubexpParseTree
-    Binding :: Text -> SubexpParseTree -> SubexpParseTree
-    HilbertShort :: [Int] -> SubexpParseTree
-    ParseTreeConst :: Text -> SubexpParseTree
-    ParseTreeFreeVar :: Int -> SubexpParseTree
-    ParseTreeBoundVar :: Int -> SubexpParseTree
-    ParseTreeX :: Int -> SubexpParseTree
-    Tuple :: [SubexpParseTree] -> SubexpParseTree
-    ParseTreeF :: SubexpParseTree
-    ParseTreeInt :: Int -> SubexpParseTree
-    Builder :: SubexpParseTree -> SubexpParseTree -> SubexpParseTree
-    FuncApp :: SubexpParseTree -> SubexpParseTree -> SubexpParseTree
-    TupleProject :: Int -> SubexpParseTree -> SubexpParseTree
-    TestText :: Text -> SubexpParseTree
-
-
-
-subexpParseTreeBoundDepth :: SubexpParseTree -> Int
-subexpParseTreeBoundDepth sub = case sub of
-    BinaryOp _ sub1 sub2 -> max (subexpParseTreeBoundDepth sub1) (subexpParseTreeBoundDepth sub2)
-    UnaryOp _ sub1 -> subexpParseTreeBoundDepth sub1
-    Binding _ sub1 -> 1 + subexpParseTreeBoundDepth sub1
-    HilbertShort idxs -> 0
-    ParseTreeConst const -> 0
-    ParseTreeFreeVar idx -> 0
-    ParseTreeBoundVar idx -> 0
-    ParseTreeX idx -> 0
-    Tuple as -> maximum $ Prelude.map subexpParseTreeBoundDepth as
-    ParseTreeF -> 0
-    ParseTreeInt _ -> 0
-    Builder sub1 sub2 -> 1 + max (subexpParseTreeBoundDepth sub1) (subexpParseTreeBoundDepth sub2)
-    FuncApp sub1 sub2 -> max (subexpParseTreeBoundDepth sub1) (subexpParseTreeBoundDepth sub2)
-    TupleProject int sub -> subexpParseTreeBoundDepth sub
-
-sbParseTreeNormalize :: Int -> SubexpParseTree -> SubexpParseTree
--- Be ultra-careful with this function. It will probably break indexing if
--- boundVarIdx is greater than than subepParseTreeDepth sub.
-sbParseTreeNormalize boundVarIdx sub =
-       sbParseTreeNormalize' (subexpParseTreeBoundDepth sub) sub
-    where
-        sbParseTreeNormalize' :: Int -> SubexpParseTree -> SubexpParseTree
-        sbParseTreeNormalize' depth sub = case sub of
-            BinaryOp opSymb sub1 sub2 -> BinaryOp opSymb (sbParseTreeNormalize' depth sub1)
-                            (sbParseTreeNormalize' depth sub2)
-            UnaryOp opSymb sub1 -> UnaryOp opSymb (sbParseTreeNormalize' depth sub1)
-            Binding quant sub1 -> Binding quant (sbParseTreeNormalize' depth sub1)
-            HilbertShort idxs -> HilbertShort idxs
-            ParseTreeConst const -> ParseTreeConst const
-            ParseTreeFreeVar idx -> ParseTreeFreeVar idx
-            ParseTreeBoundVar idx -> if idx == boundVarIdx then
-                                          ParseTreeBoundVar depth
-                                        else
-                                            ParseTreeBoundVar idx
-
-            Tuple as -> Tuple $ Prelude.map (sbParseTreeNormalize' depth) as
-            ParseTreeX idx -> ParseTreeX idx
-            ParseTreeF -> ParseTreeF
-            ParseTreeInt i -> ParseTreeInt i
-            Builder sub1 sub2 -> Builder (sbParseTreeNormalize' depth sub1) (sbParseTreeNormalize' depth sub2)
-            FuncApp sub1 sub2 -> FuncApp (sbParseTreeNormalize' depth sub1) (sbParseTreeNormalize' depth sub2)
-            TupleProject n obj -> TupleProject n (sbParseTreeNormalize' depth obj)
-  
-
-class SubexpDeBr sub where
-    toSubexpParseTree :: sub -> Map PropDeBr [Int] -> SubexpParseTree
-
-
-
-
-binaryOpInData :: [(Text,(Associativity,Int))]
-binaryOpInData = [("=",(NotAssociative,5)),("→",(RightAssociative,1)),("↔",(RightAssociative,1)),("∈",(NotAssociative,5)),("∧",(RightAssociative,4)),("∨",(RightAssociative,3)),
-     ("≥",(NotAssociative,5)),
-     ("≠",(NotAssociative,5)),("∉",(NotAssociative,5)),
-     ("⊆",(NotAssociative,5)),("⊂",(NotAssociative,5)),("⊈",(NotAssociative,5)), 
-     ("∘",(RightAssociative,9)),
-     ("×",(NotAssociative,7))
-     
-     ]
-
-
-     --The Int is it's precedence number.
-binaryOpData :: Map Text (Associativity, Int)
-binaryOpData = Data.Map.fromList binaryOpInData
 
 
 parsePairFirstExp :: ObjDeBr -> Maybe ObjDeBr
@@ -251,7 +92,7 @@ parseFuncApplication obj = do
     -- 3. Match the tuple structure: Tupl [ arg_term, result_var ]
     args <- parseTupl tuple_term
     guard (length args == 2)
-    let arg_term = args !! 0        -- Potential argument 'x'
+    let arg_term = head args        -- Potential argument 'x'
     let result_var = args !! 1     -- Potential bound variable 'y'
 
     -- 4. Verify the result_var is the Bound variable with the index from the Hilbert binding
@@ -334,14 +175,14 @@ parseHilbertShort :: ObjDeBr -> Map PropDeBr [Int] -> Maybe [Int]
 parseHilbertShort subexp dict = 
     case subexp of
         Hilbert p ->
-            maybe Nothing Just (Data.Map.lookup (Exists p) dict) 
+            Just =<< Data.Map.lookup (Exists p) dict 
         _ -> Nothing
 
 parsePair :: ObjDeBr -> Maybe (ObjDeBr,ObjDeBr)
 parsePair subexp = do
     list <- parseTupl subexp
-    guard (length(list) == 2)
-    return (list!!0,list!!1)
+    guard (length list == 2)
+    return (head list,list!!1)
 
 parseComposition :: ObjDeBr -> Maybe (ObjDeBr, ObjDeBr)
 parseComposition obj = do
@@ -441,10 +282,10 @@ parseProjectHilbert obj = do
 
     -- 5. Find the argument matching the Hilbert binder (Bound norm_h).
     --    Its list index is the projection index 'm'.
-    m <- findIndex (\arg -> case arg of Bound b -> b == norm_h; _ -> False) parsedArgs
+    m <- findIndex (\case Bound b -> b == norm_h; _ -> False) parsedArgs
 
     -- 6. Verify other arguments and their indices
-    let (r_arg_list, other_args) = partition (\arg -> case arg of Bound b -> b == norm_h; _ -> False) parsedArgs
+    let (r_arg_list, other_args) = partition (\case Bound b -> b == norm_h; _ -> False) parsedArgs
     guard (length r_arg_list == 1)
     guard (length other_args == quantifierCount)
 
@@ -456,7 +297,7 @@ parseProjectHilbert obj = do
 
     -- == Validation Checks on recovered_t (lhs) ==
     guard (not (objDeBrBoundVarInside recovered_t norm_h))
-    guard (all (\idx -> not (objDeBrBoundVarInside recovered_t idx)) expectedIndices)
+    guard (not (any (objDeBrBoundVarInside recovered_t) expectedIndices))
     -- 8. Return result: projection index m and the recovered term t
 
     return (m, recovered_t)
@@ -499,7 +340,7 @@ parseCrossProduct obj = do
     -- 9. Match pair tuple: Tupl [bound_x_rhs, bound_y_rhs]
     pair_args <- parseTupl pair_term
     guard (length pair_args == 2)
-    let bound_x_rhs = pair_args !! 0
+    let bound_x_rhs = head pair_args
     let bound_y_rhs = pair_args !! 1
 
     -- 10. Check indices within the pair tuple match binders 'x' and 'y'
@@ -540,13 +381,14 @@ parseIsTupleApp prop = do
             _               -> Just False -- Argument is not a Bound var
 
     -- Check if all arguments match their expected Bound index using the corrected logic.
-    allMatch <- sequence $ zipWith checkArgIndexed [0..] args
-    guard (all id allMatch) -- This guard is now logically correct.
+    allMatch <- Control.Monad.zipWithM checkArgIndexed [0 .. ] args
+    guard (and allMatch) -- This guard is now logically correct.
 
     -- 5. Optional Sanity Check: Ensure 'term'' doesn't capture binders.
     --    The expected indices are base_depth to base_depth + n - 1
     let boundIndicesRange = [base_depth .. base_depth + n - 1]
-    guard (all (\idx -> not (objDeBrBoundVarInside term' idx)) boundIndicesRange)
+    guard (not (any (objDeBrBoundVarInside term') boundIndicesRange))
+
 
     -- 6. If all checks passed, return the tuple length 'n' and the term 'term''
     return (n, term')
@@ -680,84 +522,10 @@ parseFuncsSet obj = do
     return (setA, setB)
 
 
-instance SubexpDeBr ObjDeBr where
-    toSubexpParseTree :: ObjDeBr -> Map PropDeBr [Int] -> SubexpParseTree
-    
 
-
-
-    toSubexpParseTree obj dict =
-         maybe (error $ "Ubable to parse term " <> show obj <> ". This shouldn't have happened.")
-             id fullParse 
-      where fullParse =
-             parseInteg'
-              <|> parseConst'
-              <|> parseBound'
-              <|> parseV'
-              <|> parseX'
-              <|> parseTuple'
-              <|> parseFuncsSet'
-              <|> parseProject'
-              <|> parseHilbertShort'
-              <|> parseFuncApplication'
-              <|> parseCrossProduct'
-              <|> parseComposition'
-              <|> parseSetBuilder'
-              <|> parseHilbert'
-       
-            parseFuncApplication' =
-               do
-                (f,x) <- parseFuncApplication obj
-                return $ FuncApp (toSubexpParseTree f dict) (toSubexpParseTree x dict)
-            parseSetBuilder' = do
-               (t,q,norm) <- parseSetBuilder obj
-               let qTree = toSubexpParseTree q dict
-               return $  Builder (toSubexpParseTree t dict) (sbParseTreeNormalize norm qTree)
-            parseHilbertShort' = do
-               idx <- parseHilbertShort obj dict
-               return $ HilbertShort idx
-            parseHilbert' = do
-               (inner, norm) <- parseHilbert obj
-               let pTree = toSubexpParseTree inner dict
-               let normalized = sbParseTreeNormalize norm pTree
-               return $ Binding "ε" (sbParseTreeNormalize norm pTree)
-            parseConst' = do
-               c <- parseConst obj
-               return $ ParseTreeConst c
-            parseBound' = do
-                i <- parseBound obj
-                return $ ParseTreeBoundVar i
-            parseV' = do
-                i <- parseV obj
-                return $ ParseTreeFreeVar i
-            parseX' = do
-                i <- parseX obj
-                return $ ParseTreeX i
-            parseInteg' = do
-                i <- parseInteg obj
-                return $ ParseTreeInt i
-
-            parseTuple' = do
-               tuple <- parseTupl obj
-               return $ Tuple $ Prelude.map (\x -> toSubexpParseTree x dict) tuple
-            parseComposition' = do
-                (f,g) <- parseComposition obj
-                return $ BinaryOp "∘" (toSubexpParseTree f dict) (toSubexpParseTree g dict)
-            parseProject' = do
-                (i, o) <- parseProjectHilbert obj
-                let pTree = toSubexpParseTree o dict
-                return $ TupleProject i (pTree)
-            parseCrossProduct' = do
-                (a,b) <- parseCrossProduct obj
-                return $ BinaryOp "×" (toSubexpParseTree a dict) (toSubexpParseTree b dict)
-            parseFuncsSet'= do
-                (a,b) <- parseFuncsSet obj
-                let treeA = toSubexpParseTree a dict
-                let treeB = toSubexpParseTree b dict
-                return $ FuncApp (ParseTreeConst "𝗙𝗨𝗡𝗖𝗦") (Tuple [treeA, treeB])
 
         
-        parseNotIn :: PropDeBr -> Maybe (ObjDeBr, ObjDeBr)
+parseNotIn :: PropDeBr -> Maybe (ObjDeBr, ObjDeBr)
 parseNotIn p = case p of
     Neg (a `In` b) -> Just (a, b)
     _ -> Nothing
@@ -815,244 +583,10 @@ parseExistsUnique subexp = do
     return (p2,norm2)
 
 
-instance SubexpDeBr PropDeBr where
-  toSubexpParseTree :: PropDeBr -> Map PropDeBr [Int] -> SubexpParseTree
-  toSubexpParseTree prop dict =
-      maybe (error $ "Unable to parse proposition " <> show prop <> ". This shouldn't have happened.")
-          id fullParse
-    where
-      fullParse =
-            parseNotEqual'      -- Negation shorthands first
-        <|> parseNotIn'
-        <|> parseNotSubset'
-        <|> parseNegation'      -- Default negation
-        <|> parseStrictSubset'  -- Conjunction shorthand first
-        <|> parseConjunction'   -- Default conjunction
-
-        <|> parseSubset'        -- Forall shorthand first
-        <|> parseForall2'       -- Default forall
-
-        <|> parseExistsUnique'  -- Exists shorthand first
-        <|> parseExists'        -- Default exists
-
-        <|> parseDisjunction'   -- Other standard operators
-        <|> parseImplication'
-        <|> parseBiconditional'
-        <|> parseEqual'
-        <|> parseIn'
-        <|> parseGTE'
-        <|> parseFalsum'        -- Falsum
-
-
-      -- Helper functions using the basic parsers to build the tree
-      parseNotEqual' = do
-          (o1, o2) <- parseNotEqual prop
-          return $ BinaryOp "≠" (toSubexpParseTree o1 dict) (toSubexpParseTree o2 dict)
-      parseNotIn' = do
-          (o1, o2) <- parseNotIn prop
-          return $ BinaryOp "∉" (toSubexpParseTree o1 dict) (toSubexpParseTree o2 dict)
-      parseNotSubset' = do
-          (a1, a2) <- parseNotSubset prop
-          return $ BinaryOp "⊈" (toSubexpParseTree a1 dict) (toSubexpParseTree a2 dict)
-      parseNegation' = do
-          q <- parseNegation prop
-          return $ UnaryOp "¬" (toSubexpParseTree q dict)
-
-      parseStrictSubset' = do
-          (a1, a2) <- parseStrictSubset prop
-          return $ BinaryOp "⊂" (toSubexpParseTree a1 dict) (toSubexpParseTree a2 dict)
-      parseConjunction' = do
-          (a, b) <- parseConjunction prop
-          return $ BinaryOp "∧" (toSubexpParseTree a dict) (toSubexpParseTree b dict)
-
-      parseSubset' = do
-          (a1, a2) <- parseSubset prop
-          return $ BinaryOp "⊆" (toSubexpParseTree a1 dict) (toSubexpParseTree a2 dict)
-      parseForall2' = do
-          (inner, norm) <- parseForall2 prop
-          let pTree = toSubexpParseTree inner dict
-          return $ Binding "∀" (sbParseTreeNormalize norm pTree)
-
-      parseExistsUnique' = do
-          (innerP, norm) <- parseExistsUnique prop
-          let pTree = toSubexpParseTree innerP dict
-          return $ Binding "∃!" (sbParseTreeNormalize norm pTree)
-      parseExists' = do
-          (inner, norm) <- parseExists prop
-          let pTree = toSubexpParseTree inner dict
-          return $ Binding "∃" (sbParseTreeNormalize norm pTree)
-
-      parseDisjunction' = do
-          (a, b) <- parseDisjunction prop
-          return $ BinaryOp "∨" (toSubexpParseTree a dict) (toSubexpParseTree b dict)
-      parseImplication' = do
-          (a, b) <- parseImplication prop
-          return $ BinaryOp "→" (toSubexpParseTree a dict) (toSubexpParseTree b dict)
-      parseBiconditional' = do
-          (a, b) <- parseBiconditional prop
-          return $ BinaryOp "↔" (toSubexpParseTree a dict) (toSubexpParseTree b dict)
-      parseEqual' = do
-          (a, b) <- parseEqual prop
-          return $ BinaryOp "=" (toSubexpParseTree a dict) (toSubexpParseTree b dict)
-      parseIn' = do
-          (a, b) <-parseIn prop
-          return $ BinaryOp "∈" (toSubexpParseTree a dict) (toSubexpParseTree b dict)
-      parseGTE' = do
-          (a, b) <- parseGTE prop
-          return $ BinaryOp "≥" (toSubexpParseTree a dict) (toSubexpParseTree b dict)
-      parseFalsum' = do
-          () <- parseFalsum prop
-          return $ ParseTreeF
 
 
 
 
-
-
-showSubexpParseTree :: SubexpParseTree -> Text
-showSubexpParseTree sub = case sub of
-    UnaryOp opSymb sub1 ->
-           opSymb
-        <> case sub1 of
-              UnaryOp _ _ -> showSubexpParseTree sub1
-              BinaryOp {} -> "(" <>  showSubexpParseTree sub1 <> ")"
-              Binding {} -> showSubexpParseTree sub1
-              ParseTreeConst const -> showSubexpParseTree sub1
-              ParseTreeFreeVar idx -> showSubexpParseTree sub1
-              ParseTreeBoundVar idx -> showSubexpParseTree sub1
-              HilbertShort idx -> showSubexpParseTree sub1
-              Tuple as -> showSubexpParseTree sub1
-              ParseTreeF -> showSubexpParseTree sub1
-              ParseTreeX idx -> showSubexpParseTree sub1
-              ParseTreeInt i -> showSubexpParseTree sub1
-              Builder {} -> showSubexpParseTree sub1
-              FuncApp {} -> showSubexpParseTree sub1
-              TupleProject {} -> showSubexpParseTree sub1
-    BinaryOp opSymb sub1 sub2 ->
-           case sub1 of
-              UnaryOp _ _ -> showSubexpParseTree sub1
-              BinaryOp opSymbL _ _ -> 
-                 (   
-                   if prec opSymb < prec opSymbL
-                      || prec opSymb == prec opSymbL 
-                          && assoc opSymbL == LeftAssociative && assoc opSymb == LeftAssociative
-                    then
-                        showSubexpParseTree sub1
-                    else
-                        "(" <> showSubexpParseTree sub1 <> ")"
-
-                   )
-              Binding {} -> showSubexpParseTree sub1
-              ParseTreeConst const -> showSubexpParseTree sub1
-              ParseTreeFreeVar idx -> showSubexpParseTree sub1
-              ParseTreeBoundVar idx -> showSubexpParseTree sub1
-
-              HilbertShort idx -> showSubexpParseTree sub1
-              Tuple as -> showSubexpParseTree sub1
-              ParseTreeF -> showSubexpParseTree sub1
-              ParseTreeX idx -> showSubexpParseTree sub1
-              ParseTreeInt i -> showSubexpParseTree sub1
-              Builder {} -> showSubexpParseTree sub1
-              FuncApp {} -> showSubexpParseTree sub1
-              TupleProject {} -> showSubexpParseTree sub1
-
-          <> " " <> opSymb <> " "
-          <> case sub2 of
-               UnaryOp _ _-> showSubexpParseTree sub2
-               BinaryOp opSymbR _ _ -> 
-                 (
-                  if prec opSymb < prec opSymbR
-                      || prec opSymb == prec opSymbR 
-                          && assoc opSymbR == RightAssociative && assoc opSymb == RightAssociative
-                    then
-                        showSubexpParseTree sub2
-                    else
-                        "(" <> showSubexpParseTree sub2 <> ")"
-                   )
-               Binding {} -> showSubexpParseTree sub2
-               ParseTreeConst const -> showSubexpParseTree sub2
-               ParseTreeFreeVar idx -> showSubexpParseTree sub2
-               ParseTreeBoundVar idx -> showSubexpParseTree sub2
-
-               HilbertShort idx -> showSubexpParseTree sub2
-               Tuple as -> showSubexpParseTree sub2
-               ParseTreeF -> showSubexpParseTree sub2
-               ParseTreeX idx -> showSubexpParseTree sub2
-               ParseTreeInt i -> showSubexpParseTree sub2
-               Builder {} -> showSubexpParseTree sub2
-               FuncApp {} -> showSubexpParseTree sub2
-               TupleProject {} -> showSubexpParseTree sub2
-
-
-    Binding quant sub1 -> quant <> "𝑥" <> showIndexAsSubscript idx <> "(" <> showSubexpParseTree sub1 <> ")"
-        where
-            idx = subexpParseTreeBoundDepth sub1 
-    ParseTreeConst const -> const
-    ParseTreeX idx -> "X" <> showIndexAsSubscript idx
-    ParseTreeFreeVar idx -> "𝑣" <> showIndexAsSubscript idx
-    ParseTreeBoundVar idx -> "𝑥" <> showIndexAsSubscript idx
-
-
-    HilbertShort idx -> "ε" <> showHierarchalIdxAsSubscript idx
-    Tuple as -> "(" <> Data.Text.concat (intersperse "," $ Prelude.map showSubexpParseTree as ) <> ")"
-    ParseTreeF -> "⊥"
-    ParseTreeInt i -> pack $ show i
-    Builder sub1 sub2 -> "{" 
-                             <> "𝑥" <> showIndexAsSubscript idx
-                             <> " ∈ "
-                             <> showSubexpParseTree sub1 
-                             <> " | " 
-                             <> showSubexpParseTree sub2
-                             <> "}"
-          where
-            idx = subexpParseTreeBoundDepth sub2
-    FuncApp f x -> case f of
-        ParseTreeConst c -> showSubexpParseTree f <> "(" <> showSubexpParseTree x <> ")"
-        ParseTreeX idx -> showSubexpParseTree f <> "(" <> showSubexpParseTree x <> ")"
-        Tuple _ -> showSubexpParseTree f <> "(" <> showSubexpParseTree x <> ")"
-        ParseTreeFreeVar idx -> showSubexpParseTree f <> "(" <> showSubexpParseTree x <> ")"
-        ParseTreeBoundVar idx -> showSubexpParseTree f <> "(" <> showSubexpParseTree x <> ")"
-        HilbertShort _ -> showSubexpParseTree f <> "(" <> showSubexpParseTree x <> ")"
-        Builder _ _ -> showSubexpParseTree f <> "(" <> showSubexpParseTree x <> ")"
-        _ -> "(" <> showSubexpParseTree f <> ")" <> "(" <> showSubexpParseTree x <> ")"
-    TupleProject idx obj -> "𝛑" <> showIndexAsSubscript idx 
-                               <> "(" <> showSubexpParseTree obj <> ")"
-
-
-
-  where 
-    showHierarchalIdxAsSubscript :: [Int] -> Text
-    showHierarchalIdxAsSubscript idxs = Data.Text.concat (intersperse "." (Prelude.map showIndexAsSubscript idxs))
-    assoc opSymb = fst $ binaryOpData!opSymb
-    prec opSymb = snd $ binaryOpData!opSymb
-
-
-showObj :: Map PropDeBr [Int] -> ObjDeBr -> Text
-showObj dict obj = showSubexpParseTree $ toSubexpParseTree obj dict
-
-
-
-showObjM :: (Monad m, Monoid r, 
-             Proof eL r (PrfStdState PropDeBr Text ()) (PrfStdContext ()) [PrfStdStep PropDeBr Text ()] PropDeBr) 
-                     => ObjDeBr -> ProofGenTStd () r PropDeBr Text m Text
-showObjM obj = 
-    do
-      state <- getProofState
-      let dict = provenSents state
-      return $ showObj dict obj
-           
-
-showProp :: Map PropDeBr [Int] -> PropDeBr -> Text
-showProp dict prop = showSubexpParseTree $ toSubexpParseTree prop dict
-
-showPropM :: (Monad m, Monoid r, 
-             Proof eL r (PrfStdState PropDeBr Text ()) (PrfStdContext ()) [PrfStdStep PropDeBr Text ()] PropDeBr) 
-                     => PropDeBr -> ProofGenTStd () r PropDeBr Text m Text
-showPropM obj = 
-    do
-      state <- getProofState
-      let dict = provenSents state
-      return $ showProp dict obj
 
 boundDecrementObjDeBr :: Int -> ObjDeBr -> ObjDeBr
 boundDecrementObjDeBr idx obj = case obj of
@@ -1086,217 +620,11 @@ boundDecrementPropDeBr idx prop = case prop of
 
 
 
-subscriptCharTable :: [Text]
-subscriptCharTable = ["₀","₁","₂","₃","₄","₅","₆","₇","₈","₉"]
 
-showIndexAsSubscript :: Int -> Text
-showIndexAsSubscript n =  Data.Text.concat (Prelude.map f (show n))
-      where
-          f char = subscriptCharTable!!read [char]
-
-
-data PropDeBrStepContext where
-  PropDeBrStepContext :: {stepContextFrames :: [Bool],
-                            lineIndex :: [Int],
-                            notFromMonad :: Bool,
-                            lastLineNum :: Int} ->
-                           PropDeBrStepContext
-
-data PropDeBrStepState where
-    PropDeBrStepState :: {sentMap :: Map PropDeBr [Int],
-                          stpCount :: Int} -> PropDeBrStepState
-
-
-
-showPropDeBrStep :: PrfStdStep PropDeBr Text () -> RWS PropDeBrStepContext Text PropDeBrStepState ()
-showPropDeBrStep step = do
-        context <- ask
-        let cf = stepContextFrames context
-        let lIndex = lineIndex context
-        state <- get
-        let dictMap = sentMap state
-        let lineNum = stpCount state
-        let notMonadic = notFromMonad context
-        let lastLineN = lastLineNum context
-        tell $ contextFramesShown cf
-          <> showIndex lIndex
-                <> (if (not . Prelude.null) lIndex then "." else "")
-                <> (pack . show) lineNum
-                <> ": "
-        let newIndex = lIndex <> [lineNum]
-        let qed = if notMonadic && lineNum == lastLineN && (not . null) cf then " ◻" else ""
-        case step of
-            PrfStdStepStep prop justification depends -> do
-                let newDictMap = insert prop newIndex dictMap
-                put $ PropDeBrStepState newDictMap (lineNum + 1)
-                tell $ showProp newDictMap prop
-                       <> "    "
-                       <> justification
-                       <> showIndices depends
-                       <> qed
-            PrfStdStepLemma prop mayWhereProven -> do
-                let newDictMap = insert prop newIndex dictMap
-                put $ PropDeBrStepState newDictMap (lineNum + 1)
-                tell $ showProp newDictMap prop
-                       <> "    LEMMA"
-                       <> maybe "" (("[⬅ " <>) . (<> "]"). showIndexDepend) mayWhereProven
-                       <> qed
-            PrfStdStepConst constName _ mayWhereDefined -> do
-                put $ PropDeBrStepState dictMap (lineNum + 1)
-                tell $ "Const "
-                     <> (pack .show) constName
-                     <> "    CONSTDEF"
-                     <> maybe "" (("[⬅ " <>) . (<> "]"). showIndexDepend) mayWhereDefined
-            PrfStdStepTheorem prop steps -> do
-                let newDictMap = insert prop newIndex dictMap
-                put $ PropDeBrStepState newDictMap (lineNum + 1)
-                tell $ showProp newDictMap prop
-                       <> "    THEOREM"
-                       <> showSubproofF steps True notMonadic mempty cf []
-                       <> qed
-            PrfStdStepSubproof prop subproofName steps -> do
-                let newDictMap = insert prop newIndex dictMap
-                put $ PropDeBrStepState newDictMap (lineNum + 1)
-                tell $ showProp newDictMap prop
-                       <> "    "
-                       <> subproofName
-                       <> qed
-                       <> showSubproofF steps False notMonadic newDictMap cf newIndex
-            PrfStdStepTheoremM prop -> do
-                let newDictMap = insert prop newIndex dictMap
-                put $ PropDeBrStepState newDictMap (lineNum + 1)
-                tell $ showProp newDictMap prop
-                       <> "    ALGORITHMIC_THEOREM"
-                       <> qed
-            PrfStdStepFreevar index _ -> do
-                put $ PropDeBrStepState dictMap (lineNum + 1)
-                tell $ "FreeVar 𝑣"
-                     <> showIndexAsSubscript index
-                     <> "    VARDEF"
-            PrfStdStepFakeConst constName _ -> do
-                put $ PropDeBrStepState dictMap (lineNum + 1)
-                tell $ "Const "
-                     <> constName
-                     <> "    FAKE_CONST"
-            PrfStdStepRemark text -> do
-                put $ PropDeBrStepState dictMap (lineNum + 1)
-                tell $ "REMARK"
-                     <> qed
-                     <> (if text == "" then "" else "\n" <> contextFramesShown cf <> "║") 
-                     <> intercalate ("\n" <> contextFramesShown cf <> "║") (Data.Text.lines text)
-                     <> "\n"
-                     <> contextFramesShown cf
-                     <> "╚"
-        let eol = if lineNum < lastLineN then "\n" else ""
-        tell eol
-        return ()
-      where
-        contextFramesShown cf = Data.Text.concat (Prelude.map mapBool cf)
-        mapBool frameBool =  if frameBool
-                                then
-                                    "┃"
-                                else
-                                    "│"
-        showIndices idxs = if Prelude.null idxs then "" else "[" 
-                            <> Data.Text.concat (intersperse "," (Prelude.map showIndexDepend idxs))
-                            <> "]"
-        showIndexDepend i = if Prelude.null i then "?" else showIndex i 
-        showIndex i = Data.Text.concat (intersperse "." (Prelude.map (pack . show) i))
-        showSubproofF steps isTheorem notMonadic dictMap cf newIndex = 
-                    if notMonadic then
-                         "\n"
-                        <> showPropDeBrSteps (cf <> [isTheorem]) newIndex 0 notMonadic newDictMap steps
-                        <> "\n"
-                       <> Data.Text.concat (Prelude.map mapBool cf) 
-                               <> cornerFrame
-                      else ""
-                     where
-                        newDictMap = if isTheorem then
-                                        mempty
-                                        else
-                                        dictMap
-                        cornerFrame = if isTheorem then
-                                 "┗"
-                              else
-                                  "└"
-
-instance StdPrfPrintMonadFrame IO where
-    printStartFrame :: [Bool] -> IO ()
-    printStartFrame contextFrames = do
-        unless (Prelude.null contextFrames) ( do
-            let mapBool frameBool = 
-                                   if frameBool
-                                   then
-                                      "┃"
-                                   else
-                                      "│"
-            let contextFramesPre = Prelude.take (length contextFrames - 1) contextFrames
-            let cornerBool =  last contextFrames
-            let cornerFrame = if cornerBool then
-                                 "┏"
-                              else
-                                  "┌"
-            let frames = Data.Text.concat (Prelude.map mapBool contextFramesPre) <> cornerFrame 
-            (putStrLn . unpack) frames
-            )
-
-
-
-
-instance StdPrfPrintMonadFrame (Either SomeException) where
-    printStartFrame :: [Bool] -> Either SomeException ()
-    printStartFrame _ = return ()
-
-instance StdPrfPrintMonad PropDeBr Text () IO where
-  printSteps :: [Bool] -> [Int] -> Int -> Map PropDeBr [Int] -> [PrfStdStep PropDeBr Text ()] -> IO ()
-  printSteps contextFrames idx stepStart dictMap steps = do
-    let outputTxt = showPropDeBrSteps contextFrames idx stepStart False dictMap steps
-    (putStrLn . unpack) outputTxt
-
-
-
-instance StdPrfPrintMonad PropDeBr Text () (Either SomeException) where
-  printSteps :: [Bool] -> [Int] -> Int ->  Map PropDeBr [Int] -> [PrfStdStep PropDeBr Text ()] -> Either SomeException ()
-  printSteps _ _ _ _ _ = return ()
-
-showPropDeBrStepsPre :: [Bool] -> [Int] -> Int -> Bool -> Map PropDeBr [Int] -> [PrfStdStepPredDeBr] -> Text
-showPropDeBrStepsPre contextFrames index startLine notFromMonad dictMap steps = 
-
-    resultText runResult
-    where
-       lastLineN = startLine + length steps
-       runResult = runRWS (mapM_ showPropDeBrStep steps) context state
-       resultText (a,b,c) = c
-       context = PropDeBrStepContext contextFrames index notFromMonad lastLineN
-       state = PropDeBrStepState dictMap startLine
-
-showPropDeBrSteps :: [Bool] -> [Int] -> Int -> Bool -> Map PropDeBr [Int] -> [PrfStdStepPredDeBr] -> Text
-showPropDeBrSteps contextFrames index startLine notFromMonad dictMap steps = 
-
-    resultText runResult
-    where
-       lastLineN = startLine + length steps - 1
-       runResult = runRWS (mapM_ showPropDeBrStep steps) context state
-       resultText (a,b,c) = c
-       context = PropDeBrStepContext contextFrames index notFromMonad lastLineN
-       state = PropDeBrStepState dictMap startLine
-
-
-showPropDeBrStepsBase :: [PrfStdStepPredDeBr] -> Text
-showPropDeBrStepsBase = showPropDeBrSteps [] [] 0 True mempty
-
-
-showPropDeBrStepsBaseM :: (Monad m, Monoid r, 
-             Proof eL r (PrfStdState PropDeBr Text ()) (PrfStdContext ()) [PrfStdStep PropDeBr Text ()] PropDeBr) 
-                     => [PrfStdStepPredDeBr] -> ProofGenTStd () r PropDeBr Text m Text
-showPropDeBrStepsBaseM steps = do 
-      state <- getProofState
-      let dict = provenSents state
-      return $ showPropDeBrStepsBase steps
 
 
 isPair :: ObjDeBr -> PropDeBr
-isPair t = isTuple 2 t
+isPair = isTuple 2
 
 
 
@@ -1389,7 +717,7 @@ project n m t =
             -- This compares the placeholder for the input tuple 't' (X tupleIdx)
             -- with the tuple constructed from the template variables.
             equalityBody :: PropDeBr
-            equalityBody = (X tupleIdx) :==: (Tupl tuplArgs) -- Assumes Tupl constructor exists
+            equalityBody = X tupleIdx :==: Tupl tuplArgs -- Assumes Tupl constructor exists
 
             -- Construct the existentially quantified body using the multiEx helper:
             -- Exists X0 ... Exists X(m-1) Exists X(m+1) ... Exists X(n-1) ( equalityBody )
@@ -1443,7 +771,7 @@ isFunc f setA setB =
         -- Condition 7: Functionality property over the declared domain 'dom'.
         --              Forall x (x In dom -> Exists! y (<x,y> In graph))
         --              Ensures each element in the declared domain maps to exactly one element.
-        cond7 = aX 0 ( (X 0 `In` dom) :->: (eXBang 1 (Tupl [X 0, X 1] `In` graph)) )
+        cond7 = aX 0 ( (X 0 `In` dom) :->: eXBang 1 (Tupl [X 0, X 1] `In` graph) )
 
     -- Combine all conditions using logical AND
     in
@@ -1453,7 +781,7 @@ isFunc f setA setB =
 
 
 pairFirst :: ObjDeBr -> ObjDeBr
-pairFirst pair = project 2 0 pair
+pairFirst = project 2 0
 
 
 
@@ -1478,7 +806,7 @@ relDomain s = objDeBrSubX 0 s (hX 1(aX 2 (X 2 `In` X 1)  -- x ∈ D
 --
 
 tripletLast :: ObjDeBr -> ObjDeBr
-tripletLast triplet = project 3 2 triplet
+tripletLast = project 3 2
 
 
 
@@ -1520,3 +848,9 @@ crossProd :: ObjDeBr -> ObjDeBr -> ObjDeBr
 crossProd a b = objDeBrSubXs [(0,a),(1,b)] (hX 2 (multiAx [3,4]
               (X 3 `In` X 0 :&&: X 4 `In` X 1 :<->:
             Tupl [X 3, X 4] `In` X 2)))
+
+
+isTuple :: Int -> ObjDeBr -> PropDeBr
+isTuple i obj = propDeBrSubX i obj $ multiEx idxs 
+      (X i :==: Tupl [X j | j <- idxs ])
+      where idxs = [0 .. i-1]

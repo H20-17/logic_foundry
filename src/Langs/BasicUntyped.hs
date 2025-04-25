@@ -1,9 +1,7 @@
-{-# LANGUAGE PatternGuards #-}
 module Langs.BasicUntyped (
     ObjDeBr(Integ,Constant,V,X,Tupl,Hilbert, Bound),
     PropDeBr(Neg,(:&&:),(:||:),(:->:),(:<->:),(:==:),In,(:>=:),F,Exists),
     DeBrSe(..),
-    SubexpDeBr(..),
     PrfStdStepPredDeBr,
     PropErrDeBr,
     PropRuleDeBr,
@@ -31,8 +29,10 @@ module Langs.BasicUntyped (
     project,
     objDeBrSubX,
     crossProd,
-    funcsSet,
+    funcsSet
 ) where
 
 
 import Langs.Internal.BasicUntyped.Core
+import Langs.Internal.BasicUntyped.Shorthands
+import Langs.Internal.BasicUntyped.Rendering

@@ -1,37 +1,49 @@
-{-# LANGUAGE PatternGuards #-}
 module Langs.Internal.BasicUntyped.Core (
-    ObjDeBr(Integ,Constant,V,X,Tupl,Hilbert, Bound),
-    PropDeBr(Neg,(:&&:),(:||:),(:->:),(:<->:),(:==:),In,(:>=:),F,Exists),
+    ObjDeBr(..),
+    PropDeBr(..),
     DeBrSe(..),
-    SubexpDeBr(..),
     PrfStdStepPredDeBr,
     PropErrDeBr,
     PropRuleDeBr,
     PredErrDeBr,
     PredRuleDeBr,
-    showPropDeBrStepsBase,
-    showPropDeBrStepsBaseM,
     eX, hX, aX,
-    showProp,
-    showObj,
-    showPropM,
-    showObjM,
     eXBang,
     (./=.),
-    builderX,
     nIn,
-    subset,
-    strictSubset,
     boundDepthObjDeBr,
     boundDepthPropDeBr,
-    notSubset,
-    pairFirst,
-    (.@.),
-    (.:.),
-    project,
     objDeBrSubX,
-    crossProd,
-    funcsSet,
+    parseHilbert,
+    parseIn,
+    parseTupl,
+    parseBound,
+    objDeBrBoundVarInside,
+    parseForall2,
+    parseBiconditional,
+    parseConjunction,
+    propDeBrBoundVarInside,
+    parseEqual,
+    objDeBrSubXs,
+    parseConst,
+    parseV,
+    parseX,
+    parseInteg,
+    parseImplication,
+    parseNegation,
+    parseExists,
+    parseDisjunction,
+    parseGTE,
+    parseFalsum,
+    objDeBrSubXInt,
+    propDeBrSubXInt,
+    hXInt,
+    propDeBrSubXs,
+    multiEx,
+    multiAx,
+    propDeBrSubX
+
+
 ) where
 import Control.Monad ( unless, guard,msum )
 import Data.List (intersperse,findIndex, partition,sort,find)
@@ -105,7 +117,7 @@ objDeBrBoundVarInside obj idx = case obj of
     Bound i -> idx == i
     V i -> False
     X i -> False
-    Tupl as -> or $ Prelude.map (\a -> objDeBrBoundVarInside a idx) as
+    Tupl as -> any (`objDeBrBoundVarInside` idx) as
 
 
 
@@ -229,7 +241,7 @@ parseHilbert :: ObjDeBr -> Maybe (PropDeBr, Int)
 parseHilbert subexp =            
   case subexp of 
      Hilbert p
-                -> Just $ (p, pDepth)
+                -> Just (p, pDepth)
             where
              pDepth = boundDepthPropDeBr p
      _ -> Nothing
@@ -239,7 +251,7 @@ parseForall2 :: PropDeBr -> Maybe (PropDeBr, Int)
 parseForall2 subexp =            
   case subexp of 
      Forall p
-                -> Just $ (p, pDepth)
+                -> Just (p, pDepth)
             where
              pDepth = boundDepthPropDeBr p
      _ -> Nothing
@@ -1125,15 +1137,6 @@ hX idx p = Hilbert (xsubPropDeBr p idx (boundDepthPropDeBr p))
 
 
 
-isTuple :: Int -> ObjDeBr -> PropDeBr
-isTuple i obj = propDeBrSubX i obj $ multiEx idxs 
-      (X i :==: (Tupl [X j | j <- idxs ]))
-      where idxs = [0 .. i-1]
-
-
-
-
-
 
 
 
@@ -1147,10 +1150,10 @@ multiBinder binder indices body =
     foldr binder body indices
 
 multiEx :: [Int] -> PropDeBr -> PropDeBr
-multiEx indices body = multiBinder eX indices body
+multiEx = multiBinder eX
 
 multiAx :: [Int] -> PropDeBr -> PropDeBr
-multiAx indices body = multiBinder aX indices body
+multiAx = multiBinder aX
 
 
 
