@@ -2,12 +2,10 @@ module Langs.Internal.BasicUntyped.Rendering (
     PrfStdStepPredDeBr,
     showPropDeBrStepsBase,
     showPropDeBrStepsBaseM,
-    eX, hX, aX,
     showProp,
     showObj,
     showPropM,
     showObjM,
-    nIn
 ) where
 
 import Langs.Internal.BasicUntyped.Core
@@ -123,8 +121,8 @@ binaryOpInData = [("=",(NotAssociative,5)),("→",(RightAssociative,1)),("↔",(
      ("≠",(NotAssociative,5)),("∉",(NotAssociative,5)),
      ("⊆",(NotAssociative,5)),("⊂",(NotAssociative,5)),("⊈",(NotAssociative,5)), 
      ("∘",(RightAssociative,9)),
-     ("×",(NotAssociative,7))
-     
+     ("×",(NotAssociative,7)),
+     ("∪",(NotAssociative,6)),("∩",(NotAssociative,7))
      ]
 
 
@@ -155,6 +153,8 @@ instance SubexpDeBr ObjDeBr where
               <|> parseFuncApplication'
               <|> parseCrossProduct'
               <|> parseComposition'
+              <|> parseBinaryUnion'
+              <|> parseIntersectionOp'
               <|> parseSetBuilder'
               <|> parseHilbert'
        
@@ -208,6 +208,14 @@ instance SubexpDeBr ObjDeBr where
                 let treeA = toSubexpParseTree a dict
                 let treeB = toSubexpParseTree b dict
                 return $ FuncApp (ParseTreeConst "𝗙𝗨𝗡𝗖𝗦") (Tuple [treeA, treeB])
+            parseBinaryUnion' = do
+                (a,b) <- parseBinaryUnion obj
+                return $ BinaryOp "∪" (toSubexpParseTree a dict) (toSubexpParseTree b dict)
+            parseIntersectionOp' = do
+                            (a,b) <- parseIntersectionOp obj
+                            return $ BinaryOp "∩" (toSubexpParseTree a dict) (toSubexpParseTree b dict) 
+            
+
 
 instance SubexpDeBr PropDeBr where
   toSubexpParseTree :: PropDeBr -> Map PropDeBr [Int] -> SubexpParseTree

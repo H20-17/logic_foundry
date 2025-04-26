@@ -29,7 +29,9 @@ module Langs.BasicUntyped (
     project,
     objDeBrSubX,
     crossProd,
-    funcsSet
+    funcsSet,
+    (.\/.),
+    (./\.)
 ) where
 
 
