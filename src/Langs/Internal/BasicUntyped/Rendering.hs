@@ -162,6 +162,7 @@ instance SubexpDeBr ObjDeBr where
               <|> parseComposition'
               <|> parseBinaryUnion'
               <|> parseIntersectionOp'
+              <|> parseSetDifference'
               <|> parseSetBuilder'
               <|> parseHilbert'
        
@@ -229,11 +230,14 @@ instance SubexpDeBr ObjDeBr where
                             return $ BinaryOp "∩" (toSubexpParseTree a dict) (toSubexpParseTree b dict) 
             parseBigUnion' = do
                 setS <- parseBigUnion obj
-                return $ FuncApp (ParseTreeConst "∪") (toSubexpParseTree setS dict)
+                return $ UnaryOp "∪" (toSubexpParseTree setS dict)
 
             parseBigIntersection' = do
                 setS <- parseBigIntersection obj
-                return $ FuncApp (ParseTreeConst "∩") (toSubexpParseTree setS dict)                
+                return $ UnaryOp "∩" (toSubexpParseTree setS dict)
+            parseSetDifference' = do
+                (a, b) <- parseSetDifference obj
+                return $ BinaryOp "∖" (toSubexpParseTree a dict) (toSubexpParseTree b dict)              
             
 
 

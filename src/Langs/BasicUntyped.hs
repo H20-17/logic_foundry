@@ -34,7 +34,8 @@ module Langs.BasicUntyped (
     (./\.),
     bigUnion,
     bigIntersection,
-    roster
+    roster,
+    (.\.)
 ) where
 
 
