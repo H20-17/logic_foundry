@@ -50,12 +50,14 @@ data SubexpParseTree where
     ParseTreeBoundVar :: Int -> SubexpParseTree
     ParseTreeX :: Int -> SubexpParseTree
     Tuple :: [SubexpParseTree] -> SubexpParseTree
+    Roster :: [SubexpParseTree] -> SubexpParseTree
     ParseTreeF :: SubexpParseTree
     ParseTreeInt :: Int -> SubexpParseTree
     Builder :: SubexpParseTree -> SubexpParseTree -> SubexpParseTree
     FuncApp :: SubexpParseTree -> SubexpParseTree -> SubexpParseTree
     TupleProject :: Int -> SubexpParseTree -> SubexpParseTree
     TestText :: Text -> SubexpParseTree
+
 
 
 
@@ -70,6 +72,7 @@ subexpParseTreeBoundDepth sub = case sub of
     ParseTreeBoundVar idx -> 0
     ParseTreeX idx -> 0
     Tuple as -> maximum $ Prelude.map subexpParseTreeBoundDepth as
+    Roster as -> maximum $ Prelude.map subexpParseTreeBoundDepth as
     ParseTreeF -> 0
     ParseTreeInt _ -> 0
     Builder sub1 sub2 -> 1 + max (subexpParseTreeBoundDepth sub1) (subexpParseTreeBoundDepth sub2)
@@ -97,6 +100,7 @@ sbParseTreeNormalize boundVarIdx sub =
                                             ParseTreeBoundVar idx
 
             Tuple as -> Tuple $ Prelude.map (sbParseTreeNormalize' depth) as
+            Roster as -> Roster $ Prelude.map (sbParseTreeNormalize' depth) as
             ParseTreeX idx -> ParseTreeX idx
             ParseTreeF -> ParseTreeF
             ParseTreeInt i -> ParseTreeInt i
@@ -147,6 +151,9 @@ instance SubexpDeBr ObjDeBr where
               <|> parseV'
               <|> parseX'
               <|> parseTuple'
+              <|> parseRoster'
+              <|> parseBigUnion'
+              <|> parseBigIntersection'
               <|> parseFuncsSet'
               <|> parseProject'
               <|> parseHilbertShort'
@@ -193,6 +200,12 @@ instance SubexpDeBr ObjDeBr where
             parseTuple' = do
                tuple <- parseTupl obj
                return $ Tuple $ Prelude.map  (`toSubexpParseTree` dict) tuple
+            parseRoster' = do
+               roster <- parseRoster obj
+               return $ Roster $ Prelude.map  (`toSubexpParseTree` dict) roster
+
+
+
             parseComposition' = do
                 (f,g) <- parseComposition obj
                 return $ BinaryOp "∘" (toSubexpParseTree f dict) (toSubexpParseTree g dict)
@@ -214,6 +227,13 @@ instance SubexpDeBr ObjDeBr where
             parseIntersectionOp' = do
                             (a,b) <- parseIntersectionOp obj
                             return $ BinaryOp "∩" (toSubexpParseTree a dict) (toSubexpParseTree b dict) 
+            parseBigUnion' = do
+                setS <- parseBigUnion obj
+                return $ FuncApp (ParseTreeConst "∪") (toSubexpParseTree setS dict)
+
+            parseBigIntersection' = do
+                setS <- parseBigIntersection obj
+                return $ FuncApp (ParseTreeConst "∩") (toSubexpParseTree setS dict)                
             
 
 
@@ -320,6 +340,7 @@ showSubexpParseTree sub = case sub of
               ParseTreeBoundVar idx -> showSubexpParseTree sub1
               HilbertShort idx -> showSubexpParseTree sub1
               Tuple as -> showSubexpParseTree sub1
+              Roster as -> showSubexpParseTree sub1
               ParseTreeF -> showSubexpParseTree sub1
               ParseTreeX idx -> showSubexpParseTree sub1
               ParseTreeInt i -> showSubexpParseTree sub1
@@ -347,6 +368,7 @@ showSubexpParseTree sub = case sub of
 
               HilbertShort idx -> showSubexpParseTree sub1
               Tuple as -> showSubexpParseTree sub1
+              Roster as -> showSubexpParseTree sub1
               ParseTreeF -> showSubexpParseTree sub1
               ParseTreeX idx -> showSubexpParseTree sub1
               ParseTreeInt i -> showSubexpParseTree sub1
@@ -374,6 +396,7 @@ showSubexpParseTree sub = case sub of
 
                HilbertShort idx -> showSubexpParseTree sub2
                Tuple as -> showSubexpParseTree sub2
+               Roster as -> showSubexpParseTree sub2
                ParseTreeF -> showSubexpParseTree sub2
                ParseTreeX idx -> showSubexpParseTree sub2
                ParseTreeInt i -> showSubexpParseTree sub2
@@ -393,6 +416,7 @@ showSubexpParseTree sub = case sub of
 
     HilbertShort idx -> "ε" <> showHierarchalIdxAsSubscript idx
     Tuple as -> "(" <> Data.Text.concat (intersperse "," $ Prelude.map showSubexpParseTree as ) <> ")"
+    Roster as -> "{" <> Data.Text.concat (intersperse "," $ Prelude.map showSubexpParseTree as ) <> "}"
     ParseTreeF -> "⊥"
     ParseTreeInt i -> pack $ show i
     Builder sub1 sub2 -> "{" 
@@ -404,25 +428,20 @@ showSubexpParseTree sub = case sub of
                              <> "}"
           where
             idx = subexpParseTreeBoundDepth sub2
-    FuncApp f x -> case f of
-        ParseTreeConst c -> showSubexpParseTree f <> "(" <> showSubexpParseTree x <> ")"
-        ParseTreeX idx -> showSubexpParseTree f <> "(" <> showSubexpParseTree x <> ")"
-        Tuple _ -> showSubexpParseTree f <> "(" <> showSubexpParseTree x <> ")"
-        ParseTreeFreeVar idx -> showSubexpParseTree f <> "(" <> showSubexpParseTree x <> ")"
-        ParseTreeBoundVar idx -> showSubexpParseTree f <> "(" <> showSubexpParseTree x <> ")"
-        HilbertShort _ -> showSubexpParseTree f <> "(" <> showSubexpParseTree x <> ")"
-        Builder _ _ -> showSubexpParseTree f <> "(" <> showSubexpParseTree x <> ")"
-        _ -> "(" <> showSubexpParseTree f <> ")" <> "(" <> showSubexpParseTree x <> ")"
-    TupleProject idx obj -> "𝛑" <> showIndexAsSubscript idx 
-                               <> "(" <> showSubexpParseTree obj <> ")"
-
-
-
+    FuncApp f x -> fDisplay <> funcArgDisplay x
+        where
+            fDisplay = case f of
+                FuncApp _ _ -> "(" <> showSubexpParseTree f <> ")"
+                _ -> showSubexpParseTree f
+    TupleProject idx obj ->  "𝛑" <> showIndexAsSubscript idx <> funcArgDisplay obj
   where 
     showHierarchalIdxAsSubscript :: [Int] -> Text
     showHierarchalIdxAsSubscript idxs = Data.Text.concat (intersperse "." (Prelude.map showIndexAsSubscript idxs))
     assoc opSymb = fst $ binaryOpData!opSymb
     prec opSymb = snd $ binaryOpData!opSymb
+    funcArgDisplay x = case x of
+        Tuple _ -> showSubexpParseTree x
+        _ -> "(" <> showSubexpParseTree x <> ")"
 
 
 

@@ -31,7 +31,10 @@ module Langs.BasicUntyped (
     crossProd,
     funcsSet,
     (.\/.),
-    (./\.)
+    (./\.),
+    bigUnion,
+    bigIntersection,
+    roster
 ) where
 
 
