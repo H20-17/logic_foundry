@@ -10,7 +10,7 @@ module Langs.Internal.BasicUntyped.Rendering (
 
 import Langs.Internal.BasicUntyped.Core
 import Langs.Internal.BasicUntyped.Shorthands
-import Control.Monad ( unless, guard,msum, zipWithM )
+import Control.Monad ( unless, guard,msum, zipWithM, when )
 import Data.List (intersperse,findIndex, partition,sort,find)
 import GHC.Generics (Associativity (NotAssociative, RightAssociative, LeftAssociative))
 import Data.Set(Set, notMember)
@@ -150,8 +150,10 @@ instance SubexpDeBr ObjDeBr where
               <|> parseBound'
               <|> parseV'
               <|> parseX'
+              <|> parseEmptySet'
               <|> parseTuple'
               <|> parseRoster'
+              <|> parsePowerSet'
               <|> parseBigUnion'
               <|> parseBigIntersection'
               <|> parseFuncsSet'
@@ -237,7 +239,14 @@ instance SubexpDeBr ObjDeBr where
                 return $ UnaryOp "∩" (toSubexpParseTree setS dict)
             parseSetDifference' = do
                 (a, b) <- parseSetDifference obj
-                return $ BinaryOp "∖" (toSubexpParseTree a dict) (toSubexpParseTree b dict)              
+                return $ BinaryOp "∖" (toSubexpParseTree a dict) (toSubexpParseTree b dict)
+            parsePowerSet' = do
+                setA <- parsePowerSet obj
+                return $ FuncApp (ParseTreeConst "𝒫") (toSubexpParseTree setA dict)
+            parseEmptySet' = do
+                when (parseEmptySet obj) (return ())
+                return $ ParseTreeConst "∅"    
+
             
 
 

@@ -35,7 +35,9 @@ module Langs.BasicUntyped (
     bigUnion,
     bigIntersection,
     roster,
-    (.\.)
+    (.\.),
+    powerSet,
+    emptySet
 ) where
 
 
