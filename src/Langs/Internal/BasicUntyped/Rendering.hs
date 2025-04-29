@@ -113,21 +113,39 @@ class SubexpDeBr sub where
     toSubexpParseTree :: sub -> Map PropDeBr [Int] -> SubexpParseTree
 
 
-
-
-
-
-
-
 binaryOpInData :: [(Text,(Associativity,Int))]
-binaryOpInData = [("=",(NotAssociative,5)),("→",(RightAssociative,1)),("↔",(RightAssociative,1)),("∈",(NotAssociative,5)),("∧",(RightAssociative,4)),("∨",(RightAssociative,3)),
-     ("≥",(NotAssociative,5)),
-     ("≠",(NotAssociative,5)),("∉",(NotAssociative,5)),
-     ("⊆",(NotAssociative,5)),("⊂",(NotAssociative,5)),("⊈",(NotAssociative,5)), 
-     ("∘",(RightAssociative,9)),
-     ("×",(NotAssociative,7)),
-     ("∪",(NotAssociative,6)),("∩",(NotAssociative,7))
-     ]
+binaryOpInData = [
+    -- Logical Operators
+    ("→", (RightAssociative, 1)), -- Implication: Right assoc, lowest precedence (standard)
+    ("↔", (RightAssociative, 1)), -- Biconditional: Right assoc (common), same low precedence as →
+    ("∨", (RightAssociative, 3)), -- Logical OR: Right assoc (common), precedence higher than →/↔
+    ("∧", (RightAssociative, 4)), -- Logical AND: Right assoc (common), precedence higher than ∨ (standard)
+
+    -- Relational Operators (Equality, Membership, Ordering, Subsets)
+    ("=", (NotAssociative, 5)),   -- Equality: Non-associative (standard), precedence higher than logical
+    ("≠", (NotAssociative, 5)),   -- Inequality: Non-associative, same precedence as =
+    ("∈", (NotAssociative, 5)),   -- Set Membership: Non-associative, same precedence as =
+    ("∉", (NotAssociative, 5)),   -- Not Set Membership: Non-associative, same precedence as =
+    ("≤", (NotAssociative, 5)),   -- Less/Equal: Non-associative, same precedence as =
+    ("⊆", (NotAssociative, 5)),   -- Subset/Equal: Non-associative, same precedence as =
+    ("⊂", (NotAssociative, 5)),   -- Proper Subset: Non-associative, same precedence as =
+    ("⊈", (NotAssociative, 5)),   -- Not Subset/Equal: Non-associative, same precedence as =
+    -- Note: Other relations like <, >, ≥, ⊇, ⊃, etc., would also typically go here (NotAssociative, 5)
+
+    -- Set Operators
+    ("∪", (RightAssociative, 3)), -- Set Union: Right assoc (common convention), precedence same as ∨
+    ("∩", (RightAssociative, 4)), -- Set Intersection: Right assoc (common convention), precedence same as ∧
+    ("∖", (LeftAssociative, 6)),  -- Set Difference: Changed to Left assoc (more intuitive like subtraction), precedence raised to level 6 (like +)
+
+    -- Arithmetic / Algebraic Operators
+    ("+", (LeftAssociative, 6)),   -- Addition: Left associative (standard), precedence higher than relations
+    ("×", (LeftAssociative, 7)),   -- Multiplication: Left associative (standard), precedence higher than +
+    ("⨯", (LeftAssociative, 7)),   -- Cartesian Product: Left associative, same precedence as ×
+
+    -- Function/Relation Composition
+    ("∘", (RightAssociative, 9))  -- Composition: Right associative (standard), highest precedence
+  ]
+
 
 
      --The Int is it's precedence number.
@@ -152,6 +170,9 @@ instance SubexpDeBr ObjDeBr where
               <|> parseX'
               <|> parseEmptySet'
               <|> parseTuple'
+              <|> parseIntMult'
+              <|> parseIntPlus'
+              <|> parseIntNeg'
               <|> parseRoster'
               <|> parsePowerSet'
               <|> parseBigUnion'
@@ -218,7 +239,7 @@ instance SubexpDeBr ObjDeBr where
                 return $ TupleProject i pTree
             parseCrossProduct' = do
                 (a,b) <- parseCrossProduct obj
-                return $ BinaryOp "×" (toSubexpParseTree a dict) (toSubexpParseTree b dict)
+                return $ BinaryOp "⨯" (toSubexpParseTree a dict) (toSubexpParseTree b dict)
             parseFuncsSet'= do
                 (a,b) <- parseFuncsSet obj
                 let treeA = toSubexpParseTree a dict
@@ -245,7 +266,18 @@ instance SubexpDeBr ObjDeBr where
                 return $ FuncApp (ParseTreeConst "𝒫") (toSubexpParseTree setA dict)
             parseEmptySet' = do
                 when (parseEmptySet obj) (return ())
-                return $ ParseTreeConst "∅"    
+                return $ ParseTreeConst "∅"
+            parseIntNeg' = do
+                subexp <- parseIntNeg obj
+                return $ UnaryOp "-" (toSubexpParseTree subexp dict)
+            parseIntMult' = do
+                (o1,o2) <- parseIntMult obj
+                return $ BinaryOp "×" (toSubexpParseTree o1 dict) (toSubexpParseTree o2 dict)
+            parseIntPlus' = do
+                (o1,o2) <- parseIntPlus obj
+                return $ BinaryOp "×" (toSubexpParseTree o1 dict) (toSubexpParseTree o2 dict)
+
+
 
             
 
@@ -275,7 +307,7 @@ instance SubexpDeBr PropDeBr where
         <|> parseBiconditional'
         <|> parseEqual'
         <|> parseIn'
-        <|> parseGTE'
+        <|> parseLTE'
         <|> parseFalsum'        -- Falsum
 
 
@@ -332,9 +364,9 @@ instance SubexpDeBr PropDeBr where
       parseIn' = do
           (a, b) <-parseIn prop
           return $ BinaryOp "∈" (toSubexpParseTree a dict) (toSubexpParseTree b dict)
-      parseGTE' = do
-          (a, b) <- parseGTE prop
-          return $ BinaryOp "≥" (toSubexpParseTree a dict) (toSubexpParseTree b dict)
+      parseLTE' = do
+          (a, b) <- parseLTE prop
+          return $ BinaryOp "≤" (toSubexpParseTree a dict) (toSubexpParseTree b dict)
       parseFalsum' = do
           () <- parseFalsum prop
           return ParseTreeF

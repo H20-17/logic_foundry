@@ -1,6 +1,6 @@
 module Langs.BasicUntyped (
-    ObjDeBr(Integ,Constant,V,X,Tupl,Hilbert, Bound),
-    PropDeBr(Neg,(:&&:),(:||:),(:->:),(:<->:),(:==:),In,(:>=:),F,Exists),
+    ObjDeBr(Integ,Constant,V,X,Tupl,(:+:),(:*:),Intneg),
+    PropDeBr(Neg,(:&&:),(:||:),(:->:),(:<->:),(:==:),In,(:<=:),F),
     DeBrSe(..),
     PrfStdStepPredDeBr,
     PropErrDeBr,

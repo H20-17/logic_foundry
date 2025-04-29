@@ -58,8 +58,8 @@ import Langs.BasicUntyped
 testTheoremMSchema :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) => TheoremSchemaMT () [PredRuleDeBr] PropDeBr Text m ()
 testTheoremMSchema = TheoremSchemaMT  [("N",())] [z1,z2] theoremProg 
   where
-    z1 = aX 99 ((X 99 `In` Constant "N") :&&: (X 99 :>=: Integ 10) :->: (X 99 :>=: Integ 0))
-    z2 = aX 0 ((X 0 `In` Constant "N") :&&: (X 0 :>=: Integ 0) :->: (X 0 :==: Integ 0))
+    z1 = aX 99 ((X 99 `In` Constant "N") :&&: (X 99 :<=: Integ 10) :->: (X 99 :<=: Integ 0))
+    z2 = aX 0 ((X 0 `In` Constant "N") :&&: (X 0 :<=: Integ 0) :->: (X 0 :==: Integ 0))
 
 
 testEqualityRules :: ProofGenTStd () [PredRuleDeBr] PropDeBr Text IO ()
@@ -207,8 +207,8 @@ testComplexSubsetNotation = do
     remarkM "Test 3: Checking print for {x ∈ N | x ≥ 5} ⊆ N"
     -- Ensure N constant is added (done above)
     let five = Integ 5
-    -- Define the property P(x) as x >= 5, using X 0 for the bound variable 'x'
-    let propertyP = X 0 :>=: five
+    -- Define the property P(x) as x <= 5, using X 0 for the bound variable 'x'
+    let propertyP = X 0 :<=: five
     -- Construct the set {x ∈ N | x ≥ 5} using builderX with index 0
     let setBuilderA = builderX 0 setN propertyP -- Defined in Langs/BasicUntyped.hs
     -- Create the subset proposition: {x ∈ N | x ≥ 5} ⊆ N
@@ -248,7 +248,7 @@ testStrictSubsetNotation = do
     -- 4. Test 2: Strict subset with set builder {x ∈ N | x ≥ 5} ⊂ N
     remarkM "Test 2: Strict subset involving a Set Builder expression"
     let five = Integ 5
-    let propertyP = X 0 :>=: five
+    let propertyP = X 0 :<=: five
     let setBuilderA = builderX 0 setN propertyP -- {x ∈ N | x ≥ 5}
     -- Create the strict subset proposition: {x ∈ N | x ≥ 5} ⊂ N
     let strictSubPropBuilder = strictSubset setBuilderA setN
@@ -298,7 +298,7 @@ testNotSubsetNotation = do
     -- 4. Test 2: Not subset with set builder {x ∈ N | x ≥ 5} ⊈ N
     remarkM "Test 2: Not subset involving a Set Builder expression"
     let five = Integ 5
-    let propertyP = X 0 :>=: five
+    let propertyP = X 0 :<=: five
     let setBuilderA = builderX 0 setN propertyP -- {x ∈ N | x ≥ 5}
     -- Create the not subset proposition: {x ∈ N | x ≥ 5} ⊈ N
     let notSubPropBuilder = notSubset setBuilderA setN
@@ -368,9 +368,9 @@ testBuilderXSuite = do
     let constC = Constant "C"
     let int5 = Integ 5
 
-    -- Test 1: Simple Predicate (x >= 5)
+    -- Test 1: Simple Predicate (x <= 5)
     remarkM "Test 1: Simple Predicate { x ∈ N | x ≥ 5 }"
-    let prop1 = X 0 :>=: int5
+    let prop1 = X 0 :<=: int5
     let builtSet1 = builderX 0 setN prop1
     builtSet1Show <- showObjM builtSet1
     remarkM $ "Constructed (idx=0): " <> builtSet1Show
@@ -386,7 +386,7 @@ testBuilderXSuite = do
 
     -- Test 3: Using a different index (idx=1)
     remarkM "Test 3: Using Different Index { x ∈ N | x ≥ 5 }"
-    let prop3 = X 1 :>=: int5 -- Using X 1 now
+    let prop3 = X 1 :<=: int5 -- Using X 1 now
     let builtSet3 = builderX 1 setN prop3 -- Using index 1
     builtSet3Show <- showObjM builtSet3
     remarkM $ "Constructed (idx=1): " <> builtSet3Show
@@ -558,10 +558,10 @@ testShorthandRendering = do
     -- == Other tests remain largely the same, as they don't depend on the function representation ==
 
     -- Test 4: Set Builder -> { x ∈ N | x ≥ 5 }
-    remarkM "Test 4: builderX 0 N (X 0 :>=: 5)"
-    let builder_n_ge_5 = builderX 0 n (X 0 :>=: five)
+    remarkM "Test 4: builderX 0 N (X 0 :<=: 5)"
+    let builder_n_ge_5 = builderX 0 n (X 0 :<=: five)
     builder_n_ge_5_show <- showObjM builder_n_ge_5
-    remarkM "  Input: builderX 0 N (X 0 :>=: 5)"
+    remarkM "  Input: builderX 0 N (X 0 :<=: 5)"
     remarkM $ "  Actual:   " <> builder_n_ge_5_show
     remarkM "  Expected: {𝑥₀ ∈ N | 𝑥₀ ≥ 5}"
 
@@ -580,9 +580,9 @@ testShorthandRendering = do
 
     -- Test 6: Default Hilbert -> εx.(...)
     remarkM "Test 6: Default Hilbert ε binding"
-    let hilbert_term_default = hX 1 (X 1 :>=: zero) -- εx.(x >= 0)
+    let hilbert_term_default = hX 1 (X 1 :<=: zero) -- εx.(x <= 0)
     hilbert_term_default_show <- showObjM hilbert_term_default
-    remarkM "  Input: hX 1 (X 1 :>=: 0)"
+    remarkM "  Input: hX 1 (X 1 :<=: 0)"
     remarkM $ "  Actual:   " <> hilbert_term_default_show
     remarkM "  Expected: ε𝑥₁(𝑥₁ ≥ 0)"
 
@@ -1143,11 +1143,11 @@ main = do
 
     -- either (putStrLn . show) (putStrLn . unpack . showPropDeBrStepsBase . snd) zb
     print "OI leave me alone"
-    let z1 = aX 0 ((X 0 `In` Constant "N") :&&: (X 0 :>=: Integ 10) :->: (X 0 :>=: Integ 0))
-    let z2 = aX 0 ((X 0 `In` Constant "N") :&&: (X 0 :>=: Integ 0) :->: (X 0 :==: Integ 0))
-    let generalized = aX 0 ((X 0 `In` Constant "N") :&&: (X 0 :>=: Integ 10) :->: (X 0 :==: Integ 0))
-    let asm = (V 0 `In` Constant "N") :&&: (V 0 :>=: Integ 10)
-    let mid = (V 0 `In` Constant "N") :&&: (V 0 :>=: Integ 0)
+    let z1 = aX 0 ((X 0 `In` Constant "N") :&&: (X 0 :<=: Integ 10) :->: (X 0 :<=: Integ 0))
+    let z2 = aX 0 ((X 0 `In` Constant "N") :&&: (X 0 :<=: Integ 0) :->: (X 0 :==: Integ 0))
+    let generalized = aX 0 ((X 0 `In` Constant "N") :&&: (X 0 :<=: Integ 10) :->: (X 0 :==: Integ 0))
+    let asm = (V 0 `In` Constant "N") :&&: (V 0 :<=: Integ 10)
+    let mid = (V 0 `In` Constant "N") :&&: (V 0 :<=: Integ 0)
 
     let proof2 =    fakeConst "N" ()
                  <> fakeProp z1
@@ -1156,9 +1156,9 @@ main = do
                                         (
                                             proofByAsm asm z1 (
                                                     ui (V 0) z1
-                                                <> mp ( asm .->. (V 0 :>=: Integ 0))
-                                                <> simpL ((V 0 `In` Constant "N") :&&: (V 0 :>=: Integ 10))
-                                                <> adj (V 0 `In` Constant "N") (V 0 :>=: Integ 0)
+                                                <> mp ( asm .->. (V 0 :<=: Integ 0))
+                                                <> simpL ((V 0 `In` Constant "N") :&&: (V 0 :<=: Integ 10))
+                                                <> adj (V 0 `In` Constant "N") (V 0 :<=: Integ 0)
                                                 <> ui (V 0) z2
                                                 <> mp ( mid .->. (V 0 :==: Integ 0)  )
                                             )  
@@ -1169,7 +1169,7 @@ main = do
                                      (
                                         proofByAsm asm z1 (
                                                 ui (V 0) z1
-                                             <> mp ( asm .->. (V 0 :>=: Integ 0))
+                                             <> mp ( asm .->. (V 0 :<=: Integ 0))
                                       
                                             )
                                      )
@@ -1317,12 +1317,12 @@ main = do
 
 testprog::ProofGenTStd () [PredRuleDeBr] PropDeBr Text IO ()
 testprog = do
-      let z1 = aX 0 ((X 0 `In` Constant "N") :&&: (X 0 :>=: Integ 10) :->: (X 0 :>=: Integ 0))
+      let z1 = aX 0 ((X 0 `In` Constant "N") :&&: (X 0 :<=: Integ 10) :->: (X 0 :<=: Integ 0))
       showZ1 <- showPropM z1
       remarkM $ showZ1 <> " Z1Z1Z1Z1" 
-      let z2 = aX 0 ((X 0 `In` Constant "N") :&&: (X 0 :>=: Integ 0) :->: (X 0 :==: Integ 0))
-      let asm = (V 0 `In` Constant "N") :&&: (V 0 :>=: Integ 10)
-      let asm2 = (V 0 `In` Constant "N") :&&: (V 0 :>=: Integ 10)
+      let z2 = aX 0 ((X 0 `In` Constant "N") :&&: (X 0 :<=: Integ 0) :->: (X 0 :==: Integ 0))
+      let asm = (V 0 `In` Constant "N") :&&: (V 0 :<=: Integ 10)
+      let asm2 = (V 0 `In` Constant "N") :&&: (V 0 :<=: Integ 10)
       fakeConstM "N" ()
       fakePropM z1
       fakePropM z2
@@ -1354,7 +1354,7 @@ testprog = do
 testprog2::ProofGenTStd () [PredRuleDeBr] PropDeBr Text IO ()
 testprog2 = do
     let p = eX 0 (X 0 `In` Constant "N")
-    let q = eX 0 (X 0 :>=: Integ 10)
+    let q = eX 0 (X 0 :<=: Integ 10)
     let pImpQ = p :->: q
     fakeConstM "N" ()
     fakePropM pImpQ
@@ -1400,10 +1400,10 @@ testprog5 = do
 
 theoremProg::(MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) => ProofGenTStd () [PredRuleDeBr] PropDeBr Text m ()
 theoremProg = do
-    let z1 = aX 0 ((X 0 `In` Constant "N") :&&: (X 0 :>=: Integ 10) :->: (X 0 :>=: Integ 0))
-    let z2 = aX 0 ((X 0 `In` Constant "N") :&&: (X 0 :>=: Integ 0) :->: (X 0 :==: Integ  0))
-    let asm = (V 0 `In` Constant "N") :&&: (V 0 :>=: Integ 10)
-    let asm2 = (V 0 `In` Constant "N") :&&: (V 0 :>=: Integ 10)
+    let z1 = aX 0 ((X 0 `In` Constant "N") :&&: (X 0 :<=: Integ 10) :->: (X 0 :<=: Integ 0))
+    let z2 = aX 0 ((X 0 `In` Constant "N") :&&: (X 0 :<=: Integ 0) :->: (X 0 :==: Integ  0))
+    let asm = (V 0 `In` Constant "N") :&&: (V 0 :<=: Integ 10)
+    let asm2 = (V 0 `In` Constant "N") :&&: (V 0 :<=: Integ 10)
     (generalized, _) <- runProofByUGM () do
           runProofByAsmM asm2 do
               newFreeVar <- getTopFreeVar
