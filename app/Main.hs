@@ -453,7 +453,7 @@ testCompositionImplementation = do
     fakeConstM "F" () -- Represents function F as Tupl[DomF, CodF, GraphF]
     fakeConstM "G" () -- Represents function G as Tupl[DomG, CodG, GraphG]
     fakeConstM "A" () -- Represents argument A
-    remarkM $ "Using f = F, g = G, x = A"
+    remarkM "Using f = F, g = G, x = A"
 
     -- 1. Calculate h = f .:. g using the definition based on compositionTemplate
     remarkM "Calculating h = f .:. g"
@@ -521,39 +521,39 @@ testShorthandRendering = do
     -- Uses the new .@. definition internally
     let app_f_x = f .@. x_arg
     app_f_x_show <- showObjM app_f_x
-    remarkM $ "  Input Term (structure depends on new .@.): f .@. x_arg"
+    remarkM "  Input Term (structure depends on new .@.): f .@. x_arg"
     remarkM $ "  Actual Rendered:   " <> app_f_x_show
-    remarkM $ "  Expected Rendered: f(x_arg)"
-    remarkM $ "  (Success depends on parseFuncApplication recognizing the new structure)"
+    remarkM "  Expected Rendered: f(x_arg)"
+    remarkM "  (Success depends on parseFuncApplication recognizing the new structure)"
 
     -- Test 2: Nested Function Application -> f(g(x_arg))
     remarkM "Test 2: f .@. (g .@. x_arg)"
     let app_g_x = g .@. x_arg
     let app_f_gx = f .@. app_g_x
     app_f_gx_show <- showObjM app_f_gx
-    remarkM $ "  Input Term: f .@. (g .@. x_arg)"
+    remarkM "  Input Term: f .@. (g .@. x_arg)"
     remarkM $ "  Actual Rendered:   " <> app_f_gx_show
-    remarkM $ "  Expected Rendered: f(g(x_arg))"
-    remarkM $ "  (Success depends on parseFuncApplication recognizing nested new structures)"
+    remarkM "  Expected Rendered: f(g(x_arg))"
+    remarkM "  (Success depends on parseFuncApplication recognizing nested new structures)"
 
     -- Test 3: Function Composition (.:.) -> f ∘ g
     remarkM "Test 3: f .:. g"
     -- Assumes .:. uses compositionTemplate which uses the new .@.
     let comp_f_g = f .:. g
     comp_f_g_show <- showObjM comp_f_g
-    remarkM $ "  Input Term (structure depends on new .@. via template): f .:. g"
+    remarkM "  Input Term (structure depends on new .@. via template): f .:. g"
     remarkM $ "  Actual Rendered:   " <> comp_f_g_show
-    remarkM $ "  Expected Rendered: f ∘ g"
-    remarkM $ "  (Success depends on parseComposition recognizing the template structure)"
+    remarkM "  Expected Rendered: f ∘ g"
+    remarkM "  (Success depends on parseComposition recognizing the template structure)"
 
     -- Test 3b: Apply composed function -> (f ∘ g)(x_arg)
     remarkM "Test 3b: (f .:. g) .@. x_arg"
     let app_comp_x = comp_f_g .@. x_arg
     app_comp_x_show <- showObjM app_comp_x
-    remarkM $ "  Input Term: (f .:. g) .@. x_arg"
+    remarkM "  Input Term: (f .:. g) .@. x_arg"
     remarkM $ "  Actual Rendered:   " <> app_comp_x_show
-    remarkM $ "  Expected Rendered: (f ∘ g)(x_arg)"
-    remarkM $ "  (Success depends on parseFuncApplication recognizing the composed structure)"
+    remarkM "  Expected Rendered: (f ∘ g)(x_arg)"
+    remarkM "  (Success depends on parseFuncApplication recognizing the composed structure)"
 
     -- == Other tests remain largely the same, as they don't depend on the function representation ==
 
@@ -561,9 +561,9 @@ testShorthandRendering = do
     remarkM "Test 4: builderX 0 N (X 0 :>=: 5)"
     let builder_n_ge_5 = builderX 0 n (X 0 :>=: five)
     builder_n_ge_5_show <- showObjM builder_n_ge_5
-    remarkM $ "  Input: builderX 0 N (X 0 :>=: 5)"
+    remarkM "  Input: builderX 0 N (X 0 :>=: 5)"
     remarkM $ "  Actual:   " <> builder_n_ge_5_show
-    remarkM $ "  Expected: {𝑥₀ ∈ N | 𝑥₀ ≥ 5}"
+    remarkM "  Expected: {𝑥₀ ∈ N | 𝑥₀ ≥ 5}"
 
     -- Test 5: Hilbert Epsilon Shorthand -> ε[index]
     remarkM "Test 5: Hilbert ε shorthand (requires proven Exists)"
@@ -574,7 +574,7 @@ testShorthandRendering = do
     exists_show <- showPropM fake_exists -- Show the prop being faked
     remarkM $ "  Faking proof of: " <> exists_show  <> " at index " <> pack (show fake_idx)
     hilbert_term_short_show <- showObjM hilbert_term
-    remarkM $ "  Input: hX 0 (X 0 :==: A)  (after proving Exists)"
+    remarkM "  Input: hX 0 (X 0 :==: A)  (after proving Exists)"
     remarkM $ "  Actual:   " <> hilbert_term_short_show
     remarkM $ "  Expected: ε" <> pack (show fake_idx) -- Adjust format if needed
 
@@ -582,57 +582,57 @@ testShorthandRendering = do
     remarkM "Test 6: Default Hilbert ε binding"
     let hilbert_term_default = hX 1 (X 1 :>=: zero) -- εx.(x >= 0)
     hilbert_term_default_show <- showObjM hilbert_term_default
-    remarkM $ "  Input: hX 1 (X 1 :>=: 0)"
+    remarkM "  Input: hX 1 (X 1 :>=: 0)"
     remarkM $ "  Actual:   " <> hilbert_term_default_show
-    remarkM $ "  Expected: ε𝑥₁(𝑥₁ ≥ 0)"
+    remarkM "  Expected: ε𝑥₁(𝑥₁ ≥ 0)"
 
     -- Test 7: Subset (⊆)
     remarkM "Test 7: subset A B"
     let subset_a_b = subset a b
     subset_a_b_show <- showPropM subset_a_b
-    remarkM $ "  Input: subset A B"
+    remarkM "  Input: subset A B"
     remarkM $ "  Actual:   " <> subset_a_b_show
-    remarkM $ "  Expected: A ⊆ B"
+    remarkM "  Expected: A ⊆ B"
 
     -- Test 8: Strict Subset (⊂)
     remarkM "Test 8: strictSubset A B"
     let strictsubset_a_b = strictSubset a b
     strictsubset_a_b_show <- showPropM strictsubset_a_b
-    remarkM $ "  Input: strictSubset A B"
+    remarkM "  Input: strictSubset A B"
     remarkM $ "  Actual:   " <> strictsubset_a_b_show
-    remarkM $ "  Expected: A ⊂ B"
+    remarkM "  Expected: A ⊂ B"
 
     -- Test 9: Not Subset (⊈)
     remarkM "Test 9: notSubset A B"
     let notsubset_a_b = notSubset a b
     notsubset_a_b_show <- showPropM notsubset_a_b
-    remarkM $ "  Input: notSubset A B"
+    remarkM "  Input: notSubset A B"
     remarkM $ "  Actual:   " <> notsubset_a_b_show
-    remarkM $ "  Expected: A ⊈ B"
+    remarkM "  Expected: A ⊈ B"
 
     -- Test 10: Exists Unique (∃!)
     remarkM "Test 10: eXBang 0 (X 0 :==: A)"
     let existsunique_a = eXBang 0 (X 0 :==: a)
     existsunique_a_show <- showPropM existsunique_a
-    remarkM $ "  Input: eXBang 0 (X 0 :==: A)"
+    remarkM "  Input: eXBang 0 (X 0 :==: A)"
     remarkM $ "  Actual:   " <> existsunique_a_show
-    remarkM $ "  Expected: ∃!𝑥₀(𝑥₀ = A)"
+    remarkM "  Expected: ∃!𝑥₀(𝑥₀ = A)"
 
     -- Test 11: Not Equal (≠)
     remarkM "Test 11: A ./=. B"
     let notequal_a_b = a ./=. b -- Or Neg (a :==: b)
     notequal_a_b_show <- showPropM notequal_a_b
-    remarkM $ "  Input: A ./=. B"
+    remarkM "  Input: A ./=. B"
     remarkM $ "  Actual:   " <> notequal_a_b_show
-    remarkM $ "  Expected: A ≠ B"
+    remarkM "  Expected: A ≠ B"
 
     -- Test 12: Not In (∉)
     remarkM "Test 12: A `nIn` B"
     let notin_a_b = a `nIn` b -- Or Neg (a `In` b)
     notin_a_b_show <- showPropM notin_a_b
-    remarkM $ "  Input: A `nIn` B"
+    remarkM "  Input: A `nIn` B"
     remarkM $ "  Actual:   " <> notin_a_b_show
-    remarkM $ "  Expected: A ∉ B"
+    remarkM "  Expected: A ∉ B"
 
     remarkM "--- Shorthand Rendering Tests Complete ---"
     return ()
@@ -664,42 +664,42 @@ testProjectShorthandParsing = do
     remarkM "Test 1: Project 2 0 MyTupleA"
     let proj_2_0_A = project 2 0 tupleA -- Generate term using helper
     proj_2_0_A_show <- showObjM proj_2_0_A
-    remarkM $ "  Input:    project 2 0 MyTupleA"
+    remarkM "  Input:    project 2 0 MyTupleA"
     remarkM $ "  Actual:   " <> proj_2_0_A_show
-    remarkM $ "  Expected: π₀(MyTupleA)"
+    remarkM "  Expected: π₀(MyTupleA)"
 
     -- Test 2: Simple 2-tuple, project index 1
     remarkM "Test 2: Project 2 1 MyTupleA"
     let proj_2_1_A = project 2 1 tupleA
     proj_2_1_A_show <- showObjM proj_2_1_A
-    remarkM $ "  Input:    project 2 1 MyTupleA"
+    remarkM "  Input:    project 2 1 MyTupleA"
     remarkM $ "  Actual:   " <> proj_2_1_A_show
-    remarkM $ "  Expected: π₁(MyTupleA)"
+    remarkM "  Expected: π₁(MyTupleA)"
 
     -- Test 3: 3-tuple, project index 1
     remarkM "Test 3: Project 3 1 MyTupleB"
     let proj_3_1_B = project 3 1 tupleB
     proj_3_1_B_show <- showObjM proj_3_1_B
-    remarkM $ "  Input:    project 3 1 MyTupleB"
+    remarkM "  Input:    project 3 1 MyTupleB"
     remarkM $ "  Actual:   " <> proj_3_1_B_show
-    remarkM $ "  Expected: π₁(MyTupleB)"
+    remarkM "  Expected: π₁(MyTupleB)"
 
     -- Test 4: Nested projection (term `t` is itself a projection)
     remarkM "Test 4: Project 2 0 (project 2 1 MyTupleA)"
     let inner_proj = project 2 1 tupleA
     let outer_proj = project 2 0 inner_proj
     outer_proj_show <- showObjM outer_proj
-    remarkM $ "  Input:    project 2 0 (project 2 1 MyTupleA)"
+    remarkM "  Input:    project 2 0 (project 2 1 MyTupleA)"
     remarkM $ "  Actual:   " <> outer_proj_show
-    remarkM $ "  Expected: π₀(π₁(MyTupleA))"
+    remarkM "  Expected: π₀(π₁(MyTupleA))"
 
     -- Test 5: A standard Hilbert term that doesn't match the project structure
     remarkM "Test 5: Standard Hilbert term hX 0 (X 0 :==: Constant A)"
     let simpleHilbert = hX 0 (X 0 :==: constA)
     simpleHilbert_show <- showObjM simpleHilbert
-    remarkM $ "  Input:    hX 0 (X 0 :==: Constant A)"
+    remarkM "  Input:    hX 0 (X 0 :==: Constant A)"
     remarkM $ "  Actual:   " <> simpleHilbert_show
-    remarkM $ "  Expected: ε𝑥₀(𝑥₀ = A)  (or similar default Hilbert rendering, NOT π)"
+    remarkM "  Expected: ε𝑥₀(𝑥₀ = A)  (or similar default Hilbert rendering, NOT π)"
 
     -- == Negative Cases (Should Fail Parsing) ==
 
@@ -707,17 +707,17 @@ testProjectShorthandParsing = do
     remarkM "Test 6: Hilbert term where RHS of equality is not a Tuple"
     let nonTupleRHS = hX 1 ( eX 0 ( Constant "A" :==: Constant "B" ) )
     nonTupleRHS_show <- showObjM nonTupleRHS
-    remarkM $ "  Input:    hX 1 ( eX 0 ( Constant \"A\" :==: Constant \"B\" ) )"
+    remarkM "  Input:    hX 1 ( eX 0 ( Constant \"A\" :==: Constant \"B\" ) )"
     remarkM $ "  Actual:   " <> nonTupleRHS_show
-    remarkM $ "  Expected: ε𝑥₁(∃𝑥₀(A = B)) (Default Hilbert rendering, NOT π)"
+    remarkM "  Expected: ε𝑥₁(∃𝑥₀(A = B)) (Default Hilbert rendering, NOT π)"
 
     -- Test 7 (Negative Case - Body Not Equality)
     remarkM "Test 7: Hilbert term where body inside Exists is not an Equality"
     let nonEqBody = hX 1 ( eX 0 ( Neg ( Constant "A" :==: Tupl [X 1, X 0] ) ) )
     nonEqBody_show <- showObjM nonEqBody
-    remarkM $ "  Input:    hX 1 ( eX 0 ( Neg ( Constant \"A\" :==: Tupl [X 1, X 0] ) ) )"
+    remarkM "  Input:    hX 1 ( eX 0 ( Neg ( Constant \"A\" :==: Tupl [X 1, X 0] ) ) )"
     remarkM $ "  Actual:   " <> nonEqBody_show
-    remarkM $ "  Expected: ε𝑥₁(∃𝑥₀(¬(A = (𝑥₁,𝑥₀)))) (Default Hilbert rendering, NOT π)"
+    remarkM "  Expected: ε𝑥₁(∃𝑥₀(¬(A = (𝑥₁,𝑥₀)))) (Default Hilbert rendering, NOT π)"
 
 
     remarkM "--- Project Shorthand Parsing Tests Complete ---"
@@ -744,7 +744,7 @@ testCrossProductRendering = do
     actualOutput <- showObjM prodAB     -- Use showObjM to trigger rendering
     let expectedOutput = "A × B"      -- Define the expected string output
 
-    remarkM $ "  Input Term: crossProd A B"
+    remarkM "  Input Term: crossProd A B"
     -- remarkM $ "  Internal Structure (for info): " <> (pack $ show prodAB) -- Uncomment to see raw structure if needed
     remarkM $ "  Actual Rendered Output:   " <> actualOutput
     remarkM $ "  Expected Rendered Output: " <> expectedOutput
@@ -764,7 +764,7 @@ testCrossProductRendering = do
     let tupleTerm = Tupl [setA, setB]
     tupleOutput <- showObjM tupleTerm
     let expectedTupleOutput = "(A,B)" -- Or similar based on your tuple rendering
-    remarkM $ "  Input Term: Tupl [A, B]"
+    remarkM "  Input Term: Tupl [A, B]"
     remarkM $ "  Actual Rendered Output: " <> tupleOutput
     remarkM $ "  Expected Rendered Output (e.g.): " <> expectedTupleOutput
     if tupleOutput /= expectedOutput && tupleOutput == expectedTupleOutput then
@@ -797,7 +797,7 @@ testFuncsSetRendering = do
     -- Note: Expecting 𝗙𝗨𝗡𝗖𝗦(A,B) based on default FuncApp/Tuple rendering
     let expectedOutput = "𝗙𝗨𝗡𝗖𝗦(A,B)"
 
-    remarkM $ "  Input Term: funcsSet A B"
+    remarkM "  Input Term: funcsSet A B"
     -- remarkM $ "  Internal Structure (for info): " <> (pack $ show funcsAB) -- Uncomment if needed
     remarkM $ "  Actual Rendered Output:   " <> actualOutput
     remarkM $ "  Expected Rendered Output: " <> expectedOutput
@@ -809,7 +809,7 @@ testFuncsSetRendering = do
           remarkM "  (Requires parseFuncsSet logic within toSubexpParseTree to be correct)"
     else
         do
-          remarkM $ "  Check: Rendering does NOT match expected output. FAILED."
+          remarkM "  Check: Rendering does NOT match expected output. FAILED."
           remarkM "  (Check parseFuncsSet logic and showSubexpParseTree formatting for FuncApp/Tuple)"
 
     remarkM "--- FUNCS(A,B) Rendering Tests Complete ---"
@@ -833,7 +833,7 @@ testBinaryUnionRendering = do
     actualOutput <- showObjM unionAB     -- Use showObjM to trigger rendering
     let expectedOutput = "A ∪ B"      -- Define the expected string output
 
-    remarkM $ "  Input Term: A .\\/. B"
+    remarkM "  Input Term: A .\\/. B"
     -- remarkM $ "  Internal Structure (for info): " <> (pack $ show unionAB) -- Uncomment to see raw structure if needed
     remarkM $ "  Actual Rendered Output:   " <> actualOutput
     remarkM $ "  Expected Rendered Output: " <> expectedOutput
@@ -870,7 +870,7 @@ testIntersectionRendering = do
     actualOutput <- showObjM intersectionAB   -- Use showObjM to trigger rendering
     let expectedOutput = "A ∩ B"         -- Define the expected string output
 
-    remarkM $ "  Input Term: A ./\\. B"
+    remarkM "  Input Term: A ./\\. B"
     -- remarkM $ "  Internal Structure (for info): " <> (pack $ show intersectionAB) -- Uncomment if needed
     remarkM $ "  Actual Rendered Output:   " <> actualOutput
     remarkM $ "  Expected Rendered Output: " <> expectedOutput
@@ -900,7 +900,7 @@ testBigUnionRendering = do
     actualOutput <- showObjM unionS     -- Use showObjM to trigger rendering
     let expectedOutput = "∪S"      -- Define the expected string output
 
-    remarkM $ "  Input Term: bigUnion S"
+    remarkM "  Input Term: bigUnion S"
     remarkM $ "  Actual Rendered Output:   " <> actualOutput
     remarkM $ "  Expected Rendered Output: " <> expectedOutput
 
@@ -924,7 +924,7 @@ testBigIntersectionRendering = do
     actualOutput <- showObjM intersectionS     -- Use showObjM to trigger rendering
     let expectedOutput = "∩S"         -- Define the expected string output
 
-    remarkM $ "  Input Term: bigIntersection S"
+    remarkM "  Input Term: bigIntersection S"
     remarkM $ "  Actual Rendered Output:   " <> actualOutput
     remarkM $ "  Expected Rendered Output: " <> expectedOutput
 
@@ -956,7 +956,7 @@ testRosterRendering = do
     let rosterEmpty = roster []
     actualOutput1 <- showObjM rosterEmpty
     let expectedOutput1 = "{}"
-    remarkM $ "  Input Term: roster []"
+    remarkM "  Input Term: roster []"
     remarkM $ "  Actual Rendered Output:   " <> actualOutput1
     remarkM $ "  Expected Rendered Output: " <> expectedOutput1
     if actualOutput1 == expectedOutput1 then remarkM "  Check: PASSED." else remarkM "  Check: FAILED."
@@ -966,7 +966,7 @@ testRosterRendering = do
     let rosterA = roster [elemA]
     actualOutput2 <- showObjM rosterA
     let expectedOutput2 = "{A}"
-    remarkM $ "  Input Term: roster [A]"
+    remarkM "  Input Term: roster [A]"
     remarkM $ "  Actual Rendered Output:   " <> actualOutput2
     remarkM $ "  Expected Rendered Output: " <> expectedOutput2
     if actualOutput2 == expectedOutput2 then remarkM "  Check: PASSED." else remarkM "  Check: FAILED."
@@ -978,7 +978,7 @@ testRosterRendering = do
     -- Note: Expected output depends on the derived Ord instance for ObjDeBr
     -- Integ constructor usually comes before Constant constructor
     let expectedOutput3 = "{1,A}"
-    remarkM $ "  Input Term: roster [A, 1]"
+    remarkM "  Input Term: roster [A, 1]"
     remarkM $ "  Actual Rendered Output:   " <> actualOutput3
     remarkM $ "  Expected Rendered Output: " <> expectedOutput3
     if actualOutput3 == expectedOutput3 then remarkM "  Check: PASSED." else remarkM "  Check: FAILED."
@@ -988,7 +988,7 @@ testRosterRendering = do
     let rosterCBA = roster [elemC, elemB, elemA]
     actualOutput4 <- showObjM rosterCBA
     let expectedOutput4 = "{A,B,C}" -- Assumes alphabetical sort for Constants
-    remarkM $ "  Input Term: roster [C, B, A]"
+    remarkM "  Input Term: roster [C, B, A]"
     remarkM $ "  Actual Rendered Output:   " <> actualOutput4
     remarkM $ "  Expected Rendered Output: " <> expectedOutput4
     if actualOutput4 == expectedOutput4 then remarkM "  Check: PASSED." else remarkM "  Check: FAILED."
@@ -998,7 +998,7 @@ testRosterRendering = do
     let rosterBAA = roster [elemB, elemA, elemA]
     actualOutput5 <- showObjM rosterBAA
     let expectedOutput5 = "{A,B}" -- Sorted and deduplicated
-    remarkM $ "  Input Term: roster [B, A, A]"
+    remarkM "  Input Term: roster [B, A, A]"
     remarkM $ "  Actual Rendered Output:   " <> actualOutput5
     remarkM $ "  Expected Rendered Output: " <> expectedOutput5
     if actualOutput5 == expectedOutput5 then remarkM "  Check: PASSED." else remarkM "  Check: FAILED."
@@ -1026,7 +1026,7 @@ testSetDifferenceRendering = do
     actualOutput <- showObjM differenceAB   -- Use showObjM to trigger rendering
     let expectedOutput = "A ∖ B"         -- Define the expected string output (double backslash for Haskell String)
 
-    remarkM $ "  Input Term: A .\\. B"
+    remarkM "  Input Term: A .\\. B"
     -- remarkM $ "  Internal Structure (for info): " <> (pack $ show differenceAB) -- Uncomment if needed
     remarkM $ "  Actual Rendered Output:   " <> actualOutput
     remarkM $ "  Expected Rendered Output: " <> expectedOutput
@@ -1059,7 +1059,7 @@ testPowerSetRendering = do
     actualOutput <- showObjM pSetA     -- Use showObjM to trigger rendering
     -- User specified Unicode Script P (U+1D4AB)
     let expectedOutput = "𝒫(A)"
-    remarkM $ "  Input Term: powerSet A"
+    remarkM "  Input Term: powerSet A"
     remarkM $ "  Actual Rendered Output:   " <> actualOutput
     remarkM $ "  Expected Rendered Output: " <> expectedOutput
 
@@ -1087,7 +1087,7 @@ testEmptySetRendering = do
     actualOutput <- showObjM emptySet -- Use showObjM to trigger rendering
     let expectedOutput = "∅"           -- Define the expected string output (Unicode U+2205)
 
-    remarkM $ "  Input Term: emptySet"
+    remarkM "  Input Term: emptySet"
     remarkM $ "  Actual Rendered Output:   " <> actualOutput
     remarkM $ "  Expected Rendered Output: " <> expectedOutput
 

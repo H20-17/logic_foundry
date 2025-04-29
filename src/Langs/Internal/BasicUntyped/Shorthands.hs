@@ -201,7 +201,7 @@ parseEmptySet obj = case obj of
 -- (var == e1) || (var == e2) || ... || (var == en)
 buildDisjunction :: ObjDeBr -> [ObjDeBr] -> PropDeBr
 buildDisjunction _ [] = F -- Disjunction of zero items is Falsum
-buildDisjunction var [e] = (var :==: e)
+buildDisjunction var [e] = var :==: e
 buildDisjunction var (e:es) = (var :==: e) :||: buildDisjunction var es
 
 
@@ -1344,7 +1344,7 @@ powerSet setA =
 
         -- Core property: x ∈ P ↔ x ⊆ A
         -- Uses the existing 'subset' helper for x ⊆ A (placeholder version)
-        propTemplate = (X x_idx `In` X p_idx) :<->: (subset (X x_idx) (X setA_idx))
+        propTemplate = (X x_idx `In` X p_idx) :<->: subset (X x_idx) (X setA_idx)
 
         -- Quantified property: ∀x P(x, P, A)
         quantifiedProp = aX x_idx propTemplate
