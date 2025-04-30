@@ -37,7 +37,8 @@ module Langs.BasicUntyped (
     roster,
     (.\.),
     powerSet,
-    emptySet
+    emptySet,
+    (.<.)
 ) where
 
 

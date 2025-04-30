@@ -130,6 +130,7 @@ binaryOpInData = [
     ("⊆", (NotAssociative, 5)),   -- Subset/Equal: Non-associative, same precedence as =
     ("⊂", (NotAssociative, 5)),   -- Proper Subset: Non-associative, same precedence as =
     ("⊈", (NotAssociative, 5)),   -- Not Subset/Equal: Non-associative, same precedence as =
+    ("<", (NotAssociative, 5)),   -- Less than: Non-associative, same precedence as =
     -- Note: Other relations like <, >, ≥, ⊇, ⊃, etc., would also typically go here (NotAssociative, 5)
 
     -- Set Operators
@@ -289,7 +290,8 @@ instance SubexpDeBr PropDeBr where
           id fullParse
     where
       fullParse =
-            parseNotEqual'      -- Negation shorthands first
+            parseLessThan'      -- Less than shorthand first
+        <|> parseNotEqual'      -- Negation shorthands first
         <|> parseNotIn'
         <|> parseNotSubset'
         <|> parseNegation'      -- Default negation
@@ -370,6 +372,10 @@ instance SubexpDeBr PropDeBr where
       parseFalsum' = do
           () <- parseFalsum prop
           return ParseTreeF
+      parseLessThan' = do
+          (o1, o2) <- parseLessThan prop
+          return $ BinaryOp "<" (toSubexpParseTree o1 dict) (toSubexpParseTree o2 dict)
+
 
 
 showSubexpParseTree :: SubexpParseTree -> Text

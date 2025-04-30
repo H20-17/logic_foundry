@@ -44,7 +44,9 @@ module Langs.Internal.BasicUntyped.Shorthands (
     powerSet,
     parsePowerSet,
     emptySet,
-    parseEmptySet
+    parseEmptySet,
+    (.<.),
+    parseLessThan
 
 ) where
 import Langs.Internal.BasicUntyped.Core
@@ -1394,3 +1396,29 @@ parsePowerSet obj = do
 
     -- 7. Return Just setA
     return setA
+
+-- | Shorthand for Less Than (a < b). Defined as (a ≤ b) ∧ (a ≠ b).
+(.<.) :: ObjDeBr -> ObjDeBr -> PropDeBr
+a .<. b = (a :<=: b) :&&: (a ./=. b) -- Using :<=: and the existing ./=. shorthand
+
+
+-- Define the parser function (place it near other PropDeBr parsers like parseSubset, parseStrictSubset):
+-- | Parses a PropDeBr to see if it matches the structure for Less Than (a < b),
+-- | which is defined as (a <= b) && (a /= b).
+parseLessThan :: PropDeBr -> Maybe (ObjDeBr, ObjDeBr)
+parseLessThan prop = do
+    -- 1. Expect top level to be conjunction: (a <= b) :&&: (a /= b)
+    (leEqPart, neEqPart) <- parseConjunction prop
+
+    -- 2. Parse the left conjunct: a :<=: b
+    (a1, b1) <- parseLTE leEqPart -- Assuming parseLTE exists for :<=:
+
+    -- 3. Parse the right conjunct: a :/:= b (using parseNotEqual)
+    (a2, b2) <- parseNotEqual neEqPart -- Assuming parseNotEqual exists for :/:= (or Neg(:==:))
+
+    -- 4. Check that the terms match across both parts
+    guard (a1 == a2)
+    guard (b1 == b2)
+
+    -- 5. Return the matched terms a and b
+    return (a1, b1)
