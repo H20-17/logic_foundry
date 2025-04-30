@@ -164,7 +164,8 @@ instance SubexpDeBr ObjDeBr where
          maybe (error $ "Ubable to parse term " <> show obj <> ". This shouldn't have happened.")
              id fullParse 
       where fullParse =
-             parseInteg'
+                  parseIntSet'
+              <|> parseInteg'
               <|> parseConst'
               <|> parseBound'
               <|> parseV'
@@ -277,6 +278,9 @@ instance SubexpDeBr ObjDeBr where
             parseIntPlus' = do
                 (o1,o2) <- parseIntPlus obj
                 return $ BinaryOp "×" (toSubexpParseTree o1 dict) (toSubexpParseTree o2 dict)
+            parseIntSet' = do
+                () <- parseIntSet obj
+                return $ ParseTreeConst "ℤ"
 
 
 

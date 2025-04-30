@@ -46,7 +46,8 @@ module Langs.Internal.BasicUntyped.Core (
     -- Added parsers for new ObjDeBr operators
     parseIntPlus,
     parseIntNeg,
-    parseIntMult
+    parseIntMult,
+    parseIntSet
 
 ) where
 import Control.Monad ( unless, guard,msum )
@@ -91,6 +92,7 @@ data ObjDeBr where
     (:+:) :: ObjDeBr -> ObjDeBr -> ObjDeBr -- Changed to infix +
     Intneg :: ObjDeBr -> ObjDeBr            -- Kept prefix unary -
     (:*:) :: ObjDeBr -> ObjDeBr -> ObjDeBr -- Changed to infix *
+    IntSet :: ObjDeBr
     deriving (Eq, Ord, Show)
 
 -- Define Infix properties (optional, but good practice for clarity)
@@ -137,6 +139,7 @@ objDeBrBoundVarInside obj idx = case obj of
     (o1 :+: o2) -> objDeBrBoundVarInside o1 idx || objDeBrBoundVarInside o2 idx -- Updated
     Intneg o1     -> objDeBrBoundVarInside o1 idx                            -- Updated
     (o1 :*: o2) -> objDeBrBoundVarInside o1 idx || objDeBrBoundVarInside o2 idx -- Updated
+    IntSet -> False
 
 
 -- Update swapBoundIndexProp (No changes needed here, already updated)
@@ -169,6 +172,7 @@ swapBoundIndexObj fromIdx toIdx o = case o of
     (o1 :+: o2) -> (swapBoundIndexObj fromIdx toIdx o1) :+: (swapBoundIndexObj fromIdx toIdx o2) -- Updated
     Intneg o1     -> Intneg (swapBoundIndexObj fromIdx toIdx o1)                                  -- Updated
     (o1 :*: o2) -> (swapBoundIndexObj fromIdx toIdx o1) :*: (swapBoundIndexObj fromIdx toIdx o2) -- Updated
+    IntSet -> IntSet
 
 
 -- Update boundDepthObjDeBrX
@@ -185,6 +189,7 @@ boundDepthObjDeBrX targetIdx substitutionDepth obj = case obj of
     (o1 :+: o2) -> max (boundDepthObjDeBrX targetIdx substitutionDepth o1) (boundDepthObjDeBrX targetIdx substitutionDepth o2) -- Updated
     Intneg o1     -> boundDepthObjDeBrX targetIdx substitutionDepth o1                                                     -- Updated
     (o1 :*: o2) -> max (boundDepthObjDeBrX targetIdx substitutionDepth o1) (boundDepthObjDeBrX targetIdx substitutionDepth o2) -- Updated
+    IntSet -> 0
 
 
 -- Update boundDepthPropDeBrX (No changes needed here, already updated)
@@ -217,6 +222,7 @@ boundDepthObjDeBrXInt targetIdx substitutionDepth obj = case obj of
     (o1 :+: o2) -> max (boundDepthObjDeBrXInt targetIdx substitutionDepth o1) (boundDepthObjDeBrXInt targetIdx substitutionDepth o2) -- Updated
     Intneg o1     -> boundDepthObjDeBrXInt targetIdx substitutionDepth o1                                                     -- Updated
     (o1 :*: o2) -> max (boundDepthObjDeBrXInt targetIdx substitutionDepth o1) (boundDepthObjDeBrXInt targetIdx substitutionDepth o2) -- Updated
+    IntSet -> 0
 
 -- Update boundDepthPropDeBrXInt (No changes needed here, already updated)
 boundDepthPropDeBrXInt :: Int -> Int -> PropDeBr -> Int
@@ -259,6 +265,10 @@ parseInteg subexp = case subexp of
     Integ i -> Just i
     _ -> Nothing
 
+parseIntSet :: ObjDeBr -> Maybe ()
+parseIntSet subexp = case subexp of
+    IntSet -> Just ()
+    _ -> Nothing
 
 parseConst :: ObjDeBr -> Maybe Text
 parseConst subexp = case subexp of
@@ -308,6 +318,7 @@ boundDepthObjDeBr obj = case obj of
      (o1 :+: o2) -> max (boundDepthObjDeBr o1) (boundDepthObjDeBr o2) -- Updated
      Intneg o1     -> boundDepthObjDeBr o1                            -- Updated
      (o1 :*: o2) -> max (boundDepthObjDeBr o1) (boundDepthObjDeBr o2) -- Updated
+     IntSet ->  0
 
 
 -- Update boundDepthPropDeBr (No changes needed here, already updated)
@@ -417,6 +428,7 @@ checkSanityObjDeBr obj varStackHeight tmpltVarIndices constSet boundSet = case o
      (o1 :+: o2) -> checkSanityObjDeBr o1 varStackHeight tmpltVarIndices constSet boundSet <|> checkSanityObjDeBr o2 varStackHeight tmpltVarIndices constSet boundSet -- Updated
      Intneg o1     -> checkSanityObjDeBr o1 varStackHeight tmpltVarIndices constSet boundSet -- Updated
      (o1 :*: o2) -> checkSanityObjDeBr o1 varStackHeight tmpltVarIndices constSet boundSet <|> checkSanityObjDeBr o2 varStackHeight tmpltVarIndices constSet boundSet -- Updated
+     IntSet -> Nothing
 
 
 -- Update checkSanityPropDeBr (No changes needed here, already updated)
@@ -533,6 +545,7 @@ objDeBrSubXInt targetIdx substitution template = case template of
     (o1 :+: o2) -> (objDeBrSubXInt targetIdx substitution o1) :+: (objDeBrSubXInt targetIdx substitution o2) -- Updated
     Intneg o1     -> Intneg (objDeBrSubXInt targetIdx substitution o1)                                     -- Updated
     (o1 :*: o2) -> (objDeBrSubXInt targetIdx substitution o1) :*: (objDeBrSubXInt targetIdx substitution o2) -- Updated
+    IntSet -> IntSet
 
 
 -- Update propDeBrSubXInt (No changes needed here, already updated)
@@ -582,6 +595,7 @@ objDeBrSubX targetIdx substitution template = case template of
     (o1 :+: o2) -> (objDeBrSubX targetIdx substitution o1) :+: (objDeBrSubX targetIdx substitution o2) -- Updated
     Intneg o1     -> Intneg (objDeBrSubX targetIdx substitution o1)                                     -- Updated
     (o1 :*: o2) -> (objDeBrSubX targetIdx substitution o1) :*: (objDeBrSubX targetIdx substitution o2) -- Updated
+    IntSet -> IntSet
 
 
 -- Update propDeBrSubX (No changes needed here, already updated)
@@ -640,6 +654,7 @@ swapXtoXIntObj o = case o of
     (o1 :+: o2) -> (swapXtoXIntObj o1) :+: (swapXtoXIntObj o2) -- Updated
     Intneg o1     -> Intneg (swapXtoXIntObj o1)               -- Updated
     (o1 :*: o2) -> (swapXtoXIntObj o1) :*: (swapXtoXIntObj o2) -- Updated
+    IntSet -> IntSet
 
 
 -- Update swapXIntToXProp (No changes needed here, already updated)
@@ -672,6 +687,7 @@ swapXIntToXObj o = case o of
     (o1 :+: o2) -> (swapXIntToXObj o1) :+: (swapXIntToXObj o2) -- Updated
     Intneg o1     -> Intneg (swapXIntToXObj o1)               -- Updated
     (o1 :*: o2) -> (swapXIntToXObj o1) :*: (swapXIntToXObj o2) -- Updated
+    IntSet -> IntSet
 
 
 objDeBrSubXs :: [(Int, ObjDeBr)] -> ObjDeBr -> ObjDeBr
@@ -702,6 +718,7 @@ objDeBrApplyUG obj freevarIdx boundvarIdx =
         (o1 :+: o2) -> (objDeBrApplyUG o1 freevarIdx boundvarIdx) :+: (objDeBrApplyUG o2 freevarIdx boundvarIdx) -- Updated
         Intneg o1     -> Intneg (objDeBrApplyUG o1 freevarIdx boundvarIdx)                                      -- Updated
         (o1 :*: o2) -> (objDeBrApplyUG o1 freevarIdx boundvarIdx) :*: (objDeBrApplyUG o2 freevarIdx boundvarIdx) -- Updated
+        IntSet -> IntSet
 
 
 -- Update propDeBrApplyUG (No changes needed here, already updated)
@@ -797,6 +814,7 @@ objDeBrSubBoundVarToX0 boundVarIdx obj = case obj of
     (o1 :+: o2) -> (objDeBrSubBoundVarToX0 boundVarIdx o1) :+: (objDeBrSubBoundVarToX0 boundVarIdx o2) -- Updated
     Intneg o1     -> Intneg (objDeBrSubBoundVarToX0 boundVarIdx o1)                                  -- Updated
     (o1 :*: o2) -> (objDeBrSubBoundVarToX0 boundVarIdx o1) :*: (objDeBrSubBoundVarToX0 boundVarIdx o2) -- Updated
+    IntSet -> IntSet
 
 
 -- Update propDeBrSubBoundVarToX0 (No changes needed here, already updated)
@@ -844,6 +862,7 @@ xsubObjDeBr o idx depth = case o of
     (o1 :+: o2) -> (xsubObjDeBr o1 idx depth) :+: (xsubObjDeBr o2 idx depth) -- Updated
     Intneg o1     -> Intneg (xsubObjDeBr o1 idx depth)                      -- Updated
     (o1 :*: o2) -> (xsubObjDeBr o1 idx depth) :*: (xsubObjDeBr o2 idx depth) -- Updated
+    IntSet -> IntSet
 
 
 -- Update xsubPropDeBrXInt (No changes needed here, already updated)
@@ -875,6 +894,7 @@ xsubObjDeBrXInt o idx depth = case o of
     (o1 :+: o2) -> (xsubObjDeBrXInt o1 idx depth) :+: (xsubObjDeBrXInt o2 idx depth) -- Updated
     Intneg o1     -> Intneg (xsubObjDeBrXInt o1 idx depth)                      -- Updated
     (o1 :*: o2) -> (xsubObjDeBrXInt o1 idx depth) :*: (xsubObjDeBrXInt o2 idx depth) -- Updated
+    IntSet -> IntSet
 
 
 instance LogicConst Text where
