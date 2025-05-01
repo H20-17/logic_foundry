@@ -33,8 +33,7 @@ module Langs.Internal.BasicUntyped.Core (
     parseNegation,
     parseExists,
     parseDisjunction,
-    -- parseGTE, -- Removed
-    parseLTE, -- Added
+    parseLTE,
     parseFalsum,
     objDeBrSubXInt,
     propDeBrSubXInt,
@@ -43,7 +42,6 @@ module Langs.Internal.BasicUntyped.Core (
     multiEx,
     multiAx,
     propDeBrSubX,
-    -- Added parsers for new ObjDeBr operators
     parseIntPlus,
     parseIntNeg,
     parseIntMult,
@@ -79,7 +77,6 @@ import qualified Internal.StdPattern
 import Data.Maybe (isJust)
 
 
--- Update ObjDeBr constructors
 data ObjDeBr where
     Integ :: Int -> ObjDeBr
     Constant :: Text -> ObjDeBr
@@ -89,17 +86,16 @@ data ObjDeBr where
     X :: Int -> ObjDeBr
     XInternal :: Int -> ObjDeBr
     Tupl :: [ObjDeBr] -> ObjDeBr
-    (:+:) :: ObjDeBr -> ObjDeBr -> ObjDeBr -- Changed to infix +
-    Intneg :: ObjDeBr -> ObjDeBr            -- Kept prefix unary -
-    (:*:) :: ObjDeBr -> ObjDeBr -> ObjDeBr -- Changed to infix *
+    (:+:) :: ObjDeBr -> ObjDeBr -> ObjDeBr
+    Intneg :: ObjDeBr -> ObjDeBr
+    (:*:) :: ObjDeBr -> ObjDeBr -> ObjDeBr
     IntSet :: ObjDeBr
     deriving (Eq, Ord, Show)
 
--- Define Infix properties (optional, but good practice for clarity)
 infixl 6 :+:
 infixl 7 :*:
 
--- Update PropDeBr constructors
+
 data PropDeBr where
       Neg :: PropDeBr -> PropDeBr
       (:&&:)  :: PropDeBr -> PropDeBr -> PropDeBr
@@ -110,8 +106,7 @@ data PropDeBr where
       In :: ObjDeBr -> ObjDeBr -> PropDeBr
       Forall :: PropDeBr -> PropDeBr
       Exists :: PropDeBr -> PropDeBr
-      -- (:>=:) :: ObjDeBr -> ObjDeBr -> PropDeBr -- Removed >=
-      (:<=:) :: ObjDeBr -> ObjDeBr -> PropDeBr -- Added <=
+      (:<=:) :: ObjDeBr -> ObjDeBr -> PropDeBr
       F :: PropDeBr
     deriving (Show, Eq, Ord)
 
@@ -122,11 +117,10 @@ infixr 0 :->:
 infixr 0 :<->:
 infix  4 :==:
 infix  4 `In`
--- infix  4 :>=: -- Removed >=
-infix  4 :<=: -- Added <=
+infix  4 :<=:
 
 
--- Update objDeBrBoundVarInside
+
 objDeBrBoundVarInside :: ObjDeBr -> Int -> Bool
 objDeBrBoundVarInside obj idx = case obj of
     Integ num -> False
@@ -142,7 +136,7 @@ objDeBrBoundVarInside obj idx = case obj of
     IntSet -> False
 
 
--- Update swapBoundIndexProp (No changes needed here, already updated)
+
 swapBoundIndexProp :: Int -> Int -> PropDeBr -> PropDeBr
 swapBoundIndexProp fromIdx toIdx p = case p of
     Neg q -> Neg (swapBoundIndexProp fromIdx toIdx q)
@@ -158,7 +152,7 @@ swapBoundIndexProp fromIdx toIdx p = case p of
     F -> F
 
 
--- Update swapBoundIndexObj
+
 swapBoundIndexObj :: Int -> Int -> ObjDeBr -> ObjDeBr
 swapBoundIndexObj fromIdx toIdx o = case o of
     Integ num -> Integ num
@@ -175,7 +169,7 @@ swapBoundIndexObj fromIdx toIdx o = case o of
     IntSet -> IntSet
 
 
--- Update boundDepthObjDeBrX
+
 boundDepthObjDeBrX :: Int -> Int -> ObjDeBr -> Int
 boundDepthObjDeBrX targetIdx substitutionDepth obj = case obj of
     Integ num -> 0
@@ -192,7 +186,7 @@ boundDepthObjDeBrX targetIdx substitutionDepth obj = case obj of
     IntSet -> 0
 
 
--- Update boundDepthPropDeBrX (No changes needed here, already updated)
+
 boundDepthPropDeBrX :: Int -> Int -> PropDeBr -> Int
 boundDepthPropDeBrX targetIdx substitutionDepth prop = case prop of
     Neg p -> boundDepthPropDeBrX targetIdx substitutionDepth p
@@ -208,7 +202,7 @@ boundDepthPropDeBrX targetIdx substitutionDepth prop = case prop of
     F -> 0
 
 
--- Update boundDepthObjDeBrXInt
+
 boundDepthObjDeBrXInt :: Int -> Int -> ObjDeBr -> Int
 boundDepthObjDeBrXInt targetIdx substitutionDepth obj = case obj of
     Integ num -> 0
@@ -224,7 +218,7 @@ boundDepthObjDeBrXInt targetIdx substitutionDepth obj = case obj of
     (o1 :*: o2) -> max (boundDepthObjDeBrXInt targetIdx substitutionDepth o1) (boundDepthObjDeBrXInt targetIdx substitutionDepth o2)
     IntSet -> 0
 
--- Update boundDepthPropDeBrXInt (No changes needed here, already updated)
+
 boundDepthPropDeBrXInt :: Int -> Int -> PropDeBr -> Int
 boundDepthPropDeBrXInt targetIdx substitutionDepth prop = case prop of
     Neg p -> boundDepthPropDeBrXInt targetIdx substitutionDepth p
@@ -304,7 +298,7 @@ parseEqual subexp = case subexp of
     _           -> Nothing
 
 
--- Update boundDepthObjDeBr
+
 boundDepthObjDeBr :: ObjDeBr -> Int
 boundDepthObjDeBr obj = case obj of
      Integ num -> 0
@@ -321,7 +315,7 @@ boundDepthObjDeBr obj = case obj of
      IntSet ->  0
 
 
--- Update boundDepthPropDeBr (No changes needed here, already updated)
+
 boundDepthPropDeBr :: PropDeBr -> Int
 boundDepthPropDeBr prop = case prop of
     Neg p -> boundDepthPropDeBr p
@@ -375,8 +369,7 @@ parseBiconditional p = case p of
     (a :<->: b) -> Just (a,b)
     _ -> Nothing
 
--- Remove parseGTE
--- Add parseLTE (already added in previous response)
+
 parseLTE :: PropDeBr -> Maybe (ObjDeBr, ObjDeBr)
 parseLTE p = case p of
     (a :<=: b) -> Just (a, b)
@@ -388,7 +381,7 @@ parseFalsum p = case p of
     F -> Just ()
     _ -> Nothing
 
--- Add parsers for new ObjDeBr operators
+
 parseIntPlus :: ObjDeBr -> Maybe (ObjDeBr, ObjDeBr)
 parseIntPlus obj = case obj of
     (o1 :+: o2) -> Just (o1, o2)
@@ -414,7 +407,7 @@ data DeBrSe where
    deriving Show
 
 
--- Update checkSanityObjDeBr
+
 checkSanityObjDeBr :: ObjDeBr -> Int -> Set Int -> Set Text -> Set Int -> Maybe DeBrSe
 checkSanityObjDeBr obj varStackHeight tmpltVarIndices constSet boundSet = case obj of
      Integ num -> Nothing
@@ -430,7 +423,7 @@ checkSanityObjDeBr obj varStackHeight tmpltVarIndices constSet boundSet = case o
      IntSet -> Nothing
 
 
--- Update checkSanityPropDeBr (No changes needed here, already updated)
+
 checkSanityPropDeBr :: PropDeBr -> Int -> Set Int -> Set Text -> Set Int -> Maybe DeBrSe
 checkSanityPropDeBr prop freevarStackHeight tmpltVarIndices consts boundVars =
       case prop of
@@ -507,7 +500,7 @@ instance PL.LogicSent PropDeBr () where
 
 
 
--- Update propDeBrBoundVarInside (No changes needed here, already updated)
+
 propDeBrBoundVarInside :: PropDeBr -> Int -> Bool
 propDeBrBoundVarInside prop idx = case prop of
     Neg p -> propDeBrBoundVarInside p idx
