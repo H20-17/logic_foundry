@@ -136,9 +136,9 @@ objDeBrBoundVarInside obj idx = case obj of
     V i -> False
     X i -> False
     Tupl as -> any (`objDeBrBoundVarInside` idx) as
-    (o1 :+: o2) -> objDeBrBoundVarInside o1 idx || objDeBrBoundVarInside o2 idx -- Updated
-    Intneg o1     -> objDeBrBoundVarInside o1 idx                            -- Updated
-    (o1 :*: o2) -> objDeBrBoundVarInside o1 idx || objDeBrBoundVarInside o2 idx -- Updated
+    (o1 :+: o2) -> objDeBrBoundVarInside o1 idx || objDeBrBoundVarInside o2 idx
+    Intneg o1     -> objDeBrBoundVarInside o1 idx
+    (o1 :*: o2) -> objDeBrBoundVarInside o1 idx || objDeBrBoundVarInside o2 idx
     IntSet -> False
 
 
@@ -146,15 +146,15 @@ objDeBrBoundVarInside obj idx = case obj of
 swapBoundIndexProp :: Int -> Int -> PropDeBr -> PropDeBr
 swapBoundIndexProp fromIdx toIdx p = case p of
     Neg q -> Neg (swapBoundIndexProp fromIdx toIdx q)
-    (p1 :&&: p2) -> (swapBoundIndexProp fromIdx toIdx p1) :&&: (swapBoundIndexProp fromIdx toIdx p2)
-    (p1 :||: p2) -> (swapBoundIndexProp fromIdx toIdx p1) :||: (swapBoundIndexProp fromIdx toIdx p2)
-    (p1 :->: p2) -> (swapBoundIndexProp fromIdx toIdx p1) :->: (swapBoundIndexProp fromIdx toIdx p2)
-    (p1 :<->: p2) -> (swapBoundIndexProp fromIdx toIdx p1) :<->: (swapBoundIndexProp fromIdx toIdx p2)
-    (o1 :==: o2) -> (swapBoundIndexObj fromIdx toIdx o1) :==: (swapBoundIndexObj fromIdx toIdx o2)
+    (p1 :&&: p2) -> swapBoundIndexProp fromIdx toIdx p1 :&&: swapBoundIndexProp fromIdx toIdx p2
+    (p1 :||: p2) -> swapBoundIndexProp fromIdx toIdx p1 :||: swapBoundIndexProp fromIdx toIdx p2
+    (p1 :->: p2) -> swapBoundIndexProp fromIdx toIdx p1 :->: swapBoundIndexProp fromIdx toIdx p2
+    (p1 :<->: p2) -> swapBoundIndexProp fromIdx toIdx p1 :<->: swapBoundIndexProp fromIdx toIdx p2
+    (o1 :==: o2) -> swapBoundIndexObj fromIdx toIdx o1 :==: swapBoundIndexObj fromIdx toIdx o2
     In o1 o2 -> In (swapBoundIndexObj fromIdx toIdx o1) (swapBoundIndexObj fromIdx toIdx o2)
     Forall q -> Forall (swapBoundIndexProp fromIdx toIdx q)
     Exists q -> Exists (swapBoundIndexProp fromIdx toIdx q)
-    (o1 :<=: o2) -> (swapBoundIndexObj fromIdx toIdx o1) :<=: (swapBoundIndexObj fromIdx toIdx o2) -- Updated
+    (o1 :<=: o2) -> swapBoundIndexObj fromIdx toIdx o1 :<=: swapBoundIndexObj fromIdx toIdx o2
     F -> F
 
 
@@ -169,9 +169,9 @@ swapBoundIndexObj fromIdx toIdx o = case o of
     X i -> X i
     XInternal i -> XInternal i
     Tupl os -> Tupl $ Prelude.map (swapBoundIndexObj fromIdx toIdx) os
-    (o1 :+: o2) -> (swapBoundIndexObj fromIdx toIdx o1) :+: (swapBoundIndexObj fromIdx toIdx o2) -- Updated
-    Intneg o1     -> Intneg (swapBoundIndexObj fromIdx toIdx o1)                                  -- Updated
-    (o1 :*: o2) -> (swapBoundIndexObj fromIdx toIdx o1) :*: (swapBoundIndexObj fromIdx toIdx o2) -- Updated
+    (o1 :+: o2) -> swapBoundIndexObj fromIdx toIdx o1 :+: swapBoundIndexObj fromIdx toIdx o2
+    Intneg o1   -> Intneg (swapBoundIndexObj fromIdx toIdx o1)
+    (o1 :*: o2) -> swapBoundIndexObj fromIdx toIdx o1 :*: swapBoundIndexObj fromIdx toIdx o2
     IntSet -> IntSet
 
 
@@ -186,9 +186,9 @@ boundDepthObjDeBrX targetIdx substitutionDepth obj = case obj of
     X idx -> if idx == targetIdx then substitutionDepth else 0
     XInternal idx -> 0
     Tupl xs -> if null xs then 0 else maximum $ Prelude.map (boundDepthObjDeBrX targetIdx substitutionDepth) xs
-    (o1 :+: o2) -> max (boundDepthObjDeBrX targetIdx substitutionDepth o1) (boundDepthObjDeBrX targetIdx substitutionDepth o2) -- Updated
-    Intneg o1     -> boundDepthObjDeBrX targetIdx substitutionDepth o1                                                     -- Updated
-    (o1 :*: o2) -> max (boundDepthObjDeBrX targetIdx substitutionDepth o1) (boundDepthObjDeBrX targetIdx substitutionDepth o2) -- Updated
+    (o1 :+: o2) -> max (boundDepthObjDeBrX targetIdx substitutionDepth o1) (boundDepthObjDeBrX targetIdx substitutionDepth o2)
+    Intneg o1     -> boundDepthObjDeBrX targetIdx substitutionDepth o1
+    (o1 :*: o2) -> max (boundDepthObjDeBrX targetIdx substitutionDepth o1) (boundDepthObjDeBrX targetIdx substitutionDepth o2)
     IntSet -> 0
 
 
@@ -204,7 +204,7 @@ boundDepthPropDeBrX targetIdx substitutionDepth prop = case prop of
     In o1 o2 -> max (boundDepthObjDeBrX targetIdx substitutionDepth o1) (boundDepthObjDeBrX targetIdx substitutionDepth o2)
     Forall p -> 1 + boundDepthPropDeBrX targetIdx substitutionDepth p
     Exists p -> 1 + boundDepthPropDeBrX targetIdx substitutionDepth p
-    (o1 :<=: o2) -> max (boundDepthObjDeBrX targetIdx substitutionDepth o1) (boundDepthObjDeBrX targetIdx substitutionDepth o2) -- Updated
+    (o1 :<=: o2) -> max (boundDepthObjDeBrX targetIdx substitutionDepth o1) (boundDepthObjDeBrX targetIdx substitutionDepth o2)
     F -> 0
 
 
@@ -219,9 +219,9 @@ boundDepthObjDeBrXInt targetIdx substitutionDepth obj = case obj of
     X idx -> 0
     XInternal idx -> if idx == targetIdx then substitutionDepth else 0
     Tupl xs -> if null xs then 0 else maximum $ Prelude.map (boundDepthObjDeBrXInt targetIdx substitutionDepth) xs
-    (o1 :+: o2) -> max (boundDepthObjDeBrXInt targetIdx substitutionDepth o1) (boundDepthObjDeBrXInt targetIdx substitutionDepth o2) -- Updated
-    Intneg o1     -> boundDepthObjDeBrXInt targetIdx substitutionDepth o1                                                     -- Updated
-    (o1 :*: o2) -> max (boundDepthObjDeBrXInt targetIdx substitutionDepth o1) (boundDepthObjDeBrXInt targetIdx substitutionDepth o2) -- Updated
+    (o1 :+: o2) -> max (boundDepthObjDeBrXInt targetIdx substitutionDepth o1) (boundDepthObjDeBrXInt targetIdx substitutionDepth o2)
+    Intneg o1     -> boundDepthObjDeBrXInt targetIdx substitutionDepth o1
+    (o1 :*: o2) -> max (boundDepthObjDeBrXInt targetIdx substitutionDepth o1) (boundDepthObjDeBrXInt targetIdx substitutionDepth o2)
     IntSet -> 0
 
 -- Update boundDepthPropDeBrXInt (No changes needed here, already updated)
@@ -236,7 +236,7 @@ boundDepthPropDeBrXInt targetIdx substitutionDepth prop = case prop of
     In o1 o2 -> max (boundDepthObjDeBrXInt targetIdx substitutionDepth o1) (boundDepthObjDeBrXInt targetIdx substitutionDepth o2)
     Forall p -> 1 + boundDepthPropDeBrXInt targetIdx substitutionDepth p
     Exists p -> 1 + boundDepthPropDeBrXInt targetIdx substitutionDepth p
-    (o1 :<=: o2) -> max (boundDepthObjDeBrXInt targetIdx substitutionDepth o1) (boundDepthObjDeBrXInt targetIdx substitutionDepth o2) -- Updated
+    (o1 :<=: o2) -> max (boundDepthObjDeBrXInt targetIdx substitutionDepth o1) (boundDepthObjDeBrXInt targetIdx substitutionDepth o2)
     F -> 0
 
 
@@ -315,9 +315,9 @@ boundDepthObjDeBr obj = case obj of
      X idx -> 0
      XInternal idx -> 0
      Tupl xs -> if null xs then 0 else maximum $ Prelude.map boundDepthObjDeBr xs
-     (o1 :+: o2) -> max (boundDepthObjDeBr o1) (boundDepthObjDeBr o2) -- Updated
-     Intneg o1     -> boundDepthObjDeBr o1                            -- Updated
-     (o1 :*: o2) -> max (boundDepthObjDeBr o1) (boundDepthObjDeBr o2) -- Updated
+     (o1 :+: o2) -> max (boundDepthObjDeBr o1) (boundDepthObjDeBr o2)
+     Intneg o1     -> boundDepthObjDeBr o1
+     (o1 :*: o2) -> max (boundDepthObjDeBr o1) (boundDepthObjDeBr o2)
      IntSet ->  0
 
 
@@ -333,7 +333,7 @@ boundDepthPropDeBr prop = case prop of
     (o1 :==: o2) -> max (boundDepthObjDeBr o1) (boundDepthObjDeBr o2)
     Forall p -> boundDepthPropDeBr p + 1
     Exists p -> boundDepthPropDeBr p + 1
-    (o1 :<=: o2) -> max (boundDepthObjDeBr o1) (boundDepthObjDeBr o2) -- Updated
+    (o1 :<=: o2) -> max (boundDepthObjDeBr o1) (boundDepthObjDeBr o2)
     F -> 0
 
 
@@ -424,10 +424,9 @@ checkSanityObjDeBr obj varStackHeight tmpltVarIndices constSet boundSet = case o
      V idx -> if idx >= 0 && idx < varStackHeight then Nothing else (return . ObjDeBrFreeVarIdx) idx
      X idx -> if idx >= 0 && idx `Set.member` tmpltVarIndices then Nothing else (return . ObjDeBrTemplateVarIdx) idx
      Tupl xs -> msum $ Prelude.map (\x -> checkSanityObjDeBr x varStackHeight tmpltVarIndices constSet boundSet) xs
-     -- Check sanity for new ObjDeBr constructors recursively
-     (o1 :+: o2) -> checkSanityObjDeBr o1 varStackHeight tmpltVarIndices constSet boundSet <|> checkSanityObjDeBr o2 varStackHeight tmpltVarIndices constSet boundSet -- Updated
-     Intneg o1     -> checkSanityObjDeBr o1 varStackHeight tmpltVarIndices constSet boundSet -- Updated
-     (o1 :*: o2) -> checkSanityObjDeBr o1 varStackHeight tmpltVarIndices constSet boundSet <|> checkSanityObjDeBr o2 varStackHeight tmpltVarIndices constSet boundSet -- Updated
+     (o1 :+: o2) -> checkSanityObjDeBr o1 varStackHeight tmpltVarIndices constSet boundSet <|> checkSanityObjDeBr o2 varStackHeight tmpltVarIndices constSet boundSet
+     Intneg o1     -> checkSanityObjDeBr o1 varStackHeight tmpltVarIndices constSet boundSet
+     (o1 :*: o2) -> checkSanityObjDeBr o1 varStackHeight tmpltVarIndices constSet boundSet <|> checkSanityObjDeBr o2 varStackHeight tmpltVarIndices constSet boundSet
      IntSet -> Nothing
 
 
@@ -444,7 +443,7 @@ checkSanityPropDeBr prop freevarStackHeight tmpltVarIndices consts boundVars =
         (o1 :==: o2) -> checkSanityObjDeBr o1 freevarStackHeight tmpltVarIndices consts boundVars <|> checkSanityObjDeBr o2 freevarStackHeight tmpltVarIndices consts boundVars
         Forall propInner -> checkSanityPropDeBr propInner freevarStackHeight tmpltVarIndices consts (Set.insert (boundDepthPropDeBr propInner) boundVars )
         Exists propInner -> checkSanityPropDeBr propInner freevarStackHeight tmpltVarIndices consts (Set.insert (boundDepthPropDeBr propInner) boundVars )
-        (o1 :<=: o2) -> checkSanityObjDeBr o1 freevarStackHeight tmpltVarIndices consts boundVars <|> checkSanityObjDeBr o2 freevarStackHeight tmpltVarIndices consts boundVars -- Updated
+        (o1 :<=: o2) -> checkSanityObjDeBr o1 freevarStackHeight tmpltVarIndices consts boundVars <|> checkSanityObjDeBr o2 freevarStackHeight tmpltVarIndices consts boundVars
         F -> Nothing
 
 
@@ -520,11 +519,10 @@ propDeBrBoundVarInside prop idx = case prop of
     In o1 o2 -> objDeBrBoundVarInside o1 idx || objDeBrBoundVarInside o2 idx
     Forall p -> propDeBrBoundVarInside p idx
     Exists p -> propDeBrBoundVarInside p idx
-    (o1 :<=: o2) -> objDeBrBoundVarInside o1 idx || objDeBrBoundVarInside o2 idx -- Updated
+    (o1 :<=: o2) -> objDeBrBoundVarInside o1 idx || objDeBrBoundVarInside o2 idx
     F -> False
 
 
--- Update objDeBrSubXInt
 objDeBrSubXInt :: Int -> ObjDeBr -> ObjDeBr -> ObjDeBr
 objDeBrSubXInt targetIdx substitution template = case template of
     Integ num -> Integ num
@@ -542,13 +540,12 @@ objDeBrSubXInt targetIdx substitution template = case template of
         | otherwise -> XInternal idx
     X idx -> X idx
     Tupl xs -> Tupl $ Prelude.map (objDeBrSubXInt targetIdx substitution) xs
-    (o1 :+: o2) -> (objDeBrSubXInt targetIdx substitution o1) :+: (objDeBrSubXInt targetIdx substitution o2) -- Updated
-    Intneg o1     -> Intneg (objDeBrSubXInt targetIdx substitution o1)                                     -- Updated
-    (o1 :*: o2) -> (objDeBrSubXInt targetIdx substitution o1) :*: (objDeBrSubXInt targetIdx substitution o2) -- Updated
+    (o1 :+: o2) -> objDeBrSubXInt targetIdx substitution o1 :+: objDeBrSubXInt targetIdx substitution o2
+    Intneg o1     -> Intneg (objDeBrSubXInt targetIdx substitution o1)
+    (o1 :*: o2) -> objDeBrSubXInt targetIdx substitution o1 :*: objDeBrSubXInt targetIdx substitution o2
     IntSet -> IntSet
 
 
--- Update propDeBrSubXInt (No changes needed here, already updated)
 propDeBrSubXInt :: Int -> ObjDeBr -> PropDeBr -> PropDeBr
 propDeBrSubXInt targetIdx substitution template = case template of
     Neg p -> Neg $ propDeBrSubXInt targetIdx substitution p
@@ -570,11 +567,10 @@ propDeBrSubXInt targetIdx substitution template = case template of
         newBoundDepth = boundDepthPropDeBrXInt boundDepth subBoundDepth p
         subBoundDepth = boundDepthObjDeBr substitution
         normalisedSubexp = swapBoundIndexProp boundDepth newBoundDepth p
-    (o1 :<=: o2) -> objDeBrSubXInt targetIdx substitution o1 :<=: objDeBrSubXInt targetIdx substitution o2 -- Updated
+    (o1 :<=: o2) -> objDeBrSubXInt targetIdx substitution o1 :<=: objDeBrSubXInt targetIdx substitution o2
     F -> F
 
 
--- Update objDeBrSubX
 objDeBrSubX :: Int -> ObjDeBr -> ObjDeBr -> ObjDeBr
 objDeBrSubX targetIdx substitution template = case template of
     Integ num -> Integ num
@@ -592,13 +588,12 @@ objDeBrSubX targetIdx substitution template = case template of
         | otherwise -> X idx
     XInternal idx -> XInternal idx
     Tupl xs -> Tupl $ Prelude.map (objDeBrSubX targetIdx substitution) xs
-    (o1 :+: o2) -> (objDeBrSubX targetIdx substitution o1) :+: (objDeBrSubX targetIdx substitution o2) -- Updated
-    Intneg o1     -> Intneg (objDeBrSubX targetIdx substitution o1)                                     -- Updated
-    (o1 :*: o2) -> (objDeBrSubX targetIdx substitution o1) :*: (objDeBrSubX targetIdx substitution o2) -- Updated
+    (o1 :+: o2) -> objDeBrSubX targetIdx substitution o1 :+: objDeBrSubX targetIdx substitution o2
+    Intneg o1     -> Intneg (objDeBrSubX targetIdx substitution o1) 
+    (o1 :*: o2) -> objDeBrSubX targetIdx substitution o1 :*: objDeBrSubX targetIdx substitution o2
     IntSet -> IntSet
 
 
--- Update propDeBrSubX (No changes needed here, already updated)
 propDeBrSubX :: Int -> ObjDeBr -> PropDeBr -> PropDeBr
 propDeBrSubX targetIdx substitution template = case template of
     Neg p -> Neg $ propDeBrSubX targetIdx substitution p
@@ -620,27 +615,26 @@ propDeBrSubX targetIdx substitution template = case template of
         subBoundDepth = boundDepthObjDeBr substitution
         newBoundDepth = boundDepthPropDeBrX targetIdx subBoundDepth p
         normalisedSubexp = swapBoundIndexProp boundDepth newBoundDepth p
-    (o1 :<=: o2) -> objDeBrSubX targetIdx substitution o1 :<=: objDeBrSubX targetIdx substitution o2 -- Updated
+    (o1 :<=: o2) -> objDeBrSubX targetIdx substitution o1 :<=: objDeBrSubX targetIdx substitution o2
     F -> F
 
 
--- Update swapXtoXIntProp (No changes needed here, already updated)
 swapXtoXIntProp :: PropDeBr -> PropDeBr
 swapXtoXIntProp p = case p of
     Neg q -> Neg (swapXtoXIntProp q)
-    (p1 :&&: p2) -> (swapXtoXIntProp p1) :&&: (swapXtoXIntProp p2)
-    (p1 :||: p2) -> (swapXtoXIntProp p1) :||: (swapXtoXIntProp p2)
-    (p1 :->: p2) -> (swapXtoXIntProp p1) :->: (swapXtoXIntProp p2)
-    (p1 :<->: p2) -> (swapXtoXIntProp p1) :<->: (swapXtoXIntProp p2)
-    (o1 :==: o2) -> (swapXtoXIntObj o1) :==: (swapXtoXIntObj o2)
+    (p1 :&&: p2) -> swapXtoXIntProp p1 :&&: swapXtoXIntProp p2
+    (p1 :||: p2) -> swapXtoXIntProp p1 :||: swapXtoXIntProp p2
+    (p1 :->: p2) -> swapXtoXIntProp p1 :->: swapXtoXIntProp p2
+    (p1 :<->: p2) -> swapXtoXIntProp p1 :<->: swapXtoXIntProp p2
+    (o1 :==: o2) -> swapXtoXIntObj o1 :==: swapXtoXIntObj o2
     In o1 o2 -> In (swapXtoXIntObj o1) (swapXtoXIntObj o2)
     Forall q -> Forall (swapXtoXIntProp q)
     Exists q -> Exists (swapXtoXIntProp q)
-    (o1 :<=: o2) -> (swapXtoXIntObj o1) :<=: (swapXtoXIntObj o2) -- Updated
+    (o1 :<=: o2) -> swapXtoXIntObj o1 :<=: swapXtoXIntObj o2
     F -> F
 
 
--- Update swapXtoXIntObj
+
 swapXtoXIntObj :: ObjDeBr -> ObjDeBr
 swapXtoXIntObj o = case o of
     Integ num -> Integ num
@@ -651,29 +645,29 @@ swapXtoXIntObj o = case o of
     X i -> XInternal i
     XInternal i -> XInternal i
     Tupl xs -> Tupl $ Prelude.map swapXtoXIntObj xs
-    (o1 :+: o2) -> (swapXtoXIntObj o1) :+: (swapXtoXIntObj o2) -- Updated
-    Intneg o1     -> Intneg (swapXtoXIntObj o1)               -- Updated
-    (o1 :*: o2) -> (swapXtoXIntObj o1) :*: (swapXtoXIntObj o2) -- Updated
+    (o1 :+: o2) -> swapXtoXIntObj o1 :+: swapXtoXIntObj o2
+    Intneg o1     -> Intneg (swapXtoXIntObj o1)
+    (o1 :*: o2) -> swapXtoXIntObj o1 :*: swapXtoXIntObj o2
     IntSet -> IntSet
 
 
--- Update swapXIntToXProp (No changes needed here, already updated)
+
 swapXIntToXProp :: PropDeBr -> PropDeBr
 swapXIntToXProp p = case p of
     Neg q -> Neg (swapXIntToXProp q)
-    (p1 :&&: p2) -> (swapXIntToXProp p1) :&&: (swapXIntToXProp p2)
-    (p1 :||: p2) -> (swapXIntToXProp p1) :||: (swapXIntToXProp p2)
-    (p1 :->: p2) -> (swapXIntToXProp p1) :->: (swapXIntToXProp p2)
-    (p1 :<->: p2) -> (swapXIntToXProp p1) :<->: (swapXIntToXProp p2)
-    (o1 :==: o2) -> (swapXIntToXObj o1) :==: (swapXIntToXObj o2)
+    (p1 :&&: p2) -> swapXIntToXProp p1 :&&: swapXIntToXProp p2
+    (p1 :||: p2) -> swapXIntToXProp p1 :||: swapXIntToXProp p2
+    (p1 :->: p2) -> swapXIntToXProp p1 :->: swapXIntToXProp p2
+    (p1 :<->: p2) -> swapXIntToXProp p1 :<->: swapXIntToXProp p2
+    (o1 :==: o2) -> swapXIntToXObj o1 :==: swapXIntToXObj o2
     In o1 o2 -> In (swapXIntToXObj o1) (swapXIntToXObj o2)
     Forall q -> Forall (swapXIntToXProp q)
     Exists q -> Exists (swapXIntToXProp q)
-    (o1 :<=: o2) -> (swapXIntToXObj o1) :<=: (swapXIntToXObj o2) -- Updated
+    (o1 :<=: o2) -> swapXIntToXObj o1 :<=: swapXIntToXObj o2
     F -> F
 
 
--- Update swapXIntToXObj
+
 swapXIntToXObj :: ObjDeBr -> ObjDeBr
 swapXIntToXObj o = case o of
     Integ num -> Integ num
@@ -684,9 +678,9 @@ swapXIntToXObj o = case o of
     X i -> X i
     XInternal i -> X i
     Tupl xs -> Tupl $ Prelude.map swapXIntToXObj xs
-    (o1 :+: o2) -> (swapXIntToXObj o1) :+: (swapXIntToXObj o2) -- Updated
-    Intneg o1     -> Intneg (swapXIntToXObj o1)               -- Updated
-    (o1 :*: o2) -> (swapXIntToXObj o1) :*: (swapXIntToXObj o2) -- Updated
+    (o1 :+: o2) -> swapXIntToXObj o1 :+: swapXIntToXObj o2
+    Intneg o1     -> Intneg (swapXIntToXObj o1)
+    (o1 :*: o2) -> swapXIntToXObj o1 :*: swapXIntToXObj o2
     IntSet -> IntSet
 
 
@@ -705,7 +699,7 @@ propDeBrSubXs subs prop =
           ) prop subs
 
 
--- Update objDeBrApplyUG
+
 objDeBrApplyUG :: ObjDeBr -> Int -> Int -> ObjDeBr
 objDeBrApplyUG obj freevarIdx boundvarIdx =
     case obj of
@@ -715,26 +709,26 @@ objDeBrApplyUG obj freevarIdx boundvarIdx =
         Bound idx -> Bound idx
         V idx -> if idx == freevarIdx then Bound boundvarIdx else V idx
         Tupl xs -> Tupl $ Prelude.map (\x -> objDeBrApplyUG x freevarIdx boundvarIdx) xs
-        (o1 :+: o2) -> (objDeBrApplyUG o1 freevarIdx boundvarIdx) :+: (objDeBrApplyUG o2 freevarIdx boundvarIdx) -- Updated
-        Intneg o1     -> Intneg (objDeBrApplyUG o1 freevarIdx boundvarIdx)                                      -- Updated
-        (o1 :*: o2) -> (objDeBrApplyUG o1 freevarIdx boundvarIdx) :*: (objDeBrApplyUG o2 freevarIdx boundvarIdx) -- Updated
+        (o1 :+: o2) -> objDeBrApplyUG o1 freevarIdx boundvarIdx :+: objDeBrApplyUG o2 freevarIdx boundvarIdx
+        Intneg o1     -> Intneg (objDeBrApplyUG o1 freevarIdx boundvarIdx)
+        (o1 :*: o2) -> objDeBrApplyUG o1 freevarIdx boundvarIdx :*: objDeBrApplyUG o2 freevarIdx boundvarIdx
         IntSet -> IntSet
 
 
--- Update propDeBrApplyUG (No changes needed here, already updated)
+
 propDeBrApplyUG :: PropDeBr -> Int -> Int -> PropDeBr
 propDeBrApplyUG prop freevarIdx boundvarIdx =
     case prop of
         Neg p -> Neg (propDeBrApplyUG p freevarIdx boundvarIdx)
-        (p1 :&&: p2) -> (propDeBrApplyUG p1 freevarIdx boundvarIdx) :&&: (propDeBrApplyUG p2 freevarIdx boundvarIdx)
-        (p1 :||: p2) -> (propDeBrApplyUG p1 freevarIdx boundvarIdx) :||: (propDeBrApplyUG p2 freevarIdx boundvarIdx)
-        (p1 :->: p2) -> (propDeBrApplyUG p1 freevarIdx boundvarIdx) :->: (propDeBrApplyUG p2 freevarIdx boundvarIdx)
-        (p1 :<->: p2) -> (propDeBrApplyUG p1 freevarIdx boundvarIdx) :<->: (propDeBrApplyUG p2 freevarIdx boundvarIdx)
-        (o1 :==: o2) -> (objDeBrApplyUG o1 freevarIdx boundvarIdx) :==: (objDeBrApplyUG o2 freevarIdx boundvarIdx)
+        (p1 :&&: p2) -> propDeBrApplyUG p1 freevarIdx boundvarIdx :&&: propDeBrApplyUG p2 freevarIdx boundvarIdx
+        (p1 :||: p2) -> propDeBrApplyUG p1 freevarIdx boundvarIdx :||: propDeBrApplyUG p2 freevarIdx boundvarIdx
+        (p1 :->: p2) -> propDeBrApplyUG p1 freevarIdx boundvarIdx :->: propDeBrApplyUG p2 freevarIdx boundvarIdx
+        (p1 :<->: p2) -> propDeBrApplyUG p1 freevarIdx boundvarIdx :<->: propDeBrApplyUG p2 freevarIdx boundvarIdx
+        (o1 :==: o2) -> objDeBrApplyUG o1 freevarIdx boundvarIdx :==: objDeBrApplyUG o2 freevarIdx boundvarIdx
         In o1 o2 -> In (objDeBrApplyUG o1 freevarIdx boundvarIdx) (objDeBrApplyUG o2 freevarIdx boundvarIdx)
         Forall p -> Forall (propDeBrApplyUG p freevarIdx boundvarIdx)
         Exists p -> Exists (propDeBrApplyUG p freevarIdx boundvarIdx)
-        (o1 :<=: o2) -> (objDeBrApplyUG o1 freevarIdx boundvarIdx) :<=: (objDeBrApplyUG o2 freevarIdx boundvarIdx) -- Added
+        (o1 :<=: o2) -> objDeBrApplyUG o1 freevarIdx boundvarIdx :<=: objDeBrApplyUG o2 freevarIdx boundvarIdx
         F -> F
 
 
@@ -802,7 +796,7 @@ type PredRuleDeBr = PREDL.LogicRule PropDeBr DeBrSe Text ObjDeBr ()
 type PrfStdStepPredDeBr = PrfStdStep PropDeBr Text ()
 
 
--- Update objDeBrSubBoundVarToX0
+
 objDeBrSubBoundVarToX0 :: Int -> ObjDeBr -> ObjDeBr
 objDeBrSubBoundVarToX0 boundVarIdx obj = case obj of
     Integ num -> Integ num
@@ -811,13 +805,12 @@ objDeBrSubBoundVarToX0 boundVarIdx obj = case obj of
     Bound idx -> if idx == boundVarIdx then X 0 else Bound idx
     V idx -> V idx
     Tupl xs -> Tupl $ Prelude.map (objDeBrSubBoundVarToX0 boundVarIdx) xs
-    (o1 :+: o2) -> (objDeBrSubBoundVarToX0 boundVarIdx o1) :+: (objDeBrSubBoundVarToX0 boundVarIdx o2) -- Updated
-    Intneg o1     -> Intneg (objDeBrSubBoundVarToX0 boundVarIdx o1)                                  -- Updated
-    (o1 :*: o2) -> (objDeBrSubBoundVarToX0 boundVarIdx o1) :*: (objDeBrSubBoundVarToX0 boundVarIdx o2) -- Updated
+    (o1 :+: o2) -> objDeBrSubBoundVarToX0 boundVarIdx o1 :+: objDeBrSubBoundVarToX0 boundVarIdx o2
+    Intneg o1     -> Intneg (objDeBrSubBoundVarToX0 boundVarIdx o1)
+    (o1 :*: o2) -> objDeBrSubBoundVarToX0 boundVarIdx o1 :*: objDeBrSubBoundVarToX0 boundVarIdx o2
     IntSet -> IntSet
 
 
--- Update propDeBrSubBoundVarToX0 (No changes needed here, already updated)
 propDeBrSubBoundVarToX0 :: Int -> PropDeBr -> PropDeBr
 propDeBrSubBoundVarToX0 boundVarIdx prop = case prop of
     Neg p -> Neg $ propDeBrSubBoundVarToX0 boundVarIdx p
@@ -829,26 +822,26 @@ propDeBrSubBoundVarToX0 boundVarIdx prop = case prop of
     In a b -> In (objDeBrSubBoundVarToX0 boundVarIdx a) (objDeBrSubBoundVarToX0 boundVarIdx b)
     Forall p -> Forall (propDeBrSubBoundVarToX0 boundVarIdx p)
     Exists p -> Exists (propDeBrSubBoundVarToX0 boundVarIdx p)
-    (a :<=: b) -> objDeBrSubBoundVarToX0 boundVarIdx a :<=: objDeBrSubBoundVarToX0 boundVarIdx b -- Added
+    (a :<=: b) -> objDeBrSubBoundVarToX0 boundVarIdx a :<=: objDeBrSubBoundVarToX0 boundVarIdx b
     F -> F
 
 
--- Update xsubPropDeBr (No changes needed here, already updated)
+
 xsubPropDeBr :: PropDeBr -> Int -> Int -> PropDeBr
 xsubPropDeBr p idx depth = case p of
     Neg q -> Neg (xsubPropDeBr q idx depth)
-    (p1 :&&: p2) -> (xsubPropDeBr p1 idx depth) :&&: (xsubPropDeBr p2 idx depth)
-    (p1 :||: p2) -> (xsubPropDeBr p1 idx depth) :||: (xsubPropDeBr p2 idx depth)
-    (p1 :->: p2) -> (xsubPropDeBr p1 idx depth) :->: (xsubPropDeBr p2 idx depth)
-    (p1 :<->: p2) -> (xsubPropDeBr p1 idx depth) :<->: (xsubPropDeBr p2 idx depth)
-    (o1 :==: o2) -> (xsubObjDeBr o1 idx depth) :==: (xsubObjDeBr o2 idx depth)
+    (p1 :&&: p2) -> xsubPropDeBr p1 idx depth :&&: xsubPropDeBr p2 idx depth
+    (p1 :||: p2) -> xsubPropDeBr p1 idx depth :||: xsubPropDeBr p2 idx depth
+    (p1 :->: p2) -> xsubPropDeBr p1 idx depth :->: xsubPropDeBr p2 idx depth
+    (p1 :<->: p2) -> xsubPropDeBr p1 idx depth :<->: xsubPropDeBr p2 idx depth
+    (o1 :==: o2) -> xsubObjDeBr o1 idx depth :==: xsubObjDeBr o2 idx depth
     In o1 o2 -> In (xsubObjDeBr o1 idx depth) (xsubObjDeBr o2 idx depth)
     Forall q -> Forall (xsubPropDeBr q idx depth)
     Exists q -> Exists (xsubPropDeBr q idx depth)
-    (o1 :<=: o2) -> (xsubObjDeBr o1 idx depth) :<=: (xsubObjDeBr o2 idx depth) -- Added
+    (o1 :<=: o2) -> xsubObjDeBr o1 idx depth :<=: xsubObjDeBr o2 idx depth
     F -> F
 
--- Update xsubObjDeBr
+
 xsubObjDeBr :: ObjDeBr -> Int -> Int -> ObjDeBr
 xsubObjDeBr o idx depth = case o of
     Integ num -> Integ num
@@ -859,28 +852,28 @@ xsubObjDeBr o idx depth = case o of
     X i -> if i == idx then Bound depth else X i
     XInternal i -> XInternal i
     Tupl xs -> Tupl $ Prelude.map (\x -> xsubObjDeBr x idx depth) xs
-    (o1 :+: o2) -> (xsubObjDeBr o1 idx depth) :+: (xsubObjDeBr o2 idx depth) -- Updated
-    Intneg o1     -> Intneg (xsubObjDeBr o1 idx depth)                      -- Updated
-    (o1 :*: o2) -> (xsubObjDeBr o1 idx depth) :*: (xsubObjDeBr o2 idx depth) -- Updated
+    (o1 :+: o2) -> xsubObjDeBr o1 idx depth :+: xsubObjDeBr o2 idx depth
+    Intneg o1     -> Intneg (xsubObjDeBr o1 idx depth)
+    (o1 :*: o2) -> xsubObjDeBr o1 idx depth :*: xsubObjDeBr o2 idx depth
     IntSet -> IntSet
 
 
--- Update xsubPropDeBrXInt (No changes needed here, already updated)
+
 xsubPropDeBrXInt :: PropDeBr -> Int -> Int -> PropDeBr
 xsubPropDeBrXInt p idx depth = case p of
     Neg q -> Neg (xsubPropDeBrXInt q idx depth)
-    (p1 :&&: p2) -> (xsubPropDeBrXInt p1 idx depth) :&&: (xsubPropDeBrXInt p2 idx depth)
-    (p1 :||: p2) -> (xsubPropDeBrXInt p1 idx depth) :||: (xsubPropDeBrXInt p2 idx depth)
-    (p1 :->: p2) -> (xsubPropDeBrXInt p1 idx depth) :->: (xsubPropDeBrXInt p2 idx depth)
-    (p1 :<->: p2) -> (xsubPropDeBrXInt p1 idx depth) :<->: (xsubPropDeBrXInt p2 idx depth)
-    (o1 :==: o2) -> (xsubObjDeBrXInt o1 idx depth) :==: (xsubObjDeBrXInt o2 idx depth)
+    (p1 :&&: p2) -> xsubPropDeBrXInt p1 idx depth :&&: xsubPropDeBrXInt p2 idx depth
+    (p1 :||: p2) -> xsubPropDeBrXInt p1 idx depth :||: xsubPropDeBrXInt p2 idx depth
+    (p1 :->: p2) -> xsubPropDeBrXInt p1 idx depth :->: xsubPropDeBrXInt p2 idx depth
+    (p1 :<->: p2) -> xsubPropDeBrXInt p1 idx depth :<->: xsubPropDeBrXInt p2 idx depth
+    (o1 :==: o2) -> xsubObjDeBrXInt o1 idx depth :==: xsubObjDeBrXInt o2 idx depth
     In o1 o2 -> In (xsubObjDeBrXInt o1 idx depth) (xsubObjDeBrXInt o2 idx depth)
     Forall q -> Forall (xsubPropDeBrXInt q idx depth)
     Exists q -> Exists (xsubPropDeBrXInt q idx depth)
-    (o1 :<=: o2) -> (xsubObjDeBrXInt o1 idx depth) :<=: (xsubObjDeBrXInt o2 idx depth) -- Added
+    (o1 :<=: o2) -> xsubObjDeBrXInt o1 idx depth :<=: xsubObjDeBrXInt o2 idx depth
     F -> F
 
--- Update xsubObjDeBrXInt
+
 xsubObjDeBrXInt :: ObjDeBr -> Int -> Int -> ObjDeBr
 xsubObjDeBrXInt o idx depth = case o of
     Integ num -> Integ num
@@ -891,9 +884,9 @@ xsubObjDeBrXInt o idx depth = case o of
     X i -> X i
     XInternal i -> if i == idx then Bound depth else XInternal i
     Tupl xs -> Tupl $ Prelude.map (\x -> xsubObjDeBrXInt x idx depth) xs
-    (o1 :+: o2) -> (xsubObjDeBrXInt o1 idx depth) :+: (xsubObjDeBrXInt o2 idx depth) -- Updated
-    Intneg o1     -> Intneg (xsubObjDeBrXInt o1 idx depth)                      -- Updated
-    (o1 :*: o2) -> (xsubObjDeBrXInt o1 idx depth) :*: (xsubObjDeBrXInt o2 idx depth) -- Updated
+    (o1 :+: o2) -> xsubObjDeBrXInt o1 idx depth :+: xsubObjDeBrXInt o2 idx depth
+    Intneg o1     -> Intneg (xsubObjDeBrXInt o1 idx depth)
+    (o1 :*: o2) -> xsubObjDeBrXInt o1 idx depth :*: xsubObjDeBrXInt o2 idx depth
     IntSet -> IntSet
 
 
