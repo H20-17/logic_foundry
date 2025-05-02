@@ -68,7 +68,7 @@ import qualified RuleSets.PropLogic as PL
 import qualified RuleSets.PredLogic as PREDL
 import qualified RuleSets.ZFC as ZFC
 import RuleSets.PropLogic (LogicSent(parseIff))
-import RuleSets.ZFC (emptySetAxiom, specification,parseMemberOf,memberOf)
+import RuleSets.ZFC (specification,parseMemberOf,memberOf)
 import Control.Monad.State
 import Control.Monad.RWS
     ( MonadReader(ask), runRWS, MonadWriter(tell), RWS )
@@ -950,8 +950,6 @@ instance ZFC.LogicTerm ObjDeBr where
 
 
 instance ZFC.LogicSent PropDeBr ObjDeBr where
-    emptySetAxiom :: PropDeBr
-    emptySetAxiom = eX 0 $ Neg $ aX 1 $ X 1 `In` X 0
 
 
     specAxiom :: [Int] -> Int -> ObjDeBr -> PropDeBr -> PropDeBr

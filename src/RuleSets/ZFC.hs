@@ -6,10 +6,14 @@ module RuleSets.ZFC
     LogicRuleClass(..),
     LogicSent(..),
     LogicTerm(..),
-     emptySetM,
-     specificationM,
-     replacementM,
-     MetaRuleError(..)
+    specificationM,
+    replacementM,
+    integerMembershipM,
+    integerNegationM,
+    integerAdditionM,
+    integerMultiplicationM,
+    integerCompareM,
+    MetaRuleError(..)
 ) where
 
 
@@ -74,6 +78,7 @@ import RuleSets.PredLogic hiding
    SubproofMException(..),
    MetaRuleError(..))
 import qualified RuleSets.PredLogic as PREDL
+import GHC.Num (integerMul)
 
 
 
@@ -82,7 +87,6 @@ import qualified RuleSets.PredLogic as PREDL
 
 
 class LogicTerm t where
-   nullSet :: t
    integer :: Int -> t
    parseTuple :: t -> Maybe [t]
    buildTuple :: [t] -> t
@@ -94,7 +98,6 @@ class LogicTerm t where
 
 
 class (PREDL.LogicSent s t ()) => LogicSent s t | s ->t where
-   emptySetAxiom :: s
    specAxiom :: [Int] -> Int -> t -> s -> s
    replaceAxiom :: [Int] -> Int -> Int -> t -> s -> s
    parseMemberOf :: s -> Maybe (t, t)
@@ -251,7 +254,6 @@ instance PREDL.LogicRuleClass [LogicRule s sE t] s t () sE Text where
      eqSubst idx templateSent eqSent = [PredRule $ PREDL.EqSubst idx templateSent eqSent]
 
 class LogicRuleClass r s sE t | r->s, r->sE, r->t where
-     emptySet :: r
      specification :: [Int] -> Int -> t -> s -> r
      replacement :: [Int] -> Int -> Int -> t -> s -> r
      integerMembership    :: Int -> r
@@ -261,8 +263,6 @@ class LogicRuleClass r s sE t | r->s, r->sE, r->t where
      integerCompare :: Int -> Int -> r
 
 instance LogicRuleClass [LogicRule s sE t] s sE t where
-     emptySet :: [LogicRule s sE t]
-     emptySet = [EmptySet]
      specification :: [Int] -> Int -> t -> s -> [LogicRule s sE t]
      specification outerIdxs idx t s = [Specification outerIdxs idx t s]
      replacement :: [Int] -> Int -> Int -> t ->  s -> [LogicRule s sE t]
@@ -277,7 +277,7 @@ instance LogicRuleClass [LogicRule s sE t] s sE t where
      integerNegation i = [IntegerNegation i]
      integerCompare :: Int -> Int -> [LogicRule s sE t]
      integerCompare i1 i2 = [IntegerCompare i1 i2]
-     
+
 
 -- Finds the first element that appears more than once in the list.
 findFirstDuplicate :: Ord a => [a] -> Maybe a
@@ -323,9 +323,6 @@ runProofAtomic rule context state  =
           ProofByUG schema -> do
                (generalized,step) <- left LogicErrUG (runProofByUG schema context state)
                return (Just generalized,Nothing, step)
-          EmptySet -> do
-               let step = PrfStdStepStep emptySetAxiom "AXIOM_EMPTYSET" []
-               return (Just emptySetAxiom, Nothing, step)
           Specification outerIdxs idx t s -> do
                -- Check idx is not in outerIdxs
                when (idx `elem` outerIdxs) $ -- Use 'when' from Control.Monad for cleaner Either handling
@@ -522,11 +519,6 @@ standardRuleM rule = do
      mayPropIndex <- monadifyProofStd rule
      maybe (error "Critical failure: No index looking up sentence.") return mayPropIndex
 
-emptySetM :: (Monad m, Show sE, Typeable sE, Show s, Typeable s, Show eL, Typeable eL,
-       MonadThrow m, Show o, Typeable o, Show tType, Typeable tType, TypedSent o tType sE s,
-       Monoid (PrfStdState s o tType), ProofStd s eL [LogicRule s sE t] o tType, StdPrfPrintMonad s o tType m    )
-       => ProofGenTStd tType [LogicRule s sE t] s o m (s,[Int])
-emptySetM = standardRuleM emptySet
 
 
 specificationM :: (Monad m, Show sE, Typeable sE, Show s, Typeable s, Show eL, Typeable eL,
@@ -542,6 +534,23 @@ replacementM :: (Monad m, Show sE, Typeable sE, Show s, Typeable s, Show eL, Typ
        Monoid (PrfStdState s o tType), ProofStd s eL [LogicRule s sE t] o tType, StdPrfPrintMonad s o tType m    )
        => [Int] -> Int -> Int -> t -> s -> ProofGenTStd tType [LogicRule s sE t] s o m (s,[Int])
 replacementM outerIdxs idx1 idx2 t s = standardRuleM (replacement outerIdxs idx1 idx2 t s)
+
+
+integerMembershipM, integerNegationM :: (Monad m, Show sE, Typeable sE, Show s, Typeable s, Show eL, Typeable eL,
+       MonadThrow m, Show o, Typeable o, Show tType, Typeable tType, TypedSent o tType sE s,
+       Monoid (PrfStdState s o tType), ProofStd s eL [LogicRule s sE t] o tType, StdPrfPrintMonad s o tType m    )
+       => Int -> ProofGenTStd tType [LogicRule s sE t] s o m (s,[Int])
+integerMembershipM i = standardRuleM (integerMembership i)
+integerNegationM i = standardRuleM (integerNegation i)
+
+integerAdditionM, integerMultiplicationM, integerCompareM 
+ :: (Monad m, Show sE, Typeable sE, Show s, Typeable s, Show eL, Typeable eL,
+       MonadThrow m, Show o, Typeable o, Show tType, Typeable tType, TypedSent o tType sE s,
+       Monoid (PrfStdState s o tType), ProofStd s eL [LogicRule s sE t] o tType, StdPrfPrintMonad s o tType m    )
+       => Int -> Int -> ProofGenTStd tType [LogicRule s sE t] s o m (s,[Int])
+integerAdditionM i1 i2 = standardRuleM (integerAddition i1 i2)
+integerMultiplicationM i1 i2 = standardRuleM (integerMultiplication i1 i2)
+integerCompareM i1 i2 = standardRuleM (integerCompare i1 i2)
 
 
 
