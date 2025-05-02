@@ -87,6 +87,11 @@ class LogicTerm t where
    parseTuple :: t -> Maybe [t]
    buildTuple :: [t] -> t
    buildProject :: Int -> t -> t
+   (.+.) :: t -> t -> t
+   (.*.) :: t -> t -> t
+   intNeg :: t -> t
+   intSet :: t
+
 
 class (PREDL.LogicSent s t ()) => LogicSent s t | s ->t where
    emptySetAxiom :: s
@@ -94,6 +99,9 @@ class (PREDL.LogicSent s t ()) => LogicSent s t | s ->t where
    replaceAxiom :: [Int] -> Int -> Int -> t -> s -> s
    parseMemberOf :: s -> Maybe (t, t)
    memberOf :: t -> t -> s
+   (.<=.) :: t -> t -> s
+
+
 
 
 
@@ -117,6 +125,7 @@ data LogicError s sE t where
     LogicErrReplOuterIndexDuplicate :: Int -> [Int] -> LogicError s sE t
     LogicErrSpecOuterIndexDuplicate :: Int -> [Int] -> LogicError s sE t
     LogicErrReplIndexConflict :: Int -> Int -> [Int] -> LogicError s sE t -- For idx1 == idx2 OR idx1/idx2 in outerIdxs
+    LogicErrIntCompareFalse :: Int -> Int -> LogicError s sE t
    deriving (Show)
 
 data LogicRule s sE t  where
@@ -131,6 +140,11 @@ data LogicRule s sE t  where
     EmptySet :: LogicRule s sE t
     Specification :: [Int] -> Int -> t -> s -> LogicRule s sE t
     Replacement :: [Int] -> Int -> Int -> t -> s -> LogicRule s sE t
+    IntegerMembership    :: Int -> LogicRule s sE t
+    IntegerAddition      :: Int -> Int -> LogicRule s sE t
+    IntegerMultiplication:: Int -> Int -> LogicRule s sE t
+    IntegerNegation      :: Int -> LogicRule s sE t
+    IntegerCompare :: Int -> Int -> LogicRule s sE t
     deriving(Show)
 
 
@@ -240,6 +254,11 @@ class LogicRuleClass r s sE t | r->s, r->sE, r->t where
      emptySet :: r
      specification :: [Int] -> Int -> t -> s -> r
      replacement :: [Int] -> Int -> Int -> t -> s -> r
+     integerMembership    :: Int -> r
+     integerAddition      :: Int -> Int -> r
+     integerMultiplication:: Int -> Int -> r
+     integerNegation      :: Int -> r
+     integerCompare :: Int -> Int -> r
 
 instance LogicRuleClass [LogicRule s sE t] s sE t where
      emptySet :: [LogicRule s sE t]
@@ -248,7 +267,17 @@ instance LogicRuleClass [LogicRule s sE t] s sE t where
      specification outerIdxs idx t s = [Specification outerIdxs idx t s]
      replacement :: [Int] -> Int -> Int -> t ->  s -> [LogicRule s sE t]
      replacement outerIdxs idx1 idx2 t s = [Replacement outerIdxs idx1 idx2 t s]
-
+     integerMembership    :: Int -> [LogicRule s sE t]
+     integerMembership i = [IntegerMembership i]
+     integerAddition      :: Int -> Int -> [LogicRule s sE t]
+     integerAddition i1 i2 = [IntegerAddition i1 i2]
+     integerMultiplication:: Int -> Int -> [LogicRule s sE t]
+     integerMultiplication i1 i2 = [IntegerMultiplication i1 i2]
+     integerNegation      :: Int -> [LogicRule s sE t]
+     integerNegation i = [IntegerNegation i]
+     integerCompare :: Int -> Int -> [LogicRule s sE t]
+     integerCompare i1 i2 = [IntegerCompare i1 i2]
+     
 
 -- Finds the first element that appears more than once in the list.
 findFirstDuplicate :: Ord a => [a] -> Maybe a
@@ -381,6 +410,33 @@ runProofAtomic rule context state  =
                -- Create the proof step
                let step = PrfStdStepStep replAx "AXIOM_REPLACEMENT" []
                return (Just replAx, Nothing, step)
+
+          IntegerMembership i -> do
+              let resultSent = integer i `memberOf` intSet
+              return (Just resultSent, Nothing, PrfStdStepStep resultSent "AXIOM_INTEGER_MEMBERSHIP" [])
+
+          IntegerAddition i1 i2 -> do
+              let termLHS = integer i1 .+. integer i2
+              let termRHS = integer (i1 + i2) -- Meta-level calculation
+              let resultSent = termLHS .==. termRHS
+              return (Just resultSent, Nothing, PrfStdStepStep resultSent "AXIOM_INTEGER_ADDITION" [])
+
+          IntegerMultiplication i1 i2 -> do
+              let termLHS = integer i1 .*. integer i2
+              let termRHS = integer (i1 * i2) -- Meta-level calculation
+              let resultSent = termLHS .==. termRHS
+              return (Just resultSent, Nothing, PrfStdStepStep resultSent "AXIOM_INTEGER_MULTIPLICATION" [])
+
+          IntegerNegation i -> do
+              let termLHS = intNeg (integer i)
+              let termRHS = integer (-i) -- Meta-level calculation
+              let resultSent = termLHS .==. termRHS
+              return (Just resultSent, Nothing, PrfStdStepStep resultSent "AXIOM_INTEGER_NEGATION" [])
+          IntegerCompare i1 i2 -> do
+              when (i1 > i2) $
+                  throwError $ LogicErrIntCompareFalse i1 i2 -- Error for invalid comparison
+              let resultSent = integer i1 .<=. integer i2
+              return (Just resultSent, Nothing, PrfStdStepStep resultSent "AXIOM_INTEGER_LTE" [])
 
     where
         proven = (keysSet . provenSents) state

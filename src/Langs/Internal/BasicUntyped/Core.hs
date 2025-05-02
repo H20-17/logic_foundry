@@ -939,6 +939,14 @@ instance ZFC.LogicTerm ObjDeBr where
     parseTuple = parseTupl
     buildTuple :: [ObjDeBr] -> ObjDeBr
     buildTuple = Tupl
+    (.+.) :: ObjDeBr -> ObjDeBr -> ObjDeBr
+    (.+.) = (:+:)
+    (.*.) :: ObjDeBr -> ObjDeBr -> ObjDeBr
+    (.*.) = (:*:)
+    intNeg :: ObjDeBr -> ObjDeBr
+    intNeg = Intneg
+    intSet :: ObjDeBr
+    intSet = IntSet
 
 
 instance ZFC.LogicSent PropDeBr ObjDeBr where
@@ -1008,3 +1016,7 @@ instance ZFC.LogicSent PropDeBr ObjDeBr where
 
         in
             closed_axiom
+    memberOf :: ObjDeBr -> ObjDeBr -> PropDeBr
+    memberOf a b = a `In` b
+    (.<=.) :: ObjDeBr -> ObjDeBr -> PropDeBr
+    (.<=.) = (:<=:)

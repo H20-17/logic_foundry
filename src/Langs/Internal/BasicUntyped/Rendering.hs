@@ -267,7 +267,7 @@ instance SubexpDeBr ObjDeBr where
                 setA <- parsePowerSet obj
                 return $ FuncApp (ParseTreeConst "𝒫") (toSubexpParseTree setA dict)
             parseEmptySet' = do
-                when (parseEmptySet obj) (return ())
+                guard (parseEmptySet obj)
                 return $ ParseTreeConst "∅"
             parseIntNeg' = do
                 subexp <- parseIntNeg obj
