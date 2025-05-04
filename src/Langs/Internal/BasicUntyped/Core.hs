@@ -75,6 +75,7 @@ import Control.Monad.RWS
 import Text.XHtml (sub)
 import qualified Internal.StdPattern
 import Data.Maybe (isJust)
+import GHC.IO.BufferedIO (BufferedIO(emptyWriteBuffer))
 
 
 data ObjDeBr where
@@ -1018,3 +1019,32 @@ instance ZFC.LogicSent PropDeBr ObjDeBr where
     memberOf a b = a `In` b
     (.<=.) :: ObjDeBr -> ObjDeBr -> PropDeBr
     (.<=.) = (:<=:)
+
+    tupleIsUrelementAxiom :: Int -> PropDeBr
+    tupleIsUrelementAxiom tupleLen =
+        let elementVars = [X i | i <- [0 .. tupleLen - 1]]
+            templateTuple = Tupl elementVars
+            x_idx = tupleLen -- Use tupleLen as the index for the existential variable 'x'
+            -- Proposition template using the template variable X x_idx
+            prop_template = X x_idx `In` templateTuple
+            -- Create the existential proposition correctly using eX
+            exists_prop = eX x_idx prop_template
+        in
+            -- Apply multiAx to the Negation of the existential proposition
+            multiAx [0 .. tupleLen - 1] (Neg exists_prop)
+
+    intsAreUrelementsAxiom :: PropDeBr
+    intsAreUrelementsAxiom =
+              -- Construct the axiom: ∀i (i ∈ IntSet → (∀x (x ∉ i)))
+              -- Using template variables: ∀X₀ (X₀ ∈ IntSet → (∀X₁ (¬(X₁ ∈ X₀))))
+              -- Inner part: ∀X₁ (¬(X₁ ∈ X₀))
+              -- Template for negation: Neg (X 1 `In` X 0)
+              let inner_forall = aX 1 (Neg (X 1 `In` X 0))
+
+              -- Outer part: X₀ ∈ IntSet → inner_forall
+              -- Template for implication: (X 0 `In` IntSet) :->: inner_forall
+                  implication = (X 0 `In` IntSet) :->: inner_forall
+
+              -- Full axiom: ∀X₀ (implication)
+              in aX 0 implication
+

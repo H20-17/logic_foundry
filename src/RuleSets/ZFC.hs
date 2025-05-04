@@ -13,6 +13,8 @@ module RuleSets.ZFC
     integerAdditionM,
     integerMultiplicationM,
     integerCompareM,
+    tupleUrelementM,
+    integersAreUrelementsM,
     MetaRuleError(..)
 ) where
 
@@ -102,6 +104,9 @@ class (PREDL.LogicSent s t ()) => LogicSent s t | s ->t where
    replaceAxiom :: [Int] -> Int -> Int -> t -> s -> s
    parseMemberOf :: s -> Maybe (t, t)
    memberOf :: t -> t -> s
+   tupleIsUrelementAxiom :: Int -> s
+   intsAreUrelementsAxiom :: s
+   
    (.<=.) :: t -> t -> s
 
 
@@ -129,6 +134,7 @@ data LogicError s sE t where
     LogicErrSpecOuterIndexDuplicate :: Int -> [Int] -> LogicError s sE t
     LogicErrReplIndexConflict :: Int -> Int -> [Int] -> LogicError s sE t -- For idx1 == idx2 OR idx1/idx2 in outerIdxs
     LogicErrIntCompareFalse :: Int -> Int -> LogicError s sE t
+    LogicErrInvalidTupleLength :: Int -> LogicError s sE t
    deriving (Show)
 
 data LogicRule s sE t  where
@@ -148,6 +154,8 @@ data LogicRule s sE t  where
     IntegerMultiplication:: Int -> Int -> LogicRule s sE t
     IntegerNegation      :: Int -> LogicRule s sE t
     IntegerCompare :: Int -> Int -> LogicRule s sE t
+    TupleUrelement:: Int -> LogicRule s sE t
+    IntegersAreUrelements :: LogicRule s sE t
     deriving(Show)
 
 
@@ -261,6 +269,8 @@ class LogicRuleClass r s sE t | r->s, r->sE, r->t where
      integerMultiplication:: Int -> Int -> r
      integerNegation      :: Int -> r
      integerCompare :: Int -> Int -> r
+     tupleUrelement :: Int -> r
+     integersAreUrelements :: r
 
 instance LogicRuleClass [LogicRule s sE t] s sE t where
      specification :: [Int] -> Int -> t -> s -> [LogicRule s sE t]
@@ -277,7 +287,10 @@ instance LogicRuleClass [LogicRule s sE t] s sE t where
      integerNegation i = [IntegerNegation i]
      integerCompare :: Int -> Int -> [LogicRule s sE t]
      integerCompare i1 i2 = [IntegerCompare i1 i2]
-
+     tupleUrelement :: Int -> [LogicRule s sE t]
+     tupleUrelement n = [TupleUrelement n]
+     integersAreUrelements :: [LogicRule s sE t]
+     integersAreUrelements = [IntegersAreUrelements]
 
 -- Finds the first element that appears more than once in the list.
 findFirstDuplicate :: Ord a => [a] -> Maybe a
@@ -435,6 +448,31 @@ runProofAtomic rule context state  =
               let resultSent = integer i1 .<=. integer i2
               return (Just resultSent, Nothing, PrfStdStepStep resultSent "AXIOM_INTEGER_LTE" [])
 
+          TupleUrelement n -> do -- Renamed from AxiomTupleUrelement
+              -- Basic check on the length argument
+              when (n < 0) $
+                  throwError $ LogicErrInvalidTupleLength n
+
+              -- Get the axiom instance using the LogicSent method
+              let axiomInstance = tupleIsUrelementAxiom n -- This function name stays the same (it describes what's *generated*)
+
+              -- Create the proof step (Axiom has no dependencies)
+              -- Use a justification reflecting the rule name
+              let justificationText = "TUPLE_URELEMENT_" <> pack (show n) -- Renamed Justification
+              let step = PrfStdStepStep axiomInstance justificationText []
+              return (Just axiomInstance, Nothing, step)
+         
+          IntegersAreUrelements -> do
+              -- Get the axiom instance by calling the renamed LogicSent method
+              let axiomInstance = intsAreUrelementsAxiom -- Use the renamed method
+
+              -- Sanity Check Optional/Removed
+
+              -- Create the proof step
+              let justificationText = "AXIOM_INTEGER_URELEMENT"
+              let step = PrfStdStepStep axiomInstance justificationText []
+              return (Just axiomInstance, Nothing, step)
+
     where
         proven = (keysSet . provenSents) state
         constDict = fmap fst (consts state)
@@ -553,6 +591,19 @@ integerMultiplicationM i1 i2 = standardRuleM (integerMultiplication i1 i2)
 integerCompareM i1 i2 = standardRuleM (integerCompare i1 i2)
 
 
+tupleUrelementM :: (Monad m, Show sE, Typeable sE, Show s, Typeable s, Show eL, Typeable eL,
+       MonadThrow m, Show o, Typeable o, Show tType, Typeable tType, TypedSent o tType sE s,
+       Monoid (PrfStdState s o tType), ProofStd s eL [LogicRule s sE t] o tType, StdPrfPrintMonad s o tType m,
+       LogicRuleClass [LogicRule s sE t] s sE t)
+       => Int -> ProofGenTStd tType [LogicRule s sE t] s o m (s,[Int])
+tupleUrelementM n = standardRuleM (tupleUrelement n)
+
+integersAreUrelementsM :: (Monad m, Show sE, Typeable sE, Show s, Typeable s, Show eL, Typeable eL,
+       MonadThrow m, Show o, Typeable o, Show tType, Typeable tType, TypedSent o tType sE s,
+       Monoid (PrfStdState s o tType), ProofStd s eL [LogicRule s sE t] o tType, StdPrfPrintMonad s o tType m,
+       LogicRuleClass [LogicRule s sE t] s sE t)
+       => ProofGenTStd tType [LogicRule s sE t] s o m (s,[Int])
+integersAreUrelementsM = standardRuleM integersAreUrelements
 
 data MetaRuleError s where
    MetaRuleErrNotClosed :: s -> MetaRuleError s
