@@ -43,8 +43,8 @@ module Langs.Internal.BasicUntyped.Shorthands (
     parseSetDifference,
     powerSet,
     parsePowerSet,
-    emptySet,
-    parseEmptySet,
+    --emptySet,
+    --parseEmptySet,
     (.<.),
     parseLessThan
 
@@ -189,13 +189,13 @@ parseRoster obj
 
 
 -- Representation for the empty set term
-emptySet :: ObjDeBr
-emptySet = Tupl [] -- Assumes "∅" constant exists or is axiomatically defined
+--emptySet :: ObjDeBr
+--emptySet = Tupl [] -- Assumes "∅" constant exists or is axiomatically defined
 
-parseEmptySet :: ObjDeBr -> Bool
-parseEmptySet obj = case obj of
-    Tupl [] -> True -- Matches the empty set representation
-    _ -> False -- Anything else is not the empty set
+--parseEmptySet :: ObjDeBr -> Bool
+--parseEmptySet obj = case obj of
+--    Tupl [] -> True -- Matches the empty set representation
+--    _ -> False -- Anything else is not the empty set
 
 
 
@@ -895,9 +895,9 @@ boundDecrementObjDeBr idx obj = case obj of
      Bound i -> if i == idx then Bound (i - 1) else Bound i
      V i -> V i
      X i -> X i
-     Tupl xs ->
+     Tupl o1 o2 ->
          -- Apply the decrement recursively to each element in the list
-         Tupl $ Prelude.map (boundDecrementObjDeBr idx) xs
+         Tupl (boundDecrementObjDeBr idx o1) (boundDecrementObjDeBr idx o2)
      (:+:) o1 o2 -> (:+:) (boundDecrementObjDeBr idx o1) (boundDecrementObjDeBr idx o2)
      (:*:) o1 o2 -> (:*:) (boundDecrementObjDeBr idx o1) (boundDecrementObjDeBr idx o2)
 
