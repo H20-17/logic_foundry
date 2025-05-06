@@ -170,7 +170,7 @@ instance SubexpDeBr ObjDeBr where
               <|> parseBound'
               <|> parseV'
               <|> parseX'
-              <|> parseEmptySet'
+              -- <|> parseEmptySet'
               <|> parseTuple'
               <|> parseIntMult'
               <|> parseIntPlus'
@@ -224,7 +224,7 @@ instance SubexpDeBr ObjDeBr where
                 return $ ParseTreeInt i
 
             parseTuple' = do
-               tuple <- parseTupl obj
+               tuple <- parseTupleMax obj
                return $ Tuple $ Prelude.map  (`toSubexpParseTree` dict) tuple
             parseRoster' = do
                roster <- parseRoster obj
@@ -266,9 +266,9 @@ instance SubexpDeBr ObjDeBr where
             parsePowerSet' = do
                 setA <- parsePowerSet obj
                 return $ FuncApp (ParseTreeConst "𝒫") (toSubexpParseTree setA dict)
-            parseEmptySet' = do
-                guard (parseEmptySet obj)
-                return $ ParseTreeConst "∅"
+            --parseEmptySet' = do
+            --    guard (parseEmptySet obj)
+            --    return $ ParseTreeConst "∅"
             parseIntNeg' = do
                 subexp <- parseIntNeg obj
                 return $ UnaryOp "-" (toSubexpParseTree subexp dict)
