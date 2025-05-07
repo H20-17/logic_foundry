@@ -145,7 +145,7 @@ data LogicRule s sE t  where
     Theorem :: TheoremSchema s [LogicRule s sE t ] Text () -> LogicRule s sE t 
     TheoremM :: TheoremAlgSchema () [LogicRule s sE t ] s Text () -> 
                              LogicRule s sE t
-    EmptySet :: LogicRule s sE t
+    --EmptySet :: LogicRule s sE t
     Specification :: [Int] -> Int -> t -> s -> LogicRule s sE t
     Replacement :: [Int] -> Int -> Int -> t -> s -> LogicRule s sE t
     IntegerMembership    :: Int -> LogicRule s sE t

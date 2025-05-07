@@ -1,5 +1,5 @@
 module Langs.BasicUntyped (
-    ObjDeBr(Integ,Constant,V,X,Tupl,(:+:),(:*:),Intneg,IntSet),
+    ObjDeBr(Integ,Constant,V,X,(:+:),(:*:),Intneg,IntSet,EmptySet),
     PropDeBr(Neg,(:&&:),(:||:),(:->:),(:<->:),(:==:),In,(:<=:),F),
     DeBrSe(..),
     PrfStdStepPredDeBr,
@@ -39,7 +39,9 @@ module Langs.BasicUntyped (
     powerSet,
     --emptySet,
     (.<.),
-    parseIntSet
+    parseIntSet,
+    buildPair,
+    parsePair
 ) where
 
 

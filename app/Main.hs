@@ -406,7 +406,7 @@ testBuilderXSuite = do
     remarkM "Test 5: Complex Predicate { x ∈ N | ∃y (y ∈ M ∧ x = <y, C>) }"
     -- Predicate: eX 1 ( (X 1 `In` setM) :&&: (X 0 :==: Pair (X 1) constC) )
     -- Here, x is X 0 (bound by builderX), y is X 1 (bound by eX)
-    let prop5 = eX 1 ( (X 1 `In` setM) :&&: (X 0 :==: Tupl (X 1) (constC)) )
+    let prop5 = eX 1 ( (X 1 `In` setM) :&&: (X 0 :==: buildPair (X 1) (constC)) )
     let builtSet5 = builderX 0 setN prop5 -- Using index 0 for x
     builtSet5Show <- showObjM builtSet5
     remarkM $ "Constructed (idx=0): " <> builtSet5Show
@@ -713,7 +713,7 @@ testProjectShorthandParsing = do
 
     -- Test 7 (Negative Case - Body Not Equality)
     remarkM "Test 7: Hilbert term where body inside Exists is not an Equality"
-    let nonEqBody = hX 1 ( eX 0 ( Neg ( Constant "A" :==: Tupl (X 1) (X 0) ) ) )
+    let nonEqBody = hX 1 ( eX 0 ( Neg ( Constant "A" :==: buildPair (X 1) (X 0) ) ) )
     nonEqBody_show <- showObjM nonEqBody
     remarkM "  Input:    hX 1 ( eX 0 ( Neg ( Constant \"A\" :==: Tupl [X 1, X 0] ) ) )"
     remarkM $ "  Actual:   " <> nonEqBody_show
@@ -761,7 +761,7 @@ testCrossProductRendering = do
 
     -- == Negative Case (Optional): Ensure unrelated terms don't render as cross product ==
     remarkM "Test 2: Rendering a simple Tuple (A, B)"
-    let tupleTerm = Tupl setA setB
+    let tupleTerm = buildPair setA setB
     tupleOutput <- showObjM tupleTerm
     let expectedTupleOutput = "(A,B)" -- Or similar based on your tuple rendering
     remarkM "  Input Term: Tupl [A, B]"

@@ -1,4 +1,5 @@
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE DoAndIfThenElse #-}
 module Langs.Internal.BasicUntyped.Shorthands (
     eXBang,
     (./=.),
@@ -43,12 +44,12 @@ module Langs.Internal.BasicUntyped.Shorthands (
     parseSetDifference,
     powerSet,
     parsePowerSet,
-    --emptySet,
-    --parseEmptySet,
     (.<.),
     parseLessThan,
     parseTupleFixed,
-    parseTupleMax
+    parseTupleMax,
+    buildPair,
+    parsePair
 
 ) where
 import Langs.Internal.BasicUntyped.Core
@@ -99,7 +100,7 @@ parsePairFirstExp subexp = do
 --   Implemented as: hX S (∀x (x ∈ S ↔ (x=e₁ ∨ ... ∨ x=eₙ)))
 --   Automatically sorts and removes duplicate elements from the input list for a canonical term.
 roster :: [ObjDeBr] -> ObjDeBr
-roster [] = error "Empty set not impelemented yet!!!" -- emptySet
+roster [] = EmptySet
 roster elems =
     let
         -- Sort and remove duplicates for a canonical representation
@@ -190,14 +191,6 @@ parseRoster obj
 
 
 
--- Representation for the empty set term
---emptySet :: ObjDeBr
---emptySet = Tupl [] -- Assumes "∅" constant exists or is axiomatically defined
-
---parseEmptySet :: ObjDeBr -> Bool
---parseEmptySet obj = case obj of
---    Tupl [] -> True -- Matches the empty set representation
---    _ -> False -- Anything else is not the empty set
 
 
 
@@ -210,35 +203,82 @@ buildDisjunction var (e:es) = (var :==: e) :||: buildDisjunction var es
 
 
 parseTupleMax :: ObjDeBr -> Maybe [ObjDeBr]
-parseTupleMax obj = 
-        case obj of
-            Tupl o1 o2 -> Just $ o1 : parseTupleMaxInternal o2
-            _ -> Nothing
+parseTupleMax obj = do
+        (o1, o2) <- parsePair obj
+        return (o1 : parseTupleMaxInternal o2)
     where
         parseTupleMaxInternal obj =
-            case obj of
-                Tupl o1 o2 -> o1 : parseTupleMaxInternal o2
-                _ -> [obj]
+            case parsePair obj of
+                Just (o1,o2) -> o1 : parseTupleMaxInternal o2
+                Nothing -> [obj]
+
+
 
 parseTupleFixed :: ObjDeBr -> Int -> Maybe [ObjDeBr]
-parseTupleFixed obj n = 
-    case obj of
-        Tupl o1 o2 
-            | n > 2 -> do
-                 otherElements <- parseTupleFixed o2 (n-1)
-                 return $ o1 : otherElements
-            | n == 2 -> Just [o1, o2]
+parseTupleFixed obj n
+      |  n == 0 = case obj of
+                    EmptySet -> Just []
+                    _ ->  Nothing
+      |  n == 1 = Just [obj]
+      |  n == 2 = do
+            (o1, o2) <- parsePair obj
+            return [o1, o2]
+      | n > 2 = do
+            (o1, o2) <- parsePair obj
+            otherElements <- parseTupleFixed o2 (n-1)
+            return $ o1 : otherElements 
+      | otherwise = Nothing
 
-            | otherwise -> Nothing
-        _ -> Nothing
+
+
+buildPair :: ObjDeBr -> ObjDeBr -> ObjDeBr
+buildPair o1 o2 = roster [roster[o1], roster[o1,o2]]
+
+parsePair :: ObjDeBr -> Maybe (ObjDeBr, ObjDeBr)
+parsePair obj = do
+    list <- parseRoster obj
+    guard (length list == 2 || length list == 1)
+    (o1, o2) <- if 
+                  length list == 1 
+                then
+                  caseA (head list)
+                else 
+                  caseB (head list) (list!!1)
+    return (o1,o2)
+  where
+    caseA obj = do
+        list <- parseRoster obj
+        guard (length list == 1)
+        let o = head list
+        return (o,o)
+    caseB objA objB = do
+        listA <- parseRoster objA
+        listB <- parseRoster objB
+        guard (length listA == 2 && length listB == 1 || length listA == 1 && length listB == 2)
+        (o1, o2) <- if length listA == 2 && length listB == 1 then
+                         caseBInternal (head listB) (head listA) (listA!!1)
+                       else
+                         caseBInternal (head listA) (head listB) (listB!!1)
+        return (o1, o2)
+    caseBInternal :: ObjDeBr -> ObjDeBr -> ObjDeBr -> Maybe (ObjDeBr,ObjDeBr)
+    caseBInternal el1 el2a el2b = do
+        guard (el1 == el2a || el1 == el2b)
+        (o1,o2) <- if el1 == el2a then
+                     return (el1, el2b)
+                   else return (el1, el2a)
+        return (o1,o2)
+
+
+
+
 
 
 buildTuple :: [ObjDeBr] -> ObjDeBr
 buildTuple objs =
     case objs of
-        [] -> error "empty set not implemented yet!!!"
+        [] -> EmptySet
         [x] -> x
-        (x:xs) -> Tupl x (buildTuple xs)
+        (x:xs) -> buildPair x (buildTuple xs)
 
 
 
@@ -922,12 +962,9 @@ boundDecrementObjDeBr idx obj = case obj of
      Bound i -> if i == idx then Bound (i - 1) else Bound i
      V i -> V i
      X i -> X i
-     Tupl o1 o2 ->
-         -- Apply the decrement recursively to each element in the list
-         Tupl (boundDecrementObjDeBr idx o1) (boundDecrementObjDeBr idx o2)
      (:+:) o1 o2 -> (:+:) (boundDecrementObjDeBr idx o1) (boundDecrementObjDeBr idx o2)
      (:*:) o1 o2 -> (:*:) (boundDecrementObjDeBr idx o1) (boundDecrementObjDeBr idx o2)
-
+     EmptySet -> EmptySet
 
 
 
@@ -1100,7 +1137,7 @@ isFunc f setA setB =
         -- Condition 7: Functionality property over the declared domain 'dom'.
         --              Forall x (x In dom -> Exists! y (<x,y> In graph))
         --              Ensures each element in the declared domain maps to exactly one element.
-        cond7 = aX 0 ( (X 0 `In` dom) :->: eXBang 1 (Tupl (X 0) (X 1) `In` graph) )
+        cond7 = aX 0 ( (X 0 `In` dom) :->: eXBang 1 (buildPair (X 0) (X 1) `In` graph) )
 
     -- Combine all conditions using logical AND
     in
@@ -1122,7 +1159,7 @@ pairFirst = project 2 0
 relDomain :: ObjDeBr -> ObjDeBr
 relDomain s = objDeBrSubX 0 s (hX 1(aX 2 (X 2 `In` X 1)  -- x ∈ D
                        :<->:                             -- iff
-                            eX 3 (Tupl (X 2) (X 3) `In` X 0)))
+                            eX 3 (buildPair (X 2) (X 3) `In` X 0)))
 
 
 -- let us assume that f is a pair
@@ -1140,7 +1177,7 @@ tripletLast = project 3 2
 
 
 (.@.) :: ObjDeBr -> ObjDeBr -> ObjDeBr
-f .@. x = objDeBrSubXs [(0,f),(1,x)] (hX 2 ( Tupl (X 1) (X 2) `In` tripletLast (X 0) ))
+f .@. x = objDeBrSubXs [(0,f),(1,x)] (hX 2 ( buildPair (X 1) (X 2) `In` tripletLast (X 0) ))
 
 --f .@. x = objDeBrSubXs [(0, project 3 2 f), (1, x)] (hX 2 ( Tupl [X 1, X 2] `In` X 0 ))
 
@@ -1176,7 +1213,7 @@ f .:. g = --objDeBrSubXs [(1, f), (2, g)]
 crossProd :: ObjDeBr -> ObjDeBr -> ObjDeBr
 crossProd a b = objDeBrSubXs [(0,a),(1,b)] (hX 2 (multiAx [3,4]
               (X 3 `In` X 0 :&&: X 4 `In` X 1 :<->:
-            Tupl (X 3) (X 4) `In` X 2)))
+            buildPair (X 3) (X 4) `In` X 2)))
 
 
 isTuple :: Int -> ObjDeBr -> PropDeBr
