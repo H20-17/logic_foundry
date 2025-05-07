@@ -1076,6 +1076,133 @@ testPowerSetRendering = do
     remarkM "--- Power Set Rendering Tests Complete ---"
     return ()
 
+
+testPairAndTupleRendering :: ProofGenTStd () [PredRuleDeBr] PropDeBr Text IO ()
+testPairAndTupleRendering = do
+    remarkM "--- Testing Pair and Tuple Rendering (Kuratowski) ---"
+
+    -- Setup Constants for elements
+    let constA = Constant "A"
+    let constB = Constant "B"
+    let constC = Constant "C"
+    let constD = Constant "D"
+    let int1 = Integ 1
+    let int2 = Integ 2
+
+    fakeConstM "A" ()
+    fakeConstM "B" ()
+    fakeConstM "C" ()
+    fakeConstM "D" ()
+
+    -- Test 1: Simple Pair (A, B)
+    remarkM "Test 1: Rendering buildPair A B"
+    let pairAB = buildPair constA constB
+    actualOutput1 <- showObjM pairAB
+    let expectedOutput1 = "(A,B)"
+    remarkM "  Input Term: buildPair A B"
+    remarkM $ "  Actual Rendered Output:   " <> actualOutput1
+    remarkM $ "  Expected Rendered Output: " <> expectedOutput1
+    if actualOutput1 == expectedOutput1 then
+        remarkM "  Check: PASSED."
+    else
+        remarkM "  Check: FAILED. (Verify parsePair and Tuple rendering in Rendering.hs)"
+
+    -- Test 2: Pair with an integer (1, C)
+    remarkM "Test 2: Rendering buildPair (Integ 1) C"
+    let pair1C = buildPair int1 constC
+    actualOutput2 <- showObjM pair1C
+    let expectedOutput2 = "(1,C)"
+    remarkM "  Input Term: buildPair (Integ 1) C"
+    remarkM $ "  Actual Rendered Output:   " <> actualOutput2
+    remarkM $ "  Expected Rendered Output: " <> expectedOutput2
+    if actualOutput2 == expectedOutput2 then
+        remarkM "  Check: PASSED."
+    else
+        remarkM "  Check: FAILED."
+
+    -- Test 3: Simple Tuple (A, B, C) - built as Pair A (Pair B C)
+    remarkM "Test 3: Rendering buildTuple [A, B, C]"
+    let tupleABC = buildTuple [constA, constB, constC]
+    actualOutput3 <- showObjM tupleABC
+    let expectedOutput3 = "(A,B,C)"
+    remarkM "  Input Term: buildTuple [A, B, C]"
+    remarkM $ "  Actual Rendered Output:   " <> actualOutput3
+    remarkM $ "  Expected Rendered Output: " <> expectedOutput3
+    if actualOutput3 == expectedOutput3 then
+        remarkM "  Check: PASSED."
+    else
+        remarkM "  Check: FAILED. (Verify parseTupleMax/parseTupleFixed and Tuple rendering)"
+
+    -- Test 4: Tuple with mixed types (A, 1, B, 2)
+    remarkM "Test 4: Rendering buildTuple [A, (Integ 1), B, (Integ 2)]"
+    let tupleA1B2 = buildTuple [constA, int1, constB, int2]
+    actualOutput4 <- showObjM tupleA1B2
+    let expectedOutput4 = "(A,1,B,2)"
+    remarkM "  Input Term: buildTuple [A, (Integ 1), B, (Integ 2)]"
+    remarkM $ "  Actual Rendered Output:   " <> actualOutput4
+    remarkM $ "  Expected Rendered Output: " <> expectedOutput4
+    if actualOutput4 == expectedOutput4 then
+        remarkM "  Check: PASSED."
+    else
+        remarkM "  Check: FAILED."
+
+    -- Test 5: Single element tuple (A) - buildTuple [A] should just be A
+    remarkM "Test 5: Rendering buildTuple [A]"
+    let tupleA_single = buildTuple [constA]
+    actualOutput5 <- showObjM tupleA_single
+    let expectedOutput5 = "A" -- As per buildTuple [x] -> x
+    remarkM "  Input Term: buildTuple [A]"
+    remarkM $ "  Actual Rendered Output:   " <> actualOutput5
+    remarkM $ "  Expected Rendered Output: " <> expectedOutput5
+    if actualOutput5 == expectedOutput5 then
+        remarkM "  Check: PASSED."
+    else
+        remarkM "  Check: FAILED."
+
+    -- Test 6: Empty tuple - buildTuple [] should be EmptySet, rendered as ∅
+    remarkM "Test 6: Rendering buildTuple []"
+    let tupleEmpty = buildTuple []
+    actualOutput6 <- showObjM tupleEmpty
+    let expectedOutput6 = "∅" -- Assuming EmptySet renders as ∅
+    remarkM "  Input Term: buildTuple [] (which is EmptySet)"
+    remarkM $ "  Actual Rendered Output:   " <> actualOutput6
+    remarkM $ "  Expected Rendered Output: " <> expectedOutput6
+    if actualOutput6 == expectedOutput6 then
+        remarkM "  Check: PASSED."
+    else
+        remarkM "  Check: FAILED. (Verify EmptySet rendering or buildTuple [] behavior)"
+
+    -- Test 7: Nested Pairs/Tuples - Pair (Pair A B) C -> ((A,B),C)
+    remarkM "Test 7: Rendering buildPair (buildPair A B) C"
+    let nestedPair = buildPair (buildPair constA constB) constC
+    actualOutput7 <- showObjM nestedPair
+    let expectedOutput7 = "((A,B),C)"
+    remarkM "  Input Term: buildPair (buildPair A B) C"
+    remarkM $ "  Actual Rendered Output:   " <> actualOutput7
+    remarkM $ "  Expected Rendered Output: " <> expectedOutput7
+    if actualOutput7 == expectedOutput7 then
+        remarkM "  Check: PASSED."
+    else
+        remarkM "  Check: FAILED."
+
+    -- Test 8: A Kuratowski pair that is NOT created by buildPair, but by roster directly
+    -- This tests if parsePair can still recognize it for tuple rendering.
+    remarkM "Test 8: Rendering a direct Kuratowski pair roster [roster[A], roster[A,B]]"
+    let directKuratowski = roster [roster[constA], roster[constA, constB]]
+    actualOutput8 <- showObjM directKuratowski
+    let expectedOutput8 = "(A,B)" -- Expecting it to be parsed as a pair
+    remarkM "  Input Term: roster [roster[A], roster[A,B]]"
+    remarkM $ "  Actual Rendered Output:   " <> actualOutput8
+    remarkM $ "  Expected Rendered Output: " <> expectedOutput8
+    if actualOutput8 == expectedOutput8 then
+        remarkM "  Check: PASSED."
+    else
+        remarkM "  Check: FAILED. (parsePair might not be robust enough, or roster rendering interferes)"
+
+    remarkM "--- Pair and Tuple Rendering Tests Complete ---"
+    return ()
+
+
 -- Test function for the shorthand rendering of Empty Set (∅)
 --testEmptySetRendering :: ProofGenTStd () [PredRuleDeBr] PropDeBr Text IO ()
 --testEmptySetRendering = do
@@ -1103,6 +1230,10 @@ testPowerSetRendering = do
 --
 --    remarkM "--- Empty Set Rendering Tests Complete ---"
 --    return ()
+
+
+
+
 
 main :: IO ()
 main = do
@@ -1308,7 +1439,9 @@ main = do
     -- print "TEST EMPTY SET RENDERING BEGIN-------------------------------------"
     -- (aEmp, bEmp, cEmp, dEmp) <- runProofGeneratorT testEmptySetRendering
     -- (putStrLn . unpack . showPropDeBrStepsBase) cEmp -- Print results
-
+    print "TEST PAIR AND TUPLE RENDERING (KURATOWSKI) BEGIN-------------------------------------"
+    (aPT, bPT, cPT, dPT) <- runProofGeneratorT testPairAndTupleRendering
+    (putStrLn . unpack . showPropDeBrStepsBase) cPT -- Print results
 
 
     return ()

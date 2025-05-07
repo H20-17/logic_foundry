@@ -41,7 +41,7 @@ module Langs.BasicUntyped (
     (.<.),
     parseIntSet,
     buildPair,
-    parsePair
+    buildTuple
 ) where
 
 

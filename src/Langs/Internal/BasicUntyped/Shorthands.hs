@@ -49,7 +49,8 @@ module Langs.Internal.BasicUntyped.Shorthands (
     parseTupleFixed,
     parseTupleMax,
     buildPair,
-    parsePair
+    parsePair,
+    buildTuple
 
 ) where
 import Langs.Internal.BasicUntyped.Core
@@ -1214,7 +1215,7 @@ crossProd :: ObjDeBr -> ObjDeBr -> ObjDeBr
 crossProd a b = objDeBrSubXs [(0,a),(1,b)] (hX 2 (multiAx [3,4]
               (X 3 `In` X 0 :&&: X 4 `In` X 1 :<->:
             buildPair (X 3) (X 4) `In` X 2)))
-
+infixr 7 `crossProd`
 
 isTuple :: Int -> ObjDeBr -> PropDeBr
 isTuple i obj = propDeBrSubX i obj $ multiEx idxs 

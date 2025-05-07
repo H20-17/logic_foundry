@@ -141,7 +141,7 @@ binaryOpInData = [
     -- Arithmetic / Algebraic Operators
     ("+", (LeftAssociative, 6)),   -- Addition: Left associative (standard), precedence higher than relations
     ("×", (LeftAssociative, 7)),   -- Multiplication: Left associative (standard), precedence higher than +
-    ("⨯", (LeftAssociative, 7)),   -- Cartesian Product: Left associative, same precedence as ×
+    ("⨯", (RightAssociative, 7)),   -- Cartesian Product: Left associative, same precedence as ×
 
     -- Function/Relation Composition
     ("∘", (RightAssociative, 9))  -- Composition: Right associative (standard), highest precedence
@@ -170,7 +170,7 @@ instance SubexpDeBr ObjDeBr where
               <|> parseBound'
               <|> parseV'
               <|> parseX'
-              -- <|> parseEmptySet'
+              <|> parseEmptySet'
               <|> parseTuple'
               <|> parseIntMult'
               <|> parseIntPlus'
@@ -266,9 +266,9 @@ instance SubexpDeBr ObjDeBr where
             parsePowerSet' = do
                 setA <- parsePowerSet obj
                 return $ FuncApp (ParseTreeConst "𝒫") (toSubexpParseTree setA dict)
-            --parseEmptySet' = do
-            --    guard (parseEmptySet obj)
-            --    return $ ParseTreeConst "∅"
+            parseEmptySet' = do
+                parseEmptySet obj
+                return $ ParseTreeConst "∅"
             parseIntNeg' = do
                 subexp <- parseIntNeg obj
                 return $ UnaryOp "-" (toSubexpParseTree subexp dict)
