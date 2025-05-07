@@ -440,8 +440,6 @@ runProofAtomic rule context state  =
                   throwError $ LogicErrIntCompareFalse i1 i2 -- Error for invalid comparison
               let resultSent = integer i1 .<=. integer i2
               return (Just resultSent, Nothing, PrfStdStepStep resultSent "AXIOM_INTEGER_LTE" [])
-
-         
           IntegersAreUrelements -> do
               -- Get the axiom instance by calling the renamed LogicSent method
               let axiomInstance = intsAreUrelementsAxiom -- Use the renamed method
