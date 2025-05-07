@@ -16,7 +16,6 @@ module Langs.Internal.BasicUntyped.Core (
     objDeBrSubX,
     parseHilbert,
     parseIn,
-    parseTupl,
     parseBound,
     objDeBrBoundVarInside,
     parseForall2,
@@ -45,7 +44,8 @@ module Langs.Internal.BasicUntyped.Core (
     parseIntPlus,
     parseIntNeg,
     parseIntMult,
-    parseIntSet
+    parseIntSet,
+    parseEmptySet
 
 ) where
 import Control.Monad ( unless, guard,msum )
@@ -86,11 +86,11 @@ data ObjDeBr where
     V :: Int ->ObjDeBr
     X :: Int -> ObjDeBr
     XInternal :: Int -> ObjDeBr
-    Tupl :: [ObjDeBr] -> ObjDeBr
     (:+:) :: ObjDeBr -> ObjDeBr -> ObjDeBr
     Intneg :: ObjDeBr -> ObjDeBr
     (:*:) :: ObjDeBr -> ObjDeBr -> ObjDeBr
     IntSet :: ObjDeBr
+    EmptySet :: ObjDeBr
     deriving (Eq, Ord, Show)
 
 infixl 6 :+:
@@ -130,11 +130,11 @@ objDeBrBoundVarInside obj idx = case obj of
     Bound i -> idx == i
     V i -> False
     X i -> False
-    Tupl as -> any (`objDeBrBoundVarInside` idx) as
     (o1 :+: o2) -> objDeBrBoundVarInside o1 idx || objDeBrBoundVarInside o2 idx
     Intneg o1     -> objDeBrBoundVarInside o1 idx
     (o1 :*: o2) -> objDeBrBoundVarInside o1 idx || objDeBrBoundVarInside o2 idx
     IntSet -> False
+    EmptySet -> False
 
 
 
@@ -163,11 +163,11 @@ swapBoundIndexObj fromIdx toIdx o = case o of
     V i -> V i
     X i -> X i
     XInternal i -> XInternal i
-    Tupl os -> Tupl $ Prelude.map (swapBoundIndexObj fromIdx toIdx) os
     (o1 :+: o2) -> swapBoundIndexObj fromIdx toIdx o1 :+: swapBoundIndexObj fromIdx toIdx o2
     Intneg o1   -> Intneg (swapBoundIndexObj fromIdx toIdx o1)
     (o1 :*: o2) -> swapBoundIndexObj fromIdx toIdx o1 :*: swapBoundIndexObj fromIdx toIdx o2
     IntSet -> IntSet
+    EmptySet -> EmptySet
 
 
 
@@ -180,11 +180,11 @@ boundDepthObjDeBrX targetIdx substitutionDepth obj = case obj of
     V idx -> 0
     X idx -> if idx == targetIdx then substitutionDepth else 0
     XInternal idx -> 0
-    Tupl xs -> if null xs then 0 else maximum $ Prelude.map (boundDepthObjDeBrX targetIdx substitutionDepth) xs
     (o1 :+: o2) -> max (boundDepthObjDeBrX targetIdx substitutionDepth o1) (boundDepthObjDeBrX targetIdx substitutionDepth o2)
     Intneg o1     -> boundDepthObjDeBrX targetIdx substitutionDepth o1
     (o1 :*: o2) -> max (boundDepthObjDeBrX targetIdx substitutionDepth o1) (boundDepthObjDeBrX targetIdx substitutionDepth o2)
     IntSet -> 0
+    EmptySet -> 0
 
 
 
@@ -204,6 +204,7 @@ boundDepthPropDeBrX targetIdx substitutionDepth prop = case prop of
 
 
 
+
 boundDepthObjDeBrXInt :: Int -> Int -> ObjDeBr -> Int
 boundDepthObjDeBrXInt targetIdx substitutionDepth obj = case obj of
     Integ num -> 0
@@ -213,11 +214,11 @@ boundDepthObjDeBrXInt targetIdx substitutionDepth obj = case obj of
     V idx -> 0
     X idx -> 0
     XInternal idx -> if idx == targetIdx then substitutionDepth else 0
-    Tupl xs -> if null xs then 0 else maximum $ Prelude.map (boundDepthObjDeBrXInt targetIdx substitutionDepth) xs
     (o1 :+: o2) -> max (boundDepthObjDeBrXInt targetIdx substitutionDepth o1) (boundDepthObjDeBrXInt targetIdx substitutionDepth o2)
     Intneg o1     -> boundDepthObjDeBrXInt targetIdx substitutionDepth o1
     (o1 :*: o2) -> max (boundDepthObjDeBrXInt targetIdx substitutionDepth o1) (boundDepthObjDeBrXInt targetIdx substitutionDepth o2)
     IntSet -> 0
+    EmptySet -> 0
 
 
 boundDepthPropDeBrXInt :: Int -> Int -> PropDeBr -> Int
@@ -281,10 +282,7 @@ parseV subexp = case subexp of
     V i -> Just i
     _ -> Nothing
 
-parseTupl :: ObjDeBr ->  Maybe [ObjDeBr]
-parseTupl subexp = case subexp of
-    Tupl xs -> Just xs
-    _ -> Nothing
+
 
 
 parseX :: ObjDeBr -> Maybe Int
@@ -309,7 +307,6 @@ boundDepthObjDeBr obj = case obj of
      V idx -> 0
      X idx -> 0
      XInternal idx -> 0
-     Tupl xs -> if null xs then 0 else maximum $ Prelude.map boundDepthObjDeBr xs
      (o1 :+: o2) -> max (boundDepthObjDeBr o1) (boundDepthObjDeBr o2)
      Intneg o1     -> boundDepthObjDeBr o1
      (o1 :*: o2) -> max (boundDepthObjDeBr o1) (boundDepthObjDeBr o2)
@@ -399,6 +396,12 @@ parseIntMult obj = case obj of
     _ -> Nothing
 
 
+parseEmptySet :: ObjDeBr -> Maybe ()
+parseEmptySet obj = case obj of
+    EmptySet -> Just ()
+    _ -> Nothing
+
+
 data DeBrSe where
     ObjDeBrSeConstNotDefd :: Text -> DeBrSe
     ObjDeBrBoundVarIdx :: Int -> DeBrSe
@@ -417,11 +420,11 @@ checkSanityObjDeBr obj varStackHeight tmpltVarIndices constSet boundSet = case o
      Bound idx -> if idx `Set.member` boundSet then Nothing else (return . ObjDeBrBoundVarIdx) idx
      V idx -> if idx >= 0 && idx < varStackHeight then Nothing else (return . ObjDeBrFreeVarIdx) idx
      X idx -> if idx >= 0 && idx `Set.member` tmpltVarIndices then Nothing else (return . ObjDeBrTemplateVarIdx) idx
-     Tupl xs -> msum $ Prelude.map (\x -> checkSanityObjDeBr x varStackHeight tmpltVarIndices constSet boundSet) xs
      (o1 :+: o2) -> checkSanityObjDeBr o1 varStackHeight tmpltVarIndices constSet boundSet <|> checkSanityObjDeBr o2 varStackHeight tmpltVarIndices constSet boundSet
      Intneg o1     -> checkSanityObjDeBr o1 varStackHeight tmpltVarIndices constSet boundSet
      (o1 :*: o2) -> checkSanityObjDeBr o1 varStackHeight tmpltVarIndices constSet boundSet <|> checkSanityObjDeBr o2 varStackHeight tmpltVarIndices constSet boundSet
      IntSet -> Nothing
+     EmptySet -> Nothing
 
 
 
@@ -533,11 +536,11 @@ objDeBrSubXInt targetIdx substitution template = case template of
         | idx == targetIdx -> substitution
         | otherwise -> XInternal idx
     X idx -> X idx
-    Tupl xs -> Tupl $ Prelude.map (objDeBrSubXInt targetIdx substitution) xs
     (o1 :+: o2) -> objDeBrSubXInt targetIdx substitution o1 :+: objDeBrSubXInt targetIdx substitution o2
     Intneg o1     -> Intneg (objDeBrSubXInt targetIdx substitution o1)
     (o1 :*: o2) -> objDeBrSubXInt targetIdx substitution o1 :*: objDeBrSubXInt targetIdx substitution o2
     IntSet -> IntSet
+    EmptySet -> EmptySet
 
 
 propDeBrSubXInt :: Int -> ObjDeBr -> PropDeBr -> PropDeBr
@@ -581,11 +584,11 @@ objDeBrSubX targetIdx substitution template = case template of
         | idx == targetIdx -> substitution
         | otherwise -> X idx
     XInternal idx -> XInternal idx
-    Tupl xs -> Tupl $ Prelude.map (objDeBrSubX targetIdx substitution) xs
     (o1 :+: o2) -> objDeBrSubX targetIdx substitution o1 :+: objDeBrSubX targetIdx substitution o2
     Intneg o1     -> Intneg (objDeBrSubX targetIdx substitution o1) 
     (o1 :*: o2) -> objDeBrSubX targetIdx substitution o1 :*: objDeBrSubX targetIdx substitution o2
     IntSet -> IntSet
+    EmptySet -> EmptySet
 
 
 propDeBrSubX :: Int -> ObjDeBr -> PropDeBr -> PropDeBr
@@ -638,11 +641,11 @@ swapXtoXIntObj o = case o of
     V i -> V i
     X i -> XInternal i
     XInternal i -> XInternal i
-    Tupl xs -> Tupl $ Prelude.map swapXtoXIntObj xs
     (o1 :+: o2) -> swapXtoXIntObj o1 :+: swapXtoXIntObj o2
     Intneg o1     -> Intneg (swapXtoXIntObj o1)
     (o1 :*: o2) -> swapXtoXIntObj o1 :*: swapXtoXIntObj o2
     IntSet -> IntSet
+    EmptySet -> EmptySet
 
 
 
@@ -671,11 +674,11 @@ swapXIntToXObj o = case o of
     V i -> V i
     X i -> X i
     XInternal i -> X i
-    Tupl xs -> Tupl $ Prelude.map swapXIntToXObj xs
     (o1 :+: o2) -> swapXIntToXObj o1 :+: swapXIntToXObj o2
     Intneg o1     -> Intneg (swapXIntToXObj o1)
     (o1 :*: o2) -> swapXIntToXObj o1 :*: swapXIntToXObj o2
     IntSet -> IntSet
+    EmptySet -> EmptySet
 
 
 objDeBrSubXs :: [(Int, ObjDeBr)] -> ObjDeBr -> ObjDeBr
@@ -702,11 +705,11 @@ objDeBrApplyUG obj freevarIdx boundvarIdx =
         Hilbert p1 -> Hilbert (propDeBrApplyUG p1 freevarIdx boundvarIdx)
         Bound idx -> Bound idx
         V idx -> if idx == freevarIdx then Bound boundvarIdx else V idx
-        Tupl xs -> Tupl $ Prelude.map (\x -> objDeBrApplyUG x freevarIdx boundvarIdx) xs
         (o1 :+: o2) -> objDeBrApplyUG o1 freevarIdx boundvarIdx :+: objDeBrApplyUG o2 freevarIdx boundvarIdx
         Intneg o1     -> Intneg (objDeBrApplyUG o1 freevarIdx boundvarIdx)
         (o1 :*: o2) -> objDeBrApplyUG o1 freevarIdx boundvarIdx :*: objDeBrApplyUG o2 freevarIdx boundvarIdx
         IntSet -> IntSet
+        EmptySet -> EmptySet
 
 
 
@@ -798,11 +801,11 @@ objDeBrSubBoundVarToX0 boundVarIdx obj = case obj of
     Hilbert p -> Hilbert (propDeBrSubBoundVarToX0 boundVarIdx p)
     Bound idx -> if idx == boundVarIdx then X 0 else Bound idx
     V idx -> V idx
-    Tupl xs -> Tupl $ Prelude.map (objDeBrSubBoundVarToX0 boundVarIdx) xs
     (o1 :+: o2) -> objDeBrSubBoundVarToX0 boundVarIdx o1 :+: objDeBrSubBoundVarToX0 boundVarIdx o2
     Intneg o1     -> Intneg (objDeBrSubBoundVarToX0 boundVarIdx o1)
     (o1 :*: o2) -> objDeBrSubBoundVarToX0 boundVarIdx o1 :*: objDeBrSubBoundVarToX0 boundVarIdx o2
     IntSet -> IntSet
+    EmptySet -> EmptySet
 
 
 propDeBrSubBoundVarToX0 :: Int -> PropDeBr -> PropDeBr
@@ -845,11 +848,11 @@ xsubObjDeBr o idx depth = case o of
     V i -> V i
     X i -> if i == idx then Bound depth else X i
     XInternal i -> XInternal i
-    Tupl xs -> Tupl $ Prelude.map (\x -> xsubObjDeBr x idx depth) xs
     (o1 :+: o2) -> xsubObjDeBr o1 idx depth :+: xsubObjDeBr o2 idx depth
     Intneg o1     -> Intneg (xsubObjDeBr o1 idx depth)
     (o1 :*: o2) -> xsubObjDeBr o1 idx depth :*: xsubObjDeBr o2 idx depth
     IntSet -> IntSet
+    EmptySet -> EmptySet
 
 
 
@@ -877,11 +880,11 @@ xsubObjDeBrXInt o idx depth = case o of
     V i -> V i
     X i -> X i
     XInternal i -> if i == idx then Bound depth else XInternal i
-    Tupl xs -> Tupl $ Prelude.map (\x -> xsubObjDeBrXInt x idx depth) xs
     (o1 :+: o2) -> xsubObjDeBrXInt o1 idx depth :+: xsubObjDeBrXInt o2 idx depth
     Intneg o1     -> Intneg (xsubObjDeBrXInt o1 idx depth)
     (o1 :*: o2) -> xsubObjDeBrXInt o1 idx depth :*: xsubObjDeBrXInt o2 idx depth
     IntSet -> IntSet
+    EmptySet -> EmptySet
 
 
 instance LogicConst Text where
@@ -936,10 +939,10 @@ multiAx = multiBinder aX
 
 
 instance ZFC.LogicTerm ObjDeBr where
-    parseTuple :: ObjDeBr -> Maybe [ObjDeBr]
-    parseTuple = parseTupl
-    buildTuple :: [ObjDeBr] -> ObjDeBr
-    buildTuple = Tupl
+    --parseTuple :: ObjDeBr -> Maybe [ObjDeBr]
+    --parseTuple = parseTupl
+    --buildTuple :: [ObjDeBr] -> ObjDeBr
+    --buildTuple = Tupl
     (.+.) :: ObjDeBr -> ObjDeBr -> ObjDeBr
     (.+.) = (:+:)
     (.*.) :: ObjDeBr -> ObjDeBr -> ObjDeBr
@@ -1020,18 +1023,6 @@ instance ZFC.LogicSent PropDeBr ObjDeBr where
     (.<=.) :: ObjDeBr -> ObjDeBr -> PropDeBr
     (.<=.) = (:<=:)
 
-    tupleIsUrelementAxiom :: Int -> PropDeBr
-    tupleIsUrelementAxiom tupleLen =
-        let elementVars = [X i | i <- [0 .. tupleLen - 1]]
-            templateTuple = Tupl elementVars
-            x_idx = tupleLen -- Use tupleLen as the index for the existential variable 'x'
-            -- Proposition template using the template variable X x_idx
-            prop_template = X x_idx `In` templateTuple
-            -- Create the existential proposition correctly using eX
-            exists_prop = eX x_idx prop_template
-        in
-            -- Apply multiAx to the Negation of the existential proposition
-            multiAx [0 .. tupleLen - 1] (Neg exists_prop)
 
     intsAreUrelementsAxiom :: PropDeBr
     intsAreUrelementsAxiom =

@@ -1,4 +1,5 @@
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE DoAndIfThenElse #-}
 module Langs.Internal.BasicUntyped.Shorthands (
     eXBang,
     (./=.),
@@ -43,10 +44,13 @@ module Langs.Internal.BasicUntyped.Shorthands (
     parseSetDifference,
     powerSet,
     parsePowerSet,
-    emptySet,
-    parseEmptySet,
     (.<.),
-    parseLessThan
+    parseLessThan,
+    parseTupleFixed,
+    parseTupleMax,
+    buildPair,
+    parsePair,
+    buildTuple
 
 ) where
 import Langs.Internal.BasicUntyped.Core
@@ -97,7 +101,7 @@ parsePairFirstExp subexp = do
 --   Implemented as: hX S (∀x (x ∈ S ↔ (x=e₁ ∨ ... ∨ x=eₙ)))
 --   Automatically sorts and removes duplicate elements from the input list for a canonical term.
 roster :: [ObjDeBr] -> ObjDeBr
-roster [] = emptySet
+roster [] = EmptySet
 roster elems =
     let
         -- Sort and remove duplicates for a canonical representation
@@ -188,14 +192,6 @@ parseRoster obj
 
 
 
--- Representation for the empty set term
-emptySet :: ObjDeBr
-emptySet = Tupl [] -- Assumes "∅" constant exists or is axiomatically defined
-
-parseEmptySet :: ObjDeBr -> Bool
-parseEmptySet obj = case obj of
-    Tupl [] -> True -- Matches the empty set representation
-    _ -> False -- Anything else is not the empty set
 
 
 
@@ -206,6 +202,84 @@ buildDisjunction _ [] = F -- Disjunction of zero items is Falsum
 buildDisjunction var [e] = var :==: e
 buildDisjunction var (e:es) = (var :==: e) :||: buildDisjunction var es
 
+
+parseTupleMax :: ObjDeBr -> Maybe [ObjDeBr]
+parseTupleMax obj = do
+        (o1, o2) <- parsePair obj
+        return (o1 : parseTupleMaxInternal o2)
+    where
+        parseTupleMaxInternal obj =
+            case parsePair obj of
+                Just (o1,o2) -> o1 : parseTupleMaxInternal o2
+                Nothing -> [obj]
+
+
+
+parseTupleFixed :: ObjDeBr -> Int -> Maybe [ObjDeBr]
+parseTupleFixed obj n
+      |  n == 0 = case obj of
+                    EmptySet -> Just []
+                    _ ->  Nothing
+      |  n == 1 = Just [obj]
+      |  n == 2 = do
+            (o1, o2) <- parsePair obj
+            return [o1, o2]
+      | n > 2 = do
+            (o1, o2) <- parsePair obj
+            otherElements <- parseTupleFixed o2 (n-1)
+            return $ o1 : otherElements 
+      | otherwise = Nothing
+
+
+
+buildPair :: ObjDeBr -> ObjDeBr -> ObjDeBr
+buildPair o1 o2 = roster [roster[o1], roster[o1,o2]]
+
+parsePair :: ObjDeBr -> Maybe (ObjDeBr, ObjDeBr)
+parsePair obj = do
+    list <- parseRoster obj
+    guard (length list == 2 || length list == 1)
+    (o1, o2) <- if 
+                  length list == 1 
+                then
+                  caseA (head list)
+                else 
+                  caseB (head list) (list!!1)
+    return (o1,o2)
+  where
+    caseA obj = do
+        list <- parseRoster obj
+        guard (length list == 1)
+        let o = head list
+        return (o,o)
+    caseB objA objB = do
+        listA <- parseRoster objA
+        listB <- parseRoster objB
+        guard (length listA == 2 && length listB == 1 || length listA == 1 && length listB == 2)
+        (o1, o2) <- if length listA == 2 && length listB == 1 then
+                         caseBInternal (head listB) (head listA) (listA!!1)
+                       else
+                         caseBInternal (head listA) (head listB) (listB!!1)
+        return (o1, o2)
+    caseBInternal :: ObjDeBr -> ObjDeBr -> ObjDeBr -> Maybe (ObjDeBr,ObjDeBr)
+    caseBInternal el1 el2a el2b = do
+        guard (el1 == el2a || el1 == el2b)
+        (o1,o2) <- if el1 == el2a then
+                     return (el1, el2b)
+                   else return (el1, el2a)
+        return (o1,o2)
+
+
+
+
+
+
+buildTuple :: [ObjDeBr] -> ObjDeBr
+buildTuple objs =
+    case objs of
+        [] -> EmptySet
+        [x] -> x
+        (x:xs) -> buildPair x (buildTuple xs)
 
 
 
@@ -228,11 +302,11 @@ parseFuncApplication obj = do
     -- 2. Match the 'In' structure within the inner proposition: tuple_term `In` graph_term
     (tuple_term, graph_term) <- parseIn inner_prop
 
-    -- 3. Match the tuple structure: Tupl [ arg_term, result_var ]
-    args <- parseTupl tuple_term
-    guard (length args == 2)
-    let arg_term = head args        -- Potential argument 'x'
-    let result_var = args !! 1     -- Potential bound variable 'y'
+    -- 3. Match the tuple structure: Tupl arg_term result_var
+    -- arg_term is the potential argument 'x'
+    -- result_var is the potential bound variable 'y'
+    (arg_term, result_var) <- parsePair tuple_term
+
 
     -- 4. Verify the result_var is the Bound variable with the index from the Hilbert binding
     result_idx_parsed <- parseBound result_var
@@ -477,11 +551,11 @@ parseHilbertShort subexp dict =
             Just =<< Data.Map.lookup (Exists p) dict 
         _ -> Nothing
 
-parsePair :: ObjDeBr -> Maybe (ObjDeBr,ObjDeBr)
-parsePair subexp = do
-    list <- parseTupl subexp
-    guard (length list == 2)
-    return (head list,list!!1)
+--parsePair :: ObjDeBr -> Maybe (ObjDeBr,ObjDeBr)
+--parsePair subexp = do
+--    list <- parseTupl subexp
+--    guard (length list == 2)
+--    return (head list,list!!1)
 
 parseComposition :: ObjDeBr -> Maybe (ObjDeBr, ObjDeBr)
 parseComposition obj = do
@@ -570,14 +644,10 @@ parseProjectHilbert obj = do
     let recovered_t = lhs -- Treat lhs as the recovered original term t
 
     -- 4. Parse the RHS Tuple: Tupl [arg0, ..., argN-1]
-    parsedArgs <- parseTupl rhs
+    let n = quantifierCount + 1 -- n is the number of arguments in the tuple
+    parsedArgs <- parseTupleFixed rhs n
     
 
-    let n = length parsedArgs -- This is the tuple length
-
-    -- == Structural Guards (Removed norm_h == n check) ==
-    -- Guard: Ensure number of Exists binders is n-1
-    guard (quantifierCount == n - 1)
 
     -- 5. Find the argument matching the Hilbert binder (Bound norm_h).
     --    Its list index is the projection index 'm'.
@@ -636,11 +706,9 @@ parseCrossProduct obj = do
     -- 8. Match RHS In: pair_term `In` bound_S_rhs
     (pair_term, bound_S_rhs) <- parseIn rhs
 
-    -- 9. Match pair tuple: Tupl [bound_x_rhs, bound_y_rhs]
-    pair_args <- parseTupl pair_term
-    guard (length pair_args == 2)
-    let bound_x_rhs = head pair_args
-    let bound_y_rhs = pair_args !! 1
+    -- 9. Match pair tuple: Tupl bound_x_rhs bound_y_rhs
+    (bound_x_rhs, bound_y_rhs) <- parsePair pair_term
+
 
     -- 10. Check indices within the pair tuple match binders 'x' and 'y'
     bound_x_idx_rhs <- parseBound bound_x_rhs
@@ -669,8 +737,8 @@ parseIsTupleApp prop = do
     (term', tuple_term) <- parseEqual equalityBody
 
     -- 3. Parse the RHS of the equality as a tuple: Tupl [arg_0, ..., arg_n_1]
-    args <- parseTupl tuple_term
-    guard (length args == n) -- Check if tuple length matches quantifier count
+    args <- parseTupleFixed tuple_term n
+
 
     -- 4. Verify that each argument 'arg_i' in the tuple is the correct Bound variable.
     --    The i-th argument (args !! i) should be Bound(base_depth + n - 1 - i)
@@ -895,12 +963,9 @@ boundDecrementObjDeBr idx obj = case obj of
      Bound i -> if i == idx then Bound (i - 1) else Bound i
      V i -> V i
      X i -> X i
-     Tupl xs ->
-         -- Apply the decrement recursively to each element in the list
-         Tupl $ Prelude.map (boundDecrementObjDeBr idx) xs
      (:+:) o1 o2 -> (:+:) (boundDecrementObjDeBr idx o1) (boundDecrementObjDeBr idx o2)
      (:*:) o1 o2 -> (:*:) (boundDecrementObjDeBr idx o1) (boundDecrementObjDeBr idx o2)
-
+     EmptySet -> EmptySet
 
 
 
@@ -940,9 +1005,9 @@ isRelation :: ObjDeBr -> PropDeBr
 isRelation s = aX 0 $ X 0 `In` s :->: isPair (X 0)
 
 
-isFunction :: ObjDeBr -> PropDeBr
-isFunction t = isRelation t :&&: 
-          aX 0 ( X 0 `In` relDomain t :->: eXBang 1 $ Tupl [X 0, X 1] `In` t)
+--isFunction :: ObjDeBr -> PropDeBr
+--isFunction t = isRelation t :&&: 
+--          aX 0 ( X 0 `In` relDomain t :->: eXBang 1 $ Tupl [X 0, X 1] `In` t)
 
 --propIsFuncOnSet :: ObjDeBr -> PropDeBr -> PropDeBr
 --propIsFuncOnSet t p = 
@@ -988,7 +1053,7 @@ notSubset a b = Neg (subset a b)
 -- | Generates an ObjDeBr term representing the projection of the m-th element
 -- | from an n-tuple t. Uses a Hilbert expression internally.
 -- | project n m t = "the element r such that there exist y0..y(m-1),y(m+1)..y(n-1)
--- |                where t = Tupl [y0, ..., y(m-1), r, y(m+1), ..., y(n-1)]"
+-- |                where t = buildTuple [y0, ..., y(m-1), r, y(m+1), ..., y(n-1)]"
 project :: Int -> Int -> ObjDeBr -> ObjDeBr
 project n m t =
     -- n: the length of the tuple (integer)
@@ -1019,7 +1084,7 @@ project n m t =
             -- This compares the placeholder for the input tuple 't' (X tupleIdx)
             -- with the tuple constructed from the template variables.
             equalityBody :: PropDeBr
-            equalityBody = X tupleIdx :==: Tupl tuplArgs -- Assumes Tupl constructor exists
+            equalityBody = X tupleIdx :==: buildTuple tuplArgs -- Assumes Tupl constructor exists
 
             -- Construct the existentially quantified body using the multiEx helper:
             -- Exists X0 ... Exists X(m-1) Exists X(m+1) ... Exists X(n-1) ( equalityBody )
@@ -1073,7 +1138,7 @@ isFunc f setA setB =
         -- Condition 7: Functionality property over the declared domain 'dom'.
         --              Forall x (x In dom -> Exists! y (<x,y> In graph))
         --              Ensures each element in the declared domain maps to exactly one element.
-        cond7 = aX 0 ( (X 0 `In` dom) :->: eXBang 1 (Tupl [X 0, X 1] `In` graph) )
+        cond7 = aX 0 ( (X 0 `In` dom) :->: eXBang 1 (buildPair (X 0) (X 1) `In` graph) )
 
     -- Combine all conditions using logical AND
     in
@@ -1095,7 +1160,7 @@ pairFirst = project 2 0
 relDomain :: ObjDeBr -> ObjDeBr
 relDomain s = objDeBrSubX 0 s (hX 1(aX 2 (X 2 `In` X 1)  -- x ∈ D
                        :<->:                             -- iff
-                            eX 3 (Tupl [X 2, X 3] `In` X 0)))
+                            eX 3 (buildPair (X 2) (X 3) `In` X 0)))
 
 
 -- let us assume that f is a pair
@@ -1113,7 +1178,7 @@ tripletLast = project 3 2
 
 
 (.@.) :: ObjDeBr -> ObjDeBr -> ObjDeBr
-f .@. x = objDeBrSubXs [(0,f),(1,x)] (hX 2 ( Tupl [X 1, X 2] `In` tripletLast (X 0) ))
+f .@. x = objDeBrSubXs [(0,f),(1,x)] (hX 2 ( buildPair (X 1) (X 2) `In` tripletLast (X 0) ))
 
 --f .@. x = objDeBrSubXs [(0, project 3 2 f), (1, x)] (hX 2 ( Tupl [X 1, X 2] `In` X 0 ))
 
@@ -1149,12 +1214,12 @@ f .:. g = --objDeBrSubXs [(1, f), (2, g)]
 crossProd :: ObjDeBr -> ObjDeBr -> ObjDeBr
 crossProd a b = objDeBrSubXs [(0,a),(1,b)] (hX 2 (multiAx [3,4]
               (X 3 `In` X 0 :&&: X 4 `In` X 1 :<->:
-            Tupl [X 3, X 4] `In` X 2)))
-
+            buildPair (X 3) (X 4) `In` X 2)))
+infixr 7 `crossProd`
 
 isTuple :: Int -> ObjDeBr -> PropDeBr
 isTuple i obj = propDeBrSubX i obj $ multiEx idxs 
-      (X i :==: Tupl [X j | j <- idxs ])
+      (X i :==: buildTuple [X j | j <- idxs ])
       where idxs = [0 .. i-1]
 
 

@@ -89,8 +89,8 @@ import GHC.Num (integerMul)
 
 class LogicTerm t where
    integer :: Int -> t
-   parseTuple :: t -> Maybe [t]
-   buildTuple :: [t] -> t
+   --parseTuple :: t -> Maybe [t]
+   --buildTuple :: [t] -> t
    buildProject :: Int -> t -> t
    (.+.) :: t -> t -> t
    (.*.) :: t -> t -> t
@@ -103,7 +103,6 @@ class (PREDL.LogicSent s t ()) => LogicSent s t | s ->t where
    replaceAxiom :: [Int] -> Int -> Int -> t -> s -> s
    parseMemberOf :: s -> Maybe (t, t)
    memberOf :: t -> t -> s
-   tupleIsUrelementAxiom :: Int -> s
    intsAreUrelementsAxiom :: s
    
    (.<=.) :: t -> t -> s
@@ -125,15 +124,14 @@ data LogicError s sE t where
     LogicErrSpecTermNotClosedSane :: t -> sE -> LogicError s sE t
     LogicErrSpecTmpltNotSane :: s -> sE -> LogicError s sE t
     LogicErrReplTmpltNotSane :: s -> sE -> LogicError s sE t
-    LogicErrTupleNotSane :: t -> sE -> LogicError s sE t -- Changed to include sE from getTypeTerm failure
-    LogicErrNotATuple :: t -> LogicError s sE t
+    LogicErrPairNotSane :: t -> Int -> LogicError s sE t
+    LogicErrNotAPair :: t -> LogicError s sE t
     LogicErrIndexOutOfBounds :: Int -> Int -> t -> LogicError s sE t -- Holds index, length, tuple
     LogicErrSpecOuterIndexConflict :: Int -> [Int] -> LogicError s sE t
     LogicErrReplOuterIndexDuplicate :: Int -> [Int] -> LogicError s sE t
     LogicErrSpecOuterIndexDuplicate :: Int -> [Int] -> LogicError s sE t
     LogicErrReplIndexConflict :: Int -> Int -> [Int] -> LogicError s sE t -- For idx1 == idx2 OR idx1/idx2 in outerIdxs
     LogicErrIntCompareFalse :: Int -> Int -> LogicError s sE t
-    LogicErrInvalidTupleLength :: Int -> LogicError s sE t
    deriving (Show)
 
 data LogicRule s sE t  where
@@ -145,7 +143,7 @@ data LogicRule s sE t  where
     Theorem :: TheoremSchema s [LogicRule s sE t ] Text () -> LogicRule s sE t 
     TheoremM :: TheoremAlgSchema () [LogicRule s sE t ] s Text () -> 
                              LogicRule s sE t
-    EmptySet :: LogicRule s sE t
+    --EmptySet :: LogicRule s sE t
     Specification :: [Int] -> Int -> t -> s -> LogicRule s sE t
     Replacement :: [Int] -> Int -> Int -> t -> s -> LogicRule s sE t
     IntegerMembership    :: Int -> LogicRule s sE t
@@ -442,7 +440,6 @@ runProofAtomic rule context state  =
                   throwError $ LogicErrIntCompareFalse i1 i2 -- Error for invalid comparison
               let resultSent = integer i1 .<=. integer i2
               return (Just resultSent, Nothing, PrfStdStepStep resultSent "AXIOM_INTEGER_LTE" [])
-
           IntegersAreUrelements -> do
               -- Get the axiom instance by calling the renamed LogicSent method
               let axiomInstance = intsAreUrelementsAxiom -- Use the renamed method
