@@ -14,6 +14,10 @@ module RuleSets.ZFC
     integerMultiplicationM,
     integerCompareM,
     integersAreUrelementsM,
+    integerInequalityM,
+    emptySetAxiomM,
+    extensionalityAxiomM,
+    emptySetNotIntM,
     MetaRuleError(..)
 ) where
 
@@ -103,10 +107,11 @@ class (PREDL.LogicSent s t ()) => LogicSent s t | s ->t where
    replaceAxiom :: [Int] -> Int -> Int -> t -> s -> s
    parseMemberOf :: s -> Maybe (t, t)
    memberOf :: t -> t -> s
-   intsAreUrelementsAxiom :: s
-   
+   intsAreUrelementsAxiom :: s   
    (.<=.) :: t -> t -> s
-
+   emptySetAxiom :: s
+   extensionalityAxiom :: s
+   emptySetNotIntAxiom :: s
 
 
 
@@ -132,6 +137,7 @@ data LogicError s sE t where
     LogicErrSpecOuterIndexDuplicate :: Int -> [Int] -> LogicError s sE t
     LogicErrReplIndexConflict :: Int -> Int -> [Int] -> LogicError s sE t -- For idx1 == idx2 OR idx1/idx2 in outerIdxs
     LogicErrIntCompareFalse :: Int -> Int -> LogicError s sE t
+    LogicErrIntInequalitySameValues :: Int -> Int -> LogicError s sE t
    deriving (Show)
 
 data LogicRule s sE t  where
@@ -152,6 +158,10 @@ data LogicRule s sE t  where
     IntegerNegation      :: Int -> LogicRule s sE t
     IntegerCompare :: Int -> Int -> LogicRule s sE t
     IntegersAreUrelements :: LogicRule s sE t
+    IntegerInequality    :: Int -> Int -> LogicRule s sE t
+    EmptySetAxiom        :: LogicRule s sE t
+    ExtensionalityAxiom  :: LogicRule s sE t
+    EmptySetNotIntAxiom  :: LogicRule s sE t 
     deriving(Show)
 
 
@@ -266,6 +276,10 @@ class LogicRuleClass r s sE t | r->s, r->sE, r->t where
      integerNegation      :: Int -> r
      integerCompare :: Int -> Int -> r
      integersAreUrelements :: r
+     integerInequality    :: Int -> Int -> r
+     emptySet             :: r
+     extensionality       :: r
+     emptySetNotInt       :: r
 
 instance LogicRuleClass [LogicRule s sE t] s sE t where
      specification :: [Int] -> Int -> t -> s -> [LogicRule s sE t]
@@ -284,6 +298,14 @@ instance LogicRuleClass [LogicRule s sE t] s sE t where
      integerCompare i1 i2 = [IntegerCompare i1 i2]
      integersAreUrelements :: [LogicRule s sE t]
      integersAreUrelements = [IntegersAreUrelements]
+     integerInequality    :: Int -> Int -> [LogicRule s sE t]
+     integerInequality i1 i2 = [IntegerInequality i1 i2]
+     emptySet :: [LogicRule s sE t]
+     emptySet = [EmptySetAxiom]
+     extensionality :: [LogicRule s sE t]
+     extensionality       = [ExtensionalityAxiom]
+     emptySetNotInt :: [LogicRule s sE t]
+     emptySetNotInt = [EmptySetNotIntAxiom]
 
 -- Finds the first element that appears more than once in the list.
 findFirstDuplicate :: Ord a => [a] -> Maybe a
@@ -450,6 +472,32 @@ runProofAtomic rule context state  =
               let justificationText = "AXIOM_INTEGER_URELEMENT"
               let step = PrfStdStepStep axiomInstance justificationText []
               return (Just axiomInstance, Nothing, step)
+          IntegerInequality i1 i2 -> do
+              when (i1 == i2) $ -- This axiom asserts inequality, so it's an error if inputs are equal
+                  throwError $ LogicErrIntInequalitySameValues i1 i2
+              -- Construct the proposition: Integ i1 ./=. Integ i2
+              -- This translates to: neg (Integ i1 .==. Integ i2)
+              -- 'integer' comes from the `LogicTerm t` constraint.
+              -- 'neg' comes from `PL.LogicSent s ()` (via `PREDL.LogicSent s t ()`).
+              -- '.==.' comes from `PREDL.LogicSent s t ()`.
+              -- For your specific types PropDeBr and ObjDeBr, these resolve to
+              -- Neg ((Integ i1) :==: (Integ i2)), which is your (./=.) shorthand.
+              let resultSent = neg (integer i1 .==. integer i2)
+              return (Just resultSent, Nothing, PrfStdStepStep resultSent "AXIOM_INTEGER_INEQUALITY" [])
+          EmptySetAxiom -> do -- New case
+              let axiomInstance = emptySetAxiom -- From LogicSent s t constraint
+              -- Optional: Sanity check if the axiom is complexly generated in LogicSent
+              -- maybe (return ()) (throwError . MetaRuleErrNotClosed axiomInstance) (checkSanity mempty [] (fmap fst (consts state)) axiomInstance)
+              let step = PrfStdStepStep axiomInstance "AXIOM_EMPTY_SET" []
+              return (Just axiomInstance, Nothing, step)
+
+          ExtensionalityAxiom -> do -- New case
+              let axiomInstance = extensionalityAxiom -- From LogicSent s t constraint
+              -- Optional: Sanity check
+              -- maybe (return ()) (throwError . MetaRuleErrNotClosed axiomInstance) (checkSanity mempty [] (fmap fst (consts state)) axiomInstance)
+              let step = PrfStdStepStep axiomInstance "AXIOM_EXTENSIONALITY" []
+              return (Just axiomInstance, Nothing, step)
+  
 
     where
         proven = (keysSet . provenSents) state
@@ -559,7 +607,7 @@ integerMembershipM, integerNegationM :: (Monad m, Show sE, Typeable sE, Show s, 
 integerMembershipM i = standardRuleM (integerMembership i)
 integerNegationM i = standardRuleM (integerNegation i)
 
-integerAdditionM, integerMultiplicationM, integerCompareM 
+integerAdditionM, integerMultiplicationM, integerCompareM, integerInequalityM
  :: (Monad m, Show sE, Typeable sE, Show s, Typeable s, Show eL, Typeable eL,
        MonadThrow m, Show o, Typeable o, Show tType, Typeable tType, TypedSent o tType sE s,
        Monoid (PrfStdState s o tType), ProofStd s eL [LogicRule s sE t] o tType, StdPrfPrintMonad s o tType m    )
@@ -567,15 +615,19 @@ integerAdditionM, integerMultiplicationM, integerCompareM
 integerAdditionM i1 i2 = standardRuleM (integerAddition i1 i2)
 integerMultiplicationM i1 i2 = standardRuleM (integerMultiplication i1 i2)
 integerCompareM i1 i2 = standardRuleM (integerCompare i1 i2)
+integerInequalityM i1 i2 = standardRuleM (integerInequality i1 i2)
 
 
-
-integersAreUrelementsM :: (Monad m, Show sE, Typeable sE, Show s, Typeable s, Show eL, Typeable eL,
+integersAreUrelementsM, emptySetAxiomM, extensionalityAxiomM,emptySetNotIntM :: (Monad m, Show sE, Typeable sE, Show s, Typeable s, Show eL, Typeable eL,
        MonadThrow m, Show o, Typeable o, Show tType, Typeable tType, TypedSent o tType sE s,
        Monoid (PrfStdState s o tType), ProofStd s eL [LogicRule s sE t] o tType, StdPrfPrintMonad s o tType m,
        LogicRuleClass [LogicRule s sE t] s sE t)
        => ProofGenTStd tType [LogicRule s sE t] s o m (s,[Int])
 integersAreUrelementsM = standardRuleM integersAreUrelements
+emptySetAxiomM = standardRuleM emptySet
+extensionalityAxiomM = standardRuleM extensionality
+emptySetNotIntM = standardRuleM emptySetNotInt
+
 
 data MetaRuleError s where
    MetaRuleErrNotClosed :: s -> MetaRuleError s

@@ -1039,3 +1039,41 @@ instance ZFC.LogicSent PropDeBr ObjDeBr where
               -- Full axiom: ∀X₀ (implication)
               in aX 0 implication
 
+    emptySetAxiom :: PropDeBr -- MODIFIED implementation
+    emptySetAxiom = aX 0 (Neg (X 0 `In` EmptySet))
+        -- This asserts ∀x (x ∉ EmptySet).
+        -- X 0 is the universally quantified element x.
+        -- EmptySet is your ObjDeBr constructor for the empty set.
+
+    extensionalityAxiom :: PropDeBr -- MODIFIED implementation
+    extensionalityAxiom =
+        -- ∀A ∀B ( (isSet(A) ∧ isSet(B) ∧ (∀x (x ∈ A ↔ x ∈ B))) → A = B )
+        -- where isSet(Y) is defined as ¬(Y ∈ IntSet) for this context.
+        --
+        -- Using template variables:
+        -- X 0 for A (bound by the first aX)
+        -- X 1 for B (bound by the second aX)
+        -- X 2 for x (the element, bound by the third aX)
+        let
+            a_is_Not_IntUrelement = Neg (X 0 `In` IntSet)
+            b_is_Not_IntUrelement = Neg (X 1 `In` IntSet)
+
+            x_in_A = X 2 `In` X 0
+            x_in_B = X 2 `In` X 1
+            elements_are_equivalent = aX 2 (x_in_A :<->: x_in_B) -- ∀x (x ∈ A ↔ x ∈ B)
+
+            -- The full antecedent of the main implication:
+            -- (A is not an IntUrelement) ∧ (B is not an IntUrelement) ∧ (A and B have same elements)
+            antecedent = a_is_Not_IntUrelement :&&: b_is_Not_IntUrelement :&&: elements_are_equivalent
+
+            -- The consequent of the main implication:
+            consequent = X 0 :==: X 1 -- A = B
+        in
+            -- ∀A ∀B (antecedent → consequent)
+            aX 0 (aX 1 (antecedent :->: consequent))
+
+    emptySetNotIntAxiom :: PropDeBr -- New implementation
+    emptySetNotIntAxiom = Neg (EmptySet `In` IntSet)
+        -- This asserts EmptySet ∉ IntSet.
+        -- EmptySet is your ObjDeBr constructor for the empty set.
+        -- IntSet is your ObjDeBr constructor for the set of integers.
