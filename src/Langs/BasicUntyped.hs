@@ -48,3 +48,4 @@ module Langs.BasicUntyped (
 import Langs.Internal.BasicUntyped.Core
 import Langs.Internal.BasicUntyped.Shorthands
 import Langs.Internal.BasicUntyped.Rendering
+import Langs.Internal.BasicUntyped.Axiomizations
