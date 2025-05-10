@@ -78,6 +78,7 @@ import Text.XHtml (sub)
 import qualified Internal.StdPattern
 import Data.Maybe (isJust)
 import GHC.IO.BufferedIO (BufferedIO(emptyWriteBuffer))
+import qualified Internal.StdPattern as substitutions
 
 
 data ObjDeBr where
@@ -654,7 +655,20 @@ objDeBrSubXs subs term =
     foldl (\currentTerm (idx, substitutionTerm) ->
              objDeBrSubX idx (swapXtoXIntObj substitutionTerm) currentTerm
           ) term subs
+          
 
+-- | This function is used to substitute a list of substitutions into an PropDeBr expression.
+-- | The substitutions are given as a list of pairs (index, substitution term)
+-- | For each substitution (idx, t), The function will replace all occurrences of the 'X index' in the expression with t.
+-- | The function begins by recursing through the list of substitutions.
+-- | For each substition term, the function first swaps X template variables within the term to matching XInternal template 
+-- | variables, and 
+-- | then it applies the substitution to the PropDeBre expression.
+-- | Once all substitutions have been applied, it swaps all of the XInternal template variables in the
+-- | thusly generated expression
+-- | back to X template variables.
+-- | The swapping of X template variables to XInternal template variables and back, is done to ensure that the
+-- | substitutions do not interfere with each other.
 propDeBrSubXs :: [(Int, ObjDeBr)] -> PropDeBr -> PropDeBr
 propDeBrSubXs subs prop =
     swapXIntToXProp $
