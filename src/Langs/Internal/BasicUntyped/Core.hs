@@ -77,8 +77,7 @@ import Control.Monad.RWS
 import Text.XHtml (sub)
 import qualified Internal.StdPattern
 import Data.Maybe (isJust)
-import GHC.IO.BufferedIO (BufferedIO(emptyWriteBuffer))
-import qualified Internal.StdPattern as substitutions
+
 
 
 data ObjDeBr where
