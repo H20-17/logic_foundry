@@ -797,10 +797,15 @@ testFuncsSetRendering = do
     -- Note: Expecting 𝗙𝗨𝗡𝗖𝗦(A,B) based on default FuncApp/Tuple rendering
     let expectedOutput = "𝗙𝗨𝗡𝗖𝗦(A,B)"
 
+ 
+
     remarkM "  Input Term: funcsSet A B"
-    -- remarkM $ "  Internal Structure (for info): " <> (pack $ show funcsAB) -- Uncomment if needed
+    --remarkM $ "  Internal Structure (for info): " <> (pack $ show funcsAB) -- Uncomment if needed
     remarkM $ "  Actual Rendered Output:   " <> actualOutput
     remarkM $ "  Expected Rendered Output: " <> expectedOutput
+
+    --remarkM exp3
+
 
     -- Check if rendering matches expectation
     if actualOutput == expectedOutput then

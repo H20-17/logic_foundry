@@ -1,6 +1,6 @@
 module Langs.BasicUntyped (
-    ObjDeBr(Integ,Constant,V,X,(:+:),(:*:),Intneg,IntSet,EmptySet),
-    PropDeBr(Neg,(:&&:),(:||:),(:->:),(:<->:),(:==:),In,(:<=:),F),
+    ObjDeBr(Integ,Constant,V,X,(:+:),(:*:),Intneg,IntSet,EmptySet,Bound,Hilbert),
+    PropDeBr(Neg,(:&&:),(:||:),(:->:),(:<->:),(:==:),In,(:<=:),F,Forall,Exists),
     DeBrSe(..),
     PrfStdStepPredDeBr,
     PropErrDeBr,
@@ -23,7 +23,6 @@ module Langs.BasicUntyped (
     boundDepthObjDeBr,
     boundDepthPropDeBr,
     notSubset,
-    pairFirst,
     (.@.),
     (.:.),
     project,
@@ -41,7 +40,9 @@ module Langs.BasicUntyped (
     (.<.),
     parseIntSet,
     buildPair,
-    buildTuple
+    buildTuple,
+    parseIsFunc,
+    isFunc
 ) where
 
 
