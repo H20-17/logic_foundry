@@ -877,7 +877,7 @@ subset a b =
         -- Uses template variables X 1 for 'a', X 0 for 'b', and X 2 for 'x' (bound by aX)
         forall_part = propDeBrSubXs [(1,a),(0,b)] (aX 2 (X 2 `In` X 1 :->: X 2 `In` X 0))
     in
-        (isSet a) :&&: forall_part -- Conjoin with isSet a
+        isSet a :&&: forall_part -- Conjoin with isSet a
 
 
 
@@ -1004,7 +1004,7 @@ isRelation s =
         -- 's' is passed directly.
         all_elements_are_pairs = aX 0 ((X 0 `In` s) :->: isPair (X 0))
     in
-        (isSet s) :&&: all_elements_are_pairs -- Conjoin with isSet s
+        isSet s :&&: all_elements_are_pairs -- Conjoin with isSet s
 
 
 -- Parser for the modified isRelation structure
