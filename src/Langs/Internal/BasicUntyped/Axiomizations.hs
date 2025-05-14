@@ -373,3 +373,14 @@ instance ZFC.LogicSent PropDeBr ObjDeBr where
         -- This asserts EmptySet ∉ IntSet.
         -- EmptySet is your ObjDeBr constructor for the empty set.
         -- IntSet is your ObjDeBr constructor for the set of integers.
+
+
+-- Axiom of Regularity:
+-- Forall A (A /= EmptySet -> Exists x (x In A /\ (x intersect A) == EmptySet))
+regularityAxiom :: PropDeBr
+regularityAxiom = aX 0 ( 
+                         (isSet (X 0)) :&&: Neg (X 0 :==: EmptySet) :->: 
+                                eX 1 ( 
+                                       (X 1 `In` X 0) :&&: ((X 1 ./\. X 0) :==: EmptySet) 
+                                     ) 
+                       )

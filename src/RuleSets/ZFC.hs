@@ -18,6 +18,7 @@ module RuleSets.ZFC
     emptySetAxiomM,
     extensionalityAxiomM,
     emptySetNotIntM,
+    regularityAxiomM,
     MetaRuleError(..)
 ) where
 
@@ -112,7 +113,7 @@ class (PREDL.LogicSent s t ()) => LogicSent s t | s ->t where
    emptySetAxiom :: s
    extensionalityAxiom :: s
    emptySetNotIntAxiom :: s
-
+   regularityAxiom :: s
 
 
 
@@ -161,7 +162,8 @@ data LogicRule s sE t  where
     IntegerInequality    :: Int -> Int -> LogicRule s sE t
     EmptySetAxiom        :: LogicRule s sE t
     ExtensionalityAxiom  :: LogicRule s sE t
-    EmptySetNotIntAxiom  :: LogicRule s sE t 
+    EmptySetNotIntAxiom  :: LogicRule s sE t
+    RegularityAxiom      :: LogicRule s sE t
     deriving(Show)
 
 
@@ -280,6 +282,7 @@ class LogicRuleClass r s sE t | r->s, r->sE, r->t where
      emptySet             :: r
      extensionality       :: r
      emptySetNotInt       :: r
+     regularity :: r
 
 instance LogicRuleClass [LogicRule s sE t] s sE t where
      specification :: [Int] -> Int -> t -> s -> [LogicRule s sE t]
@@ -306,6 +309,12 @@ instance LogicRuleClass [LogicRule s sE t] s sE t where
      extensionality       = [ExtensionalityAxiom]
      emptySetNotInt :: [LogicRule s sE t]
      emptySetNotInt = [EmptySetNotIntAxiom]
+     regularity :: [LogicRule s sE t]
+     regularity =  [RegularityAxiom]
+
+
+
+
 
 -- Finds the first element that appears more than once in the list.
 findFirstDuplicate :: Ord a => [a] -> Maybe a
@@ -497,6 +506,11 @@ runProofAtomic rule context state  =
               -- maybe (return ()) (throwError . MetaRuleErrNotClosed axiomInstance) (checkSanity mempty [] (fmap fst (consts state)) axiomInstance)
               let step = PrfStdStepStep axiomInstance "AXIOM_EXTENSIONALITY" []
               return (Just axiomInstance, Nothing, step)
+          RegularityAxiom -> do -- New case
+              let axiomInstance = regularityAxiom -- From LogicSent s t constraint
+              -- No sanity check needed as it's a fixed, closed proposition.
+              let step = PrfStdStepStep axiomInstance "AXIOM_REGULARITY" []
+              return (Just axiomInstance, Nothing, step) 
   
 
     where
@@ -618,7 +632,8 @@ integerCompareM i1 i2 = standardRuleM (integerCompare i1 i2)
 integerInequalityM i1 i2 = standardRuleM (integerInequality i1 i2)
 
 
-integersAreUrelementsM, emptySetAxiomM, extensionalityAxiomM,emptySetNotIntM :: (Monad m, Show sE, Typeable sE, Show s, Typeable s, Show eL, Typeable eL,
+integersAreUrelementsM, emptySetAxiomM, extensionalityAxiomM,emptySetNotIntM,regularityAxiomM 
+       :: (Monad m, Show sE, Typeable sE, Show s, Typeable s, Show eL, Typeable eL,
        MonadThrow m, Show o, Typeable o, Show tType, Typeable tType, TypedSent o tType sE s,
        Monoid (PrfStdState s o tType), ProofStd s eL [LogicRule s sE t] o tType, StdPrfPrintMonad s o tType m,
        LogicRuleClass [LogicRule s sE t] s sE t)
@@ -627,7 +642,7 @@ integersAreUrelementsM = standardRuleM integersAreUrelements
 emptySetAxiomM = standardRuleM emptySet
 extensionalityAxiomM = standardRuleM extensionality
 emptySetNotIntM = standardRuleM emptySetNotInt
-
+regularityAxiomM = standardRuleM regularity
 
 data MetaRuleError s where
    MetaRuleErrNotClosed :: s -> MetaRuleError s
