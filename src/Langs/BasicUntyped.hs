@@ -42,7 +42,8 @@ module Langs.BasicUntyped (
     buildPair,
     buildTuple,
     parseIsFunc,
-    isFunc
+    isFunc,
+    parseNatSet
 ) where
 
 

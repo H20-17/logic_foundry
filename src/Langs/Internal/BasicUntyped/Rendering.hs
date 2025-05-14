@@ -164,7 +164,8 @@ instance SubexpDeBr ObjDeBr where
          maybe (error $ "Ubable to parse term " <> show obj <> ". This shouldn't have happened.")
              id fullParse 
       where fullParse =
-                  parseIntSet'
+                  parseNatSet'
+              <|> parseIntSet'
               <|> parseInteg'
               <|> parseConst'
               <|> parseBound'
@@ -190,7 +191,11 @@ instance SubexpDeBr ObjDeBr where
               <|> parseSetDifference'
               <|> parseSetBuilder'
               <|> parseHilbert'
-       
+            parseNatSet' =
+                do
+                    parseNatSet obj
+                    return $ ParseTreeConst "ℕ"
+
             parseFuncApplication' =
                do
                 (f,x) <- parseFuncApplication obj

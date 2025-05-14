@@ -52,7 +52,9 @@ module Langs.Internal.BasicUntyped.Shorthands (
     buildTuple,
     isSet,
     parseIsFunc,
-    isFunc
+    isFunc,
+    natSetObj,      -- Exporting the NatSet object
+    parseNatSet     -- Exporting the NatSet parser
 
 ) where
 import Langs.Internal.BasicUntyped.Core
@@ -1643,3 +1645,17 @@ isSet x = Neg (x `In` IntSet)
 parseIsSet :: PropDeBr -> Maybe ObjDeBr
 parseIsSet (Neg (x `In` IntSet)) = Just x
 parseIsSet _ = Nothing
+
+
+-- Shorthand for the set of Natural Numbers (non-negative integers)
+-- N = {x ∈ Z | x ≥ 0}
+natSetObj :: ObjDeBr
+natSetObj = builderX 0 IntSet predicate_non_negative
+  where
+    -- Predicate: (Integ 0) <= X 0  (i.e., 0 <= x)
+    predicate_non_negative = (Integ 0) :<=: (X 0)
+
+-- Parser for the natSetObj structure.
+-- Since natSetObj is a specific constant, we can just check for equality.
+parseNatSet :: ObjDeBr -> Maybe ()
+parseNatSet obj = guard (obj == natSetObj) 
