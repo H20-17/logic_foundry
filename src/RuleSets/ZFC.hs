@@ -19,6 +19,7 @@ module RuleSets.ZFC
     extensionalityAxiomM,
     emptySetNotIntM,
     regularityAxiomM,
+    unionAxiomM,
     MetaRuleError(..)
 ) where
 
@@ -114,6 +115,7 @@ class (PREDL.LogicSent s t ()) => LogicSent s t | s ->t where
    extensionalityAxiom :: s
    emptySetNotIntAxiom :: s
    regularityAxiom :: s
+   unionAxiom :: s
 
 
 
@@ -164,6 +166,7 @@ data LogicRule s sE t  where
     ExtensionalityAxiom  :: LogicRule s sE t
     EmptySetNotIntAxiom  :: LogicRule s sE t
     RegularityAxiom      :: LogicRule s sE t
+    UnionAxiom :: LogicRule s sE t
     deriving(Show)
 
 
@@ -283,6 +286,7 @@ class LogicRuleClass r s sE t | r->s, r->sE, r->t where
      extensionality       :: r
      emptySetNotInt       :: r
      regularity :: r
+     union :: r
 
 instance LogicRuleClass [LogicRule s sE t] s sE t where
      specification :: [Int] -> Int -> t -> s -> [LogicRule s sE t]
@@ -311,6 +315,9 @@ instance LogicRuleClass [LogicRule s sE t] s sE t where
      emptySetNotInt = [EmptySetNotIntAxiom]
      regularity :: [LogicRule s sE t]
      regularity =  [RegularityAxiom]
+     union :: [LogicRule s sE t]
+     union = [UnionAxiom]
+
 
 
 
@@ -493,24 +500,28 @@ runProofAtomic rule context state  =
               -- Neg ((Integ i1) :==: (Integ i2)), which is your (./=.) shorthand.
               let resultSent = neg (integer i1 .==. integer i2)
               return (Just resultSent, Nothing, PrfStdStepStep resultSent "AXIOM_INTEGER_INEQUALITY" [])
-          EmptySetAxiom -> do -- New case
+          EmptySetAxiom -> do
               let axiomInstance = emptySetAxiom -- From LogicSent s t constraint
               -- Optional: Sanity check if the axiom is complexly generated in LogicSent
               -- maybe (return ()) (throwError . MetaRuleErrNotClosed axiomInstance) (checkSanity mempty [] (fmap fst (consts state)) axiomInstance)
               let step = PrfStdStepStep axiomInstance "AXIOM_EMPTY_SET" []
               return (Just axiomInstance, Nothing, step)
 
-          ExtensionalityAxiom -> do -- New case
+          ExtensionalityAxiom -> do
               let axiomInstance = extensionalityAxiom -- From LogicSent s t constraint
               -- Optional: Sanity check
               -- maybe (return ()) (throwError . MetaRuleErrNotClosed axiomInstance) (checkSanity mempty [] (fmap fst (consts state)) axiomInstance)
               let step = PrfStdStepStep axiomInstance "AXIOM_EXTENSIONALITY" []
               return (Just axiomInstance, Nothing, step)
-          RegularityAxiom -> do -- New case
+          RegularityAxiom -> do
               let axiomInstance = regularityAxiom -- From LogicSent s t constraint
               -- No sanity check needed as it's a fixed, closed proposition.
               let step = PrfStdStepStep axiomInstance "AXIOM_REGULARITY" []
               return (Just axiomInstance, Nothing, step) 
+          UnionAxiom -> do
+              let axiomInstance = unionAxiom -- From LogicSent s t constraint
+              let step = PrfStdStepStep axiomInstance "AXIOM_UNION" []
+              return (Just axiomInstance, Nothing, step)
   
 
     where
@@ -632,7 +643,7 @@ integerCompareM i1 i2 = standardRuleM (integerCompare i1 i2)
 integerInequalityM i1 i2 = standardRuleM (integerInequality i1 i2)
 
 
-integersAreUrelementsM, emptySetAxiomM, extensionalityAxiomM,emptySetNotIntM,regularityAxiomM 
+integersAreUrelementsM, emptySetAxiomM, extensionalityAxiomM,emptySetNotIntM,regularityAxiomM, unionAxiomM 
        :: (Monad m, Show sE, Typeable sE, Show s, Typeable s, Show eL, Typeable eL,
        MonadThrow m, Show o, Typeable o, Show tType, Typeable tType, TypedSent o tType sE s,
        Monoid (PrfStdState s o tType), ProofStd s eL [LogicRule s sE t] o tType, StdPrfPrintMonad s o tType m,
@@ -643,6 +654,7 @@ emptySetAxiomM = standardRuleM emptySet
 extensionalityAxiomM = standardRuleM extensionality
 emptySetNotIntM = standardRuleM emptySetNotInt
 regularityAxiomM = standardRuleM regularity
+unionAxiomM = standardRuleM union
 
 data MetaRuleError s where
    MetaRuleErrNotClosed :: s -> MetaRuleError s

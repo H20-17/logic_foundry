@@ -375,12 +375,35 @@ instance ZFC.LogicSent PropDeBr ObjDeBr where
         -- IntSet is your ObjDeBr constructor for the set of integers.
 
 
--- Axiom of Regularity:
--- Forall A (A /= EmptySet -> Exists x (x In A /\ (x intersect A) == EmptySet))
-regularityAxiom :: PropDeBr
-regularityAxiom = aX 0 ( 
+    -- Axiom of Regularity:
+    -- Forall A (A /= EmptySet -> Exists x (x In A /\ (x intersect A) == EmptySet))
+    regularityAxiom :: PropDeBr
+    regularityAxiom = aX 0 ( 
                          (isSet (X 0)) :&&: Neg (X 0 :==: EmptySet) :->: 
                                 eX 1 ( 
                                        (X 1 `In` X 0) :&&: ((X 1 ./\. X 0) :==: EmptySet) 
                                      ) 
                        )
+
+                       
+    -- Axiom of Union:
+    -- Forall F (isSet(F) -> Exists A (isSet(A) /\ Forall x (x In A <-> Exists Y (Y In F /\ x In Y))))
+    unionAxiom :: PropDeBr
+    unionAxiom =
+        aX 0 ( -- Forall F (X 0 is F)
+                (isSet (X 0)) -- isSet(F)
+                 :->:        -- ->
+                eX 1 (      -- Exists A (X 1 is A)
+                    (isSet (X 1)) -- isSet(A)
+                        :&&:        -- /\
+                    aX 2 (      -- Forall x (X 2 is x)
+                            (X 2 `In` X 1) -- x In A
+                                :<->:       -- <->
+                            eX 3 (      -- Exists Y (X 3 is Y)
+                                    (X 3 `In` X 0) -- Y In F
+                                            :&&:  -- /\
+                                    (X 2 `In` X 3) -- x In Y
+                            ) -- End of Exists Y
+                    )
+                )
+        )
