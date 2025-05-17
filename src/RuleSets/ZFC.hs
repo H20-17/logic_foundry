@@ -20,6 +20,9 @@ module RuleSets.ZFC
     emptySetNotIntM,
     regularityAxiomM,
     unionAxiomM,
+    powerSetAxiomM,
+    pairingAxiomM,
+    axiomOfChoiceM,
     MetaRuleError(..)
 ) where
 
@@ -116,6 +119,9 @@ class (PREDL.LogicSent s t ()) => LogicSent s t | s ->t where
    emptySetNotIntAxiom :: s
    regularityAxiom :: s
    unionAxiom :: s
+   powerSetAxiom :: s
+   pairingAxiom :: s
+   axiomOfChoice :: s
 
 
 
@@ -167,6 +173,9 @@ data LogicRule s sE t  where
     EmptySetNotIntAxiom  :: LogicRule s sE t
     RegularityAxiom      :: LogicRule s sE t
     UnionAxiom :: LogicRule s sE t
+    PowerSetAxiom :: LogicRule s sE t
+    PairingAxiom :: LogicRule s sE t
+    AxiomOfChoice :: LogicRule s sE t
     deriving(Show)
 
 
@@ -287,6 +296,9 @@ class LogicRuleClass r s sE t | r->s, r->sE, r->t where
      emptySetNotInt       :: r
      regularity :: r
      union :: r
+     powerSet :: r
+     pairing :: r
+     choice :: r
 
 instance LogicRuleClass [LogicRule s sE t] s sE t where
      specification :: [Int] -> Int -> t -> s -> [LogicRule s sE t]
@@ -317,6 +329,12 @@ instance LogicRuleClass [LogicRule s sE t] s sE t where
      regularity =  [RegularityAxiom]
      union :: [LogicRule s sE t]
      union = [UnionAxiom]
+     powerSet :: [LogicRule s sE t]
+     powerSet = [PowerSetAxiom]
+     pairing :: [LogicRule s sE t]
+     pairing = [PairingAxiom]
+     choice :: [LogicRule s sE t]
+     choice = [AxiomOfChoice]
 
 
 
@@ -522,8 +540,18 @@ runProofAtomic rule context state  =
               let axiomInstance = unionAxiom -- From LogicSent s t constraint
               let step = PrfStdStepStep axiomInstance "AXIOM_UNION" []
               return (Just axiomInstance, Nothing, step)
-  
-
+          PowerSetAxiom -> do
+              let axiomInstance = powerSetAxiom -- From LogicSent s t constraint
+              let step = PrfStdStepStep axiomInstance "AXIOM_POWER_SET" []
+              return (Just axiomInstance, Nothing, step)
+          PairingAxiom -> do
+              let axiomInstance = pairingAxiom -- From LogicSent s t constraint
+              let step = PrfStdStepStep axiomInstance "AXIOM_PAIRING" []
+              return (Just axiomInstance, Nothing, step)
+          AxiomOfChoice -> do
+              let axiomInstance = axiomOfChoice -- From LogicSent s t constraint
+              let step = PrfStdStepStep axiomInstance "AXIOM_CHOICE" []
+              return (Just axiomInstance, Nothing, step)
     where
         proven = (keysSet . provenSents) state
         constDict = fmap fst (consts state)
@@ -643,7 +671,8 @@ integerCompareM i1 i2 = standardRuleM (integerCompare i1 i2)
 integerInequalityM i1 i2 = standardRuleM (integerInequality i1 i2)
 
 
-integersAreUrelementsM, emptySetAxiomM, extensionalityAxiomM,emptySetNotIntM,regularityAxiomM, unionAxiomM 
+integersAreUrelementsM, emptySetAxiomM, extensionalityAxiomM,emptySetNotIntM,regularityAxiomM, unionAxiomM,
+             powerSetAxiomM, pairingAxiomM, axiomOfChoiceM 
        :: (Monad m, Show sE, Typeable sE, Show s, Typeable s, Show eL, Typeable eL,
        MonadThrow m, Show o, Typeable o, Show tType, Typeable tType, TypedSent o tType sE s,
        Monoid (PrfStdState s o tType), ProofStd s eL [LogicRule s sE t] o tType, StdPrfPrintMonad s o tType m,
@@ -655,6 +684,9 @@ extensionalityAxiomM = standardRuleM extensionality
 emptySetNotIntM = standardRuleM emptySetNotInt
 regularityAxiomM = standardRuleM regularity
 unionAxiomM = standardRuleM union
+powerSetAxiomM = standardRuleM powerSet
+pairingAxiomM = standardRuleM pairing
+axiomOfChoiceM = standardRuleM choice
 
 data MetaRuleError s where
    MetaRuleErrNotClosed :: s -> MetaRuleError s

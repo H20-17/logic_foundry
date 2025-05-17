@@ -7,6 +7,7 @@ module Langs.Internal.BasicUntyped.Core (
     PropRuleDeBr,
     PredErrDeBr,
     PredRuleDeBr,
+    ZFCRuleDeBr,
     eX, hX, aX,
     eXBang,
     (./=.),
@@ -313,6 +314,7 @@ boundDepthObjDeBr obj = case obj of
      Intneg o1     -> boundDepthObjDeBr o1
      (o1 :*: o2) -> max (boundDepthObjDeBr o1) (boundDepthObjDeBr o2)
      IntSet ->  0
+     EmptySet -> 0
 
 
 
@@ -687,6 +689,8 @@ type PropRuleDeBr = PL.LogicRule () PropDeBr DeBrSe Text
 
 type PredErrDeBr = PREDL.LogicError PropDeBr DeBrSe Text ObjDeBr ()
 type PredRuleDeBr = PREDL.LogicRule PropDeBr DeBrSe Text ObjDeBr ()
+
+type ZFCRuleDeBr = ZFC.LogicRule PropDeBr DeBrSe ObjDeBr
 
 type PrfStdStepPredDeBr = PrfStdStep PropDeBr Text ()
 

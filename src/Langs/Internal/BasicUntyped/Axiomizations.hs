@@ -407,3 +407,79 @@ instance ZFC.LogicSent PropDeBr ObjDeBr where
                     )
                 )
         )
+
+
+    -- Axiom of Pairing:
+    -- Forall x Forall y Exists A (isSet(A) /\ Forall z (z In A <-> (z = x \/ z = y)))
+    pairingAxiom :: PropDeBr
+    pairingAxiom =
+        aX 0 ( -- Forall x (X 0 is x)
+            aX 1 ( -- Forall y (X 1 is y)
+                eX 2 ( -- Exists A (X 2 is A, the pair set)
+                    (isSet (X 2)) -- isSet(A)
+                        :&&:        -- /\
+                    aX 3 (      -- Forall z (X 3 is z, an element of A)
+                            (X 3 `In` X 2) -- z In A
+                            :<->:       -- <->
+                            ( (X 3 :==: X 0) -- z = x
+                                :||:        -- \/
+                              (X 3 :==: X 1) -- z = y
+                            )
+                     )
+                )
+            )
+        )
+
+    -- Axiom of Power Set:
+    -- Forall X (isSet(X) -> Exists P (isSet(P) /\ Forall Y (Y In P <-> Y subset X)))
+    powerSetAxiom :: PropDeBr
+    powerSetAxiom =
+        aX 0 ( -- Forall X (X 0 is X)
+               (isSet (X 0)) -- isSet(X)
+            :->:        -- ->
+            eX 1 (      -- Exists P (X 1 is P, the power set)
+                      (isSet (X 1)) -- isSet(P)
+                      :&&:        -- /\
+                    aX 2 (      -- Forall Y (X 2 is Y, a potential subset)
+                             (X 2 `In` X 1) -- Y In P
+                             :<->:       -- <->
+                             (subset (X 2) (X 0)) -- Y subset X (subset shorthand handles isSet Y)
+                       )
+                )
+        )
+
+    -- Axiom of Choice (Choice Function Version)
+    -- Forall A ( (isSet(A) /\ Forall x (x In A -> (isSet(x) /\ x /= EmptySet))) ->
+    --            Exists f ( f In funcsSet(A, Union A) /\ Forall x (x In A -> f(x) In x)) )
+    axiomOfChoice :: PropDeBr
+    axiomOfChoice =
+        let
+            -- Template Variables
+            idx_A = 0 -- Represents the collection A of non-empty sets
+            idx_f = 1 -- Represents the choice function f
+            idx_x = 2 -- Represents an element x in A (used in quantifiers)
+
+            -- Antecedent: A is a set, and all its elements are non-empty sets
+            cond1_A_isSet = isSet (X idx_A)
+            cond2_elements_are_non_empty_sets =
+                aX idx_x ( (X idx_x `In` X idx_A)
+                           :->:
+                           (isSet (X idx_x) :&&: Neg (X idx_x :==: EmptySet))
+                      )
+            antecedent = cond1_A_isSet :&&: cond2_elements_are_non_empty_sets
+
+            -- Consequent: Exists a choice function f
+            union_A = bigUnion (X idx_A)
+            set_of_functions = funcsSet (X idx_A) union_A
+
+            prop_f_is_in_funcSet = (X idx_f) `In` set_of_functions
+            prop_f_chooses_element =
+                aX idx_x ( (X idx_x `In` X idx_A)
+                           :->:
+                        (((X idx_f) .@. (X idx_x)) `In` (X idx_x))
+                         )
+            consequent_body = prop_f_is_in_funcSet :&&: prop_f_chooses_element
+            consequent = eX idx_f consequent_body
+
+        in
+            aX idx_A ( antecedent :->: consequent )
