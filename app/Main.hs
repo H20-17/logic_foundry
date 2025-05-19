@@ -65,74 +65,139 @@ testTheoremMSchema = TheoremSchemaMT  [("N",())] [z1,z2] theoremProg
     z2 = aX 0 ((X 0 `In` Constant "N") :&&: (X 0 :<=: Integ 0) :->: (X 0 :==: Integ 0))
 
 
-strongInductionSentence :: PropDeBr -> ObjDeBr -> PropDeBr
-strongInductionSentence p_template natSet =
+-- isRelWellFoundedOn Dom Rel
+-- Assumes Rel is a set of pairs, and Dom is the set it's well-founded on.
+-- Forall S ((S subset Dom /\ S /= EmptySet) ->
+--            Exists x (x In S /\ Forall y (y In S -> not (y Rel x))) )
+-- Example usage:
+-- let myDomain = Constant "MySet"
+-- let myRelation = Constant "MyRelation" -- Assume this is a set of pairs
+-- let wellFoundedStatement = isRelWellFoundedOn myDomain myRelation
+isRelWellFoundedOn :: ObjDeBr -> ObjDeBr -> PropDeBr
+isRelWellFoundedOn dom rel =
     let
-        -- P(n) is simply p_template, as X 0 will be bound by the outer aX 0 for n.
-        p_n = p_template
+        -- Template Variables for the quantifiers in the well-foundedness definition
+        idx_S = 0 -- Represents the subset S of 'dom'
+        idx_x = 1 -- Represents the minimal element x in S
+        idx_y = 2 -- Represents any element y in S for comparison
 
-        -- P(k) requires substituting X 0 in p_template with X 1 (for k).
-        p_k = propDeBrSubX 0 (X 1) p_template
+        -- Antecedent for the main implication: S is a non-empty subset of 'dom'
+        s_is_subset_dom = subset (X idx_S) dom  -- S subset dom
+        s_is_not_empty  = Neg ( X idx_S :==: EmptySet ) -- S /= EmptySet
+        antecedent_S    = s_is_subset_dom :&&: s_is_not_empty
 
-        -- Inductive Hypothesis (IH): Forall k (k In natSet /\ k < n -> P(k))
-        -- Here, n is X 0 (from the scope of Premise_SI's aX 0)
-        -- and k is X 1 (to be bound by aX 1 below)
-        k_in_nat_and_lt_n = (X 1 `In` natSet) :&&: ((X 1) .<. (X 0))
-        ih_body = k_in_nat_and_lt_n :->: p_k
-        inductive_hypothesis_forall_k = aX 1 ih_body
-
-        -- Inductive Step (IS): IH -> P(n)
-        -- Here, n is X 0
-        inductive_step_implies_p_n = inductive_hypothesis_forall_k :->: p_n
-
-        -- Premise of Strong Induction: Forall n (n In natSet -> IS)
-        -- Here, n is X 0
-        n_in_nat_for_premise = (X 0 `In` natSet)
-        premise_strong_induction = aX 0 (n_in_nat_for_premise :->: inductive_step_implies_p_n)
-
-        -- Conclusion of Strong Induction: Forall n (n In natSet -> P(n))
-        -- Here, n is X 0
-        n_in_nat_for_conclusion = (X 0 `In` natSet)
-        conclusion_strong_induction = aX 0 (n_in_nat_for_conclusion :->: p_n)
+        -- Consequent: Exists an R-minimal element x in S
+        -- x In S
+        x_is_in_S       = X idx_x `In` X idx_S
+        -- y Rel x  (pair <y,x> In rel)
+        y_rel_x         = buildPair (X idx_y) (X idx_x) `In` rel
+        -- Forall y (y In S -> not (y Rel x))
+        x_is_minimal_in_S = aX idx_y ( (X idx_y `In` X idx_S) :->: Neg y_rel_x )
+        -- Exists x (x In S /\ x_is_minimal_in_S)
+        consequent_exists_x = eX idx_x ( x_is_in_S :&&: x_is_minimal_in_S )
     in
-        premise_strong_induction :->: conclusion_strong_induction
+        aX idx_S ( antecedent_S :->: consequent_exists_x )
+
+-- strongInductionPremiseOnRel P_template idx Dom Rel
+-- Forall n (n In Dom -> ( (Forall k (k In Dom /\ k Rel n -> P(k))) -> P(n) ) )
+-- Example usage:
+-- let myProperty = X idx :==: X idx -- P(x) is x=x
+-- let myDomain = natSetObj
+-- let lessThanRel = builderX 0 -- This needs to be defined, e.g. {<x,y> | x < y & x,y in natSetObj}
+--                  (crossProd natSetObj natSetObj) -- Source set for pairs
+--                  ( (project 2 0 (X 0)) .<. (project 2 1 (X 0)) ) -- Property X 0 is a pair <a,b> and a < b
+-- let premise = strongInductionPremiseOnRel myProperty myDomain lessThanRel
+
+strongInductionPremiseOnRel :: PropDeBr -> Int -> ObjDeBr -> ObjDeBr -> PropDeBr
+strongInductionPremiseOnRel p_template idx dom rel =
+    let
+        -- Template variable indices for the quantifiers in this premise
+        n_idx = 0 -- The main induction variable 'n'
+        k_idx = 1 -- The universally quantified variable 'k' such that k Rel n
+
+        -- P(n) - using X n_idx for n.
+        -- Since P_template uses X idx, we substitute X idx in P_template with X n_idx.
+        p_n = propDeBrSubX idx (X n_idx) p_template
+
+        -- P(k) - using X k_idx for k.
+        -- Substitute X idx in P_template with X k_idx.
+        p_k = propDeBrSubX idx (X k_idx) p_template
+
+        -- Inner hypothesis: (k In Dom /\ k Rel n) -> P(k)
+        -- Here, n is X n_idx and k is X k_idx
+        k_in_dom    = X k_idx `In` dom
+        k_rel_n     = buildPair (X k_idx) (X n_idx) `In` rel -- k Rel n
+        hyp_antecedent = k_in_dom :&&: k_rel_n
+        hyp_body    = hyp_antecedent :->: p_k
+
+        -- Forall k (hyp_body)
+        -- This is the "for all predecessors k of n, P(k) holds" part.
+        forall_k_predecessors_hold_P = aX k_idx hyp_body
+
+        -- Inductive Step (IS) for a specific n: (Forall k predecessors...) -> P(n)
+        -- Here, n is X n_idx
+        inductive_step_for_n = forall_k_predecessors_hold_P :->: p_n
+
+        -- Body of the main Forall n: (n In Dom -> IS_for_n)
+        n_in_dom = X n_idx `In` dom
+        main_forall_body = n_in_dom :->: inductive_step_for_n
+    in
+        aX n_idx main_forall_body
+
+
+
+
+
+
+
+
+
 
 
 testTheoremMSchema2 :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) => 
-     PropDeBr -> TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text m ()
-testTheoremMSchema2 p = TheoremSchemaMT  [("N",())] [z1,z2] (theoremProg2 p)
-  where
-    z1 = aX 99 ((X 99 `In` Constant "N") :&&: (X 99 :<=: Integ 10) :->: (X 99 :<=: Integ 0))
-    z2 = aX 0 ((X 0 `In` Constant "N") :&&: (X 0 :<=: Integ 0) :->: (X 0 :==: Integ 0))
+     PropDeBr -> Int -> ObjDeBr -> ObjDeBr -> TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text m ()
+testTheoremMSchema2 p_template idx dom rel = TheoremSchemaMT  [] [] (theoremProg2 p_template idx dom rel)
+
 
 theoremProg2::(MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) => 
-               PropDeBr -> ProofGenTStd () [ZFCRuleDeBr] PropDeBr Text m ()
-theoremProg2 p = do
-    let z1 = aX 0 ((X 0 `In` Constant "N") :&&: (X 0 :<=: Integ 10) :->: (X 0 :<=: Integ 0))
-    let z2 = aX 0 ((X 0 `In` Constant "N") :&&: (X 0 :<=: Integ 0) :->: (X 0 :==: Integ  0))
-    let asm = (V 0 `In` Constant "N") :&&: (V 0 :<=: Integ 10)
-    let asm2 = (V 0 `In` Constant "N") :&&: (V 0 :<=: Integ 10)
-    (generalized, _) <- runProofByUGM () do
-          runProofByAsmM asm2 do
-              newFreeVar <- getTopFreeVar
-              (s1,_) <- uiM newFreeVar z1
-              (s2,_) <- mpM s1
-              remarkIdx <- remarkM "Yeah baby"
-              remarkIdx2<-remarkM "" --empty remark
+               PropDeBr -> Int -> ObjDeBr -> ObjDeBr -> ProofGenTStd () [ZFCRuleDeBr] PropDeBr Text m ()
+theoremProg2 p_template idx dom rel = do
+    
+
+    runProofByUGM () do
+        let asm = rel `subset` (dom `crossProd` dom)
+        return ()
+    return ()
+--    let dom_idx = 0
+--    let rel_idx = 1
+--    let goal = isRelWellFoundedOn dom rel :&&: strongInductionPremiseOnRel p_template idx dom rel
+
+
+--    let z1 = aX 0 ((X 0 `In` Constant "N") :&&: (X 0 :<=: Integ 10) :->: (X 0 :<=: Integ 0))
+--    let z2 = aX 0 ((X 0 `In` Constant "N") :&&: (X 0 :<=: Integ 0) :->: (X 0 :==: Integ  0))
+--    let asm = (V 0 `In` Constant "N") :&&: (V 0 :<=: Integ 10)
+--    let asm2 = (V 0 `In` Constant "N") :&&: (V 0 :<=: Integ 10)
+--    (generalized, _) <- runProofByUGM () do
+--          runProofByAsmM asm2 do
+--              newFreeVar <- getTopFreeVar
+--              (s1,_) <- uiM newFreeVar z1
+--              (s2,_) <- mpM s1
+--              remarkIdx <- remarkM "Yeah baby"
+--              remarkIdx2<-remarkM "" --empty remark
               --(lift . print) "Coment1"
               --(lift . print . show) s1
-              remarkM $ (pack . show) remarkIdx2 <> " was the index of the remark above/"
-              (natAsm,_) <- simpLM asm
+--              remarkM $ (pack . show) remarkIdx2 <> " was the index of the remark above/"
+--              (natAsm,_) <- simpLM asm
               --(lift . print) "COmment 2"
-              (s3,_) <- adjM natAsm s2
-              (s4,line_idx) <- uiM newFreeVar z2
-              showS4 <- showPropM s4
-              remarkM $ showS4 <> " is the sentence. It was proven in line " <> (pack . show) line_idx
-                       <> "\nThis is the next line of this remark."
+--              (s3,_) <- adjM natAsm s2
+--              (s4,line_idx) <- uiM newFreeVar z2
+--              showS4 <- showPropM s4
+--              remarkM $ showS4 <> " is the sentence. It was proven in line " <> (pack . show) line_idx
+--                       <> "\nThis is the next line of this remark."
               -- (lift . print . show) line_idx
-              (s5,_) <- mpM s4
-              simpLM asm
-    return ()
+--              (s5,_) <- mpM s4
+--              simpLM asm
+--    return ()
 
 
 
@@ -480,7 +545,7 @@ testBuilderXSuite = do
     remarkM "Test 5: Complex Predicate { x ∈ N | ∃y (y ∈ M ∧ x = <y, C>) }"
     -- Predicate: eX 1 ( (X 1 `In` setM) :&&: (X 0 :==: Pair (X 1) constC) )
     -- Here, x is X 0 (bound by builderX), y is X 1 (bound by eX)
-    let prop5 = eX 1 ( (X 1 `In` setM) :&&: (X 0 :==: buildPair (X 1) (constC)) )
+    let prop5 = eX 1 ( (X 1 `In` setM) :&&: (X 0 :==: buildPair (X 1) constC) )
     let builtSet5 = builderX 0 setN prop5 -- Using index 0 for x
     builtSet5Show <- showObjM builtSet5
     remarkM $ "Constructed (idx=0): " <> builtSet5Show

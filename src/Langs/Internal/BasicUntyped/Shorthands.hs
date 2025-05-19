@@ -1653,7 +1653,7 @@ natSetObj :: ObjDeBr
 natSetObj = builderX 0 IntSet predicate_non_negative
   where
     -- Predicate: (Integ 0) <= X 0  (i.e., 0 <= x)
-    predicate_non_negative = (Integ 0) :<=: (X 0)
+    predicate_non_negative = Integ 0 :<=: X 0
 
 -- Parser for the natSetObj structure.
 -- Since natSetObj is a specific constant, we can just check for equality.
