@@ -483,3 +483,253 @@ instance ZFC.LogicSent PropDeBr ObjDeBr where
 
         in
             aX idx_A ( antecedent :->: consequent )
+
+    -- Axiom: Integer Order Antisymmetry
+    -- Forall a Forall b (((a In IntSet) /\ (b In IntSet) /\ (a <= b) /\ (b <= a)) -> (a = b))
+    intOrderAntisymmetryAxiom :: PropDeBr
+    intOrderAntisymmetryAxiom =
+        aX 0 (
+        aX 1 (
+               ( (X 0 `In` IntSet)
+                :&&: (X 1 `In` IntSet)
+                 :&&: (X 0 :<=: X 1)
+                 :&&: (X 1 :<=: X 0)
+               )
+               :->: (X 0 :==: X 1)
+          )
+        )
+    
+    -- Axiom: Integer Order Reflexivity
+    -- Forall a (a In IntSet -> a <= a)
+    intOrderReflexivityAxiom :: PropDeBr
+    intOrderReflexivityAxiom =
+        aX 0 ( (X 0 `In` IntSet) :->: (X 0 :<=: X 0) )
+
+    -- Axiom: Integer Order Transitivity
+    -- Forall a Forall b Forall c
+    --   (((a In IntSet) /\ (b In IntSet) /\ (c In IntSet) /\ (a <= b) /\ (b <= c)) -> (a <= c))
+    intOrderTransitivityAxiom :: PropDeBr
+    intOrderTransitivityAxiom =
+        aX 0 (      -- Forall a (X 0 is a)
+        aX 1 (      -- Forall b (X 1 is b)
+        aX 2 (      -- Forall c (X 2 is c)
+               ( (X 0 `In` IntSet)
+              :&&: (X 1 `In` IntSet)
+               :&&: (X 2 `In` IntSet)
+              :&&: (X 0 :<=: X 1)  -- a <= b
+               :&&: (X 1 :<=: X 2)  -- b <= c
+              )
+             :->: (X 0 :<=: X 2)      -- a <= c
+             )
+         )
+     )
+
+    -- Axiom: Integer Order Totality (Connexity)
+    -- Forall a Forall b (((a In IntSet) /\ (b In IntSet)) -> ((a <= b) \/ (b <= a)))
+    intOrderTotalityAxiom :: PropDeBr
+    intOrderTotalityAxiom =
+      aX 0 (      -- Forall a (X 0 is a)
+         aX 1 (      -- Forall b (X 1 is b)
+             ( (X 0 `In` IntSet)
+                 :&&: (X 1 `In` IntSet)
+             )
+             :->:
+             ( (X 0 :<=: X 1)  -- a <= b
+              :||:             -- \/
+               (X 1 :<=: X 0)  -- b <= a
+             )
+             )
+      )
+
+    -- Closure Axioms for Integers
+
+    -- 1. Closure of Addition on IntSet
+    -- Forall a,b ((a In IntSet /\ b In IntSet) -> (a+b) In IntSet)
+    intAddClosureAxiom :: PropDeBr
+    intAddClosureAxiom =
+        aX 0 ( aX 1 (
+            ( (X 0 `In` IntSet) :&&: (X 1 `In` IntSet) )
+            :->:
+            ((X 0 :+: X 1) `In` IntSet)
+        ))
+
+    -- 2. Closure of Multiplication on IntSet
+    -- Forall a,b ((a In IntSet /\ b In IntSet) -> (a*b) In IntSet)
+    intMulClosureAxiom :: PropDeBr
+    intMulClosureAxiom =
+        aX 0 ( aX 1 (
+            ( (X 0 `In` IntSet) :&&: (X 1 `In` IntSet) )
+            :->:
+            ((X 0 :*: X 1) `In` IntSet)
+        ))
+
+    -- 3. Closure of Negation on IntSet
+    -- Forall a (a In IntSet -> (-a) In IntSet)
+    intNegClosureAxiom :: PropDeBr
+    intNegClosureAxiom =
+        aX 0 (
+            (X 0 `In` IntSet)
+            :->:
+            (Intneg (X 0) `In` IntSet)
+        )
+
+    -- Ring Axioms for Integers (IntSet with :+:, :*:, Intneg, Integ 0, Integ 1)
+
+    -- 1. Associativity of Addition
+    -- Forall a,b,c in IntSet, (a+b)+c = a+(b+c)
+    intAddAssociativityAxiom :: PropDeBr
+    intAddAssociativityAxiom =
+        aX 0 ( aX 1 ( aX 2 (
+            ( (X 0 `In` IntSet) :&&: (X 1 `In` IntSet) :&&: (X 2 `In` IntSet) )
+            :->:
+            ( ((X 0 :+: X 1) :+: X 2) :==: (X 0 :+: (X 1 :+: X 2)) )
+     )))
+
+    -- 2. Commutativity of Addition
+    -- Forall a,b in IntSet, a+b = b+a
+    intAddCommutativityAxiom :: PropDeBr
+    intAddCommutativityAxiom =
+        aX 0 ( aX 1 (
+            ( (X 0 `In` IntSet) :&&: (X 1 `In` IntSet) )
+            :->:
+            ( (X 0 :+: X 1) :==: (X 1 :+: X 0) )
+        ))
+
+    -- 3. Additive Identity (Integ 0)
+    -- Forall a in IntSet, a + 0 = a
+    intAddIdentityAxiom :: PropDeBr
+    intAddIdentityAxiom =
+        aX 0 (
+            (X 0 `In` IntSet)
+            :->:
+            ( (X 0 :+: Integ 0) :==: X 0 )
+        )
+        -- Note: We also need Integ 0 `In` IntSet, but this is handled by your
+        -- existing IntegerMembership 0 rule/axiom. This axiom focuses on its identity property.
+
+    -- 4. Additive Inverse (Intneg)
+    -- Forall a in IntSet, a + (-a) = 0
+    intAddInverseAxiom :: PropDeBr
+    intAddInverseAxiom =
+        aX 0 (
+            (X 0 `In` IntSet)
+            :->:
+            ( (X 0 :+: Intneg (X 0)) :==: Integ 0 )
+        )
+        -- Note: We also need Forall a (a `In` IntSet -> Intneg a `In` IntSet).
+        -- This might be implicitly true by construction or require a separate axiom if Intneg
+        -- doesn't guarantee its result is in IntSet based on input from IntSet.
+        -- For now, this axiom assumes Intneg(X 0) is a valid term to operate on.
+
+    -- 5. Associativity of Multiplication
+    -- Forall a,b,c in IntSet, (a*b)*c = a*(b*c)
+    intMulAssociativityAxiom :: PropDeBr
+    intMulAssociativityAxiom =
+        aX 0 ( aX 1 ( aX 2 (
+            ( (X 0 `In` IntSet) :&&: (X 1 `In` IntSet) :&&: (X 2 `In` IntSet) )
+            :->:
+            ( ((X 0 :*: X 1) :*: X 2) :==: (X 0 :*: (X 1 :*: X 2)) )
+        )))
+
+    -- 6. Commutativity of Multiplication (Integers form a commutative ring)
+    -- Forall a,b in IntSet, a*b = b*a
+    intMulCommutativityAxiom :: PropDeBr
+    intMulCommutativityAxiom =
+        aX 0 ( aX 1 (
+            ( (X 0 `In` IntSet) :&&: (X 1 `In` IntSet) )
+            :->:
+            ( (X 0 :*: X 1) :==: (X 1 :*: X 0) )
+        ))
+
+    -- 7. Multiplicative Identity (Integ 1)
+    -- Forall a in IntSet, a * 1 = a
+    intMulIdentityAxiom :: PropDeBr
+    intMulIdentityAxiom =
+        aX 0 (
+            (X 0 `In` IntSet)
+            :->:
+            ( (X 0 :*: Integ 1) :==: X 0 )
+        )
+        -- Note: We also need Integ 1 `In` IntSet (handled by IntegerMembership 1)
+        -- and Integ 0 /= Integ 1 (handled by IntegerInequality 0 1) for a non-trivial ring.
+
+    -- 8. Distributivity of Multiplication over Addition (Left Distributivity)
+    -- Forall a,b,c in IntSet, a*(b+c) = (a*b) + (a*c)
+    intDistributivityAxiom :: PropDeBr
+    intDistributivityAxiom =
+        aX 0 ( aX 1 ( aX 2 (
+            ( (X 0 `In` IntSet) :&&: (X 1 `In` IntSet) :&&: (X 2 `In` IntSet) )
+            :->:
+            ( (X 0 :*: (X 1 :+: X 2)) -- a*(b+c)
+            :==:
+              ((X 0 :*: X 1) :+: (X 0 :*: X 2)) -- (a*b) + (a*c)
+            )
+        )))
+
+
+    -- Axioms for Ordered Ring (Compatibility of Order with Ring Operations)
+
+    -- 1. Compatibility of Order with Addition
+    -- Forall a,b,c in IntSet, (a <= b -> a+c <= b+c)
+    intOrderAddCompatibilityAxiom :: PropDeBr
+    intOrderAddCompatibilityAxiom =
+        aX 0 ( -- Forall a (X 0 is a)
+        aX 1 ( -- Forall b (X 1 is b)
+        aX 2 ( -- Forall c (X 2 is c)
+               ( (X 0 `In` IntSet)
+                 :&&: (X 1 `In` IntSet)
+                 :&&: (X 2 `In` IntSet)
+                 :&&: (X 0 :<=: X 1)      -- a <= b
+            ) -- Antecedent
+            :->:
+            ( (X 0 :+: X 2) :<=: (X 1 :+: X 2) ) -- a+c <= b+c
+             )
+        )
+        )
+
+    -- 2. Compatibility of Order with Multiplication by Non-Negative Elements
+    -- Forall a,b,c in IntSet, (a <= b /\ 0 <= c -> a*c <= b*c)
+    intOrderMulCompatibilityAxiom :: PropDeBr
+    intOrderMulCompatibilityAxiom =
+        aX 0 ( -- Forall a (X 0 is a)
+        aX 1 ( -- Forall b (X 1 is b)
+        aX 2 ( -- Forall c (X 2 is c)
+               ( (X 0 `In` IntSet)
+                 :&&: (X 1 `In` IntSet)
+                 :&&: (X 2 `In` IntSet)
+                 :&&: (X 0 :<=: X 1)         -- a <= b
+                 :&&: (Integ 0 :<=: X 2)     -- 0 <= c
+            ) -- Antecedent
+            :->:
+            ( (X 0 :*: X 2) :<=: (X 1 :*: X 2) ) -- a*c <= b*c
+             )
+         )
+        )
+
+
+        -- Axiom: Well-Ordering of natSetObj (Equivalent to Induction for N, serves as Axiom of Infinity)
+        -- Forall S ( (S subset natSetObj /\ S /= EmptySet) ->
+        --            Exists x (x In S /\ Forall y (y In S -> x <= y)) )
+    natWellOrderingAxiom :: PropDeBr
+    natWellOrderingAxiom =
+        let
+            -- Template Variables
+            idx_S = 0 -- Represents the subset S of natSetObj
+            idx_x = 1 -- Represents the least element x in S
+            idx_y = 2 -- Represents any element y in S for comparison
+
+            -- Antecedent: S is a non-empty subset of natSetObj
+            -- S subset natSetObj (also implies isSet S via the definition of subset shorthand)
+            s_is_subset_nat = subset (X idx_S) natSetObj
+            s_is_not_empty  = Neg ( (X idx_S) :==: EmptySet )
+            antecedent_S    = s_is_subset_nat :&&: s_is_not_empty
+
+            -- Consequent: Exists a least element x in S
+            x_is_in_S       = X idx_x `In` X idx_S
+            x_is_least_in_S = aX idx_y ( (X idx_y `In` X idx_S) :->: (X idx_x :<=: X idx_y) )
+            consequent_exists_x = eX idx_x ( x_is_in_S :&&: x_is_least_in_S )
+
+        in
+            aX idx_S ( antecedent_S :->: consequent_exists_x )
+
+

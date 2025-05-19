@@ -44,7 +44,8 @@ module Langs.BasicUntyped (
     buildTuple,
     parseIsFunc,
     isFunc,
-    parseNatSet
+    parseNatSet,
+    propDeBrSubX
 ) where
 
 

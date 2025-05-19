@@ -65,6 +65,77 @@ testTheoremMSchema = TheoremSchemaMT  [("N",())] [z1,z2] theoremProg
     z2 = aX 0 ((X 0 `In` Constant "N") :&&: (X 0 :<=: Integ 0) :->: (X 0 :==: Integ 0))
 
 
+strongInductionSentence :: PropDeBr -> ObjDeBr -> PropDeBr
+strongInductionSentence p_template natSet =
+    let
+        -- P(n) is simply p_template, as X 0 will be bound by the outer aX 0 for n.
+        p_n = p_template
+
+        -- P(k) requires substituting X 0 in p_template with X 1 (for k).
+        p_k = propDeBrSubX 0 (X 1) p_template
+
+        -- Inductive Hypothesis (IH): Forall k (k In natSet /\ k < n -> P(k))
+        -- Here, n is X 0 (from the scope of Premise_SI's aX 0)
+        -- and k is X 1 (to be bound by aX 1 below)
+        k_in_nat_and_lt_n = (X 1 `In` natSet) :&&: ((X 1) .<. (X 0))
+        ih_body = k_in_nat_and_lt_n :->: p_k
+        inductive_hypothesis_forall_k = aX 1 ih_body
+
+        -- Inductive Step (IS): IH -> P(n)
+        -- Here, n is X 0
+        inductive_step_implies_p_n = inductive_hypothesis_forall_k :->: p_n
+
+        -- Premise of Strong Induction: Forall n (n In natSet -> IS)
+        -- Here, n is X 0
+        n_in_nat_for_premise = (X 0 `In` natSet)
+        premise_strong_induction = aX 0 (n_in_nat_for_premise :->: inductive_step_implies_p_n)
+
+        -- Conclusion of Strong Induction: Forall n (n In natSet -> P(n))
+        -- Here, n is X 0
+        n_in_nat_for_conclusion = (X 0 `In` natSet)
+        conclusion_strong_induction = aX 0 (n_in_nat_for_conclusion :->: p_n)
+    in
+        premise_strong_induction :->: conclusion_strong_induction
+
+
+testTheoremMSchema2 :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) => 
+     PropDeBr -> TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text m ()
+testTheoremMSchema2 p = TheoremSchemaMT  [("N",())] [z1,z2] (theoremProg2 p)
+  where
+    z1 = aX 99 ((X 99 `In` Constant "N") :&&: (X 99 :<=: Integ 10) :->: (X 99 :<=: Integ 0))
+    z2 = aX 0 ((X 0 `In` Constant "N") :&&: (X 0 :<=: Integ 0) :->: (X 0 :==: Integ 0))
+
+theoremProg2::(MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) => 
+               PropDeBr -> ProofGenTStd () [ZFCRuleDeBr] PropDeBr Text m ()
+theoremProg2 p = do
+    let z1 = aX 0 ((X 0 `In` Constant "N") :&&: (X 0 :<=: Integ 10) :->: (X 0 :<=: Integ 0))
+    let z2 = aX 0 ((X 0 `In` Constant "N") :&&: (X 0 :<=: Integ 0) :->: (X 0 :==: Integ  0))
+    let asm = (V 0 `In` Constant "N") :&&: (V 0 :<=: Integ 10)
+    let asm2 = (V 0 `In` Constant "N") :&&: (V 0 :<=: Integ 10)
+    (generalized, _) <- runProofByUGM () do
+          runProofByAsmM asm2 do
+              newFreeVar <- getTopFreeVar
+              (s1,_) <- uiM newFreeVar z1
+              (s2,_) <- mpM s1
+              remarkIdx <- remarkM "Yeah baby"
+              remarkIdx2<-remarkM "" --empty remark
+              --(lift . print) "Coment1"
+              --(lift . print . show) s1
+              remarkM $ (pack . show) remarkIdx2 <> " was the index of the remark above/"
+              (natAsm,_) <- simpLM asm
+              --(lift . print) "COmment 2"
+              (s3,_) <- adjM natAsm s2
+              (s4,line_idx) <- uiM newFreeVar z2
+              showS4 <- showPropM s4
+              remarkM $ showS4 <> " is the sentence. It was proven in line " <> (pack . show) line_idx
+                       <> "\nThis is the next line of this remark."
+              -- (lift . print . show) line_idx
+              (s5,_) <- mpM s4
+              simpLM asm
+    return ()
+
+
+
 testEqualityRules :: ProofGenTStd () [PredRuleDeBr] PropDeBr Text IO ()
 testEqualityRules = do
     remarkM "--- Testing Equality Rules ---"

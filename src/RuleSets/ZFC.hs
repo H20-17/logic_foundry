@@ -23,6 +23,24 @@ module RuleSets.ZFC
     powerSetAxiomM,
     pairingAxiomM,
     axiomOfChoiceM,
+    intOrderAntiSymmetryM,
+    intOrderReflexivityM,
+    intOrderTransitivityM,
+    intOrderTotalityM,
+    intAddClosureAxiomM,
+    intMulClosureAxiomM,
+    intNegClosureAxiomM,
+    intAddAssociativityM,
+    intAddCommutativityAxiomM,
+    intAddIdentityAxiomM,
+    intAddInverseAxiomM,
+    intMulAssociativityAxiomM,
+    intMulCommutativityAxiomM,
+    intMulIdentityAxiomM,
+    intDistributivityAxiomM,
+    intOrderAddCompatibilityAxiomM,
+    intOrderMulCompatibilityAxiomM,
+    natWellOrderingAxiomM,
     MetaRuleError(..)
 ) where
 
@@ -123,6 +141,34 @@ class (PREDL.LogicSent s t ()) => LogicSent s t | s ->t where
    pairingAxiom :: s
    axiomOfChoice :: s
 
+   -- Integer order axioms
+   intOrderAntisymmetryAxiom :: s
+   intOrderReflexivityAxiom :: s
+   intOrderTransitivityAxiom :: s
+   intOrderTotalityAxiom :: s
+
+   -- Integer closure axioms
+   intAddClosureAxiom :: s
+   intMulClosureAxiom :: s
+   intNegClosureAxiom :: s
+
+   -- Integer ring axioms
+   intAddAssociativityAxiom :: s
+   intAddCommutativityAxiom :: s
+   intAddIdentityAxiom :: s
+   intAddInverseAxiom :: s
+   intMulAssociativityAxiom :: s
+   intMulCommutativityAxiom :: s
+   intMulIdentityAxiom :: s
+   intDistributivityAxiom :: s
+   intOrderAddCompatibilityAxiom :: s
+   intOrderMulCompatibilityAxiom :: s
+
+   -- Well ordering axiom
+   natWellOrderingAxiom :: s
+
+   
+
 
 
 
@@ -176,6 +222,27 @@ data LogicRule s sE t  where
     PowerSetAxiom :: LogicRule s sE t
     PairingAxiom :: LogicRule s sE t
     AxiomOfChoice :: LogicRule s sE t
+    IntOrderAntisymmetry :: LogicRule s sE t
+    IntOrderReflexivity :: LogicRule s sE t
+    IntOrderTransitivity :: LogicRule s sE t
+    IntOrderTotality :: LogicRule s sE t
+
+    IntAddClosure        :: LogicRule s sE t
+    IntMulClosure        :: LogicRule s sE t
+    IntNegClosure        :: LogicRule s sE t
+    IntAddAssociativity  :: LogicRule s sE t
+    IntAddCommutativity  :: LogicRule s sE t
+    IntAddIdentity       :: LogicRule s sE t
+    IntAddInverse        :: LogicRule s sE t
+    IntMulAssociativity  :: LogicRule s sE t
+    IntMulCommutativity  :: LogicRule s sE t
+    IntMulIdentity       :: LogicRule s sE t
+    IntDistributivity    :: LogicRule s sE t
+    IntOrderAddCompatibility :: LogicRule s sE t
+    IntOrderMulCompatibility :: LogicRule s sE t
+
+    -- Well-ordering of N axiom
+    NatWellOrderingAxiom :: LogicRule s sE t
     deriving(Show)
 
 
@@ -299,6 +366,24 @@ class LogicRuleClass r s sE t | r->s, r->sE, r->t where
      powerSet :: r
      pairing :: r
      choice :: r
+     intOrderAntiSymmetry :: r
+     intOrderReflexivity :: r
+     intOrderTransitivity:: r
+     intOrderTotality:: r
+     intAddClosure        :: r
+     intMulClosure        :: r
+     intNegClosure        :: r
+     intAddAssociativity  :: r
+     intAddCommutativity  :: r
+     intAddIdentity       :: r
+     intAddInverse        :: r
+     intMulAssociativity  :: r
+     intMulCommutativity  :: r
+     intMulIdentity       :: r
+     intDistributivity    :: r
+     intOrderAddCompatibility :: r
+     intOrderMulCompatibility :: r
+     natWellOrdering :: r
 
 instance LogicRuleClass [LogicRule s sE t] s sE t where
      specification :: [Int] -> Int -> t -> s -> [LogicRule s sE t]
@@ -335,7 +420,39 @@ instance LogicRuleClass [LogicRule s sE t] s sE t where
      pairing = [PairingAxiom]
      choice :: [LogicRule s sE t]
      choice = [AxiomOfChoice]
-
+     intOrderAntiSymmetry :: [LogicRule s sE t]
+     intOrderAntiSymmetry = [IntOrderAntisymmetry]
+     intOrderReflexivity :: [LogicRule s sE t]
+     intOrderReflexivity = [IntOrderReflexivity]
+     intOrderTransitivity :: [LogicRule s sE t]
+     intOrderTransitivity = [IntOrderTransitivity]
+     intOrderTotality :: [LogicRule s sE t]
+     intOrderTotality = [IntOrderTotality]
+     intAddClosure :: [LogicRule s sE t]
+     intAddClosure        = [IntAddClosure]
+     intMulClosure :: [LogicRule s sE t]
+     intMulClosure        = [IntMulClosure]
+     intNegClosure :: [LogicRule s sE t]
+     intNegClosure        = [IntNegClosure]
+     intAddAssociativity :: [LogicRule s sE t]
+     intAddAssociativity  = [IntAddAssociativity]
+     intAddCommutativity :: [LogicRule s sE t]
+     intAddCommutativity  = [IntAddCommutativity]
+     intAddIdentity       = [IntAddIdentity]
+     intAddInverse :: [LogicRule s sE t]
+     intAddInverse        = [IntAddInverse]
+     intMulAssociativity  = [IntMulAssociativity]
+     intMulCommutativity :: [LogicRule s sE t]
+     intMulCommutativity  = [IntMulCommutativity]
+     intMulIdentity :: [LogicRule s sE t]
+     intMulIdentity       = [IntMulIdentity]
+     intDistributivity :: [LogicRule s sE t]
+     intDistributivity    = [IntDistributivity]
+     intOrderAddCompatibility = [IntOrderAddCompatibility]
+     intOrderMulCompatibility :: [LogicRule s sE t]
+     intOrderMulCompatibility = [IntOrderMulCompatibility]
+     natWellOrdering :: [LogicRule s sE t]
+     natWellOrdering = [NatWellOrderingAxiom]
 
 
 
@@ -552,6 +669,80 @@ runProofAtomic rule context state  =
               let axiomInstance = axiomOfChoice -- From LogicSent s t constraint
               let step = PrfStdStepStep axiomInstance "AXIOM_CHOICE" []
               return (Just axiomInstance, Nothing, step)
+          IntOrderAntisymmetry -> do
+              let axiomInstance = intOrderAntisymmetryAxiom -- From LogicSent s t constraint
+              let step = PrfStdStepStep axiomInstance "AXIOM_INT_ORDER_ANTISYMMETRY" []
+              return (Just axiomInstance, Nothing, step)
+          IntOrderReflexivity -> do
+              let axiomInstance = intOrderReflexivityAxiom -- From LogicSent s t constraint
+              let step = PrfStdStepStep axiomInstance "AXIOM_INT_ORDER_REFLEXIVITY" []
+              return (Just axiomInstance, Nothing, step)
+          IntOrderTransitivity -> do
+                let axiomInstance = intOrderTransitivityAxiom -- From LogicSent s t constraint
+                let step = PrfStdStepStep axiomInstance "AXIOM_INT_ORDER_TRANSITIVITY" []
+                return (Just axiomInstance, Nothing, step)
+          IntOrderTotality -> do
+                let axiomInstance = intOrderTotalityAxiom -- From LogicSent s t constraint
+                let step = PrfStdStepStep axiomInstance "AXIOM_INT_ORDER_TOTALITY" []
+                return (Just axiomInstance, Nothing, step)
+
+          IntAddClosure -> do
+              let axiomInstance = intAddClosureAxiom
+              let step = PrfStdStepStep axiomInstance "AXIOM_INT_ADD_CLOSURE" []
+              return (Just axiomInstance, Nothing, step)
+          IntMulClosure -> do
+              let axiomInstance = intMulClosureAxiom
+              let step = PrfStdStepStep axiomInstance "AXIOM_INT_MUL_CLOSURE" []
+              return (Just axiomInstance, Nothing, step)
+          IntNegClosure -> do
+              let axiomInstance = intNegClosureAxiom
+              let step = PrfStdStepStep axiomInstance "AXIOM_INT_NEG_CLOSURE" []
+              return (Just axiomInstance, Nothing, step)
+          IntAddAssociativity -> do -- Was previously started/duplicated, now unique
+              let axiomInstance = intAddAssociativityAxiom
+              let step = PrfStdStepStep axiomInstance "AXIOM_INT_ADD_ASSOCIATIVITY" []
+              return (Just axiomInstance, Nothing, step)
+          IntAddCommutativity -> do
+              let axiomInstance = intAddCommutativityAxiom
+              let step = PrfStdStepStep axiomInstance "AXIOM_INT_ADD_COMMUTATIVITY" []
+              return (Just axiomInstance, Nothing, step)
+          IntAddIdentity -> do
+              let axiomInstance = intAddIdentityAxiom
+              let step = PrfStdStepStep axiomInstance "AXIOM_INT_ADD_IDENTITY" []
+              return (Just axiomInstance, Nothing, step)
+          IntAddInverse -> do
+              let axiomInstance = intAddInverseAxiom
+              let step = PrfStdStepStep axiomInstance "AXIOM_INT_ADD_INVERSE" []
+              return (Just axiomInstance, Nothing, step)
+          IntMulAssociativity -> do
+              let axiomInstance = intMulAssociativityAxiom
+              let step = PrfStdStepStep axiomInstance "AXIOM_INT_MUL_ASSOCIATIVITY" []
+              return (Just axiomInstance, Nothing, step)
+          IntMulCommutativity -> do
+              let axiomInstance = intMulCommutativityAxiom
+              let step = PrfStdStepStep axiomInstance "AXIOM_INT_MUL_COMMUTATIVITY" []
+              return (Just axiomInstance, Nothing, step)
+          IntMulIdentity -> do
+              let axiomInstance = intMulIdentityAxiom
+              let step = PrfStdStepStep axiomInstance "AXIOM_INT_MUL_IDENTITY" []
+              return (Just axiomInstance, Nothing, step)
+          IntDistributivity -> do
+              let axiomInstance = intDistributivityAxiom
+              let step = PrfStdStepStep axiomInstance "AXIOM_INT_DISTRIBUTIVITY" []
+              return (Just axiomInstance, Nothing, step)
+          IntOrderAddCompatibility -> do
+              let axiomInstance = intOrderAddCompatibilityAxiom
+              let step = PrfStdStepStep axiomInstance "AXIOM_INT_ORDER_ADD_COMPATIBILITY" []
+              return (Just axiomInstance, Nothing, step)
+          IntOrderMulCompatibility -> do
+              let axiomInstance = intOrderMulCompatibilityAxiom
+              let step = PrfStdStepStep axiomInstance "AXIOM_INT_ORDER_MUL_COMPATIBILITY" []
+              return (Just axiomInstance, Nothing, step)
+          NatWellOrderingAxiom -> do
+              let axiomInstance = natWellOrderingAxiom
+              let step = PrfStdStepStep axiomInstance "AXIOM_NAT_WELL_ORDERING" []
+              return (Just axiomInstance, Nothing, step)
+
     where
         proven = (keysSet . provenSents) state
         constDict = fmap fst (consts state)
@@ -672,7 +863,13 @@ integerInequalityM i1 i2 = standardRuleM (integerInequality i1 i2)
 
 
 integersAreUrelementsM, emptySetAxiomM, extensionalityAxiomM,emptySetNotIntM,regularityAxiomM, unionAxiomM,
-             powerSetAxiomM, pairingAxiomM, axiomOfChoiceM 
+             powerSetAxiomM, pairingAxiomM, axiomOfChoiceM, intOrderAntiSymmetryM,
+             intOrderReflexivityM, intOrderTransitivityM, intOrderTotalityM,
+             intAddClosureAxiomM, intMulClosureAxiomM, intNegClosureAxiomM,
+             intAddAssociativityM, intAddCommutativityAxiomM, intAddIdentityAxiomM, intAddInverseAxiomM,
+             intMulAssociativityAxiomM, intMulCommutativityAxiomM, intMulIdentityAxiomM,
+             intDistributivityAxiomM,intOrderAddCompatibilityAxiomM, intOrderMulCompatibilityAxiomM,
+             natWellOrderingAxiomM
        :: (Monad m, Show sE, Typeable sE, Show s, Typeable s, Show eL, Typeable eL,
        MonadThrow m, Show o, Typeable o, Show tType, Typeable tType, TypedSent o tType sE s,
        Monoid (PrfStdState s o tType), ProofStd s eL [LogicRule s sE t] o tType, StdPrfPrintMonad s o tType m,
@@ -687,6 +884,24 @@ unionAxiomM = standardRuleM union
 powerSetAxiomM = standardRuleM powerSet
 pairingAxiomM = standardRuleM pairing
 axiomOfChoiceM = standardRuleM choice
+intOrderAntiSymmetryM = standardRuleM intOrderAntiSymmetry
+intOrderReflexivityM = standardRuleM intOrderReflexivity
+intOrderTransitivityM = standardRuleM intOrderTransitivity
+intOrderTotalityM = standardRuleM intOrderTotality
+intAddClosureAxiomM        = standardRuleM intAddClosure
+intMulClosureAxiomM        = standardRuleM intMulClosure
+intNegClosureAxiomM        = standardRuleM intNegClosure
+intAddAssociativityM       = standardRuleM intAddAssociativity -- Was previously started
+intAddCommutativityAxiomM  = standardRuleM intAddCommutativity
+intAddIdentityAxiomM       = standardRuleM intAddIdentity
+intAddInverseAxiomM        = standardRuleM intAddInverse
+intMulAssociativityAxiomM  = standardRuleM intMulAssociativity
+intMulCommutativityAxiomM  = standardRuleM intMulCommutativity
+intMulIdentityAxiomM       = standardRuleM intMulIdentity
+intDistributivityAxiomM    = standardRuleM intDistributivity
+intOrderAddCompatibilityAxiomM = standardRuleM intOrderAddCompatibility
+intOrderMulCompatibilityAxiomM = standardRuleM intOrderMulCompatibility
+natWellOrderingAxiomM = standardRuleM natWellOrdering
 
 data MetaRuleError s where
    MetaRuleErrNotClosed :: s -> MetaRuleError s
