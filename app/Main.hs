@@ -58,6 +58,8 @@ import RuleSets.ZFC
     ( axiomOfChoiceM)
 import Langs.BasicUntyped
 
+
+
 testTheoremMSchema :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) => TheoremSchemaMT () [PredRuleDeBr] PropDeBr Text m ()
 testTheoremMSchema = TheoremSchemaMT  [("N",())] [z1,z2] theoremProg 
   where
@@ -155,17 +157,20 @@ strongInductionPremiseOnRel p_template idx dom rel =
 
 
 testTheoremMSchema2 :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) => 
-     PropDeBr -> Int -> ObjDeBr -> ObjDeBr -> TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text m ()
-testTheoremMSchema2 p_template idx dom rel = TheoremSchemaMT  [] [] (theoremProg2 p_template idx dom rel)
+     Int -> ObjDeBr -> PropDeBr -> TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text m ()
+testTheoremMSchema2 idx dom p_template= TheoremSchemaMT  [] [] (theoremProg2 idx dom p_template)
 
 
 theoremProg2::(MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) => 
-               PropDeBr -> Int -> ObjDeBr -> ObjDeBr -> ProofGenTStd () [ZFCRuleDeBr] PropDeBr Text m ()
-theoremProg2 p_template idx dom rel = do
-    
-
+               Int -> ObjDeBr -> PropDeBr -> ProofGenTStd () [ZFCRuleDeBr] PropDeBr Text m ()
+theoremProg2 idx dom p_template = do
+    -- First of all this is a generalization over the domain.
     runProofByUGM () do
-        let asm = rel `subset` (dom `crossProd` dom)
+        dom_member <- getTopFreeVar
+        -- Now we must assume the existance of a relation
+        runProofByAsmM () do
+            let asm = eX 2 (X 2 `subset` (dom `crossProd` dom))
+            joij
         return ()
     return ()
 --    let dom_idx = 0
