@@ -305,14 +305,13 @@ instance SubexpDeBr PropDeBr where
         <|> parseNotSubset'
         <|> parseNegation'      -- Default negation
         <|> parseStrictSubset'  -- Conjunction shorthand first
-        <|> parseConjunction'   -- Default conjunction
-
         <|> parseSubset'        -- Forall shorthand first
         <|> parseForall2'       -- Default forall
 
         <|> parseExistsUnique'  -- Exists shorthand first
         <|> parseExists'        -- Default exists
 
+        <|> parseConjunction'   -- Default conjunction
         <|> parseDisjunction'   -- Other standard operators
         <|> parseImplication'
         <|> parseBiconditional'

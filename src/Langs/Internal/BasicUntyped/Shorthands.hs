@@ -754,108 +754,143 @@ parseFuncsSet obj = do
     return (setA_cand, setB_cand)
 
 
+
+
+-- Asserts that x is the tuple formed by the elements in the list 'elements'
+-- in that specific order.
+isTupleWhere :: ObjDeBr -> [ObjDeBr] -> PropDeBr
+isTupleWhere x elements =
+    x :==: buildTuple elements
+
+-- Parser for isTupleWhere
+-- Takes an expected tuple length and a proposition.
+-- If the proposition is 'x :==: buildTuple elements_candidate' and
+-- 'elements_candidate' has the expected length,
+-- it returns Just (x, elements_candidate). Otherwise, Nothing.
+parseIsTupleWhere :: Int -> PropDeBr -> Maybe (ObjDeBr, [ObjDeBr])
+parseIsTupleWhere expectedLength prop = do
+    -- Step 1: Check if the proposition is an equality x :==: potentialTuple.
+    (x, potentialTupleTerm) <- parseEqual prop
+
+    -- Step 2: Try to parse potentialTupleTerm as a tuple of the expectedLength.
+    -- parseTupleFixed will return Nothing if potentialTupleTerm is not a tuple
+    -- of the precisely 'expectedLength' that matches the structure of buildTuple.
+    elements_candidate <- parseTupleFixed potentialTupleTerm expectedLength
+
+    -- If both steps succeeded, return the left-hand side of the equality (x)
+    -- and the list of elements parsed from the right-hand side.
+    return (x, elements_candidate)
+
+
+
+
+
 -- | Predicate: Checks if an ObjDeBr term 'f' represents a function from setA to setB.
---   A function f is represented as a triple Tupl[dom_f, cod_f, graph_f].
---   This definition now mandates that dom_f and cod_f are sets.
+--   Asserts that there exists a graph such that
+--   f is the tuple (setA, setB, graph) and these components satisfy
+--   the necessary function properties.
 isFunc :: ObjDeBr -> ObjDeBr -> ObjDeBr -> PropDeBr
 isFunc f setA setB =
     let
-        dom_f   = project 3 0 f
-        cod_f   = project 3 1 f
-        graph_f = project 3 2 f
+        -- Template variable index for the existential quantifier
+        gr_idx  = 0 -- for the graph component
 
-        -- Functionality check: ∀x (x ∈ dom_f → ∃!y (<x,y> ∈ graph_f))
-        -- X 0 is placeholder for 'x', X 1 is placeholder for 'y'
-        functionality_check = propDeBrSubXs [(2,dom_f),(4,graph_f)] (aX 0 ( (X 0 `In` X 2) :->: eXBang 1 (buildPair (X 0) (X 1) `In` X 4) ))
+
+        -- Placeholder for graph within the existential scope
+        gr  = X gr_idx
+
+        -- Template variable indicides for f, setA and setB
+        f_idx = 1
+        setA_idx = 2 -- Placeholder for the given setA
+        setB_idx = 3 -- Placeholder for the given setB
+
+
+        -- Functionality check: ∀x_fun (x_fun ∈ dom → ∃!y_fun (<x_fun,y_fun> ∈ gr))
+        -- Using fresh template indices for the variables in the functionality check
+        -- to avoid collision with dom_idx, cod_idx, gr_idx if they were also 0 or 1.
+        x_fun_idx = 4 -- Placeholder for 'x' in functionality check
+        y_fun_idx = 5 -- Placeholder for 'y' in functionality check
+
+        -- Constructing functionality_check relative to 'dom' and 'gr'
+        functionality_check_on_components =
+            aX x_fun_idx (
+                (X x_fun_idx `In` X setA_idx)
+                :->:
+                eXBang y_fun_idx (buildPair (X x_fun_idx) (X y_fun_idx) `In` gr)
+            )
+
+        -- The body of the existential quantifier:
+        bound_properties =          -- C3: The bound properties
+            (isTupleWhere (X f_idx) [X setA_idx, X setB_idx, gr])  -- C3A: f is the tuple (dom, cod, gr)                -- C3: The codomain component is a set
+            :&&: isRelationOn gr (X setA_idx) (X setB_idx)         -- C3B: gr is a relation from dom to cod
+                                                 -- (implies gr isSet and elements are pairs from dom x cod)
+            :&&: functionality_check_on_components -- C3C: f satisfies the functionality property
+
+        properties = 
+            isSet (X setA_idx) -- C1: The domain component is a set
+            :&&: isSet (X setB_idx) -- C2: The codomain component is a set
+            :&&: eX gr_idx bound_properties -- C3: The bound properties 
+
     in
-    isTuple 3 f                     :&&: -- C1: f is a 3-tuple
-    isSet dom_f                     :&&: -- C2: The domain component of f is a set
-    isSet cod_f                     :&&: -- C3: The codomain component of f is a set
-    (dom_f :==: setA)               :&&: -- C4: The domain of f equals the given setA
-    (cod_f :==: setB)               :&&: -- C5: The codomain of f equals the given setB
-    isRelation graph_f              :&&: -- C6: The graph of f is a relation (implies isSet graph_f)
-    subset graph_f (crossProd dom_f cod_f) :&&: -- C7: The graph is a subset of dom_f × cod_f
-    functionality_check                      -- C8: f satisfies the functionality property
+        propDeBrSubXs [(f_idx,f),(setA_idx,setA),(setB_idx,setB)]  ( 
+                properties
+        )
 
 
--- | Parses a proposition to see if it matches the structure created by 'isFunc f setA setB'.
+-- | Parses a proposition to see if it matches the latest simplified structure
+-- | created by 'isFunc f setA setB'.
 -- | Returns Maybe (f, setA, setB) on success.
 parseIsFunc :: PropDeBr -> Maybe (ObjDeBr, ObjDeBr, ObjDeBr)
 parseIsFunc prop = do
-    -- The isFunc definition is a chain of 8 conjuncts (if isTuple is C1)
-    -- C1 :&&: C2 :&&: C3 :&&: C4 :&&: C5 :&&: C6 :&&: C7 :&&: C8
-    (c1, rest1) <- parseConjunction prop          -- C1 :&&: (rest1)
-    (c2, rest2) <- parseConjunction rest1          -- C2 :&&: (rest2)
-    (c3, rest3) <- parseConjunction rest2          -- C3 :&&: (rest3)
-    (c4, rest4) <- parseConjunction rest3          -- C4 :&&: (rest4)
-    (c5, rest5) <- parseConjunction rest4          -- C5 :&&: (rest5)
-    (c6, rest6) <- parseConjunction rest5          -- C6 :&&: (rest6)
-    (c7, c8)    <- parseConjunction rest6          -- C7 :&&: C8
+    -- 1. Deconstruct the top-level conjunctions:
+    --    prop = (isSet setA_actual) :&&: (isSet setB_actual) :&&: (eX gr_idx (...))
+    (c1_isSet_setA, rest1)     <- parseConjunction prop
+    (c2_isSet_setB, c3_exists_gr_prop) <- parseConjunction rest1
 
-    -- C1: isTuple 3 f_cand
-    (size_f, f_cand) <- parseIsTupleApp c1
-    guard (size_f == 3)
+    -- 2. Parse C1 to get setA_actual
+    setA_actual <- parseIsSet c1_isSet_setA
 
-    -- Define projected components from f_cand
-    let dom_f_cand   = project 3 0 f_cand
-    let cod_f_cand   = project 3 1 f_cand
-    let graph_f_cand = project 3 2 f_cand
+    -- 3. Parse C2 to get setB_actual
+    setB_actual <- parseIsSet c2_isSet_setB
 
-    -- C2: isSet dom_f_cand
-    parsed_dom_f_from_c2 <- parseIsSet c2
-    guard (parsed_dom_f_from_c2 == dom_f_cand)
+    -- 4. Peel off the leading existential quantifier from C3 to get the inner properties.
+    --    The graph 'gr' (which was X gr_idx = X 0 in the template for eX) is now
+    --    Bound gr_b_expected_idx,
+    --    within 'inner_properties_body'.
+    (inner_properties_body, gr_b_expected_idx) <- parseExists c3_exists_gr_prop
+    let gr_b_expected = Bound gr_b_expected_idx
 
-    -- C3: isSet cod_f_cand
-    parsed_cod_f_from_c3 <- parseIsSet c3
-    guard (parsed_cod_f_from_c3 == cod_f_cand)
+    -- 5. The 'inner_properties_body' is itself a conjunction:
+    --    InnerC1: isTupleWhere f_actual [setA_actual, setB_actual, gr_b_expected]
+    --    InnerC2: isRelationOn gr_b_expected setA_actual setB_actual
+    --    InnerC3: functionality_check(setA_actual, gr_b_expected)
+    --    We only need to parse InnerC1 to extract f_actual for the reconstruction shortcut.
+    (inner_c1_isTupleWhere, _rest_of_inner_props) <- parseConjunction inner_properties_body
 
-    -- C4: (dom_f_cand :==: setA_cand)
-    (lhs_c4, setA_cand) <- parseEqual c4
-    guard (lhs_c4 == dom_f_cand)
+    -- 6. Parse InnerC1 to extract f_actual and verify consistency of setA, setB, and gr_b.
+    (f_extracted, components) <- parseIsTupleWhere 3 inner_c1_isTupleWhere
+    guard (length components == 3)
+    let setA_from_tuple = components !! 0
+    let setB_from_tuple = components !! 1
+    let gr_from_tuple   = components !! 2
 
-    -- C5: (cod_f_cand :==: setB_cand)
-    (lhs_c5, setB_cand) <- parseEqual c5
-    guard (lhs_c5 == cod_f_cand)
+    guard (setA_from_tuple == setA_actual) -- Check setA from tuple matches setA from isSet
+    guard (setB_from_tuple == setB_actual) -- Check setB from tuple matches setB from isSet
+    guard (gr_from_tuple == gr_b_expected) -- Check graph from tuple matches the bound graph
 
-    -- C6: isRelation graph_f_cand
-    parsed_graph_f_from_c6 <- parseIsRelation c6 -- parseIsRelation checks isSet internally
-    guard (parsed_graph_f_from_c6 == graph_f_cand)
+    -- At this point, f_extracted, setA_actual, and setB_actual
+    -- are our candidates for the original arguments to isFunc.
+    let f_candidate = f_extracted
+    -- setA_actual and setB_actual are already defined from steps 2 & 3.
 
-    -- C7: subset graph_f_cand (crossProd dom_f_cand cod_f_cand)
-    (parsed_graph_f_from_c7, product_set_from_c7) <- parseSubset c7 -- parseSubset checks isSet for its first arg
-    guard (parsed_graph_f_from_c7 == graph_f_cand)
-    (parsed_dom_f_from_prod, parsed_cod_f_from_prod) <- parseCrossProduct product_set_from_c7
-    guard (parsed_dom_f_from_prod == dom_f_cand)
-    guard (parsed_cod_f_from_prod == cod_f_cand)
+    -- 7. Shortcut: Reconstruct 'isFunc f_cand setA_cand setB_cand' and compare with the input 'prop'.
+    --    This implicitly verifies the structure of InnerC2 (isRelationOn) and InnerC3 (functionality_check).
+    guard (isFunc f_candidate setA_actual setB_actual == prop)
 
-    -- C8: Functionality check: aX x_idx ((X x_idx In dom_f_cand) :->: eXBang y_idx (buildPair (X x_idx) (X y_idx) In graph_f_cand))
-    -- We need to reconstruct the expected C8 based on f_cand and its components to compare.
-    -- Let's define the template variables for the quantifiers in C8.
-    -- The actual De Bruijn indices will be determined by `aX` and `eXBang`.
-    let x_template_idx_c8 = 0 -- Template for 'x' in aX
-    let y_template_idx_c8 = 1 -- Template for 'y' in eXBang
-
-    -- Construct the expected functionality check based on the parsed f_cand's components
-
-    -- functionality_check = aX 0 ( (X 0 `In` dom_f) :->: eXBang 1 (buildPair (X 0) (X 1) `In` graph_f) )
-
-   
+    -- If all checks passed
+    return (f_candidate, setA_actual, setB_actual)
 
 
-    let expected_functionality_check =
-            aX x_template_idx_c8 (
-                (X x_template_idx_c8 `In` dom_f_cand)
-                :->:
-                eXBang y_template_idx_c8 (
-                    buildPair (X x_template_idx_c8) (X y_template_idx_c8) `In` graph_f_cand
-                )
-            )
-
-    guard (c8 == expected_functionality_check)
-
-
-    -- If all conjunctions match their expected form:
-    return (f_cand, setA_cand, setB_cand)
 
 
         
@@ -891,7 +926,6 @@ parseSubset p = do
 
     -- 2. Parse the first conjunct, expecting it to be `isSet s1`
     s1 <- parseIsSet isSet_prop_candidate -- s1 is the ObjDeBr from isSet
-
     -- 3. Parse the second conjunct, expecting the universal quantification part
     (implication, norm_idx_x) <- parseForall2 forall_part_candidate -- norm_idx_x is the depth of 'x'
     (xInS1_prop, xInS2_prop) <- parseImplication implication
@@ -964,6 +998,7 @@ boundDecrementObjDeBr idx obj = case obj of
      (:+:) o1 o2 -> (:+:) (boundDecrementObjDeBr idx o1) (boundDecrementObjDeBr idx o2)
      (:*:) o1 o2 -> (:*:) (boundDecrementObjDeBr idx o1) (boundDecrementObjDeBr idx o2)
      EmptySet -> EmptySet
+     IntSet -> IntSet
 
 
 
@@ -996,17 +1031,16 @@ isPair = isTuple 2
 --isPair t = propDeBrSubX 2 t $  eX 0 $ eX 1 $ X 2 :==: Tupl [X 0,X 1]
 
 
--- Modified isRelation definition
--- Now asserts that s is a set and all its elements are pairs.
 isRelation :: ObjDeBr -> PropDeBr
 isRelation s =
     let
-        -- The original definition: ∀x (x ∈ s → isPair(x))
         -- X 0 is the placeholder for 'x', bound by aX.
         -- 's' is passed directly.
         all_elements_are_pairs = aX 0 ((X 0 `In` s) :->: isPair (X 0))
     in
         isSet s :&&: all_elements_are_pairs -- Conjoin with isSet s
+
+
 
 
 -- Parser for the modified isRelation structure
@@ -1048,6 +1082,28 @@ parseIsRelation prop = do
 
     -- 8. If all checks pass, return s_from_isSet (the object asserted to be a relation)
     return s_from_isSet
+
+isRelationOn :: ObjDeBr -> ObjDeBr -> ObjDeBr -> PropDeBr
+isRelationOn s domain codomain =
+    s `subset` crossProd domain codomain
+
+
+-- Parser for isRelationOn
+-- If prop matches the structure s `subset` (crossProd domain codomain),
+-- returns Just (s, domain, codomain). Otherwise, Nothing.
+parseIsRelationOn :: PropDeBr -> Maybe (ObjDeBr, ObjDeBr, ObjDeBr)
+parseIsRelationOn prop = do
+    -- Step 1: Attempt to parse the proposition as 's `subset` some_object'.
+    -- 's_candidate' will be the relation itself.
+    -- 'crossProd_candidate' should be the (crossProd domain codomain) term.
+    (s_candidate, crossProd_candidate) <- parseSubset prop
+
+    -- Step 2: Attempt to parse 'crossProd_candidate' as 'crossProd domain_candidate codomain_candidate'.
+    (domain_candidate, codomain_candidate) <- parseCrossProduct crossProd_candidate
+
+    -- If both parsing steps succeed, return the extracted components.
+    return (s_candidate, domain_candidate, codomain_candidate)
+
 
 
 -- Now specifies that the built object B (represented by XInternal b_placeholder_idx) satisfies isSet.

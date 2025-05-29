@@ -5,7 +5,7 @@
 module RuleSets.BaseLogic 
 (
     LogicRule(..), runProofAtomic, remarkM, LogicRuleClass(..), 
-    LogicError(..), fakePropM, fakeConstM,
+    LogicError(..), fakePropM, fakeConstM, repM,
     ProofBySubArgSchema(..), SubproofError(..), runProofBySubArg, 
     runProofBySubArgM,
     SubproofRule(..)
@@ -13,7 +13,7 @@ module RuleSets.BaseLogic
 
 import Data.Monoid ( Last(..) )
 
-import Control.Monad ( foldM, unless )
+import Control.Monad ( foldM, unless,forM )
 import Data.Text (Text, unpack)
 import Control.Monad.Except ( MonadError(throwError) )
 import Control.Monad.Catch
@@ -25,6 +25,7 @@ import Control.Monad.RWS (MonadReader(ask))
 import Data.Maybe ( isNothing )
 import Control.Arrow (left)
 import Control.Monad.Trans ( MonadTrans(lift) )
+import Data.Map (Map,lookup)
 import Internal.StdPattern
 import Kernel
 
@@ -35,16 +36,23 @@ data LogicError s sE o where
     LogicErrFakeSanityErr :: s -> sE -> LogicError s sE o
     LogicErrFakeConstDefined :: o -> LogicError s sE o
     LogicErrPrfBySubArgErr :: SubproofError s sE (LogicError s sE o) -> LogicError s sE o
+    LogicErrFakePropDependencyNotProven :: s -> LogicError s sE o
     deriving (Show)
 
 data LogicRule tType s sE o where
     Remark :: Text -> LogicRule tType s sE o
     Rep :: s -> LogicRule tType s sE o
     ProofBySubArg :: ProofBySubArgSchema s [LogicRule tType s sE o]-> LogicRule tType s sE o
-    FakeProp:: s -> LogicRule tType s sE o
+    FakeProp:: [s] -> s -> LogicRule tType s sE o
     FakeConst :: o -> tType -> LogicRule tType s sE o
     deriving(Show)
 
+-- Helper function to fetch proof index of a dependency
+fetchProofIndexOfDependency :: (Ord s) => Map s [Int] -> s -> Either (LogicError s sE o) [Int]
+fetchProofIndexOfDependency provenMap dep =
+    case Data.Map.lookup dep provenMap of
+        Nothing -> Left $ LogicErrFakePropDependencyNotProven dep
+        Just idx -> Right idx
 
 
 runProofAtomic :: (Ord s, TypedSent o tType sE s,Typeable s, Show s, Typeable o, Show o,
@@ -59,9 +67,19 @@ runProofAtomic rule context state =
         Rep s -> do
             originIndex <- maybe ((throwError . LogicErrRepOriginNotProven) s) return (Data.Map.lookup s (provenSents state))
             return (Just s, Nothing, PrfStdStepStep s "REP" [originIndex])
-        FakeProp s -> do
-            maybe (return ())   (throwError . LogicErrFakeSanityErr s) (checkSanity mempty (freeVarTypeStack context) (fmap fst (consts state)) s)
-            return (Just s, Nothing, PrfStdStepStep s "FAKE_PROP" [])
+        --FakeProp s -> do
+        --    maybe (return ())   (throwError . LogicErrFakeSanityErr s) (checkSanity mempty (freeVarTypeStack context) (fmap fst (consts state)) s)
+        --    return (Just s, Nothing, PrfStdStepStep s "FAKE_PROP" [])
+        FakeProp dependencies targetProp -> do
+            -- Check sanity of the target proposition first
+            maybe (return ()) (throwError . LogicErrFakeSanityErr targetProp) (checkSanity mempty (freeVarTypeStack context) (fmap fst (consts state)) targetProp)
+            -- Check each dependency and collect their indices
+            let provenMap = provenSents state
+            -- Using forM (which is mapM with arguments flipped) for better flow with Either
+            dependencyIndices <- forM dependencies (fetchProofIndexOfDependency provenMap)
+
+            -- If all dependencies are proven and targetProp is sane, return it
+            return (Just targetProp, Nothing, PrfStdStepStep targetProp "FAKE_PROP" dependencyIndices)
         FakeConst const tType -> do
                let constNotDefined = isNothing $ Data.Map.lookup const constDict
                unless constNotDefined ((throwError . LogicErrFakeConstDefined) const)
@@ -126,7 +144,7 @@ instance RuleInject [LogicRule tType s sE o] [LogicRule tType s sE o] where
 class LogicRuleClass r s o tType sE | r -> s, r->o, r->tType, r -> sE where
     remark :: Text -> r
     rep :: s -> r
-    fakeProp :: s -> r
+    fakeProp :: [s] -> s -> r
     fakeConst:: o -> tType -> r
    
 
@@ -135,8 +153,8 @@ instance LogicRuleClass [LogicRule tType s sE o] s o tType sE where
     remark text = [Remark text]
     rep :: s -> [LogicRule tType s sE o]
     rep s = [Rep s]
-    fakeProp :: s -> [LogicRule tType s sE o]
-    fakeProp s = [FakeProp s]
+    fakeProp :: [s] -> s -> [LogicRule tType s sE o]
+    fakeProp deps s = [FakeProp deps s]
     fakeConst :: o -> tType -> [LogicRule tType s sE o]
     fakeConst o t = [FakeConst o t]
 
@@ -252,13 +270,25 @@ standardRuleM rule = do
      maybe (error "Critical failure: No index looking up sentence.") return mayPropIndex
 
 
-fakePropM :: (Monad m, Ord o, Show sE, Typeable sE, Show s, Typeable s,
+
+
+
+
+repM :: (Monad m, Ord o, Show sE, Typeable sE, Show s, Typeable s,
        MonadThrow m, Show o, Typeable o, Show tType, Typeable tType, TypedSent o tType sE s,
        Monoid (PrfStdState s o tType), StdPrfPrintMonad s o tType m,
        StdPrfPrintMonad s o tType (Either SomeException), Monoid (PrfStdContext tType), LogicRuleClass r s o tType sE, ProofStd s eL r o tType,
        Monoid r, Show eL, Typeable eL)
           => s -> ProofGenTStd tType r s o m (s,[Int])
-fakePropM s = standardRuleM (fakeProp s)
+repM s = standardRuleM (rep s)
+
+fakePropM :: (Monad m, Ord o, Show sE, Typeable sE, Show s, Typeable s,
+       MonadThrow m, Show o, Typeable o, Show tType, Typeable tType, TypedSent o tType sE s,
+       Monoid (PrfStdState s o tType), StdPrfPrintMonad s o tType m,
+       StdPrfPrintMonad s o tType (Either SomeException), Monoid (PrfStdContext tType), LogicRuleClass r s o tType sE, ProofStd s eL r o tType,
+       Monoid r, Show eL, Typeable eL)
+          => [s] -> s -> ProofGenTStd tType r s o m (s,[Int])
+fakePropM deps s = standardRuleM (fakeProp deps s)
 
 
 fakeConstM :: (Monad m, Ord o, Show sE, Typeable sE, Show s, Typeable s,

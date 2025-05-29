@@ -792,7 +792,17 @@ hXInt idx p = Hilbert $ xsubPropDeBrXInt p idx (boundDepthPropDeBr p)
 
 
 eXBang :: Int -> PropDeBr -> PropDeBr
-eXBang idx p = eX idx (p :&&: aX (idx+1) (propDeBrSubX idx (X (idx+1)) p :->: Bound (boundDepthPropDeBr p) :==: X (idx+1))) -- Adjusted index for aX
+eXBang idx p = eX idx 
+           (p 
+              :&&: 
+            aXInt 0 
+                   (
+                      propDeBrSubX idx (XInternal 0) p 
+                           :->: 
+                      XInternal 0 :==: X idx
+                )
+            )
+ 
 
 
 aX :: Int -> PropDeBr -> PropDeBr

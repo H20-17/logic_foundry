@@ -1,11 +1,12 @@
 module RuleSets.PropLogic 
 (
-    LogicError, LogicRule(..), runProofAtomic, mpM, simpLM, adjM, 
+    LogicError, LogicRule(..), runProofAtomic, mpM, simpLM,
+    simpRM, adjM, 
     LogicRuleClass(..), SubproofRule(..),
     ProofByAsmSchema(..), SubproofError, runProofByAsm, runProofByAsmM, LogicSent(..),
     SubproofMException(..), contraFM, absurdM, MetaRuleError(..), disjIntroLM, disjIntroRM, disjElimM, doubleNegElimM,
     deMorganConjM, deMorganDisjM, bicondIntroM, bicondElimLM, bicondElimRM, absorpAndM, absorpOrM, distAndOverOrM, distOrOverAndM,
-    peircesLawM, modusTollensM, imp2ConjM
+    peircesLawM, modusTollensM, imp2DisjM, negAndNotToOrM, negImpToConjViaEquivM
 ) where
 
 import Data.Monoid ( Last(..) )
@@ -185,7 +186,7 @@ runProofAtomic rule context state =
         SimpR aAndB -> do
             (a,b) <- maybe ((throwError . LogicErrSentenceNotAdj) aAndB) return (parseAdj aAndB)
             aAndBIndex <- maybe ((throwError . LogicErrSimpLAdjNotProven) aAndB) return (Data.Map.lookup aAndB (provenSents state))
-            return (Just b, Nothing, PrfStdStepStep a "SIMP_R" [aAndBIndex])
+            return (Just b, Nothing, PrfStdStepStep b "SIMP_R" [aAndBIndex])
         Adj a b -> do
             leftIndex <- maybe ((throwError . LogicErrAdjLeftNotProven) a) return (Data.Map.lookup a (provenSents state))
             rightIndex <- maybe ((throwError . LogicErrAdjRightNotProven) b) return (Data.Map.lookup b (provenSents state))
@@ -405,8 +406,8 @@ instance REM.LogicRuleClass [LogicRule tType s sE o] s o tType sE where
     remark rem = [(BaseRule . REM.Remark) rem]
     rep :: s -> [LogicRule tType s sE o]
     rep s = [BaseRule . REM.Rep $ s]
-    fakeProp :: s -> [LogicRule tType s sE o]
-    fakeProp s = [BaseRule . REM.FakeProp $ s]
+    fakeProp :: [s] -> s -> [LogicRule tType s sE o]
+    fakeProp deps s = [BaseRule . REM.FakeProp deps $ s]
     fakeConst:: o -> tType -> [LogicRule tType s sE o]
     fakeConst o t = [BaseRule $ REM.FakeConst o t]
 
@@ -564,24 +565,311 @@ peircesLawM p = standardRuleM (peircesLaw p)
 
 data MetaRuleError s where
     MetaRuleErrNotImp :: s -> MetaRuleError s
-    MetaRuleErrNotModusTollens :: s -> MetaRuleError s
+    MetaRuleErrNotModusTollens :: s -> MetaRuleError s  
+    MetaRuleErrNotAdj :: s -> MetaRuleError s
+    MetaRuleErrNotNeg :: s -> MetaRuleError s
+    MetaRuleErrNotDisj :: s -> MetaRuleError s
     deriving (Show,Typeable)
 
 
 instance (Show s, Typeable s) => Exception (MetaRuleError s)
 
-
-imp2ConjM :: (SubproofRule r1 s, MonadThrow m, Monoid r1,  TypedSent o tType sE s, LogicRuleClass r1 s tType sE o, 
-  StdPrfPrintMonad s o tType m,  StdPrfPrintMonad s o tType (Either SomeException),  LogicSent s tType,  
+-- | Given a proven implication 's' (of the form A → B), this function
+-- | derives and proves its equivalent disjunctive form: ¬A ∨ B.
+-- | This transformation is known as Material Implication.
+-- |
+-- | The proof strategy is as follows:
+-- | 1. Given s: A → B.
+-- | 2. Parse 's' to identify the antecedent A (term `a`) and consequent B (term `b`).
+-- | 3. Prove A ∨ ¬A using the Law of Excluded Middle (`exclMidM`).
+-- | 4. Case 1 (Subproof 1): Assume A.
+-- |    a. From the assumed A and the given A → B, derive B using Modus Ponens (`mpM`).
+-- |    b. From the derived B, introduce the disjunction ¬A ∨ B using `disjIntroRM`.
+-- |    This subproof concludes A → (¬A ∨ B).
+-- | 5. Case 2 (Subproof 2): Assume ¬A.
+-- |    a. From the assumed ¬A, introduce the disjunction ¬A ∨ B using `disjIntroLM`.
+-- |    This subproof concludes ¬A → (¬A ∨ B).
+-- | 6. Apply Disjunction Elimination (`disjElimM`) using:
+-- |    - The proven A ∨ ¬A (from step 3).
+-- |    - The proven A → (¬A ∨ B) (from step 4).
+-- |    - The proven ¬A → (¬A ∨ B) (from step 5).
+-- |    The result is ¬A ∨ B.
+-- |
+-- | Note on Naming: The name 'imp2ConjM' is misleading for this function,
+-- | as it transforms an implication into a disjunction.
+-- | A more appropriate name would be 'impToDisjM' or 'materialImplicationM'.
+imp2DisjM :: (SubproofRule r1 s, MonadThrow m, Monoid r1,  TypedSent o tType sE s, LogicRuleClass r1 s tType sE o,
+  StdPrfPrintMonad s o tType m,  StdPrfPrintMonad s o tType (Either SomeException),  LogicSent s tType,
   Proof eL r1 (PrfStdState s o tType) (PrfStdContext tType) [PrfStdStep s o tType] s,
-  Show eL, Show o, Show s, Show sE, Show tType, Typeable eL,  
-  Typeable o, Typeable s, Typeable sE, Typeable tType) => 
-            s -> ProofGeneratorT s [PrfStdStep s o tType] (PrfStdContext tType) r1 (PrfStdState s o tType) m (s, [Int])
-imp2ConjM s = do
-    (a,b) <- maybe (throwM $ MetaRuleErrNotImp s) return (parse_implication s)
-    runProofByAsmM a $ do
-        mpM s
-        disjIntroRM (neg a) b
+  Show eL, Show o, Show s, Show sE, Show tType, Typeable eL,
+  Typeable o, Typeable s, Typeable sE, Typeable tType) =>
+            s -- ^ A proven proposition 's' of the form (A → B).
+            -> ProofGeneratorT s [PrfStdStep s o tType] (PrfStdContext tType) r1 (PrfStdState s o tType) m (s, [Int]) -- ^ Returns the proven proposition (¬A ∨ B) and its proof index.
+imp2DisjM s_imp_ab = do
+    -- 1. Parse the input implication s_imp_ab = (a -> b) to extract antecedent 'a' and consequent 'b'.
+    (a_term, b_term) <- maybe (throwM $ MetaRuleErrNotImp s_imp_ab) return (parse_implication s_imp_ab)
+
+    -- The target proposition we want to prove directly.
+    let target_disjunction = neg a_term .||. b_term
+
+    -- 2. Prove A ∨ ¬A using Excluded Middle.
+    (a_or_not_a_proven, _) <- exclMidM a_term
+
+    -- 3. Case 1 Subproof: Prove A → (¬A ∨ B)
+    (a_implies_target, _) <- runProofByAsmM a_term $ do
+        -- 'a_term' is assumed.
+        -- Use the original proven implication 's_imp_ab' (A → B) and the assumed 'a_term' (A)
+        -- to derive 'b_term' (B) by Modus Ponens.
+        (b_derived, _) <- mpM s_imp_ab
+        -- From the derived 'b_derived' (B), introduce the disjunction (¬A ∨ B).
+        disjIntroRM (neg a_term) b_derived
+        return () -- Subproof concludes with (¬A ∨ B)
+
+    -- 4. Case 2 Subproof: Prove ¬A → (¬A ∨ B)
+    (not_a_implies_target, _) <- runProofByAsmM (neg a_term) $ do
+        -- 'neg a_term' (¬A) is assumed.
+        -- From the assumed 'neg a_term' (¬A), introduce the disjunction (¬A ∨ B).
+        disjIntroLM (neg a_term) b_term
+        return () -- Subproof concludes with (¬A ∨ B)
+
+    -- 5. Apply Disjunction Elimination.
+    --    We have proven:
+    --      1. a_or_not_a_proven:      A ∨ ¬A
+    --      2. a_implies_target:        A → (¬A ∨ B)
+    --      3. not_a_implies_target:    ¬A → (¬A ∨ B)
+    --    The result will be (¬A ∨ B).
+    disjElimM a_or_not_a_proven a_implies_target not_a_implies_target
+
+
+-- | Given a proven disjunction 's_notA_or_B' (of the form ¬A ∨ B),
+-- | this function derives and proves its equivalent implicative form: A → B.
+-- | This transformation is the reverse of Material Implication.
+-- |
+-- | The proof strategy is:
+-- | 1. Given s: ¬A ∨ B.
+-- | 2. To prove A → B, assume A.
+-- | 3. Under the assumption of A, we need to derive B. This is done by assuming ¬B
+-- |    for a proof by contradiction (RAA) to derive B.
+-- |    a. Assume ¬B.
+-- |    b. From the assumed A and assumed ¬B, form A ∧ ¬B using Adjunction.
+-- |    c. Transform A ∧ ¬B into ¬(¬A ∨ B) using De Morgan's laws and Double Negation.
+-- |       (Specifically, A ∧ ¬B  ⇔  ¬¬A ∧ ¬B  ⇔  ¬(¬(¬¬A) ∨ ¬(¬B))  ⇔  ¬(A ∨ B) - no, this is wrong.
+-- |        A ∧ ¬B  ⇔  ¬(¬(A ∧ ¬B)) ⇔ ¬(¬A ∨ ¬(¬B)) ⇔ ¬(¬A ∨ B) )
+-- |       The direct De Morgan for this is ¬(P → Q) ⇔ P ∧ ¬Q.
+-- |       We need to show that (A ∧ ¬B) contradicts (¬A ∨ B).
+-- |       (A ∧ ¬B) is true. (¬A ∨ B) is true.
+-- |       If (¬A ∨ B) is true:
+-- |           Case i: ¬A is true. This contradicts A (from A ∧ ¬B). So False.
+-- |           Case ii: B is true. This contradicts ¬B (from A ∧ ¬B). So False.
+-- |       Since both disjuncts of (¬A ∨ B) lead to a contradiction if (A ∧ ¬B) is also true,
+-- |       then (A ∧ ¬B) and (¬A ∨ B) are contradictory.
+-- |    d. A formal derivation of False from (A ∧ ¬B) and (¬A ∨ B):
+-- |       i.   A (from A ∧ ¬B)
+-- |       ii.  ¬B (from A ∧ ¬B)
+-- |       iii. ¬A ∨ B (original premise)
+-- |       iv.  Subproof 1: Assume ¬A. Contradiction with (i). So False. (¬A → False)
+-- |       v.   Subproof 2: Assume B. Contradiction with (ii). So False. (B → False)
+-- |       vi.  DisjElim on (iii), (iv), (v) yields False.
+-- |    e. So, assuming ¬B (in context of A and ¬A ∨ B) led to False. (¬B → False)
+-- | 4. By RAA (absurdM), from (¬B → False), derive ¬¬B.
+-- | 5. By Double Negation Elimination, from ¬¬B, derive B.
+-- | 6. Since assuming A led to B, conclude A → B.
+disj2ImpM :: (SubproofRule r1 s, MonadThrow m, Monoid r1,  TypedSent o tType sE s, LogicRuleClass r1 s tType sE o,
+  StdPrfPrintMonad s o tType m,  StdPrfPrintMonad s o tType (Either SomeException),  LogicSent s tType,
+  Proof eL r1 (PrfStdState s o tType) (PrfStdContext tType) [PrfStdStep s o tType] s,
+  Show eL, Show o, Show s, Show sE, Show tType, Typeable eL,
+  Typeable o, Typeable s, Typeable sE, Typeable tType) =>
+            s -- ^ A proven proposition 's' of the form (¬A ∨ B).
+            -> ProofGeneratorT s [PrfStdStep s o tType] (PrfStdContext tType) r1 (PrfStdState s o tType) m (s, [Int]) -- ^ Returns the proven proposition (A → B) and its proof index.
+disj2ImpM s_notA_or_B_proven = do
+    -- 1. Parse the input disjunction s_notA_or_B_proven = (¬A ∨ B)
+    --    to get terms ¬A (not_a_term_parsed), B (b_term_parsed), and A (a_term_parsed).
+    (not_a_term_parsed, b_term_parsed) <- maybe (throwM $ MetaRuleErrNotDisj s_notA_or_B_proven)
+                                              return (parseDisj s_notA_or_B_proven)
+    a_term_parsed <- maybe (throwM $ MetaRuleErrNotNeg not_a_term_parsed)
+                           return (parseNeg not_a_term_parsed)
+
+    -- 2. Goal: Prove A → B. Start a subproof assuming A ('a_term_parsed').
+    runProofByAsmM a_term_parsed $ do
+        -- Current assumption in this scope: 'a_term_parsed' (A) is proven.
+        -- We also have 's_notA_or_B_proven' (¬A ∨ B) from the outer scope.
+        -- Goal: Derive 'b_term_parsed' (B).
+
+        -- To derive B, we use RAA: assume ¬B ('not_b_to_assume') and derive a contradiction.
+        let not_b_to_assume = neg b_term_parsed
+        (not_b_implies_false, _) <- runProofByAsmM not_b_to_assume $ do
+            -- Current assumptions:
+            --   'a_term_parsed' (A) - from parent subproof scope
+            --   'not_b_to_assume' (¬B) - current subproof assumption
+            --   's_notA_or_B_proven' (¬A ∨ B) - from outermost scope
+
+            -- We need to show that these three together lead to False.
+            -- We'll use Disjunction Elimination on 's_notA_or_B_proven' (¬A ∨ B).
+            -- Case 1: Assume ¬A (which is 'not_a_term_parsed')
+            (case1_notA_implies_false, _) <- runProofByAsmM not_a_term_parsed $ do
+                -- We have 'a_term_parsed' (A) and 'not_a_term_parsed' (¬A). Contradiction.
+                contraFM a_term_parsed not_a_term_parsed -- Derives False
+                return ()
+
+            -- Case 2: Assume B (which is 'b_term_parsed')
+            (case2_B_implies_false, _) <- runProofByAsmM b_term_parsed $ do
+                -- We have 'b_term_parsed' (B) and 'not_b_to_assume' (¬B). Contradiction.
+                contraFM b_term_parsed not_b_to_assume -- Derives False
+                return ()
+
+            -- Apply DisjElim: from (¬A ∨ B), (¬A → False), (B → False), conclude False.
+            (falsity_derived, _) <- disjElimM s_notA_or_B_proven case1_notA_implies_false case2_B_implies_false
+            return () -- Innermost subproof (Assume ¬B) concludes False.
+
+        -- We have now proven (¬B → False).
+        (not_not_b_derived, _) <- absurdM not_b_implies_false -- Derives ¬¬B
+
+        -- Use Double Negation Elimination to get B from ¬¬B.
+        (b_final_derived, _) <- doubleNegElimM not_not_b_derived
+        
+        -- The middle subproof (which assumed A) now has B ('b_final_derived') as its last proven statement.
+        return ()
+
+    -- The outermost 'runProofByAsmM a_term_parsed ...' will construct and prove:
+    --   a_term_parsed → b_final_derived
+    -- which is A → B.
+
+
+
+
+
+-- Helper to transform a proven Neg(A && Neg B) into a proven (Neg A || B)
+-- Uses DeMorgan, Double Negation Elimination, and Proof by Cases (DisjElim).
+negAndNotToOrM :: (MonadThrow m, Monoid r1,
+                   ProofStd s eL1 r1 o tType,
+                   LogicSent s tType,         -- From PropLogic
+                   TypedSent o tType sE s,    -- From Internal.StdPattern
+                   LogicRuleClass r1 s tType sE o,
+                   SubproofRule r1 s,
+                   StdPrfPrintMonad s o tType m,
+                   StdPrfPrintMonad s o tType (Either SomeException),
+                   Show s, Typeable s, Show sE, Typeable sE, Show eL1, Typeable eL1,
+                   Show o, Typeable o, Show tType, Typeable tType, Ord o
+                  )
+               => s -- ^ The proven proposition of the form Neg (a :&&: Neg b)
+               -> ProofGenTStd tType r1 s o m (s, [Int]) -- Returns (Neg a :||: b, its_index)
+negAndNotToOrM provenNegAAndNotB = do
+    -- 1. Parse the input to get the terms A and B.
+    innerConjunction <- maybe (throwM $ MetaRuleErrNotNeg provenNegAAndNotB)
+                              return (parseNeg provenNegAAndNotB)
+    (a_term, not_b_term) <- maybe (throwM $ MetaRuleErrNotAdj innerConjunction)
+                                 return (parseAdj innerConjunction)
+    b_term <- maybe (throwM $ MetaRuleErrNotNeg not_b_term)
+                    return (parseNeg not_b_term)
+
+    -- The target proposition we want to prove is (Neg a_term :||: b_term)
+    let target_disjunction = neg a_term .||. b_term
+
+    -- 2. Apply De Morgan's Law to provenNegAAndNotB.
+    --    Input: Neg (A && Neg B)
+    --    Output (s_or_form_proven): (Neg A) || (Neg (Neg B))
+    (s_or_form_proven, _) <- deMorganConjM provenNegAAndNotB
+    -- s_or_form_proven has the structure: (neg a_term) :||: (neg not_b_term)
+    -- which is equivalent to (neg a_term) :||: (neg (neg b_term))
+
+    -- For Disjunction Elimination, we need two implications:
+    --   I1: (Neg A) -> (Neg A || B)
+    --   I2: (Neg (Neg B)) -> (Neg A || B)
+
+    -- 3. Prove I1: (Neg A) -> (Neg A || B)
+    (neg_a_implies_target, _) <- runProofByAsmM (neg a_term) $ do
+        -- Assume (Neg A) - this is 'neg a_term', which is proven by assumption here.
+        -- We want to derive 'target_disjunction' which is (Neg A || B).
+        disjIntroLM (neg a_term) b_term -- Uses the assumed (Neg A) and term B
+        return () -- Subproof concludes with (Neg A || B)
+
+    -- 4. Prove I2: (Neg (Neg B)) -> (Neg A || B)
+    let not_not_b_assumption_term = neg not_b_term -- This is term Neg(Neg B)
+    (not_not_b_implies_target, _) <- runProofByAsmM not_not_b_assumption_term $ do
+        -- Assume (Neg (Neg B)) - this is 'not_not_b_assumption_term', proven by assumption.
+        -- First, derive B using Double Negation Elimination.
+        (b_proven_from_dne, _) <- doubleNegElimM not_not_b_assumption_term
+
+        -- Now we have B (b_proven_from_dne). We want to derive (Neg A || B).
+        disjIntroRM (neg a_term) b_proven_from_dne -- Uses term (Neg A) and proven B
+        return () -- Subproof concludes with (Neg A || B)
+
+    -- 5. Apply Disjunction Elimination.
+    --    We have:
+    --      s_or_form_proven:         (Neg A) || (Neg (Neg B))
+    --      neg_a_implies_target:     (Neg A) -> (Neg A || B)
+    --      not_not_b_implies_target: (Neg (Neg B)) -> (Neg A || B)
+    --    The result will be (Neg A || B).
+    disjElimM s_or_form_proven neg_a_implies_target not_not_b_implies_target
+
+
+
+
+-- Ensure all necessary imports are present, including:
+-- MetaRuleErrNotImp, MetaRuleErrNotNeg, MetaRuleErrNotAdj (or similar)
+-- parse_implication, parseNeg, parseAdj, neg, (.&&.), (.->.), (.||.)
+-- runProofByAsmM, contraFM, absurdM, doubleNegElimM,
+-- negAndNotToOrM, disj2ImpM (the helpers we discussed)
+-- And all necessary type classes and ProofGenTStd etc.
+
+-- | Derives (A ∧ ¬B) from a proven ¬(A → B).
+-- | This demonstrates one direction of the equivalence ¬(A → B) ⇔ (A ∧ ¬B).
+-- | It uses previously defined helpers 'negAndNotToOrM' and 'disj2ImpM'
+-- | within a proof by contradiction structure.
+-- |
+-- | Proof Strategy:
+-- | 1. Given ¬(A → B) as 's_input'.
+-- | 2. To prove (A ∧ ¬B), assume its negation ¬(A ∧ ¬B) for Reductio Ad Absurdum (RAA).
+-- |    a. From the assumption ¬(A ∧ ¬B), use 'negAndNotToOrM' to derive (¬A ∨ B).
+-- |    b. From (¬A ∨ B), use 'disj2ImpM' to derive (A → B).
+-- |    c. Now we have derived (A → B) (from step 2b) and we were given ¬(A → B) ('s_input').
+-- |       This is a contradiction, so derive False using `contraFM`.
+-- | 3. The subproof (assuming ¬(A ∧ ¬B)) has led to False.
+-- |    Thus, by RAA (via `absurdM`), we conclude ¬(¬(A ∧ ¬B)).
+-- | 4. Apply Double Negation Elimination (`doubleNegElimM`) to get (A ∧ ¬B).
+negImpToConjViaEquivM :: (SubproofRule r1 s, MonadThrow m, Monoid r1,  TypedSent o tType sE s, LogicRuleClass r1 s tType sE o,
+  StdPrfPrintMonad s o tType m,  StdPrfPrintMonad s o tType (Either SomeException),  LogicSent s tType,
+  Proof eL r1 (PrfStdState s o tType) (PrfStdContext tType) [PrfStdStep s o tType] s,
+  Show eL, Show o, Show s, Show sE, Show tType, Typeable eL,
+  Typeable o, Typeable s, Typeable sE, Typeable tType) =>
+            s -- ^ A proven proposition 's_input' of the form ¬(A → B).
+            -> ProofGeneratorT s [PrfStdStep s o tType] (PrfStdContext tType) r1 (PrfStdState s o tType) m (s, [Int]) -- ^ Returns the proven proposition (A ∧ ¬B) and its proof index.
+negImpToConjViaEquivM s_input_neg_A_implies_B = do
+    -- 1. Parse the input s_input_neg_A_implies_B = ¬(A → B) to get terms A and B.
+    --    These terms are needed to construct the assumption for RAA: ¬(A ∧ ¬B).
+    a_implies_b_term <- maybe (throwM $ MetaRuleErrNotNeg s_input_neg_A_implies_B)
+                              return (parseNeg s_input_neg_A_implies_B)
+    (a_term, b_term) <- maybe (throwM $ MetaRuleErrNotImp a_implies_b_term)
+                              return (parse_implication a_implies_b_term)
+
+    -- 2. Construct the assumption for RAA: ¬(A ∧ ¬B)
+    let assumption_for_raa = neg (a_term .&&. neg b_term)
+
+    -- 3. Start the RAA subproof: Assume ¬(A ∧ ¬B) and derive False.
+    --    This will prove (¬(A ∧ ¬B) → False).
+    (raa_antecedent_implies_false, _) <- runProofByAsmM assumption_for_raa $ do
+        -- Inside this subproof, 'assumption_for_raa' (¬(A ∧ ¬B)) is proven by assumption.
+
+        -- 3a. From ¬(A ∧ ¬B), derive (¬A ∨ B) using 'negAndNotToOrM'.
+        (not_a_or_b_derived, _) <- negAndNotToOrM assumption_for_raa
+
+        -- 3b. From (¬A ∨ B), derive (A → B) using 'disj2ImpM'.
+        (a_implies_b_derived, _) <- disj2ImpM not_a_or_b_derived
+
+        -- 3c. We have 'a_implies_b_derived' (A → B) and the original 's_input_neg_A_implies_B' (¬(A → B)).
+        --     This is a contradiction. Derive False using `contraFM`.
+        (falsity, _) <- contraFM a_implies_b_derived s_input_neg_A_implies_B
+        
+        -- The subproof (assuming ¬(A ∧ ¬B)) concludes with 'falsity' (False).
+        return ()
+
+    -- 4. Apply AbsurdM to (¬(A ∧ ¬B) → False) to get ¬(¬(A ∧ ¬B)).
+    (double_negated_target, _) <- absurdM raa_antecedent_implies_false
+
+    -- 5. Apply Double Negation Elimination to ¬(¬(A ∧ ¬B)) to get (A ∧ ¬B).
+    doubleNegElimM double_negated_target
+
+
 
 
 modusTollensM :: (Monoid r1,

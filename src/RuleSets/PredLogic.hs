@@ -147,8 +147,8 @@ instance REM.LogicRuleClass [LogicRule s sE o t tType ] s o tType sE where
      remark rem = [(PropRule . PL.BaseRule . REM.Remark) rem]
      rep :: s -> [LogicRule s sE o t tType ]
      rep s = [(PropRule . PL.BaseRule . REM.Rep) s]
-     fakeProp:: s -> [LogicRule s sE o t tType ]
-     fakeProp s = [(PropRule . PL.BaseRule . REM.FakeProp) s]
+     fakeProp:: [s] -> s -> [LogicRule s sE o t tType ]
+     fakeProp deps s = [(PropRule . PL.BaseRule . REM.FakeProp deps) s]
      fakeConst:: o -> tType -> [LogicRule s sE o t tType ]
      fakeConst o t = [PropRule $ PL.BaseRule $ REM.FakeConst o t]
 

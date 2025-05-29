@@ -5,7 +5,7 @@
 module Main where
 
 import Data.Monoid ( Last(..) )
-import Control.Monad ( foldM, unless )
+import Control.Monad ( foldM, unless, forM )
 import Control.Monad.RWS
     ( MonadTrans(..),
       MonadReader(ask, local),
@@ -83,8 +83,11 @@ isRelWellFoundedOn dom rel =
         idx_x = 1 -- Represents the minimal element x in S
         idx_y = 2 -- Represents any element y in S for comparison
 
+        dom_idx = 3
+        rel_idx = 4
+
         -- Antecedent for the main implication: S is a non-empty subset of 'dom'
-        s_is_subset_dom = subset (X idx_S) dom  -- S subset dom
+        s_is_subset_dom = subset (X idx_S) (X dom_idx)  -- S subset dom
         s_is_not_empty  = Neg ( X idx_S :==: EmptySet ) -- S /= EmptySet
         antecedent_S    = s_is_subset_dom :&&: s_is_not_empty
 
@@ -92,13 +95,13 @@ isRelWellFoundedOn dom rel =
         -- x In S
         x_is_in_S       = X idx_x `In` X idx_S
         -- y Rel x  (pair <y,x> In rel)
-        y_rel_x         = buildPair (X idx_y) (X idx_x) `In` rel
+        y_rel_x         = buildPair (X idx_y) (X idx_x) `In` X rel_idx
         -- Forall y (y In S -> not (y Rel x))
         x_is_minimal_in_S = aX idx_y ( (X idx_y `In` X idx_S) :->: Neg y_rel_x )
         -- Exists x (x In S /\ x_is_minimal_in_S)
         consequent_exists_x = eX idx_x ( x_is_in_S :&&: x_is_minimal_in_S )
     in
-        aX idx_S ( antecedent_S :->: consequent_exists_x )
+        propDeBrSubXs [(dom_idx,dom),(rel_idx,rel)] $ aX idx_S ( antecedent_S :->: consequent_exists_x )
 
 -- strongInductionPremiseOnRel P_template idx Dom Rel
 -- Forall n (n In Dom -> ( (Forall k (k In Dom /\ k Rel n -> P(k))) -> P(n) ) )
@@ -117,6 +120,9 @@ strongInductionPremiseOnRel p_template idx dom rel =
         n_idx = 0 -- The main induction variable 'n'
         k_idx = 1 -- The universally quantified variable 'k' such that k Rel n
 
+        dom_idx = 2
+        rel_idx = 3
+
         -- P(n) - using X n_idx for n.
         -- Since P_template uses X idx, we substitute X idx in P_template with X n_idx.
         p_n = propDeBrSubX idx (X n_idx) p_template
@@ -125,11 +131,10 @@ strongInductionPremiseOnRel p_template idx dom rel =
         -- Substitute X idx in P_template with X k_idx.
         p_k = propDeBrSubX idx (X k_idx) p_template
 
-        -- Inner hypothesis: (k In Dom /\ k Rel n) -> P(k)
+        -- Inner hypothesis: k Rel n -> P(k)
         -- Here, n is X n_idx and k is X k_idx
-        k_in_dom    = X k_idx `In` dom
-        k_rel_n     = buildPair (X k_idx) (X n_idx) `In` rel -- k Rel n
-        hyp_antecedent = k_in_dom :&&: k_rel_n
+        k_rel_n     = buildPair (X k_idx) (X n_idx) `In` X rel_idx -- k Rel n
+        hyp_antecedent = k_rel_n
         hyp_body    = hyp_antecedent :->: p_k
 
         -- Forall k (hyp_body)
@@ -140,11 +145,11 @@ strongInductionPremiseOnRel p_template idx dom rel =
         -- Here, n is X n_idx
         inductive_step_for_n = forall_k_predecessors_hold_P :->: p_n
 
-        -- Body of the main Forall n: (n In Dom -> IS_for_n)
-        n_in_dom = X n_idx `In` dom
-        main_forall_body = n_in_dom :->: inductive_step_for_n
+        -- Body of the main Forall n: (IS_for_n)
+        n_in_dom = X n_idx `In` X dom_idx
+        main_forall_body = inductive_step_for_n
     in
-        aX n_idx main_forall_body
+        propDeBrSubXs [(dom_idx, dom), (rel_idx, rel)] $ aX n_idx main_forall_body
 
 
 
@@ -158,51 +163,74 @@ strongInductionPremiseOnRel p_template idx dom rel =
 
 testTheoremMSchema2 :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) => 
      Int -> ObjDeBr -> PropDeBr -> TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text m ()
-testTheoremMSchema2 idx dom p_template= TheoremSchemaMT  [] [] (theoremProg2 idx dom p_template)
+testTheoremMSchema2 idx dom p_template= 
+     let
+        rel_idx = idx + 1
+        dom_idx = idx + 2
+        absurd_candidate = objDeBrSubX dom_idx dom $ builderX idx (X dom_idx) (neg p_template)
+        -- lemma1 = absurd_candidate `subset` natSetObj
+    in
+        TheoremSchemaMT  [] [] (theoremProg2 idx dom p_template)
 
 
 theoremProg2::(MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) => 
                Int -> ObjDeBr -> PropDeBr -> ProofGenTStd () [ZFCRuleDeBr] PropDeBr Text m ()
 theoremProg2 idx dom p_template = do
-    -- First of all this is a generalization over the domain.
-    runProofByUGM () do
-        dom_member <- getTopFreeVar
-        -- Now we must assume the existance of a relation
-        runProofByAsmM () do
-            let asm = eX 2 (X 2 `subset` (dom `crossProd` dom))
-            joij
+    -- The assumption is that a relation is well-founded on domain dom.
+    let rel_idx = idx + 1
+    let dom_idx = idx + 2
+    let asm_template =  eX rel_idx (
+                       X rel_idx `subset` (X dom_idx `crossProd` X dom_idx)
+                           :&&: isRelWellFoundedOn (X dom_idx) (X rel_idx)
+                            :&&: strongInductionPremiseOnRel p_template idx (X dom_idx) (X rel_idx)
+                        )  
+    let asm = propDeBrSubX dom_idx dom asm_template
+
+    runProofByAsmM asm do
+        (asm_after_ei,_,rel_obj) <- eiHilbertM asm
+        (rel_is_relation,rel_is_relation_idx) <- simpLM asm_after_ei
+        (bAndC,_) <- simpRM asm_after_ei
+        (well_founded,well_founded_idx) <- simpLM bAndC
+        (induction_premise,induction_premise_idx) <- simpRM bAndC
+        remarkM $   (pack . show) rel_is_relation_idx <> " asserts that rel is a relation over N.\n" 
+                   <> (pack . show) well_founded_idx <> " asserts that rel is well-founded over N.\n"
+                   <> (pack . show) induction_premise_idx <> " asserts that the induction premise holds for N"
+        let absurd_candidate = objDeBrSubX dom_idx dom $ builderX idx (X dom_idx) (neg p_template)
+        let absurd_asm = absurd_candidate./=. EmptySet 
+        absurd_asm_txt <- showPropM absurd_asm
+        remarkM $ "Absurd assumption: " <> absurd_asm_txt
+        runProofByAsmM absurd_asm do
+            (well_founded_instance,_) <- uiM absurd_candidate well_founded
+            (something,_) <- fakePropM [] (absurd_candidate `subset` natSetObj)
+            adjM something absurd_asm
+            (min_assertion, min_assertion_idx) <- mpM well_founded_instance --the first lemma is used here
+            remarkM $   (pack . show) min_assertion_idx <> " asserts the existance of a minimum element in the absurd set. "
+            (witnessed_min_assertion,_,min_element) <- eiHilbertM min_assertion
+            (min_element_in_absurd_set,idx_witnessed_min_assert) <- simpLM witnessed_min_assertion
+            (absurd_set_elements_not_below_min,idxB) <- simpRM witnessed_min_assertion
+            minObjTxt <- showObjM min_element
+            remarkM $ "The minimum element in the absurd set is: " <> minObjTxt <> ".\n"
+                      <> (pack . show) idx_witnessed_min_assert <> " asserts that this element is in the absurd set.\n"
+                      <> (pack . show)  idxB <> " asserts that all elements in the absurd set are not below this element."
+            
+                    
+
+            (induction_premise_on_min,idxA) <- uiM min_element induction_premise
+            remarkM $ (pack . show) idxA <> " asserts that the induction premise holds for the minimum element.\n"
+            (min_element_nat,_) <- fakePropM [witnessed_min_assertion] (min_element `In` natSetObj)
+            fakePropM [witnessed_min_assertion] (propDeBrSubX idx min_element (neg p_template))
+            (x,_) <- modusTollensM induction_premise_on_min
+            (exists_statement, idx) <- aNegIntroM x
+            remarkM $ (pack . show) idx <> " asserts that there is an element under the minimum element minimum element" 
+                                           <> " that is in the absurd set. Essentially, we already have our contradiction"
+            (absurd_element_assert,_, absurd_element) <- eiHilbertM exists_statement
+            
+
+            repM absurd_asm
+            
         return ()
     return ()
---    let dom_idx = 0
---    let rel_idx = 1
---    let goal = isRelWellFoundedOn dom rel :&&: strongInductionPremiseOnRel p_template idx dom rel
 
-
---    let z1 = aX 0 ((X 0 `In` Constant "N") :&&: (X 0 :<=: Integ 10) :->: (X 0 :<=: Integ 0))
---    let z2 = aX 0 ((X 0 `In` Constant "N") :&&: (X 0 :<=: Integ 0) :->: (X 0 :==: Integ  0))
---    let asm = (V 0 `In` Constant "N") :&&: (V 0 :<=: Integ 10)
---    let asm2 = (V 0 `In` Constant "N") :&&: (V 0 :<=: Integ 10)
---    (generalized, _) <- runProofByUGM () do
---          runProofByAsmM asm2 do
---              newFreeVar <- getTopFreeVar
---              (s1,_) <- uiM newFreeVar z1
---              (s2,_) <- mpM s1
---              remarkIdx <- remarkM "Yeah baby"
---              remarkIdx2<-remarkM "" --empty remark
-              --(lift . print) "Coment1"
-              --(lift . print . show) s1
---              remarkM $ (pack . show) remarkIdx2 <> " was the index of the remark above/"
---              (natAsm,_) <- simpLM asm
-              --(lift . print) "COmment 2"
---              (s3,_) <- adjM natAsm s2
---              (s4,line_idx) <- uiM newFreeVar z2
---              showS4 <- showPropM s4
---              remarkM $ showS4 <> " is the sentence. It was proven in line " <> (pack . show) line_idx
---                       <> "\nThis is the next line of this remark."
-              -- (lift . print . show) line_idx
---              (s5,_) <- mpM s4
---              simpLM asm
---    return ()
 
 
 
@@ -222,7 +250,7 @@ testEqualityRules = do
     let term1 = Integ 1
     let term2 = Integ 2
     let eq12 = term1 :==: term2
-    (eq12Sent, eq12Idx) <- fakePropM eq12 -- Assume 1==2 is proven for the test
+    (eq12Sent, eq12Idx) <- fakePropM [] eq12 -- Assume 1==2 is proven for the test
     eq12Show <- showPropM eq12Sent
     remarkM $ "Assuming: " <> eq12Show <> " at index " <> pack (show eq12Idx)
     (symSent, symIdx) <- eqSymM eq12Sent
@@ -233,7 +261,7 @@ testEqualityRules = do
     remarkM "Testing eqTransM (given fake 1 == 2 and 2 == 3):"
     let term3 = Integ 3
     let eq23 = term2 :==: term3
-    (eq23Sent, eq23Idx) <- fakePropM eq23 -- Assume 2==3 is proven
+    (eq23Sent, eq23Idx) <- fakePropM []eq23 -- Assume 2==3 is proven
     eq23Show <- showPropM eq23Sent
     remarkM $ "Assuming: " <> eq23Show <> " at index " <> pack (show eq23Idx)
     (transSent, transIdx) <- eqTransM eq12Sent eq23Sent -- Use eq12Sent from previous step
@@ -251,7 +279,7 @@ testEqualityRules = do
     sourceShow <- showPropM sourceSent
     remarkM $ "Proved source: " <> sourceShow <> " at index " <> pack (show sourceIdx)
     -- Assume the equality a == b, which is 5 == 6
-    (eqSent, eqIdx) <- fakePropM eq56
+    (eqSent, eqIdx) <- fakePropM [] eq56
     eqShow <- showPropM eqSent
     remarkM $ "Assuming equality: " <> eqShow <> " at index " <> pack (show eqIdx)
     -- Perform substitution
@@ -270,7 +298,7 @@ testNormalization = do
 
 
     fakeConstM "N" ()
-    fakePropM s1
+    fakePropM [] s1
     s1Show <- showPropM s1
     remarkM $ "Proved: " <> s1Show   
     return ()
@@ -283,7 +311,7 @@ testMoreComplexNesting = do
     let s3 = aX 2 ( eX 1 ( eXBang 0 ( (X 2 :==: X 1) :&&: (X 1 :==: X 0) ) ) )
 
     -- Add as fake prop and print
-    fakePropM s3
+    fakePropM []s3
     s3Show <- showPropM s3
     remarkM "Input: aX 2 ( eX 1 ( eXBang 0 ( (X 2 :==: X 1) :&&: (X 1 :==: X 0) ) ) )"
     remarkM $ "Printed: " <> s3Show   
@@ -299,7 +327,7 @@ testNonSequentialIndices = do
     let s4 = aX 5 ( eXBang 2 ( aX 7 ( (X 5 :==: X 2) :||: (X 2 :==: X 7) ) ) )
 
     -- Add as fake prop and print
-    fakePropM s4
+    fakePropM [] s4
     s4Show <- showPropM s4
     remarkM "Input: aX 5 ( eXBang 2 ( aX 7 ( (X 5 :==: X 2) :||: (X 2 :==: X 7) ) ) )"
     remarkM $ "Printed: " <> s4Show
@@ -331,7 +359,7 @@ testComplexSubsetNotation = do
     -- 3. Test 1: Basic subset A B
     remarkM "Test 1: Basic subset A B"
     let subPropAB = subset setA setB
-    (addedProp1, _) <- fakePropM subPropAB
+    (addedProp1, _) <- fakePropM [] subPropAB
     printedOutput1 <- showPropM addedProp1
     remarkM $ "Actual printed output (Test 1): " <> printedOutput1
     remarkM "(Should be A ⊆ B)"
@@ -341,7 +369,7 @@ testComplexSubsetNotation = do
     let subPropBC = subset setB setC
     -- Construct the conjunction using the PropDeBr operator :&&:
     let conjProp = subPropAB :&&: subPropBC
-    (addedConjProp, _) <- fakePropM conjProp
+    (addedConjProp, _) <- fakePropM [] conjProp
     printedOutputConj <- showPropM addedConjProp
     remarkM $ "Actual printed output (Test 2): " <> printedOutputConj
     -- Note: Depending on operator precedence for ∧ and ⊆, parentheses might appear
@@ -358,7 +386,7 @@ testComplexSubsetNotation = do
     -- Create the subset proposition: {x ∈ N | x ≥ 5} ⊆ N
     let subPropBuilder = subset setBuilderA setN
     -- Add, print, and check the output
-    (addedPropBuilder, _) <- fakePropM subPropBuilder
+    (addedPropBuilder, _) <- fakePropM []subPropBuilder
     printedOutputBuilder <- showPropM addedPropBuilder
     remarkM $ "Actual printed output (Test 3): " <> printedOutputBuilder
     remarkM "(Should look like {𝑥₀ ∈ N | 𝑥₀ ≥ 5} ⊆ N or similar)"
@@ -384,7 +412,7 @@ testStrictSubsetNotation = do
     remarkM "Test 1: Basic strict subset A ⊂ B"
     -- This assumes strictSubset a b = subset a b :&&: Neg (a :==: b)
     let strictSubProp1 = strictSubset setA setB
-    (addedProp1, _) <- fakePropM strictSubProp1
+    (addedProp1, _) <- fakePropM [] strictSubProp1
     printedOutput1 <- showPropM addedProp1
     remarkM $ "Actual printed output (Test 1): " <> printedOutput1
     remarkM "(Should be A ⊂ B)"
@@ -396,7 +424,7 @@ testStrictSubsetNotation = do
     let setBuilderA = builderX 0 setN propertyP -- {x ∈ N | x ≥ 5}
     -- Create the strict subset proposition: {x ∈ N | x ≥ 5} ⊂ N
     let strictSubPropBuilder = strictSubset setBuilderA setN
-    (addedPropBuilder, _) <- fakePropM strictSubPropBuilder
+    (addedPropBuilder, _) <- fakePropM [] strictSubPropBuilder
     printedOutputBuilder <- showPropM addedPropBuilder
     remarkM $ "Actual printed output (Test 2): " <> printedOutputBuilder
     remarkM "(Should look like {𝑥₀ ∈ N | 𝑥₀ ≥ 5} ⊂ N or similar)"
@@ -407,7 +435,7 @@ testStrictSubsetNotation = do
     (eqAA, _) <- eqReflM setA -- Prove A = A using EqRefl rule
     let subPropAB = subset setA setB -- A ⊆ B part
     let nonStrictSubProp = subPropAB :&&: eqAA -- Combine with A=A
-    (addedProp3, _) <- fakePropM nonStrictSubProp
+    (addedProp3, _) <- fakePropM [] nonStrictSubProp
     printedOutput3 <- showPropM addedProp3
     remarkM $ "Actual printed output (Test 3): " <> printedOutput3
     remarkM "(Should be (A ⊆ B) ∧ (A = A) or similar, *NOT* A ⊂ B)"
@@ -434,7 +462,7 @@ testNotSubsetNotation = do
     remarkM "Test 1: Basic not subset A ⊈ B"
     -- Assumes notSubset a b = Neg (subset a b)
     let notSubProp1 = notSubset setA setB
-    (addedProp1, _) <- fakePropM notSubProp1
+    (addedProp1, _) <- fakePropM [] notSubProp1
     printedOutput1 <- showPropM addedProp1
     remarkM $ "Actual printed output (Test 1): " <> printedOutput1
     remarkM "(Should be A ⊈ B)"
@@ -446,7 +474,7 @@ testNotSubsetNotation = do
     let setBuilderA = builderX 0 setN propertyP -- {x ∈ N | x ≥ 5}
     -- Create the not subset proposition: {x ∈ N | x ≥ 5} ⊈ N
     let notSubPropBuilder = notSubset setBuilderA setN
-    (addedPropBuilder, _) <- fakePropM notSubPropBuilder
+    (addedPropBuilder, _) <- fakePropM [] notSubPropBuilder
     printedOutputBuilder <- showPropM addedPropBuilder
     remarkM $ "Actual printed output (Test 2): " <> printedOutputBuilder
     remarkM "(Should look like {𝑥₀ ∈ N | 𝑥₀ ≥ 5} ⊈ N or similar)"
@@ -456,7 +484,7 @@ testNotSubsetNotation = do
     -- Example: Neg (A ⊂ B) -- Should print as ¬(A ⊂ B), not A ⊈ B
     let strictSubProp = strictSubset setA setB -- Assuming this helper exists and works
     let negStrictSubProp = Neg strictSubProp
-    (addedProp3, _) <- fakePropM negStrictSubProp
+    (addedProp3, _) <- fakePropM []negStrictSubProp
     printedOutput3 <- showPropM addedProp3
     remarkM $ "Actual printed output (Test 3): " <> printedOutput3
     remarkM "(Should be ¬(A ⊂ B) or similar, *NOT* related to ⊈)"
@@ -491,7 +519,7 @@ testHelperPreconditionViolation = do
 
     -- Add it to the proof state. It might pass checkSanity if the check isn't perfect,
     -- but it represents a violation of the helper's intended use conditions.
-    (addedProp, _) <- fakePropM violatingSubsetProp
+    (addedProp, _) <- fakePropM [] violatingSubsetProp
     printedProp <- showPropM addedProp
     remarkM $ "Resulting PropDeBr structure (printed form): " <> printedProp
     remarkM "(Check if it printed using ⊆ or fallback ∀ notation)"
@@ -714,7 +742,7 @@ testShorthandRendering = do
     let hilbert_prop = X 0 :==: a -- Example property P(x) = (x == A)
     let hilbert_term = hX 0 hilbert_prop -- εx.(x == A)
     let exists_prop = eX 0 hilbert_prop -- ∃x.(x == A)
-    (fake_exists, fake_idx) <- fakePropM exists_prop
+    (fake_exists, fake_idx) <- fakePropM [] exists_prop
     exists_show <- showPropM fake_exists -- Show the prop being faked
     remarkM $ "  Faking proof of: " <> exists_show  <> " at index " <> pack (show fake_idx)
     hilbert_term_short_show <- showObjM hilbert_term
@@ -1395,9 +1423,9 @@ main = do
         Nothing -> print "parse failed!"
        --let z = applyUG xn () 102
 --    -- (print . show) z
-    let proof = (   fakeProp y0
-                <> fakeProp y1 
-                <> fakeProp y2
+    let proof = (   fakeProp [] y0
+                <> fakeProp [] y1 
+                <> fakeProp [] y2
                 <> mp y0
                 <> mp y2
                 <> proofByAsm y1 (Integ 99 :==: Integ 99) (mp $ y1 .->. (Integ 99 :==: Integ 99))
@@ -1414,8 +1442,8 @@ main = do
     let mid = (V 0 `In` Constant "N") :&&: (V 0 :<=: Integ 0)
 
     let proof2 =    fakeConst "N" ()
-                 <> fakeProp z1
-                 <> fakeProp z2
+                 <> fakeProp [] z1
+                 <> fakeProp [] z2
                  <> proofByUG generalized
                                         (
                                             proofByAsm asm z1 (
@@ -1441,7 +1469,7 @@ main = do
                  
     let zb2 = runProof proof2 
 
-    let zb3 = runProof ((fakeConst "N" () <> fakeProp z1 <> fakeProp z2 <> ui (V 0) z1)::[PredRuleDeBr])
+    let zb3 = runProof ((fakeConst "N" () <> fakeProp [] z1 <> fakeProp [] z2 <> ui (V 0) z1)::[PredRuleDeBr])
     --either (putStrLn . show) (putStrLn . unpack . showPropDeBrStepsBase . snd)  zb2
     --either (putStrLn . show) (putStrLn . unpack . showPropDeBrStepsBase . snd) zb3
     (a,b,c,d) <- runProofGeneratorT testprog
@@ -1534,11 +1562,6 @@ main = do
     (putStrLn . unpack . showPropDeBrStepsBase) cXP -- Print results
 
 
-    print "TEST FUNCS(A,B) RENDERING BEGIN-------------------------------------"
-    (aFSR, bFSR, cFSR, dFSR) <- runProofGeneratorT testFuncsSetRendering
-    (putStrLn . unpack . showPropDeBrStepsBase) cFSR -- Print results
-
-
     print "TEST BINARY UNION RENDERING BEGIN-------------------------------------"
     (aBU, bBU, cBU, dBU) <- runProofGeneratorT testBinaryUnionRendering
     (putStrLn . unpack . showPropDeBrStepsBase) cBU -- Print results
@@ -1580,6 +1603,16 @@ main = do
     (aAC, bAC, cAC, dAC) <- runProofGeneratorT testAxiomOfChoice
     (putStrLn . unpack . showPropDeBrStepsBase) cAC -- Print results
 
+    print "TEST FUNCS(A,B) RENDERING BEGIN-------------------------------------"
+    (aFSR, bFSR, cFSR, dFSR) <- runProofGeneratorT testFuncsSetRendering
+    (putStrLn . unpack . showPropDeBrStepsBase) cFSR -- Print results
+
+    print "TEST STRONG INDUCTION THEOREM-------------------------------------"
+    (a,b,c,d) <- checkTheoremM $ testTheoremMSchema2 0 natSetObj (X 0 :==: X 0)
+--   print "yo"
+    (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
+
+
     return ()
 
 
@@ -1593,8 +1626,8 @@ testprog = do
       let asm = (V 0 `In` Constant "N") :&&: (V 0 :<=: Integ 10)
       let asm2 = (V 0 `In` Constant "N") :&&: (V 0 :<=: Integ 10)
       fakeConstM "N" ()
-      fakePropM z1
-      fakePropM z2
+      fakePropM [] z1
+      fakePropM [] z2
       
       fux<- runProofByUGM () do
           runProofByAsmM  asm2 do
@@ -1611,7 +1644,7 @@ testprog = do
       runTheoremM  testTheoremMSchema
       runTmSilentM  testTheoremMSchema
       (absurdImp,_) <- runProofByAsmM z2 do
-        (notZ1,_) <- fakePropM (Neg z1)
+        (notZ1,_) <- fakePropM [](Neg z1)
         (falseness,_) <- contraFM z1 notZ1
         showF <- showPropM falseness
         remarkM $ showF <> " is the falseness"
@@ -1626,8 +1659,8 @@ testprog2 = do
     let q = eX 0 (X 0 :<=: Integ 10)
     let pImpQ = p :->: q
     fakeConstM "N" ()
-    fakePropM pImpQ
-    fakePropM $ neg q
+    fakePropM [] pImpQ
+    fakePropM [] (neg q)
     (s,idx) <- modusTollensM pImpQ
     showS <- showPropM s
     remarkM $ showS <> " is the sentence. It was proven in line " <> (pack . show) idx
@@ -1638,7 +1671,7 @@ testprog3::ProofGenTStd () [PredRuleDeBr] PropDeBr Text IO ()
 testprog3 = do
     let a = eX 0 (X 0 `nIn` Constant "N")
     fakeConstM "N" ()
-    fakePropM a
+    fakePropM [] a
     (s,idx) <- reverseANegIntroM a
     showS <- showPropM s
     remarkM $ showS <> " is the sentence. It was proven in line " <> (pack . show) idx
@@ -1648,7 +1681,7 @@ testprog4::ProofGenTStd () [PredRuleDeBr] PropDeBr Text IO ()
 testprog4 = do
     let a = aX 0 (X 0 `nIn` Constant "N")
     fakeConstM "N" ()
-    fakePropM a
+    fakePropM [] a
     (s,idx) <- reverseENegIntroM a
     showS <- showPropM s
     remarkM $ showS <> " is the sentence. It was proven in line " <> (pack . show) idx
@@ -1659,7 +1692,7 @@ testprog5::ProofGenTStd () [PredRuleDeBr] PropDeBr Text IO ()
 testprog5 = do
     let a = eXBang 99 (Neg (X 99 `In` Constant "N"))
     fakeConstM "N" ()
-    (s,idx) <- fakePropM a
+    (s,idx) <- fakePropM [] a
 
 
     showS <- showPropM a

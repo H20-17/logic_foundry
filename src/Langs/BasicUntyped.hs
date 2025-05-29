@@ -42,10 +42,10 @@ module Langs.BasicUntyped (
     parseIntSet,
     buildPair,
     buildTuple,
-    parseIsFunc,
-    isFunc,
     parseNatSet,
-    propDeBrSubX
+    propDeBrSubX,
+    propDeBrSubXs,
+    natSetObj
 ) where
 
 

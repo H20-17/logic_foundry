@@ -251,8 +251,8 @@ instance REM.LogicRuleClass [LogicRule s sE t] s Text () sE where
      remark rem = [(PredRule . PREDL.PropRule . PL.BaseRule . REM.Remark) rem]
      rep :: s -> [LogicRule s sE t ]
      rep s = [(PredRule . PREDL.PropRule . PL.BaseRule . REM.Rep) s]
-     fakeProp:: s -> [LogicRule s o t ]
-     fakeProp s = [(PredRule . PREDL.PropRule . PL.BaseRule . REM.FakeProp) s]
+     fakeProp:: [s] -> s -> [LogicRule s o t ]
+     fakeProp deps s = [(PredRule . PREDL.PropRule . PL.BaseRule . REM.FakeProp deps) s]
      fakeConst:: Text -> () -> [LogicRule s sE t ]
      fakeConst o t = [PredRule $ PREDL.PropRule $ PL.BaseRule $ REM.FakeConst o t]
 
