@@ -55,7 +55,7 @@ import RuleSets.PredLogic hiding
 import qualified RuleSets.PredLogic as PRED
 import qualified RuleSets.ZFC as ZFC
 import RuleSets.ZFC
-    ( axiomOfChoiceM)
+    ( axiomOfChoiceM,specificationM)
 import Langs.BasicUntyped
 
 
@@ -154,83 +154,100 @@ strongInductionPremiseOnRel p_template idx dom rel =
 
 
 
+setBuilderTheoremMSchema :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) => 
+     [Int] -> Int -> ObjDeBr -> PropDeBr -> TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text m ()
+setBuilderTheoremMSchema outerIdxs idx source_set p_template= 
+        TheoremSchemaMT  [] [] (setBuilderTheoremProg outerIdxs idx source_set p_template)
+
+
+setBuilderTheoremProg::(MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) => 
+               [Int] -> Int -> ObjDeBr -> PropDeBr -> ProofGenTStd () [ZFCRuleDeBr] PropDeBr Text m ()
+setBuilderTheoremProg outerIdxs idx source_set p_template = do
+     let builtSet = builderX idx source_set p_template
+     specificationM outerIdxs idx source_set p_template
+     return ()
 
 
 
 
 
+strongInductionTheoremMSchema :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) => 
+     Int -> PropDeBr -> TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text m ()
+strongInductionTheoremMSchema idx p_template= 
+        TheoremSchemaMT  [] [] (strongInductionTheoremProg idx p_template)
 
 
-testTheoremMSchema2 :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) => 
-     Int -> ObjDeBr -> PropDeBr -> TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text m ()
-testTheoremMSchema2 idx dom p_template= 
-     let
-        rel_idx = idx + 1
-        dom_idx = idx + 2
-        absurd_candidate = objDeBrSubX dom_idx dom $ builderX idx (X dom_idx) (neg p_template)
-        -- lemma1 = absurd_candidate `subset` natSetObj
-    in
-        TheoremSchemaMT  [] [] (theoremProg2 idx dom p_template)
-
-
-theoremProg2::(MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) => 
-               Int -> ObjDeBr -> PropDeBr -> ProofGenTStd () [ZFCRuleDeBr] PropDeBr Text m ()
-theoremProg2 idx dom p_template = do
+strongInductionTheoremProg::(MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) => 
+               Int -> PropDeBr -> ProofGenTStd () [ZFCRuleDeBr] PropDeBr Text m ()
+strongInductionTheoremProg idx p_template = do
     -- The assumption is that a relation is well-founded on domain dom.
     let rel_idx = idx + 1
-    let dom_idx = idx + 2
-    let asm_template =  eX rel_idx (
-                       X rel_idx `subset` (X dom_idx `crossProd` X dom_idx)
-                           :&&: isRelWellFoundedOn (X dom_idx) (X rel_idx)
-                            :&&: strongInductionPremiseOnRel p_template idx (X dom_idx) (X rel_idx)
-                        )  
-    let asm = propDeBrSubX dom_idx dom asm_template
+    --let dom_idx = idx + 2
 
-    runProofByAsmM asm do
-        (asm_after_ei,_,rel_obj) <- eiHilbertM asm
-        (rel_is_relation,rel_is_relation_idx) <- simpLM asm_after_ei
-        (bAndC,_) <- simpRM asm_after_ei
-        (well_founded,well_founded_idx) <- simpLM bAndC
-        (induction_premise,induction_premise_idx) <- simpRM bAndC
-        remarkM $   (pack . show) rel_is_relation_idx <> " asserts that rel is a relation over N.\n" 
-                   <> (pack . show) well_founded_idx <> " asserts that rel is well-founded over N.\n"
-                   <> (pack . show) induction_premise_idx <> " asserts that the induction premise holds for N"
-        let absurd_candidate = objDeBrSubX dom_idx dom $ builderX idx (X dom_idx) (neg p_template)
-        let absurd_asm = absurd_candidate./=. EmptySet 
-        absurd_asm_txt <- showPropM absurd_asm
-        remarkM $ "Absurd assumption: " <> absurd_asm_txt
-        runProofByAsmM absurd_asm do
-            (well_founded_instance,_) <- uiM absurd_candidate well_founded
-            (something,_) <- fakePropM [] (absurd_candidate `subset` natSetObj)
-            adjM something absurd_asm
-            (min_assertion, min_assertion_idx) <- mpM well_founded_instance --the first lemma is used here
-            remarkM $   (pack . show) min_assertion_idx <> " asserts the existance of a minimum element in the absurd set. "
-            (witnessed_min_assertion,_,min_element) <- eiHilbertM min_assertion
-            (min_element_in_absurd_set,idx_witnessed_min_assert) <- simpLM witnessed_min_assertion
-            (absurd_set_elements_not_below_min,idxB) <- simpRM witnessed_min_assertion
-            minObjTxt <- showObjM min_element
-            remarkM $ "The minimum element in the absurd set is: " <> minObjTxt <> ".\n"
+    runProofByUGM () do
+        dom <- getTopFreeVar
+        let asm =  eX rel_idx (
+                           X rel_idx `subset` (dom `crossProd` dom)
+                               :&&: isRelWellFoundedOn dom (X rel_idx)
+                                :&&: strongInductionPremiseOnRel p_template idx dom (X rel_idx)
+                        )  
+
+        
+        runProofByAsmM asm do
+            (asm_after_ei,_,rel_obj) <- eiHilbertM asm
+            (rel_is_relation,rel_is_relation_idx) <- simpLM asm_after_ei
+            (bAndC,_) <- simpRM asm_after_ei
+            (well_founded,well_founded_idx) <- simpLM bAndC
+            (induction_premise,induction_premise_idx) <- simpRM bAndC
+            remarkM $   (pack . show) rel_is_relation_idx <> " asserts that rel is a relation over N.\n" 
+                       <> (pack . show) well_founded_idx <> " asserts that rel is well-founded over N.\n"
+                       <> (pack . show) induction_premise_idx <> " asserts that the induction premise holds for N"
+            let absurd_candidate = builderX idx dom (neg p_template)
+            let absurd_asm = absurd_candidate./=. EmptySet 
+            absurd_asm_txt <- showPropM absurd_asm
+            remarkM $ "Absurd assumption: " <> absurd_asm_txt
+            (proves_false,_) <- runProofByAsmM absurd_asm do
+                (well_founded_instance,_) <- uiM absurd_candidate well_founded
+                (something,_) <- fakePropM [] (absurd_candidate `subset` dom)
+                adjM something absurd_asm
+                (min_assertion, min_assertion_idx) <- mpM well_founded_instance --the first lemma is used here
+                remarkM $   (pack . show) min_assertion_idx <> " asserts the existance of a minimum element in the absurd set. "
+                (witnessed_min_assertion,_,min_element) <- eiHilbertM min_assertion
+                (min_element_in_absurd_set,idx_witnessed_min_assert) <- simpLM witnessed_min_assertion
+                (absurd_set_elements_not_below_min,idxB) <- simpRM witnessed_min_assertion
+                minObjTxt <- showObjM min_element
+                remarkM $ "The minimum element in the absurd set is: " <> minObjTxt <> ".\n"
                       <> (pack . show) idx_witnessed_min_assert <> " asserts that this element is in the absurd set.\n"
                       <> (pack . show)  idxB <> " asserts that all elements in the absurd set are not below this element."
             
                     
 
-            (induction_premise_on_min,idxA) <- uiM min_element induction_premise
-            remarkM $ (pack . show) idxA <> " asserts that the induction premise holds for the minimum element.\n"
-            (min_element_nat,_) <- fakePropM [witnessed_min_assertion] (min_element `In` natSetObj)
-            fakePropM [witnessed_min_assertion] (propDeBrSubX idx min_element (neg p_template))
-            (x,_) <- modusTollensM induction_premise_on_min
-            (exists_statement, idx) <- aNegIntroM x
-            remarkM $ (pack . show) idx <> " asserts that there is an element under the minimum element minimum element" 
+                (induction_premise_on_min,idxA) <- uiM min_element induction_premise
+                remarkM $ (pack . show) idxA <> " asserts that the induction premise holds for the minimum element.\n"
+                (min_element_nat,_) <- fakePropM [witnessed_min_assertion] (min_element `In` natSetObj)
+                fakePropM [witnessed_min_assertion] (propDeBrSubX idx min_element (neg p_template))
+                (x,_) <- modusTollensM induction_premise_on_min
+                (exists_statement, idx) <- aNegIntroM x
+                remarkM $ (pack . show) idx <> " asserts that there is an element under the minimum element minimum element" 
                                            <> " that is in the absurd set. Essentially, we already have our contradiction"
-            (absurd_element_assert,_, absurd_element) <- eiHilbertM exists_statement
-            
-
-            repM absurd_asm
-            
+                (absurd_element_assert,_, absurd_element) <- eiHilbertM exists_statement           
+                (more_absurd,_) <- negImpToConjViaEquivM absurd_element_assert
+                (l_more_absurd,_) <- simpLM more_absurd
+                (r_more_absurd,_) <- simpRM more_absurd
+                let absurd_element_in_n = absurd_element `In` natSetObj
+                fakePropM [l_more_absurd,rel_is_relation] absurd_element_in_n
+                let newProp = absurd_element `In` absurd_candidate
+                (final_ante,_) <- fakePropM [absurd_element_in_n, r_more_absurd] newProp
+                (final_imp,_) <- uiM absurd_element absurd_set_elements_not_below_min
+                (next,_) <- mpM final_imp
+                contraFM l_more_absurd next
+            (double_neg,_) <- absurdM proves_false
+            (final_generalization_set_version,_) <- doubleNegElimM double_neg
+            let final_generalization = aX idx (X idx `In` dom .->. p_template)
+            fakePropM [final_generalization_set_version] final_generalization
+            return ()
         return ()
     return ()
-
 
 
 
@@ -1608,7 +1625,7 @@ main = do
     (putStrLn . unpack . showPropDeBrStepsBase) cFSR -- Print results
 
     print "TEST STRONG INDUCTION THEOREM-------------------------------------"
-    (a,b,c,d) <- checkTheoremM $ testTheoremMSchema2 0 natSetObj (X 0 :==: X 0)
+    (a,b,c,d) <- checkTheoremM $ strongInductionTheoremMSchema 0 (X 0 :==: X 0)
 --   print "yo"
     (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
 

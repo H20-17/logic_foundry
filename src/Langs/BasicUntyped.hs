@@ -45,7 +45,8 @@ module Langs.BasicUntyped (
     parseNatSet,
     propDeBrSubX,
     propDeBrSubXs,
-    natSetObj
+    natSetObj,
+    parseSetBuilder
 ) where
 
 
