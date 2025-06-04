@@ -11,7 +11,8 @@ module Internal.StdPattern(
     runSubproofM,
     ProofGenTStd,
     LogicConst(..),
-    newConstM
+    newConstM,
+    getFreeVarCount
     
 
 
@@ -257,6 +258,19 @@ getTopFreeVar =  do
         let frVarTypeStack = freeVarTypeStack context
         if null frVarTypeStack then throwM BigExceptEmptyVarStack
             else return (free2Term $ length frVarTypeStack - 1)
+
+
+getFreeVarCount :: (Monoid r1, ProofStd s eL1 r1 o tType, Monad m,
+                        Show eL1, Typeable eL1,
+                    Show s, Typeable s,
+                        MonadThrow m, TypedSent o tType sE s, Show sE, Typeable sE,
+                        StdPrfPrintMonad s o tType m)
+                 =>  ProofGenTStd tType r1 s o m Int
+getFreeVarCount = do
+        context <- ask
+        let frVarTypeStack = freeVarTypeStack context
+        return $ length frVarTypeStack
+
 
 
 runSubproofM :: ( Monoid r1, ProofStd s eL1 r1 o tType, Monad m,

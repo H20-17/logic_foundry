@@ -11,6 +11,7 @@ module Langs.BasicUntyped (
     showPropDeBrStepsBase,
     showPropDeBrStepsBaseM,
     eX, hX, aX,
+    multiAx,
     showProp,
     showObj,
     showPropM,
@@ -46,7 +47,10 @@ module Langs.BasicUntyped (
     propDeBrSubX,
     propDeBrSubXs,
     natSetObj,
-    parseSetBuilder
+    parseSetBuilder,
+    parseForallChain,
+    objDeBrSwapFreeVarsToX,
+    propDeBrSwapFreeVarsToX
 ) where
 
 

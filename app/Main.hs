@@ -2,6 +2,7 @@
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE DoAndIfThenElse #-}
 
+
 module Main where
 
 import Data.Monoid ( Last(..) )
@@ -55,8 +56,9 @@ import RuleSets.PredLogic hiding
 import qualified RuleSets.PredLogic as PRED
 import qualified RuleSets.ZFC as ZFC
 import RuleSets.ZFC
-    ( axiomOfChoiceM,specificationM)
+    ( axiomOfChoiceM,specificationM, MetaRuleError(..))
 import Langs.BasicUntyped
+import Foreign (free)
 
 
 
@@ -153,19 +155,90 @@ strongInductionPremiseOnRel p_template idx dom rel =
 
 
 
+-- | Variant of specificationM allowing for parameters to be instantiated by
+-- | currently active free variables from the proof context.
+-- | It operates as a sub-argument.
+-- |
+-- | 'original_p_template' should use 'X spec_var_X_idx' for the specification variable.
+-- | Any free variables (V_i) within 'original_source_set' and 'original_p_template'
+-- | intended as parameters will be identified by 'getFreeVars', swapped with fresh X_j indices,
+-- | universally quantified by 'specificationM', and then instantiated with the original V_i terms.
+specificationFreeM :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m
 
-setBuilderTheoremMSchema :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) => 
-     [Int] -> Int -> ObjDeBr -> PropDeBr -> TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text m ()
-setBuilderTheoremMSchema outerIdxs idx source_set p_template= 
-        TheoremSchemaMT  [] [] (setBuilderTheoremProg outerIdxs idx source_set p_template)
+                      ) =>
+     Int ->           -- spec_var_X_idx: The X-index for the variable of specification (x in {x in T | P(x)})
+     ObjDeBr ->       -- original_source_set: May contain Free Variables (V i) as parameters.
+     PropDeBr ->      -- original_p_template: May use X spec_var_X_idx for spec var,
+                      --                      and Free Variables (V i) as parameters.
+     ProofGenTStd () [ZFC.LogicRule PropDeBr DeBrSe ObjDeBr] PropDeBr Text m (PropDeBr,[Int])
+specificationFreeM spec_var_X_idx original_source_set original_p_template =
+
+    runProofBySubArgM do
+        -- Step 1: Get the number of ALL active free variables from the context.
+        -- The indices of these variables are 0 to freeVarCount-1.
+        freeVarCount::Int <- getFreeVarCount
+
+        -- Step 2: Generate fresh X-indices for these free variables.
+        -- These X-indices will be universally quantified by 'specificationM'.
+        let numParameters = freeVarCount
+        let outerXTemplateIdxs = if numParameters == 0
+                                 then []
+                                 else Prelude.map (+ (spec_var_X_idx + 1)) [0 .. numParameters - 1]
+                                 -- Example: if spec_var_X_idx=0, numParams=2 -> X1, X2.
+                                 -- Ensure this generation avoids spec_var_X_idx and is robust.
+
+        -- Step 3: Create an ordered list of indices for the free variables.
+        let v_indices = if freeVarCount == 0 then [] else Prelude.reverse [0 .. freeVarCount - 1]
+
+        -- Step 4:
+        -- Create a mapping from the free variable indices to the outer X-template indices.
+        let varMappingsList = zip v_indices outerXTemplateIdxs
+                        -- e.g., [(1, 1), (0, 2)] if freeVarCount returns 2 and spec_var_X_idx=0.
+
+        let varMappings = Data.Map.fromList varMappingsList                    
+
+        -- Step 5: Swap free variables in the input p_template and source_set
+        -- with the corresponding fresh X-indices from 'outerXTemplateIdxs'.
+        -- 'X spec_var_X_idx' (the specification variable) should remain untouched.
+        let p_template_for_axiom   = propDeBrSwapFreeVarsToX original_p_template varMappings
+        let source_set_for_axiom = objDeBrSwapFreeVarsToX original_source_set varMappings
+
+
+
+        -- Step 6: Get the closed Axiom of Specification proven.
+        -- 'specificationM' will universally quantify over the X variables listed in 'outerXTemplateIdxs'
+        -- that actually appear in the (swapped) source_set_for_axiom and p_template_for_axiom.
+        (closedSpecAxiom, _) <- ZFC.specificationM outerXTemplateIdxs spec_var_X_idx source_set_for_axiom p_template_for_axiom
+
+
+        -- Step 7: Generate the list of free variable objects
+
+        let allContextFreeVars = Prelude.map (\i -> V i) v_indices
+
+        -- Step 8: Iteratively apply UI using the original free variable terms.
+        let uiLoop currentAxiom [] = return ()
+            uiLoop currentAxiom (fv_term_to_instantiate : fvs_remaining) = do
+                (instantiatedAxiomStep, _) <- uiM fv_term_to_instantiate currentAxiom
+                uiLoop instantiatedAxiomStep fvs_remaining
+        
+        if null allContextFreeVars -- If no free vars, no parameters, no UI.
+                                 then return ()
+                                 else uiLoop closedSpecAxiom allContextFreeVars
+
+
+        -- The result of the subargument will be the final instantiated proposition to make it the result of runProofBySubArgM.
+        --ZFC.repM finalInstantiatedProp
+
+
+
+
 
 
 setBuilderTheoremProg::(MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) => 
-               [Int] -> Int -> ObjDeBr -> PropDeBr -> ProofGenTStd () [ZFCRuleDeBr] PropDeBr Text m ()
-setBuilderTheoremProg outerIdxs idx source_set p_template = do
+               Int -> ObjDeBr -> PropDeBr -> ProofGenTStd () [ZFCRuleDeBr] PropDeBr Text m (PropDeBr,[Int])
+setBuilderTheoremProg idx source_set p_template = do
      let builtSet = builderX idx source_set p_template
-     specificationM outerIdxs idx source_set p_template
-     return ()
+     specificationFreeM idx source_set p_template
 
 
 
@@ -208,6 +281,9 @@ strongInductionTheoremProg idx p_template = do
             remarkM $ "Absurd assumption: " <> absurd_asm_txt
             (proves_false,_) <- runProofByAsmM absurd_asm do
                 (well_founded_instance,_) <- uiM absurd_candidate well_founded
+                remarkM "LOOK HERE!!!!!"
+                (big_deal,_)<-setBuilderTheoremProg idx dom (neg p_template)
+                eiHilbertM big_deal
                 (something,_) <- fakePropM [] (absurd_candidate `subset` dom)
                 adjM something absurd_asm
                 (min_assertion, min_assertion_idx) <- mpM well_founded_instance --the first lemma is used here

@@ -49,6 +49,7 @@ data SubexpParseTree where
     ParseTreeFreeVar :: Int -> SubexpParseTree
     ParseTreeBoundVar :: Int -> SubexpParseTree
     ParseTreeX :: Int -> SubexpParseTree
+    ParseTreeXInternal :: Int -> SubexpParseTree
     Tuple :: [SubexpParseTree] -> SubexpParseTree
     Roster :: [SubexpParseTree] -> SubexpParseTree
     ParseTreeF :: SubexpParseTree
@@ -71,6 +72,7 @@ subexpParseTreeBoundDepth sub = case sub of
     ParseTreeFreeVar idx -> 0
     ParseTreeBoundVar idx -> 0
     ParseTreeX idx -> 0
+    ParseTreeXInternal idx -> 0
     Tuple as -> maximum $ Prelude.map subexpParseTreeBoundDepth as
     Roster as -> maximum $ Prelude.map subexpParseTreeBoundDepth as
     ParseTreeF -> 0
@@ -102,6 +104,7 @@ sbParseTreeNormalize boundVarIdx sub =
             Tuple as -> Tuple $ Prelude.map (sbParseTreeNormalize' depth) as
             Roster as -> Roster $ Prelude.map (sbParseTreeNormalize' depth) as
             ParseTreeX idx -> ParseTreeX idx
+            ParseTreeXInternal idx -> ParseTreeXInternal idx
             ParseTreeF -> ParseTreeF
             ParseTreeInt i -> ParseTreeInt i
             Builder sub1 sub2 -> Builder (sbParseTreeNormalize' depth sub1) (sbParseTreeNormalize' depth sub2)
@@ -161,7 +164,7 @@ instance SubexpDeBr ObjDeBr where
 
 
     toSubexpParseTree obj dict =
-         maybe (error $ "Ubable to parse term " <> show obj <> ". This shouldn't have happened.")
+         maybe (error $ "Unable to parse term " <> show obj <> ". This shouldn't have happened.")
              id fullParse 
       where fullParse =
                   parseNatSet'
@@ -171,6 +174,7 @@ instance SubexpDeBr ObjDeBr where
               <|> parseBound'
               <|> parseV'
               <|> parseX'
+              <|> parseXInternal'
               <|> parseEmptySet'
               <|> parseTuple'
               <|> parseIntMult'
@@ -182,7 +186,6 @@ instance SubexpDeBr ObjDeBr where
               <|> parseBigIntersection'
               <|> parseFuncsSet'
               <|> parseProject'
-              <|> parseHilbertShort'
               <|> parseFuncApplication'
               <|> parseCrossProduct'
               <|> parseComposition'
@@ -190,6 +193,7 @@ instance SubexpDeBr ObjDeBr where
               <|> parseIntersectionOp'
               <|> parseSetDifference'
               <|> parseSetBuilder'
+              <|> parseHilbertShort'
               <|> parseHilbert'
             parseNatSet' =
                 do
@@ -224,6 +228,9 @@ instance SubexpDeBr ObjDeBr where
             parseX' = do
                 i <- parseX obj
                 return $ ParseTreeX i
+            parseXInternal' = do
+                i <- parseXInternal obj
+                return $ ParseTreeXInternal i
             parseInteg' = do
                 i <- parseInteg obj
                 return $ ParseTreeInt i
@@ -402,6 +409,7 @@ showSubexpParseTree sub = case sub of
               Roster as -> showSubexpParseTree sub1
               ParseTreeF -> showSubexpParseTree sub1
               ParseTreeX idx -> showSubexpParseTree sub1
+              ParseTreeXInternal idx -> showSubexpParseTree sub1
               ParseTreeInt i -> showSubexpParseTree sub1
               Builder {} -> showSubexpParseTree sub1
               FuncApp {} -> showSubexpParseTree sub1
@@ -430,6 +438,7 @@ showSubexpParseTree sub = case sub of
               Roster as -> showSubexpParseTree sub1
               ParseTreeF -> showSubexpParseTree sub1
               ParseTreeX idx -> showSubexpParseTree sub1
+              ParseTreeXInternal idx -> showSubexpParseTree sub1
               ParseTreeInt i -> showSubexpParseTree sub1
               Builder {} -> showSubexpParseTree sub1
               FuncApp {} -> showSubexpParseTree sub1
@@ -458,6 +467,7 @@ showSubexpParseTree sub = case sub of
                Roster as -> showSubexpParseTree sub2
                ParseTreeF -> showSubexpParseTree sub2
                ParseTreeX idx -> showSubexpParseTree sub2
+               ParseTreeXInternal idx -> showSubexpParseTree sub2
                ParseTreeInt i -> showSubexpParseTree sub2
                Builder {} -> showSubexpParseTree sub2
                FuncApp {} -> showSubexpParseTree sub2
@@ -469,6 +479,7 @@ showSubexpParseTree sub = case sub of
             idx = subexpParseTreeBoundDepth sub1 
     ParseTreeConst const -> const
     ParseTreeX idx -> "X" <> showIndexAsSubscript idx
+    ParseTreeXInternal idx -> "XInternal" <> showIndexAsSubscript idx
     ParseTreeFreeVar idx -> "𝑣" <> showIndexAsSubscript idx
     ParseTreeBoundVar idx -> "𝑥" <> showIndexAsSubscript idx
 

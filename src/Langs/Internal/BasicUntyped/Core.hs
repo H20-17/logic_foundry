@@ -48,7 +48,10 @@ module Langs.Internal.BasicUntyped.Core (
     parseIntSet,
     parseEmptySet,
     eXInt,
-    aXInt
+    aXInt,
+    objDeBrSwapFreeVarsToX,
+    propDeBrSwapFreeVarsToX,
+    parseXInternal
 
 ) where
 import Control.Monad ( unless, guard,msum )
@@ -78,6 +81,7 @@ import Control.Monad.RWS
 import Text.XHtml (sub)
 import qualified Internal.StdPattern
 import Data.Maybe (isJust)
+import Data.Tuple (swap)
 
 
 
@@ -123,6 +127,44 @@ infix  4 :==:
 infix  4 `In`
 infix  4 :<=:
 
+
+
+
+
+
+objDeBrSwapFreeVarsToX :: ObjDeBr -> Map Int Int -> ObjDeBr
+objDeBrSwapFreeVarsToX obj varMap = 
+    case obj of
+        Integ num -> Integ num
+        Constant const -> Constant const
+        Hilbert p -> Hilbert (propDeBrSwapFreeVarsToX p varMap)
+        Bound i -> Bound i
+        V i -> case Data.Map.lookup i varMap of
+            Just newIdx -> X newIdx
+            Nothing -> V i
+        X i -> X i
+        XInternal i -> XInternal i
+        (o1 :+: o2) -> objDeBrSwapFreeVarsToX o1 varMap :+: objDeBrSwapFreeVarsToX o2 varMap
+        Intneg o1     -> Intneg (objDeBrSwapFreeVarsToX o1 varMap)
+        (o1 :*: o2) -> objDeBrSwapFreeVarsToX o1 varMap :*: objDeBrSwapFreeVarsToX o2 varMap
+        IntSet -> IntSet
+        EmptySet -> EmptySet
+
+
+propDeBrSwapFreeVarsToX :: PropDeBr -> Map Int Int -> PropDeBr
+propDeBrSwapFreeVarsToX prop varMap = 
+    case prop of
+        Neg p -> Neg (propDeBrSwapFreeVarsToX p varMap)
+        (p1 :&&: p2) -> propDeBrSwapFreeVarsToX p1 varMap :&&: propDeBrSwapFreeVarsToX p2 varMap
+        (p1 :||: p2) -> propDeBrSwapFreeVarsToX p1 varMap :||: propDeBrSwapFreeVarsToX p2 varMap
+        (p1 :->: p2) -> propDeBrSwapFreeVarsToX p1 varMap :->: propDeBrSwapFreeVarsToX p2 varMap
+        (p1 :<->: p2) -> propDeBrSwapFreeVarsToX p1 varMap :<->: propDeBrSwapFreeVarsToX p2 varMap
+        (o1 :==: o2) -> objDeBrSwapFreeVarsToX o1 varMap :==: objDeBrSwapFreeVarsToX o2 varMap
+        In o1 o2 -> In (objDeBrSwapFreeVarsToX o1 varMap) (objDeBrSwapFreeVarsToX o2 varMap)
+        Forall q -> Forall (propDeBrSwapFreeVarsToX q varMap)
+        Exists q -> Exists (propDeBrSwapFreeVarsToX q varMap)
+        (o1 :<=: o2) -> objDeBrSwapFreeVarsToX o1 varMap :<=: objDeBrSwapFreeVarsToX o2 varMap
+        F -> F
 
 
 objDeBrBoundVarInside :: ObjDeBr -> Int -> Bool
@@ -293,6 +335,10 @@ parseX subexp = case subexp of
     X i -> Just i
     _ -> Nothing
 
+parseXInternal :: ObjDeBr -> Maybe Int
+parseXInternal subexp = case subexp of
+    XInternal i -> Just i
+    _ -> Nothing
 
 parseEqual :: PropDeBr -> Maybe (ObjDeBr, ObjDeBr)
 parseEqual subexp = case subexp of
@@ -496,7 +542,8 @@ objDeBrSubXInt targetIdx substitution template = case template of
     Hilbert p -> Hilbert $ propDeBrSubXInt targetIdx substitution normalisedSubexp
       where
         boundDepth = boundDepthPropDeBr p
-        newBoundDepth = boundDepthPropDeBrXInt boundDepth subBoundDepth p
+        --newBoundDepth = boundDepthPropDeBrXInt boundDepth subBoundDepth p
+        newBoundDepth = boundDepthPropDeBrXInt targetIdx subBoundDepth p
         subBoundDepth = boundDepthObjDeBr substitution
         normalisedSubexp = swapBoundIndexProp boundDepth newBoundDepth p
     Bound idx -> Bound idx
@@ -524,13 +571,15 @@ propDeBrSubXInt targetIdx substitution template = case template of
     Forall p -> Forall $ propDeBrSubXInt targetIdx substitution normalisedSubexp
       where
         boundDepth = boundDepthPropDeBr p
-        newBoundDepth = boundDepthPropDeBrXInt boundDepth subBoundDepth p
+        --newBoundDepth = boundDepthPropDeBrXInt boundDepth subBoundDepth p
+        newBoundDepth = boundDepthPropDeBrXInt targetIdx subBoundDepth p
         subBoundDepth = boundDepthObjDeBr substitution
         normalisedSubexp = swapBoundIndexProp boundDepth newBoundDepth p
     Exists p -> Exists $ propDeBrSubXInt targetIdx substitution normalisedSubexp
       where
         boundDepth = boundDepthPropDeBr p
-        newBoundDepth = boundDepthPropDeBrXInt boundDepth subBoundDepth p
+        --newBoundDepth = boundDepthPropDeBrXInt boundDepth subBoundDepth p
+        newBoundDepth = boundDepthPropDeBrXInt targetIdx subBoundDepth p
         subBoundDepth = boundDepthObjDeBr substitution
         normalisedSubexp = swapBoundIndexProp boundDepth newBoundDepth p
     (o1 :<=: o2) -> objDeBrSubXInt targetIdx substitution o1 :<=: objDeBrSubXInt targetIdx substitution o2

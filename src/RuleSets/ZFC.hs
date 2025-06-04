@@ -905,6 +905,8 @@ natWellOrderingAxiomM = standardRuleM natWellOrdering
 
 data MetaRuleError s where
    MetaRuleErrNotClosed :: s -> MetaRuleError s
+   MetaRuleErrFreeVarsQuantCountMismatch :: MetaRuleError s
+
    deriving(Show,Typeable)
 
 

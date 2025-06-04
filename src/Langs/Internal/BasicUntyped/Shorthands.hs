@@ -54,7 +54,8 @@ module Langs.Internal.BasicUntyped.Shorthands (
     parseIsFunc,
     isFunc,
     natSetObj,      -- Exporting the NatSet object
-    parseNatSet     -- Exporting the NatSet parser
+    parseNatSet,     -- Exporting the NatSet parser
+    parseForallChain
 
 ) where
 import Langs.Internal.BasicUntyped.Core
@@ -591,6 +592,22 @@ parseComposition obj = do
     -- 7. If all checks passed, return the extracted f and g
     return (f, g)
 
+
+
+-- Helper to recursively parse a chain of Forall quantifiers
+-- Returns the inner most term,
+-- the count of exists quantifiers and the binding depth of
+-- the innermost term.
+-- Note: The depths returned are NOT relative to the context *outside* the chain.
+parseForallChain :: PropDeBr -> Maybe (PropDeBr, Int, Int)
+parseForallChain prop = fmap g (go prop 0)
+  where
+    go p quantifierCount =
+      case p of
+        Forall inner ->
+          go inner (quantifierCount + 1) -- Increment quantifier count
+        _ -> Just (p, quantifierCount)
+    g (p, quantifierCount) = (p, quantifierCount, boundDepthPropDeBr p)
 
 
 

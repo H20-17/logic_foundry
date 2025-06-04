@@ -5,6 +5,7 @@ module StdPattern(
     StdPrfPrintMonadFrame(..), StdPrfPrintMonad(..),
     monadifyProofStd,
     getProofState, runProofGeneratorT, Proof, runProof, ProofGeneratorT, modifyPS, getTopFreeVar, 
+    getFreeVarCount,
     TypedSent(..)
     
 ) where
@@ -30,4 +31,5 @@ import Internal.StdPattern
       PrfStdContext(..),
       monadifyProofStd,
       getTopFreeVar,
-      TypedSent(..))
+      TypedSent(..),
+      getFreeVarCount)
