@@ -175,6 +175,105 @@ specificationFreeM spec_var_X_idx original_source_set original_p_template =
 
     runProofBySubArgM do
         -- Step 1: Get the number of ALL active free variables from the context.
+        freeVarCount::Int <- getFreeVarCount -- User needs to implement this
+
+        -- Step 2: Generate fresh X-indices for these free variables (parameters).
+        let numParameters = freeVarCount
+        let outerXTemplateIdxs = if numParameters == 0
+                                 then []
+                                 else Prelude.map (+ (spec_var_X_idx + 1)) [0 .. numParameters - 1]
+
+        -- Step 3: Create an ordered list of V-indices for mapping.
+        let v_indices_for_mapping = if freeVarCount == 0 then [] else Prelude.reverse [0 .. freeVarCount - 1]
+
+        -- Step 4: Create the mapping (Map V_original_idx -> X_parameter_idx).
+        let varMappingsList = zip v_indices_for_mapping outerXTemplateIdxs
+        let varMappings = Data.Map.fromList varMappingsList
+
+        -- Step 5: Swap free variables (V i) in inputs with their corresponding template variables (X j).
+        let p_template_for_axiom   = propDeBrSwapFreeVarsToX original_p_template varMappings -- User-defined
+        let source_set_for_axiom = objDeBrSwapFreeVarsToX original_source_set varMappings -- User-defined
+
+        -- Step 6: Get the closed Axiom of Specification proven.
+        -- ZFC.specificationM proves this and sets it as the 'Last s'.
+        (closedSpecAxiom, _) <- ZFC.specificationM outerXTemplateIdxs spec_var_X_idx source_set_for_axiom p_template_for_axiom
+
+        -- Step 7: Generate the list of free variable ObjDeBr terms for UI.
+        let allContextFreeVars = Prelude.map V v_indices_for_mapping
+
+        -- Step 8: Apply multiUIM to perform the sequence of UIs.
+        -- If allContextFreeVars is empty, multiUIM does nothing, and closedSpecAxiom remains 'Last s'.
+        -- Otherwise, multiUIM applies UIs, and the final instantiated prop becomes 'Last s'.
+        multiUIM closedSpecAxiom allContextFreeVars
+        
+        -- The runProofBySubArgM will pick up the correct 'consequent' from the Last s writer state.
+        -- The monadic value 'x' of this 'do' block is (), which is fine.
+
+-- | Applies Universal Instantiation (UI) multiple times to a given proposition.
+-- | Returns the final instantiated proposition and its proof index.
+-- | - Case 0: No instantiation terms -> re-proves the initial proposition.
+-- | - Case 1: One instantiation term -> applies PREDL.uiM directly.
+-- | - Case >1: Multiple terms -> creates a sub-argument for the sequen
+multiUIM :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) =>
+    PropDeBr ->      -- initialProposition: The proposition to start with.
+    [ObjDeBr] ->    -- instantiationTerms: List of terms to instantiate with, in order.
+    ProofGenTStd () [ZFC.LogicRule PropDeBr DeBrSe ObjDeBr] PropDeBr Text m (PropDeBr,[Int])
+multiUIM initialProposition instantiationTerms =
+    case instantiationTerms of
+        [] ->
+            -- Case 0: No terms to instantiate with.
+            -- Re-prove the initial proposition to ensure it's the active "last proven statement"
+            -- and to get its index in the current context.
+            repM initialProposition
+
+        [singleTerm] ->
+            -- Case 1: Exactly one term to instantiate with.
+            -- Apply PREDL.uiM directly. No need for a sub-argument wrapper.
+            uiM singleTerm initialProposition
+
+        _ -> -- More than one term (list has at least two elements here)
+            -- Case 2: Multiple instantiation terms.
+            -- Create a sub-argument whose internal proof is the sequence of UI steps.
+            runProofBySubArgM (
+                -- Use foldM to iteratively apply PREDL.uiM.
+                -- The accumulator for foldM is (current_proposition_term, its_index).
+                foldM
+                    (\(currentProp_term, _currentProp_idx) term_to_instantiate ->
+                        -- PREDL.uiM applies UI, proves the new proposition, adds it to proof steps,
+                        -- updates the Last s writer state, and returns (new_proposition_term, new_index).
+                        -- This (new_prop, new_idx) becomes the new accumulator.
+                        uiM term_to_instantiate currentProp_term
+                    )
+                    (initialProposition, []) -- Start fold with initialProposition and a dummy index.
+                    instantiationTerms
+                -- The result of this foldM is a monadic action of type m (PropDeBr, [Int]).
+                -- This is the 'prog' for runProofBySubArgM.
+                -- Its 'Last s' writer state (set by the last PREDL.uiM) will be used
+                -- by runProofBySubArgM as the 'consequent' of the sub-argument.
+            )
+
+
+-- | Variant of specificationM allowing for parameters to be instantiated by
+-- | currently active free variables from the proof context.
+-- | It operates as a sub-argument.
+-- |
+-- | 'original_p_template' should use 'X spec_var_X_idx' for the specification variable.
+-- | Any free variables (V_i) within 'original_source_set' and 'original_p_template'
+-- | intended as parameters will be identified by 'getFreeVars', swapped with fresh X_j indices,
+-- | universally quantified by 'specificationM', and then instantiated with the original V_i terms.
+specificationBuilderM :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m
+
+                      ) =>
+     [Int] ->                 
+     Int ->           -- spec_var_X_idx: The X-index for the variable of specification (x in {x in T | P(x)})
+     ObjDeBr ->       -- original_source_set: May contain Free Variables (V i) as parameters.
+     PropDeBr ->      -- original_p_template: May use X spec_var_X_idx for spec var,
+                      --                      and Free Variables (V i) as parameters.
+     ProofGenTStd () [ZFC.LogicRule PropDeBr DeBrSe ObjDeBr] PropDeBr Text m (PropDeBr,[Int])
+specificationBuilderM outer_tmplt_idxs spec_var_X_idx original_source_set original_p_template =
+
+    runProofBySubArgM do
+        -- Step 1: Get the number of ALL active free variables from the context.
         -- The indices of these variables are 0 to freeVarCount-1.
         freeVarCount::Int <- getFreeVarCount
 
@@ -228,9 +327,6 @@ specificationFreeM spec_var_X_idx original_source_set original_p_template =
 
         -- The result of the subargument will be the final instantiated proposition to make it the result of runProofBySubArgM.
         --ZFC.repM finalInstantiatedProp
-
-
-
 
 
 
