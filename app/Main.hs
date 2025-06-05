@@ -253,6 +253,8 @@ multiUIM initialProposition instantiationTerms =
             )
 
 
+
+
 -- | Variant of specificationM allowing for parameters to be instantiated by
 -- | currently active free variables from the proof context.
 -- | It operates as a sub-argument.
