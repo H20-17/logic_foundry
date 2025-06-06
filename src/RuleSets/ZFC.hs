@@ -125,7 +125,7 @@ class LogicTerm t where
    intSet :: t
 
 
-class (PREDL.LogicSent s t ()) => LogicSent s t | s ->t where
+class (PREDL.LogicSent s t () Text) => LogicSent s t | s ->t where
    specAxiom :: [Int] -> Int -> t -> s -> s
    replaceAxiom :: [Int] -> Int -> Int -> t -> s -> s
    parseMemberOf :: s -> Maybe (t, t)
@@ -477,7 +477,7 @@ runProofAtomic :: (
                 TypedSent Text () sE s,
                Show t, Typeable t,
                StdPrfPrintMonad s Text () (Either SomeException),
-                            PREDL.LogicSent s t (), LogicSent s t ,
+                            PREDL.LogicSent s t () Text, LogicSent s t ,
                             Eq t, LogicTerm t) =>
                             LogicRule s sE t  ->
                             PrfStdContext () ->
@@ -756,7 +756,7 @@ instance (Show sE, Typeable sE, Show s, Typeable s, TypedSent Text () sE s,
              Monoid (PrfStdState s Text ()), Show t, Typeable t,
              StdPrfPrintMonad s Text () (Either SomeException),
              Monoid (PrfStdContext ()),
-             PREDL.LogicSent s t (),
+             PREDL.LogicSent s t () Text,
              LogicSent s t, Eq t, LogicTerm t) 
           => Proof (LogicError s sE t) 
              [LogicRule s sE t] 

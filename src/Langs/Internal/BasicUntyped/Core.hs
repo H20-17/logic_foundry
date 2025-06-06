@@ -51,7 +51,8 @@ module Langs.Internal.BasicUntyped.Core (
     aXInt,
     objDeBrSwapFreeVarsToX,
     propDeBrSwapFreeVarsToX,
-    parseXInternal
+    parseXInternal,
+    propDeBrExtractConsts
 
 ) where
 import Control.Monad ( unless, guard,msum )
@@ -82,6 +83,7 @@ import Text.XHtml (sub)
 import qualified Internal.StdPattern
 import Data.Maybe (isJust)
 import Data.Tuple (swap)
+import qualified Data.Set as Set
 
 
 
@@ -809,6 +811,39 @@ xsubObjDeBrXInt o idx depth = case o of
     (o1 :*: o2) -> xsubObjDeBrXInt o1 idx depth :*: xsubObjDeBrXInt o2 idx depth
     IntSet -> IntSet
     EmptySet -> EmptySet
+
+objDeBrExtractConsts :: ObjDeBr -> Set Text
+
+objDeBrExtractConsts obj = case obj of
+    Integ _ -> Set.empty
+    Constant name -> Set.singleton name
+    Hilbert p -> propDeBrExtractConsts p
+    Bound _ -> Set.empty
+    V _ -> Set.empty
+    X _ -> Set.empty
+    XInternal _ -> Set.empty
+    (o1 :+: o2) -> objDeBrExtractConsts o1 `Set.union` objDeBrExtractConsts o2
+    Intneg o1     -> objDeBrExtractConsts o1
+    (o1 :*: o2) -> objDeBrExtractConsts o1 `Set.union` objDeBrExtractConsts o2
+    IntSet -> Set.empty
+    EmptySet -> Set.empty
+
+
+propDeBrExtractConsts :: PropDeBr -> Set Text
+propDeBrExtractConsts prop = case prop of
+    Neg p -> propDeBrExtractConsts p
+    (p1 :&&: p2) -> propDeBrExtractConsts p1 `Set.union` propDeBrExtractConsts p2
+    (p1 :||: p2) -> propDeBrExtractConsts p1 `Set.union` propDeBrExtractConsts p2
+    (p1 :->: p2) -> propDeBrExtractConsts p1 `Set.union` propDeBrExtractConsts p2
+    (p1 :<->: p2) -> propDeBrExtractConsts p1 `Set.union` propDeBrExtractConsts p2
+    In o1 o2 -> objDeBrExtractConsts o1 `Set.union` objDeBrExtractConsts o2
+    (o1 :==: o2) -> objDeBrExtractConsts o1 `Set.union` objDeBrExtractConsts o2
+    Forall p -> propDeBrExtractConsts p
+    Exists p -> propDeBrExtractConsts p
+    (o1 :<=: o2) -> objDeBrExtractConsts o1 `Set.union` objDeBrExtractConsts o2
+    F -> Set.empty
+
+
 
 
 instance LogicConst Text where

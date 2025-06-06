@@ -14,8 +14,9 @@ module RuleSets.PredLogic
     ChkTheoremError(..),
     establishTheorem,
     MetaRuleError(..),
-    eqReflM, eqSymM, eqTransM, eqSubstM
-
+    eqReflM, eqSymM, eqTransM, eqSubstM,
+    extractConstsM,
+    multiUGM
 ) where
 
 
@@ -27,7 +28,7 @@ import Data.List (mapAccumL,intersperse)
 import qualified Data.Set as Set
 import Data.Text ( pack, Text, unpack,concat)
 import Data.Map
-    ( (!), foldrWithKey, fromList, insert, keysSet, lookup, map, Map )
+    ( (!), foldrWithKey, fromList, insert, keysSet, lookup, map, Map,restrictKeys )
 import Control.Applicative ( Alternative((<|>)) )
 import Control.Monad.Except ( MonadError(throwError) )
 import Control.Monad.Catch
@@ -253,7 +254,7 @@ instance LogicRuleClass [LogicRule s sE o t tType ] s t tType sE o where
 
 
 
-runProofAtomic :: (LogicSent s t tType ,
+runProofAtomic :: (LogicSent s t tType o,
                ProofStd s (LogicError s sE o t tType ) [LogicRule s sE o t tType ] o tType,
                Show sE, Typeable sE, Show s, Typeable s, TypeableTerm t o tType sE, TypedSent o tType sE s,
                Typeable o, Show o,Typeable tType, Show tType, Show t, Typeable t,
@@ -431,7 +432,7 @@ runProofAtomic rule context state  =
 
 
 
-instance (LogicSent s t tType, Show sE, Typeable sE, Show s, Typeable s, TypedSent o tType sE s,
+instance (LogicSent s t tType o, Show sE, Typeable sE, Show s, Typeable s, TypedSent o tType sE s,
              TypeableTerm t o tType sE, Typeable o, Show o, Typeable tType, Show tType,
              Monoid (PrfStdState s o tType), Show t, Typeable t,
              StdPrfPrintMonad s o tType (Either SomeException),
@@ -444,7 +445,7 @@ instance (LogicSent s t tType, Show sE, Typeable sE, Show s, Typeable s, TypedSe
                s 
                  where
 
-    runProofOpen :: (LogicSent s t tType , Show sE, Typeable sE, Show s, Typeable s,
+    runProofOpen :: (LogicSent s t tType o, Show sE, Typeable sE, Show s, Typeable s,
                  TypedSent o tType sE s, TypeableTerm t o tType sE, Typeable o,
                  Show o, Typeable tType, Show tType) =>
                     [LogicRule s sE o t tType ]
@@ -511,7 +512,7 @@ standardRuleM rule = do
 
 
 
-uiM :: (Monad m, LogicSent s t tType , TypeableTerm t o tType sE, Show s,
+uiM :: (Monad m, LogicSent s t tType o, TypeableTerm t o tType sE, Show s,
                 Typeable s, Show sE, Typeable sE, MonadThrow m, Show o, Typeable o, Show t, Typeable t,
                 Show tType, Typeable tType, TypedSent o tType sE s, Monoid (PrfStdState s o tType),
                StdPrfPrintMonad s o tType m, StdPrfPrintMonad s o tType (Either SomeException),
@@ -523,7 +524,7 @@ uiM term sent = standardRuleM (ui term sent)
 
 
 
-eiM :: (Monad m, LogicSent s t tType , TypeableTerm t o tType sE, Show s,
+eiM :: (Monad m, LogicSent s t tType o, TypeableTerm t o tType sE, Show s,
                 Typeable s, Show sE, Typeable sE, MonadThrow m, Show o, Typeable o, Show t, Typeable t,
                 Show tType, Typeable tType, TypedSent o tType sE s, Monoid (PrfStdState s o tType),
                 StdPrfPrintMonad s o tType m,
@@ -536,7 +537,7 @@ eiM sent const = do
 
 
 
-eNegIntroM, aNegIntroM, eqSymM :: (Monad m, LogicSent s t tType , TypeableTerm t o tType sE, Show s,
+eNegIntroM, aNegIntroM, eqSymM :: (Monad m, LogicSent s t tType o, TypeableTerm t o tType sE, Show s,
                 Typeable s, Show sE, Typeable sE, MonadThrow m, Show o, Typeable o, Show t, Typeable t,
                 Show tType, Typeable tType, TypedSent o tType sE s, Monoid (PrfStdState s o tType),
                 StdPrfPrintMonad s o tType m,
@@ -550,7 +551,7 @@ aNegIntroM sent = standardRuleM (aNegIntro sent)
 eqSymM eqSent = standardRuleM (eqSym eqSent)
 
 
-eiHilbertM :: (Monad m, LogicSent s t tType , TypeableTerm t o tType sE, Show s,
+eiHilbertM :: (Monad m, LogicSent s t tType o, TypeableTerm t o tType sE, Show s,
                 Typeable s, Show sE, Typeable sE, MonadThrow m, Show o, Typeable o, Show t, Typeable t,
                 Show tType, Typeable tType, TypedSent o tType sE s, Monoid (PrfStdState s o tType),
                 StdPrfPrintMonad s o tType m,
@@ -566,7 +567,7 @@ eiHilbertM sent = do
          return (instantiated,idx,hilbertObj)
 
 
-eqTransM :: (Monad m, LogicSent s t tType , TypeableTerm t o tType sE, Show s,
+eqTransM :: (Monad m, LogicSent s t tType o, TypeableTerm t o tType sE, Show s,
              Typeable s, Show sE, Typeable sE, MonadThrow m, Show o, Typeable o, Show t, Typeable t,
              Show tType, Typeable tType, TypedSent o tType sE s, Monoid (PrfStdState s o tType),
              StdPrfPrintMonad s o tType m, StdPrfPrintMonad s o tType (Either SomeException),
@@ -577,7 +578,7 @@ eqTransM eqSent1 eqSent2 = standardRuleM (eqTrans eqSent1 eqSent2)
 
 
 
-eqSubstM :: (Monad m, LogicSent s t tType , TypeableTerm t o tType sE, Show s,
+eqSubstM :: (Monad m, LogicSent s t tType o, TypeableTerm t o tType sE, Show s,
              Typeable s, Show sE, Typeable sE, MonadThrow m, Show o, Typeable o, Show t, Typeable t,
              Show tType, Typeable tType, TypedSent o tType sE s, Monoid (PrfStdState s o tType),
              StdPrfPrintMonad s o tType m, StdPrfPrintMonad s o tType (Either SomeException),
@@ -586,7 +587,7 @@ eqSubstM :: (Monad m, LogicSent s t tType , TypeableTerm t o tType sE, Show s,
            => Int -> s -> s -> ProofGenTStd tType r s o m (s,[Int])
 eqSubstM idx templateSent eqSent = standardRuleM (eqSubst idx templateSent eqSent)
 
-eqReflM :: (Monad m, LogicSent s t tType , TypeableTerm t o tType sE, Show s,
+eqReflM :: (Monad m, LogicSent s t tType o, TypeableTerm t o tType sE, Show s,
             Typeable s, Show sE, Typeable sE, MonadThrow m, Show o, Typeable o, Show t, Typeable t,
             Show tType, Typeable tType, TypedSent o tType sE s, Monoid (PrfStdState s o tType),
             StdPrfPrintMonad s o tType m, StdPrfPrintMonad s o tType (Either SomeException),
@@ -596,7 +597,7 @@ eqReflM :: (Monad m, LogicSent s t tType , TypeableTerm t o tType sE, Show s,
 eqReflM term = standardRuleM (eqRefl term)
 
 
-reverseANegIntroM, reverseENegIntroM :: (Monad m, LogicSent s t tType , TypeableTerm t o tType sE, Show s,
+reverseANegIntroM, reverseENegIntroM :: (Monad m, LogicSent s t tType o, TypeableTerm t o tType sE, Show s,
                 Typeable s, Show sE, Typeable sE, MonadThrow m, Show o, Typeable o, Show t, Typeable t,
                 Show tType, Typeable tType, TypedSent o tType sE s, Monoid (PrfStdState s o tType),
                 StdPrfPrintMonad s o tType m,
@@ -897,7 +898,7 @@ data ProofByUGSchema s r where
     deriving (Show)
 
 
-class (PL.LogicSent s tType) => LogicSent s t tType | s ->tType, s ->t, s->t where
+class (PL.LogicSent s tType) => LogicSent s t tType o | s ->tType, s ->t, s->t, s->o where
     parseExists :: s -> Maybe (t->s,tType)
     parseEq :: s -> Maybe (t,t)
     (.==.) :: t -> t -> s
@@ -912,6 +913,8 @@ class (PL.LogicSent s tType) => LogicSent s t tType | s ->tType, s ->t, s->t whe
     -- create generalization from sentence, var type, and free var index.
     createForall ::s -> tType -> Int -> s
     substX :: Int -> s -> t -> s
+    extractConsts :: s -> Set o
+
  
 
 
@@ -927,7 +930,7 @@ data SubproofError s sE eL where
    ProofByUGErrGenNotForall :: s -> SubproofError s sE eL 
      deriving(Show)
 
-runProofByUG :: ( ProofStd s eL1 r1 o tType, LogicSent s t tType, TypedSent o tType sE s,
+runProofByUG :: ( ProofStd s eL1 r1 o tType, LogicSent s t tType o, TypedSent o tType sE s,
                   TypeableTerm t o tType sE)
                         => ProofByUGSchema s r1
                             -> PrfStdContext tType 
@@ -1010,7 +1013,7 @@ runTmSilentM (TheoremSchemaMT constDict lemmas prog) =  do
 
 
 runProofByUGM :: (Monoid r1, ProofStd s eL1 r1 o tType, Monad m,
-                       LogicSent s t tType, Show eL1, Typeable eL1,
+                       LogicSent s t tType o, Show eL1, Typeable eL1,
                     Show s, Typeable s,
                        MonadThrow m, TypedSent o tType sE s, Show sE, Typeable sE, 
                        StdPrfPrintMonad s o tType m,SubproofRule r1 s o tType)
@@ -1034,7 +1037,7 @@ runProofByUGM tt prog =  do
         return (resultSent,idx)
 
 multiUGM :: (Monoid r1, ProofStd s eL1 r1 o tType, Monad m,
-                       LogicSent s t tType, Show eL1, Typeable eL1,
+                       LogicSent s t tType o, Show eL1, Typeable eL1,
                     Show s, Typeable s,
                        MonadThrow m, TypedSent o tType sE s, Show sE, Typeable sE,
                        StdPrfPrintMonad s o tType m,SubproofRule r1 s o tType, 
@@ -1067,6 +1070,31 @@ multiUGM typeList programCore =
             --    This 's' (the partially generalized proposition) is what 'runProofByUGM' will then generalize.
             --    'runProofByUGM' itself returns (final_ug_prop, final_ug_idx), matching our required type.
             runProofByUGM outermost_ug_var_type inner_action_yielding_proven_s_idx
+
+
+extractConstsM :: (Monoid r1, ProofStd s eL1 r1 o tType, Monad m,
+                       LogicSent s t tType o, Show eL1, Typeable eL1,
+                    Show s, Typeable s,
+                       MonadThrow m, TypedSent o tType sE s, Show sE, Typeable sE,
+                       StdPrfPrintMonad s o tType m,SubproofRule r1 s o tType, 
+                       BASE.SubproofRule r1 s    )  
+                 =>   s
+                            -> ProofGenTStd tType r1 s o m (Map o tType)
+
+extractConstsM sentence = do
+    state <- getProofState
+    let constdict = fmap fst (consts state)
+    let sentConsts = extractConsts sentence     
+    return $ Data.Map.restrictKeys constdict sentConsts
+
+
+
+
+
+
+
+
+
 
 constDictTest :: (Ord o, Eq tType) => Map o tType -> Map o tType ->  Maybe (o, Maybe (tType,tType))
 constDictTest envDict = Data.Map.foldrWithKey f Nothing

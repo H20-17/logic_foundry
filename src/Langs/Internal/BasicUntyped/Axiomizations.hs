@@ -105,7 +105,7 @@ boundExpToFunc p obj = propDeBrSubX 0 obj template
                  boundDepth = boundDepthPropDeBr p
                  template = propDeBrSubBoundVarToX0 boundDepth p
 
-instance PREDL.LogicSent PropDeBr ObjDeBr ()  where
+instance PREDL.LogicSent PropDeBr ObjDeBr () Text where
     parseExists :: PropDeBr -> Maybe (ObjDeBr -> PropDeBr, ())
     parseExists prop =
       case prop of
@@ -149,8 +149,8 @@ instance PREDL.LogicSent PropDeBr ObjDeBr ()  where
     (.==.) = (:==:)
     substX :: Int -> PropDeBr -> ObjDeBr -> PropDeBr
     substX idx template obj = propDeBrSubX idx obj template
-
-
+    extractConsts :: PropDeBr -> Set Text
+    extractConsts prop = propDeBrExtractConsts prop
 
 objDeBrApplyUG :: ObjDeBr -> Int -> Int -> ObjDeBr
 objDeBrApplyUG obj freevarIdx boundvarIdx =

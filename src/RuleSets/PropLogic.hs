@@ -1001,6 +1001,7 @@ runProofByAsmM asm prog =  do
 
 
 
+
 class (Ord s, Eq tType) 
               => LogicSent s tType | s -> tType where
      (.&&.) :: s -> s -> s
