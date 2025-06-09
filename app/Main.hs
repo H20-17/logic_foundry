@@ -59,6 +59,7 @@ import RuleSets.ZFC
     ( axiomOfChoiceM,specificationM, MetaRuleError(..))
 import Langs.BasicUntyped
 import Foreign (free)
+import GHC.IO.Device (IODevice(close))
 
 
 
@@ -198,6 +199,8 @@ specificationFreeM spec_var_X_idx original_source_set original_p_template =
         -- ZFC.specificationM proves this and sets it as the 'Last s'.
         (closedSpecAxiom, _) <- ZFC.specificationM outerXTemplateIdxs spec_var_X_idx source_set_for_axiom p_template_for_axiom
 
+
+
         -- Step 7: Generate the list of free variable ObjDeBr terms for UI.
         let allContextFreeVars = Prelude.map V v_indices_for_mapping
 
@@ -208,6 +211,25 @@ specificationFreeM spec_var_X_idx original_source_set original_p_template =
         
         -- The runProofBySubArgM will pick up the correct 'consequent' from the Last s writer state.
         -- The monadic value 'x' of this 'do' block is (), which is fine.
+
+
+specificationFreeMBuilder :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m
+
+                      ) =>
+     Int ->           -- spec_var_X_idx: The X-index for the variable of specification (x in {x in T | P(x)})
+     ObjDeBr ->       -- original_source_set: May contain Free Variables (V i) as parameters.
+     PropDeBr ->      -- original_p_template: May use X spec_var_X_idx for spec var,
+                      --                      and Free Variables (V i) as parameters.
+     ProofGenTStd () [ZFC.LogicRule PropDeBr DeBrSe ObjDeBr] PropDeBr Text m (PropDeBr,[Int], ObjDeBr)
+specificationFreeMBuilder spec_var_X_idx original_source_set original_p_template = do
+    (specAx, _) <- specificationFreeM spec_var_X_idx original_source_set original_p_template
+    eiHilbertM specAx
+   
+
+
+
+
+
 
 -- | Applies Universal Instantiation (UI) multiple times to a given proposition.
 -- | Returns the final instantiated proposition and its proof index.
@@ -283,34 +305,54 @@ specificationBuilderMProg outer_tmplt_idxs spec_var_X_idx source_set p_template 
             let v_indices_for_mapping = if freeVarCount == 0 then [] else Prelude.reverse [0 .. freeVarCount - 1]
             let allContextFreeVars = Prelude.map V v_indices_for_mapping
             (specax_free,_) <- multiUIM specAx allContextFreeVars
-            (builder_prop,_,builder_set) <- eiHilbertM specax_free
-            return ()
-
+            eiHilbertM specax_free
         return ()
         -- The result of the subargument will be the final instantiated proposition to make it the result of runProofBySubArgM.
         --ZFC.repM finalInstantiatedProp
 
-specificationBuilderMTheorem :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m
-
-                      ) =>
-     Set Text ->                 
-     [Int] ->                 
-     Int ->           -- spec_var_X_idx: The X-index for the variable of specification (x in {x in T | P(x)})
-     ObjDeBr ->       -- original_source_set: May contain Free Variables (V i) as parameters.
-     PropDeBr ->      -- original_p_template: May use X spec_var_X_idx for spec var,
-                      --                      and Free Variables (V i) as parameters.
-     TheoremSchemaMT () [ZFC.LogicRule PropDeBr DeBrSe ObjDeBr] PropDeBr Text m ()
-specificationBuilderMTheorem consts outer_tmplt_idxs spec_var_X_idx source_set p_template =
-    let consts_dict = (zip (Set.toList consts) (repeat ()))
-    in
-    TheoremSchemaMT consts_dict [] (specificationBuilderMProg outer_tmplt_idxs spec_var_X_idx source_set p_template)
 
 
-setBuilderTheoremProg::(MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) => 
-               Int -> ObjDeBr -> PropDeBr -> ProofGenTStd () [ZFCRuleDeBr] PropDeBr Text m (PropDeBr,[Int])
-setBuilderTheoremProg idx source_set p_template = do
-     let builtSet = builderX idx source_set p_template
-     specificationFreeM idx source_set p_template
+
+
+
+--specificationBuilderMTheoremSchema :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m
+--
+--                      ) =>
+--     Set Text ->  -- consts_set: Set of constants used in the theorem schema.                        
+--     [Int] ->       -- outer_tmplt_idxs: List of indices for outer template variables.          
+--     Int ->           -- spec_var_X_idx: The X-index for the variable of specification (x in {x in T | P(x)})
+--     ObjDeBr ->       -- original_source_set: May contain Free Variables (V i) as parameters.
+--     PropDeBr ->      -- original_p_template: May use X spec_var_X_idx for spec var,
+--                      --
+--     TheoremSchemaMT () [ZFC.LogicRule PropDeBr DeBrSe ObjDeBr] PropDeBr Text m ()
+--specificationBuilderMTheoremSchema consts_set outer_tmplt_idxs spec_var_X_idx source_set p_template =
+--    let
+--        consts_dict = (zip (Set.toList consts_set) (repeat ()))
+--    in
+--    TheoremSchemaMT consts_dict [] (specificationBuilderMProg outer_tmplt_idxs spec_var_X_idx source_set p_template)
+
+
+
+
+
+--specBuilderSubsetTheoremMSchema :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) => 
+--     Int -> -- quantifierDepth: The depth of quantifiers in specAx.
+--     Set Text -> -- consts_set: Set of constants used in the theorem schema.
+--     PropDeBr -> -- spexAx: Instance of the specification axiom in builder form
+--     TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text m ()
+--specBuilderSubsetTheoremMSchema quantifierDepth consts_set specAx =
+--    let 
+--        consts_dict = (zip (Set.toList consts_set) (repeat ()))
+--    in
+--    TheoremSchemaMT consts_dict [specAx] (specBuilderSubsetTheoremProg quantifierDepth specAx)
+
+
+
+--setBuilderTheoremProg::(MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) => 
+--               Int -> ObjDeBr -> PropDeBr -> ProofGenTStd () [ZFCRuleDeBr] PropDeBr Text m (PropDeBr,[Int])
+--setBuilderTheoremProg idx source_set p_template = do
+--     let builtSet = builderX idx source_set p_template
+--     specificationFreeM idx source_set p_template
 
 
 
@@ -354,8 +396,8 @@ strongInductionTheoremProg idx p_template = do
             (proves_false,_) <- runProofByAsmM absurd_asm do
                 (well_founded_instance,_) <- uiM absurd_candidate well_founded
                 remarkM "LOOK HERE!!!!!"
-                (big_deal,_)<-setBuilderTheoremProg idx dom (neg p_template)
-                eiHilbertM big_deal
+                specificationFreeMBuilder idx dom p_template    
+                remarkM "AFTER LOOK HERE!!!!!"
                 (something,_) <- fakePropM [] (absurd_candidate `subset` dom)
                 adjM something absurd_asm
                 (min_assertion, min_assertion_idx) <- mpM well_founded_instance --the first lemma is used here
