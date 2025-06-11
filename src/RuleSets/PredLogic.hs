@@ -624,25 +624,27 @@ reverseANegIntroM existsXNotPx = do
       let mayExistsNot = parseExistsNot existsXNotPx
       (f,tType) <- maybe (throwM $ ReverseANegIntroMNotExistsNot existsXNotPx) return mayExistsNot
       
-      runProofBySubArgM $ do
+      (result_prop,idx,extra_data) <- runProofBySubArgM $ do
          (notPc,_, hObj) <- eiHilbertM existsXNotPx
          let forallXPx = reverseParseQuantToForall f tType
          (absurdity,_) <- runProofByAsmM forallXPx $ do         
             (pc,_) <- uiM hObj forallXPx
             contraFM pc notPc
          absurdM absurdity
+      return (result_prop, idx)
 
 reverseENegIntroM forallXNotPx = do
       let mayForallNot = parseForallNot forallXNotPx
       (f,tType) <- maybe (throwM $ ReverseENegIntroMNotForallNot forallXNotPx) return mayForallNot
       
-      runProofBySubArgM $ do
+      (result_prop,idx,extra_data) <- runProofBySubArgM $ do
          let existsXPx = reverseParseQuantToExists f tType
          (absurdity,_) <- runProofByAsmM existsXPx $ do
             (pc,_,obj)<- eiHilbertM existsXPx
             (notPc,_) <- uiM obj forallXNotPx        
             contraFM pc notPc
          absurdM absurdity
+      return (result_prop, idx)
 
 
 
@@ -1053,7 +1055,9 @@ multiUGM typeList programCore =
             -- Run 'programCore'. 'REM.runProofBySubArgM' will execute it,
             -- take its 'Last s' (the proposition proven by programCore) as the consequent,
             -- wrap it in a PRF_BY_SUBARG step, and return (consequent, index_of_that_step).
-            runProofBySubArgM programCore
+            do 
+               (arg_result_prop, idx, extraData) <- runProofBySubArgM programCore
+               return (arg_result_prop, idx)
 
         (outermost_ug_var_type : remaining_ug_types) ->
             -- Recursive step:

@@ -886,13 +886,14 @@ modusTollensM s = do
     let negQ = neg q
 
 
-    runProofBySubArgM $ do
+    (result_prop, idx, extra_data) <- runProofBySubArgM $ do
     -- Derive ¬P from ¬Q and P → Q (Modus Tollens)
         (absurdity,_) <- runProofByAsmM p $ do
             (q,_) <- mpM s
             contraFM q negQ
             --False now derived
         absurdM absurdity
+    return (neg p, idx)
 
 doubleNegIntroM :: (Monoid r1, MonadThrow m, LogicSent s tType,
                    Proof eL r1 (PrfStdState s o tType) (PrfStdContext tType) [PrfStdStep s o tType] s,

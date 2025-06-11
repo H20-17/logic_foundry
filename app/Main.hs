@@ -172,9 +172,9 @@ specificationFreeM :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m
      PropDeBr ->      -- original_p_template: May use X spec_var_X_idx for spec var,
                       --                      and Free Variables (V i) as parameters.
      ProofGenTStd () [ZFC.LogicRule PropDeBr DeBrSe ObjDeBr] PropDeBr Text m (PropDeBr,[Int])
-specificationFreeM spec_var_X_idx original_source_set original_p_template =
+specificationFreeM spec_var_X_idx original_source_set original_p_template = do
 
-    runProofBySubArgM do
+    (result_prop,idx,extra_data) <- runProofBySubArgM do
         -- Step 1: Get the number of ALL active free variables from the context.
         freeVarCount::Int <- getFreeVarCount -- User needs to implement this
 
@@ -211,6 +211,7 @@ specificationFreeM spec_var_X_idx original_source_set original_p_template =
         
         -- The runProofBySubArgM will pick up the correct 'consequent' from the Last s writer state.
         -- The monadic value 'x' of this 'do' block is (), which is fine.
+    return (result_prop,idx)
 
 
 specificationFreeMBuilder :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m
@@ -222,11 +223,71 @@ specificationFreeMBuilder :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m
                       --                      and Free Variables (V i) as parameters.
      ProofGenTStd () [ZFC.LogicRule PropDeBr DeBrSe ObjDeBr] PropDeBr Text m (PropDeBr,[Int], ObjDeBr)
 specificationFreeMBuilder spec_var_X_idx original_source_set original_p_template = do
-    (specAx, _) <- specificationFreeM spec_var_X_idx original_source_set original_p_template
-    eiHilbertM specAx
-   
+    runProofBySubArgM $ do
+        (specAx, _) <- specificationFreeM spec_var_X_idx original_source_set original_p_template
+        (result_prop, idx, built_obj) <- eiHilbertM specAx
+        return built_obj
 
 
+-- | Given the results from `specificationFreeMBuilder`, this function proves that
+-- | the constructed set (`builderSet`) is a subset of its original domain (`domainSet`).
+-- | It encapsulates the entire proof within a single sub-argument.
+proveBuilderIsSubsetOfDomM :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) =>
+    PropDeBr ->  -- definingProperty: The proven prop 'isSet(B) ∧ ∀x(x∈B ↔ P(x)∧x∈dom)'
+    ObjDeBr ->   -- builderSet: The ObjDeBr for the set B, i.e., {x ∈ dom | P(x)}
+    ObjDeBr ->   -- domainSet: The ObjDeBr for the original domain 'dom'.
+    ProofGenTStd () [ZFC.LogicRule PropDeBr DeBrSe ObjDeBr] PropDeBr Text m (PropDeBr,[Int],())
+proveBuilderIsSubsetOfDomM definingProperty builderSet domainSet =
+    -- runProofBySubArgM will prove the last statement from its 'do' block (the subset proposition)
+    -- and return (proven_subset_prop, index_of_this_subargument, ()).
+    runProofBySubArgM $ do
+        -- The final goal is to prove the proposition corresponding to 'builderSet `subset` domainSet'
+        let targetSubsetProp = builderSet `subset` domainSet
+
+        -- Step 1: Deconstruct the given 'definingProperty' to get its two main parts.
+        (isSet_B_proven, _) <- simpLM definingProperty         -- isSet(B) is now proven
+        (forall_bicond, _) <- simpRM definingProperty       -- ∀x(x∈B ↔ P(x)∧x∈dom) is now proven
+
+        -- Step 2: Prove the universal implication part of the subset definition: ∀x(x ∈ B → x ∈ dom).
+        -- This is done using Universal Generalization (UG).
+        -- The '()' for runProofByUGM's type argument assumes the element type is not tracked
+        -- in the context, which is common in your ZFC setup.
+        (forall_implication, _) <- runProofByUGM () $ do
+            -- Inside the UG subproof, a new free variable 'v' is introduced into the context.
+            -- getTopFreeVar retrieves this variable.
+            v <- getTopFreeVar -- Needs to be implemented, e.g., 'V . length . freeVarTypeStack <$> ask'
+
+            -- We now need to prove 'v ∈ B → v ∈ dom'. This is done with an assumption subproof.
+            runProofByAsmM (v `In` builderSet) $ do
+                -- Inside this assumption, 'v In builderSet' is proven.
+
+                -- a. Instantiate the universally quantified biconditional with 'v'.
+                (instantiated_bicond, _) <- uiM v forall_bicond
+
+                -- b. From the proven biconditional 'v∈B ↔ (P(v)∧v∈dom)', get the forward implication.
+                (forward_imp, _) <- bicondElimLM instantiated_bicond -- Proves (v∈B) → (P(v)∧v∈dom)
+
+                -- c. Use Modus Ponens with our assumption 'v∈B' to get 'P(v) ∧ v∈dom'.
+                (p_and_v_in_dom, _) <- mpM forward_imp
+
+                -- d. From 'P(v) ∧ v∈dom', simplify to get 'v∈dom'.
+                (v_in_dom, _) <- simpRM p_and_v_in_dom
+
+                -- The subproof concludes with 'v_in_dom'.
+                -- 'runProofByAsmM' will therefore prove '(v In builderSet) -> v_in_dom'.
+                return ()
+
+        -- After 'runProofByUGM', 'forall_implication' is the proven proposition ∀x(x ∈ B → x ∈ dom).
+
+        -- Step 3: Adjoin 'isSet(B)' and '∀x(x ∈ B → x ∈ dom)' to form the final subset definition.
+        (final_subset_prop, _) <- adjM isSet_B_proven forall_implication
+        
+        -- As a sanity check, ensure the proven proposition matches the definition of subset.
+        --guard (final_subset_prop == targetSubsetProp)
+
+        -- The last proven statement is 'final_subset_prop'. 'runProofBySubArgM' will pick this
+        -- up as its consequent. The () here is the monadic return value 'x', which is discarded.
+        return ()
 
 
 
@@ -256,103 +317,27 @@ multiUIM initialProposition instantiationTerms =
         _ -> -- More than one term (list has at least two elements here)
             -- Case 2: Multiple instantiation terms.
             -- Create a sub-argument whose internal proof is the sequence of UI steps.
-            runProofBySubArgM (
-                -- Use foldM to iteratively apply PREDL.uiM.
-                -- The accumulator for foldM is (current_proposition_term, its_index).
-                foldM
-                    (\(currentProp_term, _currentProp_idx) term_to_instantiate ->
-                        -- PREDL.uiM applies UI, proves the new proposition, adds it to proof steps,
-                        -- updates the Last s writer state, and returns (new_proposition_term, new_index).
-                        -- This (new_prop, new_idx) becomes the new accumulator.
-                        uiM term_to_instantiate currentProp_term
+            do
+                (result_prop, idx, extra_data) <- runProofBySubArgM (
+                    -- Use foldM to iteratively apply PREDL.uiM.
+                    -- The accumulator for foldM is (current_proposition_term, its_index).
+                    foldM
+                        (\(currentProp_term, _currentProp_idx) term_to_instantiate ->
+                            -- PREDL.uiM applies UI, proves the new proposition, adds it to proof steps,
+                            -- updates the Last s writer state, and returns (new_proposition_term, new_index).
+                            -- This (new_prop, new_idx) becomes the new accumulator.
+                            uiM term_to_instantiate currentProp_term
+                        )
+                        (initialProposition, []) -- Start fold with initialProposition and a dummy index.
+                        instantiationTerms
+                    -- The result of this foldM is a monadic action of type m (PropDeBr, [Int]).
+                    -- This is the 'prog' for runProofBySubArgM.
+                    -- Its 'Last s' writer state (set by the last PREDL.uiM) will be used
+                    -- by runProofBySubArgM as the 'consequent' of the sub-argument.
                     )
-                    (initialProposition, []) -- Start fold with initialProposition and a dummy index.
-                    instantiationTerms
-                -- The result of this foldM is a monadic action of type m (PropDeBr, [Int]).
-                -- This is the 'prog' for runProofBySubArgM.
-                -- Its 'Last s' writer state (set by the last PREDL.uiM) will be used
-                -- by runProofBySubArgM as the 'consequent' of the sub-argument.
-            )
+                return (result_prop, idx)
 
 
-
-
--- | Variant of specificationM allowing for parameters to be instantiated by
--- | currently active free variables from the proof context.
--- | It operates as a sub-argument.
--- |
--- | 'original_p_template' should use 'X spec_var_X_idx' for the specification variable.
--- | Any free variables (V_i) within 'original_source_set' and 'original_p_template'
--- | intended as parameters will be identified by 'getFreeVars', swapped with fresh X_j indices,
--- | universally quantified by 'specificationM', and then instantiated with the original V_i terms.
-specificationBuilderMProg :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m
-
-                      ) =>
-     [Int] ->                 
-     Int ->           -- spec_var_X_idx: The X-index for the variable of specification (x in {x in T | P(x)})
-     ObjDeBr ->       -- original_source_set: May contain Free Variables (V i) as parameters.
-     PropDeBr ->      -- original_p_template: May use X spec_var_X_idx for spec var,
-                      --                      and Free Variables (V i) as parameters.
-     ProofGenTStd () [ZFC.LogicRule PropDeBr DeBrSe ObjDeBr] PropDeBr Text m ()
-specificationBuilderMProg outer_tmplt_idxs spec_var_X_idx source_set p_template =
-    do
-
-        (specAx,spexAxIdx) <- ZFC.specificationM outer_tmplt_idxs spec_var_X_idx source_set p_template
-
-        let outerVarTypes = replicate (length outer_tmplt_idxs) ()
-        multiUGM outerVarTypes $ do
-            let freeVarCount = length outer_tmplt_idxs
-            let v_indices_for_mapping = if freeVarCount == 0 then [] else Prelude.reverse [0 .. freeVarCount - 1]
-            let allContextFreeVars = Prelude.map V v_indices_for_mapping
-            (specax_free,_) <- multiUIM specAx allContextFreeVars
-            eiHilbertM specax_free
-        return ()
-        -- The result of the subargument will be the final instantiated proposition to make it the result of runProofBySubArgM.
-        --ZFC.repM finalInstantiatedProp
-
-
-
-
-
-
---specificationBuilderMTheoremSchema :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m
---
---                      ) =>
---     Set Text ->  -- consts_set: Set of constants used in the theorem schema.                        
---     [Int] ->       -- outer_tmplt_idxs: List of indices for outer template variables.          
---     Int ->           -- spec_var_X_idx: The X-index for the variable of specification (x in {x in T | P(x)})
---     ObjDeBr ->       -- original_source_set: May contain Free Variables (V i) as parameters.
---     PropDeBr ->      -- original_p_template: May use X spec_var_X_idx for spec var,
---                      --
---     TheoremSchemaMT () [ZFC.LogicRule PropDeBr DeBrSe ObjDeBr] PropDeBr Text m ()
---specificationBuilderMTheoremSchema consts_set outer_tmplt_idxs spec_var_X_idx source_set p_template =
---    let
---        consts_dict = (zip (Set.toList consts_set) (repeat ()))
---    in
---    TheoremSchemaMT consts_dict [] (specificationBuilderMProg outer_tmplt_idxs spec_var_X_idx source_set p_template)
-
-
-
-
-
---specBuilderSubsetTheoremMSchema :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) => 
---     Int -> -- quantifierDepth: The depth of quantifiers in specAx.
---     Set Text -> -- consts_set: Set of constants used in the theorem schema.
---     PropDeBr -> -- spexAx: Instance of the specification axiom in builder form
---     TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text m ()
---specBuilderSubsetTheoremMSchema quantifierDepth consts_set specAx =
---    let 
---        consts_dict = (zip (Set.toList consts_set) (repeat ()))
---    in
---    TheoremSchemaMT consts_dict [specAx] (specBuilderSubsetTheoremProg quantifierDepth specAx)
-
-
-
---setBuilderTheoremProg::(MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) => 
---               Int -> ObjDeBr -> PropDeBr -> ProofGenTStd () [ZFCRuleDeBr] PropDeBr Text m (PropDeBr,[Int])
---setBuilderTheoremProg idx source_set p_template = do
---     let builtSet = builderX idx source_set p_template
---     specificationFreeM idx source_set p_template
 
 
 
@@ -389,14 +374,19 @@ strongInductionTheoremProg idx p_template = do
             remarkM $   (pack . show) rel_is_relation_idx <> " asserts that rel is a relation over N.\n" 
                        <> (pack . show) well_founded_idx <> " asserts that rel is well-founded over N.\n"
                        <> (pack . show) induction_premise_idx <> " asserts that the induction premise holds for N"
-            let absurd_candidate = builderX idx dom (neg p_template)
+            (spec_prop,spec_prop_idx,absurd_candidate) <- specificationFreeMBuilder idx dom (neg p_template) 
+            -- let absurd_candidate = builderX idx dom (neg p_template)
+            proveBuilderIsSubsetOfDomM 
+                spec_prop
+                absurd_candidate
+                dom
             let absurd_asm = absurd_candidate./=. EmptySet 
             absurd_asm_txt <- showPropM absurd_asm
             remarkM $ "Absurd assumption: " <> absurd_asm_txt
             (proves_false,_) <- runProofByAsmM absurd_asm do
                 (well_founded_instance,_) <- uiM absurd_candidate well_founded
                 remarkM "LOOK HERE!!!!!"
-                specificationFreeMBuilder idx dom p_template    
+                specificationFreeMBuilder idx dom (neg p_template)    
                 remarkM "AFTER LOOK HERE!!!!!"
                 (something,_) <- fakePropM [] (absurd_candidate `subset` dom)
                 adjM something absurd_asm
@@ -1838,7 +1828,7 @@ testprog = do
       
       fux<- runProofByUGM () do
           runProofByAsmM  asm2 do
-              (s5,_)<- runProofBySubArgM  do
+              (s5,_,_)<- runProofBySubArgM  do
                  newFreeVar <- getTopFreeVar
                  (s1,_) <- uiM newFreeVar z1
                  (s2,idx) <- mpM s1

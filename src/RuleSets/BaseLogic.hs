@@ -222,7 +222,7 @@ runProofBySubArgM :: (Monoid r1, ProofStd s eL1 r1 o tType, Monad m,
                        Show eL1, Typeable eL1, TypedSent o tType sE s, Show sE, Typeable sE,
                        StdPrfPrintMonad s o tType m, SubproofRule r1 s )
                  =>   ProofGenTStd tType r1 s o m x
-                            -> ProofGenTStd tType r1 s o m (s, [Int])
+                            -> ProofGenTStd tType r1 s o m (s, [Int],x)
 runProofBySubArgM prog =  do
         state <- getProofState
         context <- ask
@@ -237,7 +237,7 @@ runProofBySubArgM prog =  do
             <- lift $ runSubproofM newContext state newState preambleSteps (Last Nothing) prog
         mayMonadifyRes <- monadifyProofStd $ proofBySubArg consequent subproof
         idx <- maybe (error "No theorem returned by monadifyProofStd on subarg schema. This shouldn't happen") (return . snd) mayMonadifyRes
-        return (consequent, idx)
+        return (consequent, idx, extraData)
 
 
 
