@@ -50,7 +50,10 @@ module Langs.BasicUntyped (
     parseSetBuilder,
     parseForallChain,
     objDeBrSwapFreeVarsToX,
-    propDeBrSwapFreeVarsToX
+    propDeBrSwapFreeVarsToX,
+    parseImplication,
+    parsePair,
+    parseIn
 ) where
 
 

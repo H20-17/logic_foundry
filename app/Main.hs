@@ -410,13 +410,43 @@ strongInductionTheoremProg idx p_template = do
                 (exists_statement, idx) <- aNegIntroM x
                 remarkM $ (pack . show) idx <> " asserts that there is an element under the minimum element minimum element" 
                                            <> " that is in the absurd set. Essentially, we already have our contradiction"
-                (absurd_element_assert,_, absurd_element) <- eiHilbertM exists_statement           
+                (absurd_element_assert,_, absurd_element) <- eiHilbertM exists_statement     
+                remarkM "This is A"      
                 (more_absurd,_) <- negImpToConjViaEquivM absurd_element_assert
                 (l_more_absurd,_) <- simpLM more_absurd
+                show_l_more_absurd <- showPropM l_more_absurd
+                remarkM $ "This l_more_absurd: " <> show_l_more_absurd
+                repM l_more_absurd
                 (r_more_absurd,_) <- simpRM more_absurd
                 let absurd_element_in_n = absurd_element `In` natSetObj
+                (something,_) <- simpRM rel_is_relation
+                let xobj = buildPair absurd_element min_element
+                (something_else,_) <- uiM xobj something
+                remarkM "This is A" 
+                let (a,b) = maybe (error "bad error") id (parseImplication something_else)
+                imp_left_txt <- showPropM a
+                remarkM $ "The left side of the implication is: " <> imp_left_txt
+                let (pair1,_) = maybe (error "bad error") id (parseIn a)
+                let (pair2,_) = maybe (error "bad error") id (parseIn l_more_absurd)
+                pair1_txt <- showObjM pair1
+                pair2_txt <- showObjM pair2
+                remarkM $ "The first pair is: " <> pair1_txt
+                remarkM $ "The second pair is: " <> pair2_txt
+                let (pair1_left, pair1_right) = maybe (error "bad error") id (parsePair pair1)
+                let (pair2_left, pair2_right) = maybe (error "bad error") id (parsePair pair2)
+                
+
+                if pair1 /= pair2 then
+                    remarkM "The two are not equal"
+                    else
+                    remarkM "The two are equal"
+                remarkM $ (pack . show) a
+                remarkM $ (pack . show) l_more_absurd
+                mpM something_else
+                remarkM "This is B"
                 fakePropM [l_more_absurd,rel_is_relation] absurd_element_in_n
                 let newProp = absurd_element `In` absurd_candidate
+
                 (final_ante,_) <- fakePropM [absurd_element_in_n, r_more_absurd] newProp
                 (final_imp,_) <- uiM absurd_element absurd_set_elements_not_below_min
                 (next,_) <- mpM final_imp
