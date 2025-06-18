@@ -58,8 +58,7 @@ import qualified RuleSets.ZFC as ZFC
 import RuleSets.ZFC
     ( axiomOfChoiceM,specificationM, MetaRuleError(..))
 import Langs.BasicUntyped
-import Foreign (free)
-import GHC.IO.Device (IODevice(close))
+
 
 
 
@@ -434,20 +433,13 @@ strongInductionTheoremProg idx p_template = do
                 remarkM $ "The second pair is: " <> pair2_txt
                 let (pair1_left, pair1_right) = maybe (error "bad error") id (parsePair pair1)
                 let (pair2_left, pair2_right) = maybe (error "bad error") id (parsePair pair2)
-                
-
-                if pair1 /= pair2 then
-                    remarkM "The two are not equal"
-                    else
-                    remarkM "The two are equal"
-                remarkM $ (pack . show) a
-                remarkM $ (pack . show) l_more_absurd
                 mpM something_else
                 remarkM "This is B"
                 fakePropM [l_more_absurd,rel_is_relation] absurd_element_in_n
                 let newProp = absurd_element `In` absurd_candidate
 
                 (final_ante,_) <- fakePropM [absurd_element_in_n, r_more_absurd] newProp
+                remarkM "This is C"
                 (final_imp,_) <- uiM absurd_element absurd_set_elements_not_below_min
                 (next,_) <- mpM final_imp
                 contraFM l_more_absurd next
@@ -1711,6 +1703,11 @@ main = do
     let stepTxt= showPropDeBrStepsBase d
     (putStrLn . unpack) stepTxt
 
+    print "TEST ROSTER RENDERING BEGIN-------------------------------------"
+    (aRos, bRos, cRos, dRos) <- runProofGeneratorT testRosterRendering
+    (putStrLn . unpack . showPropDeBrStepsBase) cRos -- Print results
+
+
     print "TEST PROG 2 BEGIN-------------------------------------"
     (a,b,c,d) <- runProofGeneratorT testprog2
     (putStrLn . unpack . showPropDeBrStepsBase) c
@@ -1807,9 +1804,7 @@ main = do
     (aBI, bBI, cBI, dBI) <- runProofGeneratorT testBigIntersectionRendering
     (putStrLn . unpack . showPropDeBrStepsBase) cBI -- Print results
 
-    print "TEST ROSTER RENDERING BEGIN-------------------------------------"
-    (aRos, bRos, cRos, dRos) <- runProofGeneratorT testRosterRendering
-    (putStrLn . unpack . showPropDeBrStepsBase) cRos -- Print results
+   
 
     print "TEST SET DIFFERENCE RENDERING BEGIN-------------------------------------"
     (aDiff, bDiff, cDiff, dDiff) <- runProofGeneratorT testSetDifferenceRendering
