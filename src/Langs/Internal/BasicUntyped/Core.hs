@@ -677,93 +677,84 @@ propDeBrSubX :: Int -> ObjDeBr -> PropDeBr -> PropDeBr
 propDeBrSubX = propDeBrSubXWorker True
 
 
-swapXtoXIntPropWorker :: Bool -> PropDeBr -> PropDeBr
-swapXtoXIntPropWorker rosterNormalize p = case p of
-    Neg q -> Neg (swapXtoXIntPropWorker rosterNormalize q)
-    (p1 :&&: p2) -> swapXtoXIntPropWorker rosterNormalize p1 :&&: swapXtoXIntPropWorker rosterNormalize p2
-    (p1 :||: p2) -> swapXtoXIntPropWorker rosterNormalize p1 :||: swapXtoXIntPropWorker rosterNormalize p2
-    (p1 :->: p2) -> swapXtoXIntPropWorker rosterNormalize p1 :->: swapXtoXIntPropWorker rosterNormalize p2
-    (p1 :<->: p2) -> swapXtoXIntPropWorker rosterNormalize p1 :<->: swapXtoXIntPropWorker rosterNormalize p2
-    (o1 :==: o2) -> swapXtoXIntObjWorker rosterNormalize o1 :==: swapXtoXIntObjWorker rosterNormalize o2
-    In o1 o2 -> In (swapXtoXIntObjWorker rosterNormalize o1) (swapXtoXIntObjWorker rosterNormalize o2)
-    Forall q -> Forall (swapXtoXIntPropWorker rosterNormalize q)
-    Exists q -> Exists (swapXtoXIntPropWorker rosterNormalize q)
-    (o1 :<=: o2) -> swapXtoXIntObjWorker rosterNormalize o1 :<=: swapXtoXIntObjWorker rosterNormalize o2
+swapXtoXIntProp :: PropDeBr -> PropDeBr
+swapXtoXIntProp p = case p of
+    Neg q -> Neg (swapXtoXIntProp q)
+    (p1 :&&: p2) -> swapXtoXIntProp p1 :&&: swapXtoXIntProp p2
+    (p1 :||: p2) -> swapXtoXIntProp p1 :||: swapXtoXIntProp p2
+    (p1 :->: p2) -> swapXtoXIntProp p1 :->: swapXtoXIntProp p2
+    (p1 :<->: p2) -> swapXtoXIntProp p1 :<->: swapXtoXIntProp p2
+    (o1 :==: o2) -> swapXtoXIntObj o1 :==: swapXtoXIntObj o2
+    In o1 o2 -> In (swapXtoXIntObj o1) (swapXtoXIntObj o2)
+    Forall q -> Forall (swapXtoXIntProp q)
+    Exists q -> Exists (swapXtoXIntProp q)
+    (o1 :<=: o2) -> swapXtoXIntObj o1 :<=: swapXtoXIntObj o2
     F -> F
 
-swapXtoXIntProp :: PropDeBr -> PropDeBr
-swapXtoXIntProp = swapXtoXIntPropWorker True
 
 
-swapXtoXIntObjWorker :: Bool -> ObjDeBr -> ObjDeBr
-swapXtoXIntObjWorker rosterNormalize o = case o of
+
+swapXtoXIntObj :: ObjDeBr -> ObjDeBr
+swapXtoXIntObj o = case o of
     Integ num -> Integ num
     Constant name -> Constant name
-    Hilbert p -> if rosterNormalize
-        then objDeBrTryRosterNormalize $ Hilbert (swapXtoXIntPropWorker True p)
-        else
-            -- this will only happen when the "roster" function is being called
-            -- which will prevent infinite recursion
-        Hilbert (swapXtoXIntPropWorker False p)
+    Hilbert p -> Hilbert (swapXtoXIntProp p)
     Bound i -> Bound i
     V i -> V i
     X i -> XInternal i
     XInternal i -> XInternal i
-    (o1 :+: o2) -> swapXtoXIntObjWorker rosterNormalize o1 :+: swapXtoXIntObjWorker rosterNormalize o2
-    Intneg o1     -> Intneg (swapXtoXIntObjWorker rosterNormalize o1)
-    (o1 :*: o2) -> swapXtoXIntObjWorker rosterNormalize o1 :*: swapXtoXIntObjWorker rosterNormalize o2
+    (o1 :+: o2) -> swapXtoXIntObj o1 :+: swapXtoXIntObj o2
+    Intneg o1     -> Intneg (swapXtoXIntObj o1)
+    (o1 :*: o2) -> swapXtoXIntObj o1 :*: swapXtoXIntObj o2
     IntSet -> IntSet
     EmptySet -> EmptySet
 
-swapXToXIntObj :: ObjDeBr -> ObjDeBr
-swapXToXIntObj = swapXtoXIntObjWorker True
 
-swapXIntToXPropWorker :: Bool -> PropDeBr -> PropDeBr
-swapXIntToXPropWorker rosterNormalize p = case p of
-    Neg q -> Neg (swapXIntToXPropWorker rosterNormalize q)
-    (p1 :&&: p2) -> swapXIntToXPropWorker rosterNormalize p1 :&&: swapXIntToXPropWorker rosterNormalize p2
-    (p1 :||: p2) -> swapXIntToXPropWorker rosterNormalize p1 :||: swapXIntToXPropWorker rosterNormalize p2
-    (p1 :->: p2) -> swapXIntToXPropWorker rosterNormalize p1 :->: swapXIntToXPropWorker rosterNormalize p2
-    (p1 :<->: p2) -> swapXIntToXPropWorker rosterNormalize p1 :<->: swapXIntToXPropWorker rosterNormalize p2
-    (o1 :==: o2) -> swapXIntToXObjWorker rosterNormalize o1 :==: swapXIntToXObjWorker rosterNormalize o2
-    In o1 o2 -> In (swapXIntToXObjWorker rosterNormalize o1) (swapXIntToXObjWorker rosterNormalize o2)
-    Forall q -> Forall (swapXIntToXPropWorker rosterNormalize q)
-    Exists q -> Exists (swapXIntToXPropWorker rosterNormalize q)
-    (o1 :<=: o2) -> swapXIntToXObjWorker rosterNormalize o1 :<=: swapXIntToXObjWorker rosterNormalize o2
+
+swapXIntToXProp :: Bool -> PropDeBr -> PropDeBr
+swapXIntToXProp rosterNormalize p = case p of
+    Neg q -> Neg (swapXIntToXProp rosterNormalize q)
+    (p1 :&&: p2) -> swapXIntToXProp rosterNormalize p1 :&&: swapXIntToXProp rosterNormalize p2
+    (p1 :||: p2) -> swapXIntToXProp rosterNormalize p1 :||: swapXIntToXProp rosterNormalize p2
+    (p1 :->: p2) -> swapXIntToXProp rosterNormalize p1 :->: swapXIntToXProp rosterNormalize p2
+    (p1 :<->: p2) -> swapXIntToXProp rosterNormalize p1 :<->: swapXIntToXProp rosterNormalize p2
+    (o1 :==: o2) -> swapXIntToXObj rosterNormalize o1 :==: swapXIntToXObj rosterNormalize o2
+    In o1 o2 -> In (swapXIntToXObj rosterNormalize o1) (swapXIntToXObj rosterNormalize o2)
+    Forall q -> Forall (swapXIntToXProp rosterNormalize q)
+    Exists q -> Exists (swapXIntToXProp rosterNormalize q)
+    (o1 :<=: o2) -> swapXIntToXObj rosterNormalize o1 :<=: swapXIntToXObj rosterNormalize o2
     F -> F
 
 
-swapXIntToXProp :: PropDeBr -> PropDeBr
-swapXIntToXProp = swapXIntToXPropWorker True
 
-swapXIntToXObjWorker :: Bool -> ObjDeBr -> ObjDeBr
-swapXIntToXObjWorker rosterNormalize o = case o of
+
+swapXIntToXObj :: Bool -> ObjDeBr -> ObjDeBr
+swapXIntToXObj rosterNormalize o = case o of
     Integ num -> Integ num
     Constant name -> Constant name
-    Hilbert p -> if rosterNormalize
-        then objDeBrTryRosterNormalize $ Hilbert (swapXIntToXPropWorker True p)
-        else
-            -- this will only happen when the "roster" function is being called
-            -- which will prevent infinite recursion
-        Hilbert (swapXIntToXPropWorker False p)
+    Hilbert p -> 
+        if rosterNormalize
+         then objDeBrTryRosterNormalize $ Hilbert (swapXIntToXProp True p)
+         else
+             --this will only happen when the "roster" function is being called
+             --which will prevent infinite recursion
+        Hilbert (swapXIntToXProp False p)
     Bound i -> Bound i
     V i -> V i
     X i -> X i
     XInternal i -> X i
-    (o1 :+: o2) -> swapXIntToXObjWorker rosterNormalize o1 :+: swapXIntToXObjWorker rosterNormalize o2
-    Intneg o1     -> Intneg (swapXIntToXObjWorker rosterNormalize o1)
-    (o1 :*: o2) -> swapXIntToXObjWorker rosterNormalize o1 :*: swapXIntToXObjWorker rosterNormalize o2
+    (o1 :+: o2) -> swapXIntToXObj rosterNormalize o1 :+: swapXIntToXObj rosterNormalize o2
+    Intneg o1     -> Intneg (swapXIntToXObj rosterNormalize o1)
+    (o1 :*: o2) -> swapXIntToXObj rosterNormalize o1 :*: swapXIntToXObj rosterNormalize o2
     IntSet -> IntSet
     EmptySet -> EmptySet
 
-swapXtoXIntObj :: ObjDeBr -> ObjDeBr
-swapXtoXIntObj = swapXtoXIntObjWorker True
 
 objDeBrSubXsWorker :: Bool -> [(Int, ObjDeBr)] -> ObjDeBr -> ObjDeBr
 objDeBrSubXsWorker rosterNormalize subs term =
-    swapXIntToXObjWorker rosterNormalize $
+    swapXIntToXObj rosterNormalize $
     foldl (\currentTerm (idx, substitutionTerm) ->
-             objDeBrSubXWorker rosterNormalize idx (swapXtoXIntObjWorker rosterNormalize substitutionTerm) currentTerm
+             objDeBrSubXWorker False idx (swapXtoXIntObj substitutionTerm) currentTerm
           ) term subs
           
 objDeBrSubXs :: [(Int, ObjDeBr)] -> ObjDeBr -> ObjDeBr
@@ -785,7 +776,7 @@ objDeBrSubXs = objDeBrSubXsWorker True
 -- | substitutions do not interfere with each other.
 propDeBrSubXs :: [(Int, ObjDeBr)] -> PropDeBr -> PropDeBr
 propDeBrSubXs subs prop =
-    swapXIntToXProp $
+    swapXIntToXProp True $
     foldl (\currentProp (idx, substitutionTerm) ->
              propDeBrSubX idx (swapXtoXIntObj substitutionTerm) currentProp
           ) prop subs
@@ -1101,9 +1092,8 @@ roster elems =
     let
         uniqueSortedElems = nub (sort elems)
         idx_base = maybe 0 (+1) (objsMaxXIdx uniqueSortedElems)
-        s_idx = idx_base; x_idx = idx_base + 1
-        elem_indices = -- [2 .. length uniqueSortedElems + 1]
-            [idx_base + 2 + i | i <- [0 .. length uniqueSortedElems - 1]]
+        s_idx = 0; x_idx = 1
+        elem_indices = [2 .. length uniqueSortedElems + 1]
         elemPlaceholders = Prelude.map X elem_indices
         disjunction = buildDisjunction (X x_idx) elemPlaceholders
         

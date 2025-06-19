@@ -747,7 +747,7 @@ isFunc f setA setB =
 
         -- The body of the existential quantifier:
         bound_properties =          -- C3: The bound properties
-            (isTupleWhere (X f_idx) [X setA_idx, X setB_idx, gr])  -- C3A: f is the tuple (dom, cod, gr)                -- C3: The codomain component is a set
+            isTupleWhere (X f_idx) [X setA_idx, X setB_idx, gr]  -- C3A: f is the tuple (dom, cod, gr)                -- C3: The codomain component is a set
             :&&: isRelationOn gr (X setA_idx) (X setB_idx)         -- C3B: gr is a relation from dom to cod
                                                  -- (implies gr isSet and elements are pairs from dom x cod)
             :&&: functionality_check_on_components -- C3C: f satisfies the functionality property

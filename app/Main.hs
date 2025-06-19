@@ -1102,6 +1102,10 @@ testProjectShorthandParsing = do
     remarkM $ "  Actual:   " <> nonTupleRHS_show
     remarkM "  Expected: ε𝑥₁(∃𝑥₀(A = B)) (Default Hilbert rendering, NOT π)"
 
+
+
+
+
     -- Test 7 (Negative Case - Body Not Equality)
     remarkM "Test 7: Hilbert term where body inside Exists is not an Equality"
     let nonEqBody = hX 1 ( eX 0 ( Neg ( Constant "A" :==: buildPair (X 1) (X 0) ) ) )
