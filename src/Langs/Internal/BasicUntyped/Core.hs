@@ -152,7 +152,7 @@ objDeBrSwapFreeVarsToX obj varMap =
     case obj of
         Integ num -> Integ num
         Constant const -> Constant const
-        Hilbert p -> objDeBrTryRosterNormalize $ Hilbert (propDeBrSwapFreeVarsToX p varMap)
+        Hilbert p -> Hilbert (propDeBrSwapFreeVarsToX p varMap)
         Bound i -> Bound i
         V i -> case Data.Map.lookup i varMap of
             Just newIdx -> X newIdx
@@ -672,6 +672,13 @@ objDeBrSubXs subs term =
 
 
 
+propDeBrSubXsWorker :: [(Int, ObjDeBr)] -> PropDeBr -> PropDeBr
+propDeBrSubXsWorker subs prop =
+    swapXIntToXProp $
+    foldl (\currentProp (idx, substitutionTerm) ->
+             propDeBrSubXWorker idx (swapXtoXIntObj substitutionTerm) currentProp
+          ) prop subs
+
 -- | This function is used to substitute a list of substitutions into an PropDeBr expression.
 -- | The substitutions are given as a list of pairs (index, substitution term)
 -- | For each substitution (idx, t), The function will replace all occurrences of the 'X index' in the expression with t.
@@ -686,6 +693,7 @@ objDeBrSubXs subs term =
 -- | substitutions do not interfere with each other.
 propDeBrSubXs :: [(Int, ObjDeBr)] -> PropDeBr -> PropDeBr
 propDeBrSubXs subs prop =
+    propDeBrRosterNormalize $
     swapXIntToXProp $
     foldl (\currentProp (idx, substitutionTerm) ->
              propDeBrSubXWorker idx (swapXtoXIntObj substitutionTerm) currentProp
@@ -1028,17 +1036,15 @@ parseIsSet _ = Nothing
 
 
 
-objDeBrTryRosterNormalize :: ObjDeBr -> ObjDeBr
-objDeBrTryRosterNormalize obj =
-    let x = trace "objDeBrTryRosterNormalize" (show obj)
-        y = x
-    in
+objDeBrTryRosterNormalize :: PropDeBr -> ObjDeBr
+objDeBrTryRosterNormalize p =
+
         -- Attempt to parse the object as a roster.
         -- If it matches the expected structure, normalize it.
         -- Otherwise, return the original object.
-    case parseRoster obj of
-        Just elements -> roster elements
-        Nothing -> obj
+    case parseRoster $ Hilbert (propDeBrRosterNormalize p) of
+        Just elements -> roster $ Prelude.map objDeBrRosterNormalize elements
+        Nothing -> Hilbert $ propDeBrRosterNormalize p
 
 -- | Recursively traverses an object/term and normalizes any 'roster' set representations within it.
 -- | This function is mutually recursive with 'propDeBrRosterNormalize'.
@@ -1048,13 +1054,9 @@ objDeBrTryRosterNormalize obj =
 objDeBrRosterNormalize :: ObjDeBr -> ObjDeBr
 objDeBrRosterNormalize obj =
     case obj of
-        Hilbert p ->
-            let 
-                 p_normalized = propDeBrRosterNormalize p
-            in
-                 objDeBrTryRosterNormalize (Hilbert p_normalized)
+        Hilbert p -> objDeBrTryRosterNormalize p
+
                 
-            -- For a Hilbert term, first normalize the proposition inside it.
 
 
         -- Recursive cases for other compound object types:

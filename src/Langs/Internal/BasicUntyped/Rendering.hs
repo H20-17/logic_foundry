@@ -176,7 +176,7 @@ instance SubexpDeBr ObjDeBr where
               <|> parseX'
               <|> parseXInternal'
               <|> parseEmptySet'
-              <|> parseTuple'
+              -- <|> parseTuple'
               <|> parseIntMult'
               <|> parseIntPlus'
               <|> parseIntNeg'

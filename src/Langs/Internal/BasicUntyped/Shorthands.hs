@@ -87,6 +87,7 @@ import Data.Map
     ( (!), foldrWithKey, fromList, insert, keysSet, lookup, map, Map )
 
 import Debug.Trace(traceM)
+import Data.Traversable (for)
 
 parsePairFirstExp :: ObjDeBr -> Maybe ObjDeBr
 parsePairFirstExp subexp = do
@@ -657,13 +658,11 @@ parseFuncsSet :: ObjDeBr -> Maybe (ObjDeBr, ObjDeBr)
 parseFuncsSet obj = do
     (p_conj, idx_S) <- parseHilbert obj
     (isSet_S_prop, forall_f_prop) <- parseConjunction p_conj
-
     s_object_from_isSet <- parseIsSet isSet_S_prop
     s_bound_from_isSet <- parseBound s_object_from_isSet
     guard (s_bound_from_isSet == idx_S)
     (bicond_prop, idx_f) <- parseForall2 forall_f_prop
     (f_in_S_prop, isFunc_call_prop) <- parseBiconditional bicond_prop
-
     (bound_f_lhs, bound_S_lhs) <- parseIn f_in_S_prop
     parsed_idx_f_lhs <- parseBound bound_f_lhs
     parsed_idx_S_lhs <- parseBound bound_S_lhs
@@ -671,8 +670,9 @@ parseFuncsSet obj = do
     guard (parsed_idx_S_lhs == idx_S)
 
 
-    --error "got here"
     (funcTerm_from_isFunc, setA_cand, setB_cand) <- parseIsFunc isFunc_call_prop
+
+
     parsed_f_cand_idx <- parseBound funcTerm_from_isFunc
     guard (parsed_f_cand_idx == idx_f)
  
