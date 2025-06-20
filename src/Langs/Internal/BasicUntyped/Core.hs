@@ -35,9 +35,9 @@ module Langs.Internal.BasicUntyped.Core (
     parseDisjunction,
     parseLTE,
     parseFalsum,
-    objDeBrSubXInt,
-    propDeBrSubXInt,
-    hXInt,
+    -- objDeBrSubXInt,
+    -- propDeBrSubXInt,
+    --hXInt,
     propDeBrSubXs,
     multiEx,
     multiAx,
@@ -47,8 +47,8 @@ module Langs.Internal.BasicUntyped.Core (
     parseIntMult,
     parseIntSet,
     parseEmptySet,
-    eXInt,
-    aXInt,
+    --eXInt,
+    --aXInt,
     objDeBrSwapFreeVarsToX,
     propDeBrSwapFreeVarsToX,
     parseXInternal,
@@ -58,7 +58,9 @@ module Langs.Internal.BasicUntyped.Core (
     isSet,
     parseIsSet,
     roster,
-    parseRoster
+    parseRoster,
+    propMaxXIdx,
+    objMaxXIdx
 
 ) where
 import Control.Monad ( unless, guard,msum )
@@ -197,47 +199,38 @@ objDeBrBoundVarInside obj idx = case obj of
 
 
 
-swapBoundIndexObjWorker :: Bool -> Int -> Int -> ObjDeBr -> ObjDeBr
-swapBoundIndexObjWorker rosterNormalize fromIdx toIdx o = case o of
+swapBoundIndexObj :: Int -> Int -> ObjDeBr -> ObjDeBr
+swapBoundIndexObj fromIdx toIdx o = case o of
     Integ num -> Integ num
     Constant name -> Constant name
-    Hilbert p -> if rosterNormalize then
-                    objDeBrTryRosterNormalize $ Hilbert (swapBoundIndexPropWorker True fromIdx toIdx p)
-                else
-                    Hilbert (swapBoundIndexPropWorker False fromIdx toIdx p)
+    Hilbert p -> Hilbert (swapBoundIndexProp fromIdx toIdx p)
     Bound i -> if i == fromIdx then Bound toIdx else Bound i
     V i -> V i
     X i -> X i
     XInternal i -> XInternal i
-    (o1 :+: o2) -> swapBoundIndexObjWorker rosterNormalize fromIdx toIdx o1 :+: swapBoundIndexObjWorker rosterNormalize fromIdx toIdx o2
-    Intneg o1   -> Intneg (swapBoundIndexObjWorker rosterNormalize fromIdx toIdx o1)
-    (o1 :*: o2) -> swapBoundIndexObjWorker rosterNormalize fromIdx toIdx o1 :*: swapBoundIndexObjWorker rosterNormalize fromIdx toIdx o2
+    (o1 :+: o2) -> swapBoundIndexObj fromIdx toIdx o1 :+: swapBoundIndexObj fromIdx toIdx o2
+    Intneg o1   -> Intneg (swapBoundIndexObj fromIdx toIdx o1)
+    (o1 :*: o2) -> swapBoundIndexObj fromIdx toIdx o1 :*: swapBoundIndexObj fromIdx toIdx o2
     IntSet -> IntSet
     EmptySet -> EmptySet
 
 
-swapBoundIndexObj:: Int -> Int -> ObjDeBr -> ObjDeBr
-swapBoundIndexObj = swapBoundIndexObjWorker True
 
-
-
-swapBoundIndexPropWorker :: Bool -> Int -> Int -> PropDeBr -> PropDeBr
-swapBoundIndexPropWorker rosterNormalize fromIdx toIdx p = case p of
-    Neg q -> Neg (swapBoundIndexPropWorker rosterNormalize fromIdx toIdx q)
-    (p1 :&&: p2) -> swapBoundIndexPropWorker rosterNormalize fromIdx toIdx p1 :&&: swapBoundIndexPropWorker rosterNormalize fromIdx toIdx p2
-    (p1 :||: p2) -> swapBoundIndexPropWorker rosterNormalize fromIdx toIdx p1 :||: swapBoundIndexPropWorker rosterNormalize fromIdx toIdx p2
-    (p1 :->: p2) -> swapBoundIndexPropWorker rosterNormalize fromIdx toIdx p1 :->: swapBoundIndexPropWorker rosterNormalize fromIdx toIdx p2
-    (p1 :<->: p2) -> swapBoundIndexPropWorker rosterNormalize fromIdx toIdx p1 :<->: swapBoundIndexPropWorker rosterNormalize fromIdx toIdx p2
-    (o1 :==: o2) -> swapBoundIndexObjWorker rosterNormalize fromIdx toIdx o1 :==: swapBoundIndexObjWorker rosterNormalize fromIdx toIdx o2
-    In o1 o2 -> In (swapBoundIndexObjWorker rosterNormalize fromIdx toIdx o1) (swapBoundIndexObjWorker rosterNormalize fromIdx toIdx o2)
-    Forall q -> Forall (swapBoundIndexPropWorker rosterNormalize fromIdx toIdx q)
-    Exists q -> Exists (swapBoundIndexPropWorker rosterNormalize fromIdx toIdx q)
-    (o1 :<=: o2) -> swapBoundIndexObjWorker rosterNormalize fromIdx toIdx o1 :<=: swapBoundIndexObjWorker rosterNormalize fromIdx toIdx o2
-    F -> F
 
 
 swapBoundIndexProp :: Int -> Int -> PropDeBr -> PropDeBr
-swapBoundIndexProp = swapBoundIndexPropWorker True
+swapBoundIndexProp fromIdx toIdx p = case p of
+    Neg q -> Neg (swapBoundIndexProp fromIdx toIdx q)
+    (p1 :&&: p2) -> swapBoundIndexProp fromIdx toIdx p1 :&&: swapBoundIndexProp fromIdx toIdx p2
+    (p1 :||: p2) -> swapBoundIndexProp fromIdx toIdx p1 :||: swapBoundIndexProp fromIdx toIdx p2
+    (p1 :->: p2) -> swapBoundIndexProp fromIdx toIdx p1 :->: swapBoundIndexProp fromIdx toIdx p2
+    (p1 :<->: p2) -> swapBoundIndexProp fromIdx toIdx p1 :<->: swapBoundIndexProp fromIdx toIdx p2
+    (o1 :==: o2) -> swapBoundIndexObj fromIdx toIdx o1 :==: swapBoundIndexObj fromIdx toIdx o2
+    In o1 o2 -> In (swapBoundIndexObj fromIdx toIdx o1) (swapBoundIndexObj fromIdx toIdx o2)
+    Forall q -> Forall (swapBoundIndexProp fromIdx toIdx q)
+    Exists q -> Exists (swapBoundIndexProp fromIdx toIdx q)
+    (o1 :<=: o2) -> swapBoundIndexObj fromIdx toIdx o1 :<=: swapBoundIndexObj fromIdx toIdx o2
+    F -> F
 
 
 
@@ -276,35 +269,6 @@ boundDepthPropDeBrX targetIdx substitutionDepth prop = case prop of
 
 
 
-boundDepthObjDeBrXInt :: Int -> Int -> ObjDeBr -> Int
-boundDepthObjDeBrXInt targetIdx substitutionDepth obj = case obj of
-    Integ num -> 0
-    Constant name -> 0
-    Hilbert prop -> 1 + boundDepthPropDeBrXInt targetIdx substitutionDepth prop
-    Bound idx -> 0
-    V idx -> 0
-    X idx -> 0
-    XInternal idx -> if idx == targetIdx then substitutionDepth else 0
-    (o1 :+: o2) -> max (boundDepthObjDeBrXInt targetIdx substitutionDepth o1) (boundDepthObjDeBrXInt targetIdx substitutionDepth o2)
-    Intneg o1     -> boundDepthObjDeBrXInt targetIdx substitutionDepth o1
-    (o1 :*: o2) -> max (boundDepthObjDeBrXInt targetIdx substitutionDepth o1) (boundDepthObjDeBrXInt targetIdx substitutionDepth o2)
-    IntSet -> 0
-    EmptySet -> 0
-
-
-boundDepthPropDeBrXInt :: Int -> Int -> PropDeBr -> Int
-boundDepthPropDeBrXInt targetIdx substitutionDepth prop = case prop of
-    Neg p -> boundDepthPropDeBrXInt targetIdx substitutionDepth p
-    (p1 :&&: p2) -> max (boundDepthPropDeBrXInt targetIdx substitutionDepth p1) (boundDepthPropDeBrXInt targetIdx substitutionDepth p2)
-    (p1 :||: p2) -> max (boundDepthPropDeBrXInt targetIdx substitutionDepth p1) (boundDepthPropDeBrXInt targetIdx substitutionDepth p2)
-    (p1 :->: p2) -> max (boundDepthPropDeBrXInt targetIdx substitutionDepth p1) (boundDepthPropDeBrXInt targetIdx substitutionDepth p2)
-    (p1 :<->: p2) -> max (boundDepthPropDeBrXInt targetIdx substitutionDepth p1) (boundDepthPropDeBrXInt targetIdx substitutionDepth p2)
-    (o1 :==: o2) -> max (boundDepthObjDeBrXInt targetIdx substitutionDepth o1) (boundDepthObjDeBrXInt targetIdx substitutionDepth o2)
-    In o1 o2 -> max (boundDepthObjDeBrXInt targetIdx substitutionDepth o1) (boundDepthObjDeBrXInt targetIdx substitutionDepth o2)
-    Forall p -> 1 + boundDepthPropDeBrXInt targetIdx substitutionDepth p
-    Exists p -> 1 + boundDepthPropDeBrXInt targetIdx substitutionDepth p
-    (o1 :<=: o2) -> max (boundDepthObjDeBrXInt targetIdx substitutionDepth o1) (boundDepthObjDeBrXInt targetIdx substitutionDepth o2)
-    F -> 0
 
 
 parseHilbert :: ObjDeBr -> Maybe (PropDeBr, Int)
@@ -566,115 +530,66 @@ propDeBrBoundVarInside prop idx = case prop of
     F -> False
 
 
-objDeBrSubXInt :: Int -> ObjDeBr -> ObjDeBr -> ObjDeBr
-objDeBrSubXInt targetIdx substitution template = case template of
+
+
+
+objDeBrSubXWorker :: Int -> ObjDeBr -> ObjDeBr -> ObjDeBr
+objDeBrSubXWorker targetIdx substitution template = case template of
     Integ num -> Integ num
     Constant const -> Constant const
-    Hilbert p -> objDeBrTryRosterNormalize $ Hilbert $ propDeBrSubXInt targetIdx substitution normalisedSubexp
-      where
-        boundDepth = boundDepthPropDeBr p
-        --newBoundDepth = boundDepthPropDeBrXInt boundDepth subBoundDepth p
-        newBoundDepth = boundDepthPropDeBrXInt targetIdx subBoundDepth p
-        subBoundDepth = boundDepthObjDeBr substitution
-        normalisedSubexp = swapBoundIndexProp boundDepth newBoundDepth p
-    Bound idx -> Bound idx
-    V idx -> V idx
-    XInternal idx
-        | idx == targetIdx -> substitution
-        | otherwise -> XInternal idx
-    X idx -> X idx
-    (o1 :+: o2) -> objDeBrSubXInt targetIdx substitution o1 :+: objDeBrSubXInt targetIdx substitution o2
-    Intneg o1     -> Intneg (objDeBrSubXInt targetIdx substitution o1)
-    (o1 :*: o2) -> objDeBrSubXInt targetIdx substitution o1 :*: objDeBrSubXInt targetIdx substitution o2
-    IntSet -> IntSet
-    EmptySet -> EmptySet
-
-
-propDeBrSubXInt :: Int -> ObjDeBr -> PropDeBr -> PropDeBr
-propDeBrSubXInt targetIdx substitution template = case template of
-    Neg p -> Neg $ propDeBrSubXInt targetIdx substitution p
-    (p1 :&&: p2) -> propDeBrSubXInt targetIdx substitution p1 :&&: propDeBrSubXInt targetIdx substitution p2
-    (p1 :||: p2) -> propDeBrSubXInt targetIdx substitution p1 :||: propDeBrSubXInt targetIdx substitution p2
-    (p1 :->: p2) -> propDeBrSubXInt targetIdx substitution p1 :->: propDeBrSubXInt targetIdx substitution p2
-    (p1 :<->: p2) -> propDeBrSubXInt targetIdx substitution p1 :<->: propDeBrSubXInt targetIdx substitution p2
-    (o1 :==: o2) -> objDeBrSubXInt targetIdx substitution o1 :==: objDeBrSubXInt targetIdx substitution o2
-    In o1 o2 -> objDeBrSubXInt targetIdx substitution o1 `In` objDeBrSubXInt targetIdx substitution o2
-    Forall p -> Forall $ propDeBrSubXInt targetIdx substitution normalisedSubexp
-      where
-        boundDepth = boundDepthPropDeBr p
-        --newBoundDepth = boundDepthPropDeBrXInt boundDepth subBoundDepth p
-        newBoundDepth = boundDepthPropDeBrXInt targetIdx subBoundDepth p
-        subBoundDepth = boundDepthObjDeBr substitution
-        normalisedSubexp = swapBoundIndexProp boundDepth newBoundDepth p
-    Exists p -> Exists $ propDeBrSubXInt targetIdx substitution normalisedSubexp
-      where
-        boundDepth = boundDepthPropDeBr p
-        --newBoundDepth = boundDepthPropDeBrXInt boundDepth subBoundDepth p
-        newBoundDepth = boundDepthPropDeBrXInt targetIdx subBoundDepth p
-        subBoundDepth = boundDepthObjDeBr substitution
-        normalisedSubexp = swapBoundIndexProp boundDepth newBoundDepth p
-    (o1 :<=: o2) -> objDeBrSubXInt targetIdx substitution o1 :<=: objDeBrSubXInt targetIdx substitution o2
-    F -> F
-
-
-objDeBrSubXWorker :: Bool -> Int -> ObjDeBr -> ObjDeBr -> ObjDeBr
-objDeBrSubXWorker rosterNormalize targetIdx substitution template = case template of
-    Integ num -> Integ num
-    Constant const -> Constant const
-    Hilbert p -> 
-        if rosterNormalize then 
-            objDeBrTryRosterNormalize $ Hilbert $ propDeBrSubXWorker True targetIdx substitution normalisedSubexp
-        else
-            Hilbert $ propDeBrSubXWorker False targetIdx substitution normalisedSubexp
+    Hilbert p -> Hilbert $ propDeBrSubXWorker targetIdx substitution normalisedSubexp
             -- this will only happen when the "roster" function is being called
             -- which will prevent infinite recursion
       where
         boundDepth = boundDepthPropDeBr p
         subBoundDepth = boundDepthObjDeBr substitution
         newBoundDepth = boundDepthPropDeBrX targetIdx subBoundDepth p
-        normalisedSubexp = swapBoundIndexPropWorker rosterNormalize boundDepth newBoundDepth p
+        normalisedSubexp = swapBoundIndexProp boundDepth newBoundDepth p
     Bound idx -> Bound idx
     V idx -> V idx
     X idx
         | idx == targetIdx -> substitution
         | otherwise -> X idx
     XInternal idx -> XInternal idx
-    (o1 :+: o2) -> objDeBrSubXWorker rosterNormalize targetIdx substitution o1 :+: objDeBrSubXWorker rosterNormalize targetIdx substitution o2
-    Intneg o1     -> Intneg (objDeBrSubXWorker rosterNormalize targetIdx substitution o1) 
-    (o1 :*: o2) -> objDeBrSubXWorker rosterNormalize targetIdx substitution o1 :*: objDeBrSubXWorker rosterNormalize targetIdx substitution o2
+    (o1 :+: o2) -> objDeBrSubXWorker targetIdx substitution o1 :+: objDeBrSubXWorker targetIdx substitution o2
+    Intneg o1     -> Intneg (objDeBrSubXWorker targetIdx substitution o1) 
+    (o1 :*: o2) -> objDeBrSubXWorker targetIdx substitution o1 :*: objDeBrSubXWorker targetIdx substitution o2
     IntSet -> IntSet
     EmptySet -> EmptySet
 
 
 objDeBrSubX :: Int -> ObjDeBr -> ObjDeBr -> ObjDeBr
-objDeBrSubX = objDeBrSubXWorker True
+objDeBrSubX targetIdx substitution template = objDeBrRosterNormalize (objDeBrSubXWorker targetIdx substitution template)
+    -- this will only happen when the "roster" function is being called
+    -- which will prevent infinite recursion
 
-propDeBrSubXWorker :: Bool -> Int -> ObjDeBr -> PropDeBr -> PropDeBr
-propDeBrSubXWorker rosterNormalize targetIdx substitution template = case template of
-    Neg p -> Neg $ propDeBrSubXWorker rosterNormalize targetIdx substitution p
-    (p1 :&&: p2) -> propDeBrSubXWorker rosterNormalize targetIdx substitution p1 :&&: propDeBrSubXWorker rosterNormalize targetIdx substitution p2
-    (p1 :||: p2) -> propDeBrSubXWorker rosterNormalize targetIdx substitution p1 :||: propDeBrSubXWorker rosterNormalize targetIdx substitution p2
-    (p1 :->: p2) -> propDeBrSubXWorker rosterNormalize targetIdx substitution p1 :->: propDeBrSubXWorker rosterNormalize targetIdx substitution p2
-    (p1 :<->: p2) -> propDeBrSubXWorker rosterNormalize targetIdx substitution p1 :<->: propDeBrSubXWorker rosterNormalize targetIdx substitution p2
-    (o1 :==: o2) -> objDeBrSubXWorker rosterNormalize targetIdx substitution o1 :==: objDeBrSubXWorker rosterNormalize targetIdx substitution o2
-    In o1 o2 -> objDeBrSubXWorker rosterNormalize targetIdx substitution o1 `In` objDeBrSubXWorker rosterNormalize targetIdx substitution o2
-    Forall p -> Forall $ propDeBrSubXWorker rosterNormalize targetIdx substitution normalisedSubexp
+propDeBrSubXWorker :: Int -> ObjDeBr -> PropDeBr -> PropDeBr
+propDeBrSubXWorker targetIdx substitution template = case template of
+    Neg p -> Neg $ propDeBrSubXWorker targetIdx substitution p
+    (p1 :&&: p2) -> propDeBrSubXWorker targetIdx substitution p1 :&&: propDeBrSubXWorker targetIdx substitution p2
+    (p1 :||: p2) -> propDeBrSubXWorker targetIdx substitution p1 :||: propDeBrSubXWorker targetIdx substitution p2
+    (p1 :->: p2) -> propDeBrSubXWorker targetIdx substitution p1 :->: propDeBrSubXWorker targetIdx substitution p2
+    (p1 :<->: p2) -> propDeBrSubXWorker targetIdx substitution p1 :<->: propDeBrSubXWorker targetIdx substitution p2
+    (o1 :==: o2) -> objDeBrSubXWorker targetIdx substitution o1 :==: objDeBrSubXWorker targetIdx substitution o2
+    In o1 o2 -> objDeBrSubXWorker targetIdx substitution o1 `In` objDeBrSubXWorker targetIdx substitution o2
+    Forall p -> Forall $ propDeBrSubXWorker targetIdx substitution normalisedSubexp
       where
         boundDepth = boundDepthPropDeBr p
         subBoundDepth = boundDepthObjDeBr substitution
         newBoundDepth = boundDepthPropDeBrX targetIdx subBoundDepth p
-        normalisedSubexp = swapBoundIndexPropWorker rosterNormalize boundDepth newBoundDepth p
-    Exists p -> Exists $ propDeBrSubXWorker rosterNormalize targetIdx substitution normalisedSubexp
+        normalisedSubexp = swapBoundIndexProp boundDepth newBoundDepth p
+    Exists p -> Exists $ propDeBrSubXWorker targetIdx substitution normalisedSubexp
       where
         boundDepth = boundDepthPropDeBr p
         subBoundDepth = boundDepthObjDeBr substitution
         newBoundDepth = boundDepthPropDeBrX targetIdx subBoundDepth p
-        normalisedSubexp = swapBoundIndexPropWorker rosterNormalize boundDepth newBoundDepth p
-    (o1 :<=: o2) -> objDeBrSubXWorker rosterNormalize targetIdx substitution o1 :<=: objDeBrSubXWorker rosterNormalize targetIdx substitution o2
+        normalisedSubexp = swapBoundIndexProp boundDepth newBoundDepth p
+    (o1 :<=: o2) -> objDeBrSubXWorker targetIdx substitution o1 :<=: objDeBrSubXWorker targetIdx substitution o2
     F -> F
 
 propDeBrSubX :: Int -> ObjDeBr -> PropDeBr -> PropDeBr
-propDeBrSubX = propDeBrSubXWorker True
+propDeBrSubX targetIdx substitution template = 
+    propDeBrRosterNormalize $ propDeBrSubXWorker targetIdx substitution template
 
 
 swapXtoXIntProp :: PropDeBr -> PropDeBr
@@ -711,54 +626,49 @@ swapXtoXIntObj o = case o of
 
 
 
-swapXIntToXProp :: Bool -> PropDeBr -> PropDeBr
-swapXIntToXProp rosterNormalize p = case p of
-    Neg q -> Neg (swapXIntToXProp rosterNormalize q)
-    (p1 :&&: p2) -> swapXIntToXProp rosterNormalize p1 :&&: swapXIntToXProp rosterNormalize p2
-    (p1 :||: p2) -> swapXIntToXProp rosterNormalize p1 :||: swapXIntToXProp rosterNormalize p2
-    (p1 :->: p2) -> swapXIntToXProp rosterNormalize p1 :->: swapXIntToXProp rosterNormalize p2
-    (p1 :<->: p2) -> swapXIntToXProp rosterNormalize p1 :<->: swapXIntToXProp rosterNormalize p2
-    (o1 :==: o2) -> swapXIntToXObj rosterNormalize o1 :==: swapXIntToXObj rosterNormalize o2
-    In o1 o2 -> In (swapXIntToXObj rosterNormalize o1) (swapXIntToXObj rosterNormalize o2)
-    Forall q -> Forall (swapXIntToXProp rosterNormalize q)
-    Exists q -> Exists (swapXIntToXProp rosterNormalize q)
-    (o1 :<=: o2) -> swapXIntToXObj rosterNormalize o1 :<=: swapXIntToXObj rosterNormalize o2
+swapXIntToXProp :: PropDeBr -> PropDeBr
+swapXIntToXProp p = case p of
+    Neg q -> Neg (swapXIntToXProp q)
+    (p1 :&&: p2) -> swapXIntToXProp p1 :&&: swapXIntToXProp p2
+    (p1 :||: p2) -> swapXIntToXProp p1 :||: swapXIntToXProp p2
+    (p1 :->: p2) -> swapXIntToXProp p1 :->: swapXIntToXProp p2
+    (p1 :<->: p2) -> swapXIntToXProp p1 :<->: swapXIntToXProp p2
+    (o1 :==: o2) -> swapXIntToXObj o1 :==: swapXIntToXObj o2
+    In o1 o2 -> In (swapXIntToXObj o1) (swapXIntToXObj o2)
+    Forall q -> Forall (swapXIntToXProp q)
+    Exists q -> Exists (swapXIntToXProp q)
+    (o1 :<=: o2) -> swapXIntToXObj o1 :<=: swapXIntToXObj o2
     F -> F
 
 
 
 
-swapXIntToXObj :: Bool -> ObjDeBr -> ObjDeBr
-swapXIntToXObj rosterNormalize o = case o of
+swapXIntToXObj :: ObjDeBr -> ObjDeBr
+swapXIntToXObj o = case o of
     Integ num -> Integ num
     Constant name -> Constant name
-    Hilbert p -> 
-        if rosterNormalize
-         then objDeBrTryRosterNormalize $ Hilbert (swapXIntToXProp True p)
-         else
-             --this will only happen when the "roster" function is being called
-             --which will prevent infinite recursion
-        Hilbert (swapXIntToXProp False p)
+    Hilbert p -> Hilbert (swapXIntToXProp p)
     Bound i -> Bound i
     V i -> V i
     X i -> X i
     XInternal i -> X i
-    (o1 :+: o2) -> swapXIntToXObj rosterNormalize o1 :+: swapXIntToXObj rosterNormalize o2
-    Intneg o1     -> Intneg (swapXIntToXObj rosterNormalize o1)
-    (o1 :*: o2) -> swapXIntToXObj rosterNormalize o1 :*: swapXIntToXObj rosterNormalize o2
+    (o1 :+: o2) -> swapXIntToXObj o1 :+: swapXIntToXObj o2
+    Intneg o1     -> Intneg (swapXIntToXObj o1)
+    (o1 :*: o2) -> swapXIntToXObj o1 :*: swapXIntToXObj o2
     IntSet -> IntSet
     EmptySet -> EmptySet
 
 
-objDeBrSubXsWorker :: Bool -> [(Int, ObjDeBr)] -> ObjDeBr -> ObjDeBr
-objDeBrSubXsWorker rosterNormalize subs term =
-    swapXIntToXObj rosterNormalize $
+objDeBrSubXsWorker :: [(Int, ObjDeBr)] -> ObjDeBr -> ObjDeBr
+objDeBrSubXsWorker subs term =
+    swapXIntToXObj $
     foldl (\currentTerm (idx, substitutionTerm) ->
-             objDeBrSubXWorker False idx (swapXtoXIntObj substitutionTerm) currentTerm
+             objDeBrSubXWorker idx (swapXtoXIntObj substitutionTerm) currentTerm
           ) term subs
           
 objDeBrSubXs :: [(Int, ObjDeBr)] -> ObjDeBr -> ObjDeBr
-objDeBrSubXs = objDeBrSubXsWorker True
+objDeBrSubXs subs term =      
+        objDeBrRosterNormalize (objDeBrSubXsWorker subs term)
 
 
 
@@ -776,9 +686,9 @@ objDeBrSubXs = objDeBrSubXsWorker True
 -- | substitutions do not interfere with each other.
 propDeBrSubXs :: [(Int, ObjDeBr)] -> PropDeBr -> PropDeBr
 propDeBrSubXs subs prop =
-    swapXIntToXProp True $
+    swapXIntToXProp $
     foldl (\currentProp (idx, substitutionTerm) ->
-             propDeBrSubX idx (swapXtoXIntObj substitutionTerm) currentProp
+             propDeBrSubXWorker idx (swapXtoXIntObj substitutionTerm) currentProp
           ) prop subs
 
 
@@ -801,78 +711,47 @@ type PrfStdStepPredDeBr = PrfStdStep PropDeBr Text ()
 
 
 
-xsubObjDeBrWorker :: Bool -> ObjDeBr -> Int -> Int -> ObjDeBr
-xsubObjDeBrWorker rosterNormalize o idx depth = case o of
+xsubObjDeBr :: ObjDeBr -> Int -> Int -> ObjDeBr
+xsubObjDeBr o idx depth = case o of
     Integ num -> Integ num
     Constant name -> Constant name
-    Hilbert p ->if rosterNormalize
-        then objDeBrTryRosterNormalize $ Hilbert (xsubPropDeBrWorker True p idx depth)
-        else
-            Hilbert (xsubPropDeBrWorker False p idx depth)
+    Hilbert p ->
+
+            Hilbert (xsubPropDeBr p idx depth)
             -- this will only happen when the "roster" function is being called
             -- THis is to stop infinite recursion
     Bound i -> Bound i
     V i -> V i
     X i -> if i == idx then Bound depth else X i
     XInternal i -> XInternal i
-    (o1 :+: o2) -> xsubObjDeBrWorker rosterNormalize o1 idx depth :+: xsubObjDeBrWorker rosterNormalize o2 idx depth
-    Intneg o1     -> Intneg (xsubObjDeBrWorker rosterNormalize o1 idx depth)
-    (o1 :*: o2) -> xsubObjDeBrWorker rosterNormalize o1 idx depth :*: xsubObjDeBrWorker rosterNormalize o2 idx depth
+    (o1 :+: o2) -> xsubObjDeBr o1 idx depth :+: xsubObjDeBr o2 idx depth
+    Intneg o1     -> Intneg (xsubObjDeBr o1 idx depth)
+    (o1 :*: o2) -> xsubObjDeBr o1 idx depth :*: xsubObjDeBr o2 idx depth
     IntSet -> IntSet
     EmptySet -> EmptySet
 
-xsubObjDeBr :: ObjDeBr -> Int -> Int -> ObjDeBr
-xsubObjDeBr = xsubObjDeBrWorker True
 
-xsubPropDeBrWorker :: Bool -> PropDeBr -> Int -> Int -> PropDeBr
-xsubPropDeBrWorker rosterNormalize p idx depth = case p of
-    Neg q -> Neg (xsubPropDeBrWorker rosterNormalize q idx depth)
-    (p1 :&&: p2) -> xsubPropDeBrWorker rosterNormalize p1 idx depth :&&: xsubPropDeBrWorker rosterNormalize p2 idx depth
-    (p1 :||: p2) -> xsubPropDeBrWorker rosterNormalize p1 idx depth :||: xsubPropDeBrWorker rosterNormalize p2 idx depth
-    (p1 :->: p2) -> xsubPropDeBrWorker rosterNormalize p1 idx depth :->: xsubPropDeBrWorker rosterNormalize p2 idx depth
-    (p1 :<->: p2) -> xsubPropDeBrWorker rosterNormalize p1 idx depth :<->: xsubPropDeBrWorker rosterNormalize p2 idx depth
-    (o1 :==: o2) -> xsubObjDeBrWorker rosterNormalize o1 idx depth :==: xsubObjDeBrWorker rosterNormalize o2 idx depth
-    In o1 o2 -> In (xsubObjDeBrWorker rosterNormalize o1 idx depth) (xsubObjDeBrWorker rosterNormalize o2 idx depth)
-    Forall q -> Forall (xsubPropDeBrWorker rosterNormalize q idx depth)
-    Exists q -> Exists (xsubPropDeBrWorker rosterNormalize q idx depth)
-    (o1 :<=: o2) -> xsubObjDeBrWorker rosterNormalize o1 idx depth :<=: xsubObjDeBrWorker rosterNormalize o2 idx depth
-    F -> F
 
 xsubPropDeBr :: PropDeBr -> Int -> Int -> PropDeBr
-xsubPropDeBr = xsubPropDeBrWorker True
-
-
-
-
-xsubPropDeBrXInt :: PropDeBr -> Int -> Int -> PropDeBr
-xsubPropDeBrXInt p idx depth = case p of
-    Neg q -> Neg (xsubPropDeBrXInt q idx depth)
-    (p1 :&&: p2) -> xsubPropDeBrXInt p1 idx depth :&&: xsubPropDeBrXInt p2 idx depth
-    (p1 :||: p2) -> xsubPropDeBrXInt p1 idx depth :||: xsubPropDeBrXInt p2 idx depth
-    (p1 :->: p2) -> xsubPropDeBrXInt p1 idx depth :->: xsubPropDeBrXInt p2 idx depth
-    (p1 :<->: p2) -> xsubPropDeBrXInt p1 idx depth :<->: xsubPropDeBrXInt p2 idx depth
-    (o1 :==: o2) -> xsubObjDeBrXInt o1 idx depth :==: xsubObjDeBrXInt o2 idx depth
-    In o1 o2 -> In (xsubObjDeBrXInt o1 idx depth) (xsubObjDeBrXInt o2 idx depth)
-    Forall q -> Forall (xsubPropDeBrXInt q idx depth)
-    Exists q -> Exists (xsubPropDeBrXInt q idx depth)
-    (o1 :<=: o2) -> xsubObjDeBrXInt o1 idx depth :<=: xsubObjDeBrXInt o2 idx depth
+xsubPropDeBr p idx depth = case p of
+    Neg q -> Neg (xsubPropDeBr q idx depth)
+    (p1 :&&: p2) -> xsubPropDeBr p1 idx depth :&&: xsubPropDeBr p2 idx depth
+    (p1 :||: p2) -> xsubPropDeBr p1 idx depth :||: xsubPropDeBr p2 idx depth
+    (p1 :->: p2) -> xsubPropDeBr p1 idx depth :->: xsubPropDeBr p2 idx depth
+    (p1 :<->: p2) -> xsubPropDeBr p1 idx depth :<->: xsubPropDeBr p2 idx depth
+    (o1 :==: o2) -> xsubObjDeBr o1 idx depth :==: xsubObjDeBr o2 idx depth
+    In o1 o2 -> In (xsubObjDeBr o1 idx depth) (xsubObjDeBr o2 idx depth)
+    Forall q -> Forall (xsubPropDeBr q idx depth)
+    Exists q -> Exists (xsubPropDeBr q idx depth)
+    (o1 :<=: o2) -> xsubObjDeBr o1 idx depth :<=: xsubObjDeBr o2 idx depth
     F -> F
 
 
-xsubObjDeBrXInt :: ObjDeBr -> Int -> Int -> ObjDeBr
-xsubObjDeBrXInt o idx depth = case o of
-    Integ num -> Integ num
-    Constant name -> Constant name
-    Hilbert p -> objDeBrTryRosterNormalize $ Hilbert (xsubPropDeBrXInt p idx depth)
-    Bound i -> Bound i
-    V i -> V i
-    X i -> X i
-    XInternal i -> if i == idx then Bound depth else XInternal i
-    (o1 :+: o2) -> xsubObjDeBrXInt o1 idx depth :+: xsubObjDeBrXInt o2 idx depth
-    Intneg o1     -> Intneg (xsubObjDeBrXInt o1 idx depth)
-    (o1 :*: o2) -> xsubObjDeBrXInt o1 idx depth :*: xsubObjDeBrXInt o2 idx depth
-    IntSet -> IntSet
-    EmptySet -> EmptySet
+
+
+
+
+
 
 objDeBrExtractConsts :: ObjDeBr -> Set Text
 
@@ -923,57 +802,58 @@ nIn a b = Neg $ a `In` b
 
 infix 4 `nIn`
 
+eXWorker :: Int -> PropDeBr -> PropDeBr
+eXWorker idx p = Exists $ xsubPropDeBr p idx (boundDepthPropDeBr p)
+
+
 eX :: Int -> PropDeBr -> PropDeBr
-eX idx p = Exists $ xsubPropDeBr p idx (boundDepthPropDeBr p)
+eX idx p = propDeBrRosterNormalize $ eXWorker idx p
 
 
-eXInt :: Int -> PropDeBr -> PropDeBr
-eXInt idx p = Exists $ xsubPropDeBrXInt p idx (boundDepthPropDeBr p)
 
-aXInt :: Int -> PropDeBr -> PropDeBr
-aXInt idx p = Forall $ xsubPropDeBrXInt p idx (boundDepthPropDeBr p)
-
-hXInt :: Int -> PropDeBr -> ObjDeBr
-hXInt idx p = Hilbert $ xsubPropDeBrXInt p idx (boundDepthPropDeBr p)
 
 
 eXBang :: Int -> PropDeBr -> PropDeBr
-eXBang idx p = eX idx 
+eXBang idx p = 
+    let
+        new_idx = maybe (-1) id (propMaxXIdx p) + 1
+    in 
+        propDeBrRosterNormalize $ eXWorker idx 
            (p 
               :&&: 
-            aXInt 0 
+            aXWorker new_idx 
                    (
-                      propDeBrSubX idx (XInternal 0) p 
+                      propDeBrSubXWorker idx (X new_idx) p 
                            :->: 
-                      XInternal 0 :==: X idx
+                      X new_idx :==: X idx
                 )
             )
  
 
-aXWorker :: Bool -> Int -> PropDeBr -> PropDeBr
-aXWorker rosterNormalize idx p = Forall $ xsubPropDeBrWorker rosterNormalize p idx (boundDepthPropDeBr p)
+aXWorker :: Int -> PropDeBr -> PropDeBr
+aXWorker idx p = Forall $ xsubPropDeBr p idx (boundDepthPropDeBr p)
 
 
 aX :: Int -> PropDeBr -> PropDeBr
-aX = aXWorker True
+aX idx p = propDeBrRosterNormalize $ aXWorker idx p
 
 
-hXWorker :: Bool -> Int -> PropDeBr -> ObjDeBr
-hXWorker rosterNormalize idx p = Hilbert (xsubPropDeBrWorker rosterNormalize p idx (boundDepthPropDeBr p))
+hXWorker :: Int -> PropDeBr -> ObjDeBr
+hXWorker idx p = Hilbert (xsubPropDeBr p idx (boundDepthPropDeBr p))
 
 hX :: Int -> PropDeBr -> ObjDeBr
-hX = hXWorker True
+hX idx p = objDeBrRosterNormalize $ hXWorker idx p
 
 
 multiBinder :: (Int -> PropDeBr -> PropDeBr) -> [Int] -> PropDeBr -> PropDeBr
 multiBinder binder indices body =
-    foldr binder body indices
+    propDeBrRosterNormalize $ foldr binder body indices
 
 multiEx :: [Int] -> PropDeBr -> PropDeBr
-multiEx = multiBinder eX
+multiEx = multiBinder eXWorker
 
 multiAx :: [Int] -> PropDeBr -> PropDeBr
-multiAx = multiBinder aX
+multiAx = multiBinder aXWorker
 
 
 -- Helper to recursively extract element terms from the disjunction:
@@ -1098,14 +978,14 @@ roster elems =
         disjunction = buildDisjunction (X x_idx) elemPlaceholders
         
         element_membership_prop = (X x_idx `In` X s_idx) :<->: disjunction
-        quantified_prop = aXWorker False x_idx element_membership_prop
+        quantified_prop = aXWorker x_idx element_membership_prop
         
         condition_S_isSet = isSet (X s_idx)
         full_prop_for_S = condition_S_isSet :&&: quantified_prop
         
-        hilbertTemplate = hXWorker False s_idx full_prop_for_S
+        hilbertTemplate = hXWorker s_idx full_prop_for_S
         elemSubs = zip elem_indices uniqueSortedElems
-    in objDeBrSubXsWorker False elemSubs hilbertTemplate
+    in objDeBrSubXsWorker elemSubs hilbertTemplate
 
 -- | Parses an ObjDeBr term to see if it matches the structure generated by 'roster'.
 --   Now expects isSet(S) as part of the definition.

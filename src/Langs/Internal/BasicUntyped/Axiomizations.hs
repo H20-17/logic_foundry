@@ -76,6 +76,7 @@ objDeBrSubBoundVarToX0 boundVarIdx obj = case obj of
     Hilbert p -> Hilbert (propDeBrSubBoundVarToX0 boundVarIdx p)
     Bound idx -> if idx == boundVarIdx then X 0 else Bound idx
     V idx -> V idx
+    XInternal i -> XInternal i
     (o1 :+: o2) -> objDeBrSubBoundVarToX0 boundVarIdx o1 :+: objDeBrSubBoundVarToX0 boundVarIdx o2
     Intneg o1     -> Intneg (objDeBrSubBoundVarToX0 boundVarIdx o1)
     (o1 :*: o2) -> objDeBrSubBoundVarToX0 boundVarIdx o1 :*: objDeBrSubBoundVarToX0 boundVarIdx o2
@@ -205,8 +206,10 @@ instance ZFC.LogicSent PropDeBr ObjDeBr where
     specAxiom :: [Int] -> Int -> ObjDeBr -> PropDeBr -> PropDeBr
     specAxiom outerIdxs idx t p_template =
         let
-            internalTIdx = 1 -- Placeholder index for the source set 't'
-            internalBIdx = 2 -- Placeholder index for the specified set 'B' (which will be XInternal internalBIdx)
+            outerIdxsMax = if null outerIdxs then -1 else maximum outerIdxs
+            new_idx_base = max outerIdxsMax idx + 1
+            internalTIdx = new_idx_base -- Placeholder index for the source set 't'
+            internalBIdx = new_idx_base + 1 -- Placeholder index for the specified set 'B' (which will be XInternal internalBIdx)
 
             -- The core relationship: x ∈ B ↔ (P(x) ∧ x ∈ t)
             -- X idx represents 'x' (the element variable)
@@ -214,9 +217,9 @@ instance ZFC.LogicSent PropDeBr ObjDeBr where
             -- XInternal internalTIdx represents 't' (the source set)
             -- p_template represents P(x)
             core_prop_template :: PropDeBr
-            core_prop_template = (X idx `In` XInternal internalBIdx)
+            core_prop_template = (X idx `In` X internalBIdx)
                              :<->:
-                             (p_template :&&: (X idx `In` XInternal internalTIdx))
+                             (p_template :&&: (X idx `In` X internalTIdx))
 
             -- Universally quantify over x: ∀x (x ∈ B ↔ (P(x) ∧ x ∈ t))
             quantified_over_x :: PropDeBr
@@ -225,7 +228,7 @@ instance ZFC.LogicSent PropDeBr ObjDeBr where
             -- Condition that B must be a set: isSet(B)
             -- isSet is defined in Shorthands as Neg (B `In` IntSet)
             condition_B_isSet :: PropDeBr
-            condition_B_isSet = isSet (XInternal internalBIdx) -- Using the isSet shorthand
+            condition_B_isSet = isSet (X internalBIdx) -- Using the isSet shorthand
 
             -- Combine the conditions for B: isSet(B) ∧ ∀x(...)
             full_condition_for_B :: PropDeBr
@@ -234,12 +237,12 @@ instance ZFC.LogicSent PropDeBr ObjDeBr where
             -- Existentially quantify over B: ∃B (isSet(B) ∧ ∀x(...))
             -- eXInt binds XInternal internalBIdx
             quantified_over_B :: PropDeBr
-            quantified_over_B = eXInt internalBIdx full_condition_for_B
+            quantified_over_B = eX internalBIdx full_condition_for_B
 
             -- Substitute the actual source set 't' (for XInternal internalTIdx)
             -- This results in: ∃B (isSet(B) ∧ ∀x (x ∈ B ↔ (P(x) ∧ x ∈ t_actual)))
             axiom_body_with_t :: PropDeBr
-            axiom_body_with_t = propDeBrSubXInt internalTIdx t quantified_over_B
+            axiom_body_with_t = propDeBrSubX internalTIdx t quantified_over_B
 
             -- Close over any outer template variables (parameters in P(x) or t)
             closed_axiom :: PropDeBr
@@ -253,8 +256,10 @@ instance ZFC.LogicSent PropDeBr ObjDeBr where
         -- t is the source set
         let
             -- Placeholders for substituting 't' (source set) and binding 'B' (replacement set)
-            internalTIdx = 0 -- Placeholder for t
-            internalBIdx = 1 -- Placeholder for B
+            outerIdxsMax = if null outerIdxs then -1 else maximum outerIdxs
+            new_index_base = maximum [outerIdxsMax, x_from_T_idx, y_image_idx] + 1
+            internalTIdx = new_index_base -- Placeholder for t
+            internalBIdx = new_index_base + 1 -- Placeholder for B
 
             -- Premise: ∀x (x ∈ t → ∃!y P(x,y))
             -- Let x_outer_scope be X x_from_T_idx (this is what the outer aX will bind)
@@ -263,7 +268,7 @@ instance ZFC.LogicSent PropDeBr ObjDeBr where
             -- To make eXBang safe, we create a template for its argument P(x,y).
             -- We use distinct placeholders for x and y within this template for eXBang.
             -- Let X 5 be the placeholder for x, and X y_image_idx be the placeholder for y.
-            x_placeholder_for_P_arg = 5 -- Arbitrary index, distinct from y_image_idx
+            x_placeholder_for_P_arg = new_index_base + 2 -- New index.
 
             -- Step 1: Create the argument for eXBang.
             -- This argument should be P(X x_placeholder_for_P_arg, X y_image_idx)
@@ -281,13 +286,13 @@ instance ZFC.LogicSent PropDeBr ObjDeBr where
             -- for X x_placeholder_for_P_arg in the result of eXBang.
             unique_existence_for_specific_x = propDeBrSubX x_placeholder_for_P_arg (X x_from_T_idx) unique_existence_intermediate_template
             
-            premise_implication = (X x_from_T_idx `In` XInternal internalTIdx) :->: unique_existence_for_specific_x
+            premise_implication = (X x_from_T_idx `In` X internalTIdx) :->: unique_existence_for_specific_x
             premise = aX x_from_T_idx premise_implication
 
             -- Conclusion: ∃B (isSet(B) ∧ ∀y' (y' ∈ B ↔ ∃x' (x' ∈ t ∧ P(x',y'))))
             -- Using fresh template indices for y' and x' in the conclusion
-            y_prime_idx_conc = 2 
-            x_prime_idx_conc = 3
+            y_prime_idx_conc = new_index_base + 3 
+            x_prime_idx_conc = new_index_base + 4
 
             -- Construct P(X x_prime_idx_conc, X y_prime_idx_conc) from the original p_xy_template
             p_x_prime_y_prime_conc = propDeBrSubXs [ (x_from_T_idx, X x_prime_idx_conc)
@@ -295,21 +300,21 @@ instance ZFC.LogicSent PropDeBr ObjDeBr where
                                                    p_xy_template
 
             exists_x_prime_part_conc = eX x_prime_idx_conc (
-                                        (X x_prime_idx_conc `In` XInternal internalTIdx) -- x' ∈ t
+                                        (X x_prime_idx_conc `In` X internalTIdx) -- x' ∈ t
                                         :&&: p_x_prime_y_prime_conc                     -- P(x',y')
                                       )
 
-            conclusion_membership_equivalence = (X y_prime_idx_conc `In` XInternal internalBIdx) -- y' ∈ B
+            conclusion_membership_equivalence = (X y_prime_idx_conc `In` X internalBIdx) -- y' ∈ B
                                              :<->: exists_x_prime_part_conc
 
             forall_y_prime_conclusion_core = aX y_prime_idx_conc conclusion_membership_equivalence
 
-            condition_B_isSet = isSet (XInternal internalBIdx)
+            condition_B_isSet = isSet (X internalBIdx)
             full_definition_of_B = condition_B_isSet :&&: forall_y_prime_conclusion_core
-            conclusion = eXInt internalBIdx full_definition_of_B
+            conclusion = eX internalBIdx full_definition_of_B
 
             axiom_template_before_t_substitution = premise :->: conclusion
-            axiom_body_with_t = propDeBrSubXInt internalTIdx t axiom_template_before_t_substitution
+            axiom_body_with_t = propDeBrSubX internalTIdx t axiom_template_before_t_substitution
             closed_axiom = multiAx outerIdxs axiom_body_with_t
         in
             closed_axiom

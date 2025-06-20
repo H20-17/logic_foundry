@@ -53,7 +53,7 @@ module Langs.Internal.BasicUntyped.Shorthands (
     natSetObj,      -- Exporting the NatSet object
     parseNatSet,     -- Exporting the NatSet parser
     parseForallChain,
-    parseImplication
+    parseImplication,
 
 ) where
 import Langs.Internal.BasicUntyped.Core
@@ -86,7 +86,7 @@ import Data.Text (Text, pack, unpack,concat, lines,intercalate)
 import Data.Map
     ( (!), foldrWithKey, fromList, insert, keysSet, lookup, map, Map )
 
-
+import Debug.Trace(traceM)
 
 parsePairFirstExp :: ObjDeBr -> Maybe ObjDeBr
 parsePairFirstExp subexp = do
@@ -661,7 +661,6 @@ parseFuncsSet obj = do
     s_object_from_isSet <- parseIsSet isSet_S_prop
     s_bound_from_isSet <- parseBound s_object_from_isSet
     guard (s_bound_from_isSet == idx_S)
-
     (bicond_prop, idx_f) <- parseForall2 forall_f_prop
     (f_in_S_prop, isFunc_call_prop) <- parseBiconditional bicond_prop
 
@@ -671,10 +670,12 @@ parseFuncsSet obj = do
     guard (parsed_idx_f_lhs == idx_f)
     guard (parsed_idx_S_lhs == idx_S)
 
+
+    --error "got here"
     (funcTerm_from_isFunc, setA_cand, setB_cand) <- parseIsFunc isFunc_call_prop
     parsed_f_cand_idx <- parseBound funcTerm_from_isFunc
     guard (parsed_f_cand_idx == idx_f)
-
+ 
     guard (not (objDeBrBoundVarInside setA_cand idx_f || objDeBrBoundVarInside setA_cand idx_S))
     guard (not (objDeBrBoundVarInside setB_cand idx_f || objDeBrBoundVarInside setB_cand idx_S))
     return (setA_cand, setB_cand)
@@ -1040,8 +1041,15 @@ builderX :: Int -> ObjDeBr -> PropDeBr -> ObjDeBr
 builderX user_x_idx source_set_t user_predicate_p =
     let
         -- Internal placeholder indices for the definition. These are distinct from user_x_idx.
-        b_placeholder_idx = 0 -- Placeholder for the set B being built (becomes XInternal b_placeholder_idx)
-        t_placeholder_idx = 1 -- Placeholder for the source set T (becomes XInternal t_placeholder_idx)
+        source_set_max_X = maybe (-1) id (objMaxXIdx source_set_t) -- Max template var index in source_set_t
+        user_predicate_max_X = maybe (-1) id (propMaxXIdx user_predicate_p) -- Max template var index in user_predicate_p
+        new_idx_base = maximum [
+                                source_set_max_X,
+                                user_predicate_max_X,
+                                user_x_idx
+                               ] + 1 
+        b_placeholder_idx = new_idx_base -- Placeholder for the set B being built (becomes XInternal b_placeholder_idx)
+        t_placeholder_idx = new_idx_base + 1 -- Placeholder for the source set T (becomes XInternal t_placeholder_idx)
 
         -- Core membership definition: (x ∈ B) ↔ (P(x) ∧ x ∈ T)
         -- Here:
@@ -1049,9 +1057,9 @@ builderX user_x_idx source_set_t user_predicate_p =
         -- 'B' (the set being defined) is represented by (XInternal b_placeholder_idx)
         -- 'T' (the source set) is represented by (XInternal t_placeholder_idx)
         -- 'P(x)' is user_predicate_p (which should use (X user_x_idx))
-        membership_definition = (X user_x_idx `In` XInternal b_placeholder_idx)
+        membership_definition = (X user_x_idx `In` X b_placeholder_idx)
                               :<->:
-                              (user_predicate_p :&&: (X user_x_idx `In` XInternal t_placeholder_idx))
+                              (user_predicate_p :&&: (X user_x_idx `In` X t_placeholder_idx))
 
         -- Universally quantify over x: ∀x ( (x ∈ B) ↔ (P(x) ∧ x ∈ T) )
         -- The aX will bind (X user_x_idx) to a De Bruijn index.
@@ -1059,7 +1067,7 @@ builderX user_x_idx source_set_t user_predicate_p =
 
         -- Condition that the built set B must be a set: isSet(B)
         -- 'B' is represented by (XInternal b_placeholder_idx)
-        b_is_set_condition = isSet (XInternal b_placeholder_idx)
+        b_is_set_condition = isSet (X b_placeholder_idx)
 
         -- Combine: isSet(B) ∧ ∀x(...)
         -- This is the full property that B must satisfy.
@@ -1067,11 +1075,11 @@ builderX user_x_idx source_set_t user_predicate_p =
 
         -- Hilbert term template: εB (isSet(B) ∧ ∀x(...))
         -- The hXInt will bind (XInternal b_placeholder_idx) to a De Bruijn index.
-        hilbert_template_for_b = hXInt b_placeholder_idx full_property_for_b
+        hilbert_template_for_b = hX b_placeholder_idx full_property_for_b
 
     -- Substitute the actual source_set_t for its placeholder (XInternal t_placeholder_idx)
     -- in the constructed Hilbert term.
-    in objDeBrSubXInt t_placeholder_idx source_set_t hilbert_template_for_b
+    in objDeBrSubX t_placeholder_idx source_set_t hilbert_template_for_b
 
 
 -- Modified parseSetBuilder to recognize the new structure
