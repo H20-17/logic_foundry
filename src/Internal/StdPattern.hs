@@ -128,6 +128,7 @@ class (Eq tType, Ord o) => TypeableTerm t o tType sE | t -> o, t ->tType, t -> s
     -- free variable types and a const dictionary
     const2Term :: o -> t
     free2Term :: Int -> t
+    extractConstsTerm :: t -> Set o
         
 class LogicConst o where
     newConst :: Set o -> o
@@ -136,7 +137,7 @@ class (Ord s, Eq tType, Ord o) => TypedSent o tType sE s | s-> tType, s-> sE, s 
     -- check the sanity of a sentence using a map of template variable indices to types,
     -- a list of free variable types and a const dictionary
     checkSanity :: Map Int tType -> [tType] -> Map o tType -> s -> Maybe sE
-
+    extractConstsSent :: s -> Set o
 
 data TestSubproofErr s sE eL where
    TestSubproofErrResultNotSane :: s -> sE -> TestSubproofErr s sE eL

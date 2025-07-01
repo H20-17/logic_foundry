@@ -114,6 +114,13 @@ instance PREDL.LogicSent PropDeBr ObjDeBr () Text where
           _ -> Nothing
 
 
+    parseHilbert :: ObjDeBr -> Maybe (ObjDeBr -> PropDeBr, ())
+    parseHilbert obj =
+      case obj of
+          Hilbert p -> Just (boundExpToFunc p,())
+          _ -> Nothing
+
+
     parseForall :: PropDeBr -> Maybe (ObjDeBr -> PropDeBr, ())
     parseForall prop =
         case prop of
@@ -150,41 +157,43 @@ instance PREDL.LogicSent PropDeBr ObjDeBr () Text where
     (.==.) = (:==:)
     substX :: Int -> PropDeBr -> ObjDeBr -> PropDeBr
     substX idx template obj = propDeBrSubX idx obj template
-    extractConsts :: PropDeBr -> Set Text
-    extractConsts prop = propDeBrExtractConsts prop
-
-objDeBrApplyUG :: ObjDeBr -> Int -> Int -> ObjDeBr
-objDeBrApplyUG obj freevarIdx boundvarIdx =
+ 
+objDeBrApplyUGWorker :: ObjDeBr -> Int -> Int -> ObjDeBr
+objDeBrApplyUGWorker obj freevarIdx boundvarIdx =
     case obj of
         Integ num -> Integ num
         Constant name -> Constant name
-        Hilbert p1 -> Hilbert (propDeBrApplyUG p1 freevarIdx boundvarIdx)
+        Hilbert p1 -> Hilbert (propDeBrApplyUGWorker p1 freevarIdx boundvarIdx)
         Bound idx -> Bound idx
         V idx -> if idx == freevarIdx then Bound boundvarIdx else V idx
-        (o1 :+: o2) -> objDeBrApplyUG o1 freevarIdx boundvarIdx :+: objDeBrApplyUG o2 freevarIdx boundvarIdx
-        Intneg o1     -> Intneg (objDeBrApplyUG o1 freevarIdx boundvarIdx)
-        (o1 :*: o2) -> objDeBrApplyUG o1 freevarIdx boundvarIdx :*: objDeBrApplyUG o2 freevarIdx boundvarIdx
+        (o1 :+: o2) -> objDeBrApplyUGWorker o1 freevarIdx boundvarIdx :+: objDeBrApplyUGWorker o2 freevarIdx boundvarIdx
+        Intneg o1     -> Intneg (objDeBrApplyUGWorker o1 freevarIdx boundvarIdx)
+        (o1 :*: o2) -> objDeBrApplyUGWorker o1 freevarIdx boundvarIdx :*: objDeBrApplyUGWorker o2 freevarIdx boundvarIdx
         IntSet -> IntSet
         EmptySet -> EmptySet
 
+objDeBrApplyUG :: ObjDeBr -> Int -> Int -> ObjDeBr
+objDeBrApplyUG obj freevaridx boundvarIdx =
+    objDeBrRosterNormalize (objDeBrApplyUGWorker obj freevaridx boundvarIdx)
 
+propDeBrApplyUGWorker :: PropDeBr -> Int -> Int -> PropDeBr
+propDeBrApplyUGWorker prop freevarIdx boundvarIdx =
+    case prop of
+        Neg p -> Neg (propDeBrApplyUGWorker p freevarIdx boundvarIdx)
+        (p1 :&&: p2) -> propDeBrApplyUGWorker p1 freevarIdx boundvarIdx :&&: propDeBrApplyUGWorker p2 freevarIdx boundvarIdx
+        (p1 :||: p2) -> propDeBrApplyUGWorker p1 freevarIdx boundvarIdx :||: propDeBrApplyUGWorker p2 freevarIdx boundvarIdx
+        (p1 :->: p2) -> propDeBrApplyUGWorker p1 freevarIdx boundvarIdx :->: propDeBrApplyUGWorker p2 freevarIdx boundvarIdx
+        (p1 :<->: p2) -> propDeBrApplyUGWorker p1 freevarIdx boundvarIdx :<->: propDeBrApplyUGWorker p2 freevarIdx boundvarIdx
+        (o1 :==: o2) -> objDeBrApplyUGWorker o1 freevarIdx boundvarIdx :==: objDeBrApplyUGWorker o2 freevarIdx boundvarIdx
+        In o1 o2 -> In (objDeBrApplyUGWorker o1 freevarIdx boundvarIdx) (objDeBrApplyUGWorker o2 freevarIdx boundvarIdx)
+        Forall p -> Forall (propDeBrApplyUGWorker p freevarIdx boundvarIdx)
+        Exists p -> Exists (propDeBrApplyUGWorker p freevarIdx boundvarIdx)
+        (o1 :<=: o2) -> objDeBrApplyUGWorker o1 freevarIdx boundvarIdx :<=: objDeBrApplyUGWorker o2 freevarIdx boundvarIdx
+        F -> F
 
 propDeBrApplyUG :: PropDeBr -> Int -> Int -> PropDeBr
 propDeBrApplyUG prop freevarIdx boundvarIdx =
-    case prop of
-        Neg p -> Neg (propDeBrApplyUG p freevarIdx boundvarIdx)
-        (p1 :&&: p2) -> propDeBrApplyUG p1 freevarIdx boundvarIdx :&&: propDeBrApplyUG p2 freevarIdx boundvarIdx
-        (p1 :||: p2) -> propDeBrApplyUG p1 freevarIdx boundvarIdx :||: propDeBrApplyUG p2 freevarIdx boundvarIdx
-        (p1 :->: p2) -> propDeBrApplyUG p1 freevarIdx boundvarIdx :->: propDeBrApplyUG p2 freevarIdx boundvarIdx
-        (p1 :<->: p2) -> propDeBrApplyUG p1 freevarIdx boundvarIdx :<->: propDeBrApplyUG p2 freevarIdx boundvarIdx
-        (o1 :==: o2) -> objDeBrApplyUG o1 freevarIdx boundvarIdx :==: objDeBrApplyUG o2 freevarIdx boundvarIdx
-        In o1 o2 -> In (objDeBrApplyUG o1 freevarIdx boundvarIdx) (objDeBrApplyUG o2 freevarIdx boundvarIdx)
-        Forall p -> Forall (propDeBrApplyUG p freevarIdx boundvarIdx)
-        Exists p -> Exists (propDeBrApplyUG p freevarIdx boundvarIdx)
-        (o1 :<=: o2) -> objDeBrApplyUG o1 freevarIdx boundvarIdx :<=: objDeBrApplyUG o2 freevarIdx boundvarIdx
-        F -> F
-
-
+    propDeBrRosterNormalize (propDeBrApplyUGWorker prop freevarIdx boundvarIdx)
 
 instance ZFC.LogicTerm ObjDeBr where
     --parseTuple :: ObjDeBr -> Maybe [ObjDeBr]

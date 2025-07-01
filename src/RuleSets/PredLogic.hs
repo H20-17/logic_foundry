@@ -2,7 +2,7 @@ module RuleSets.PredLogic
 (
     LogicError(..), LogicRule(..), 
     runProofAtomic, uiM, eiM, reverseANegIntroM, reverseENegIntroM,eNegIntroM, aNegIntroM,
-    eiHilbertM,
+    eiHilbertM, egM,
     LogicRuleClass(..), SubproofRule(..), checkTheoremM, establishTmSilentM, expandTheoremM, runProofByUG,
     runTheoremM, runTmSilentM, runProofByUGM, SubproofMException(..),
     SubproofError(..),
@@ -15,7 +15,7 @@ module RuleSets.PredLogic
     establishTheorem,
     MetaRuleError(..),
     eqReflM, eqSymM, eqTransM, eqSubstM,
-    extractConstsM,
+    extractConstsSentM,
     multiUGM
 ) where
 
@@ -300,7 +300,7 @@ runProofAtomic rule context state  =
                let sourceSent = f term
                let maySourceSentIdx = Data.Map.lookup sourceSent (provenSents state)
                sourceSentIdx <- maybe ((throwError . LogicErrEGNotGeneralization term) generalization) return maySourceSentIdx
-               return (Just generalization,Nothing, PrfStdStepStep sourceSent "EG" [sourceSentIdx])
+               return (Just generalization,Nothing, PrfStdStepStep generalization "EG" [sourceSentIdx])
           UI term forallSent -> do
                let mayForallSentIdx = Data.Map.lookup forallSent (provenSents state)
                forallSentIdx <- maybe ((throwError . LogicErrUINotProven) forallSent) return mayForallSentIdx
@@ -512,7 +512,7 @@ standardRuleM rule = do
 
 
 
-uiM :: (Monad m, LogicSent s t tType o, TypeableTerm t o tType sE, Show s,
+uiM, egM :: (Monad m, LogicSent s t tType o, TypeableTerm t o tType sE, Show s,
                 Typeable s, Show sE, Typeable sE, MonadThrow m, Show o, Typeable o, Show t, Typeable t,
                 Show tType, Typeable tType, TypedSent o tType sE s, Monoid (PrfStdState s o tType),
                StdPrfPrintMonad s o tType m, StdPrfPrintMonad s o tType (Either SomeException),
@@ -520,7 +520,7 @@ uiM :: (Monad m, LogicSent s t tType o, TypeableTerm t o tType sE, Show s,
                 Typeable eL, Monoid r)
                    => t -> s -> ProofGenTStd tType r s o m (s,[Int])
 uiM term sent = standardRuleM (ui term sent)
-
+egM term sent = standardRuleM (eg term sent)
 
 
 
@@ -902,6 +902,7 @@ data ProofByUGSchema s r where
 
 class (PL.LogicSent s tType) => LogicSent s t tType o | s ->tType, s ->t, s->t, s->o where
     parseExists :: s -> Maybe (t->s,tType)
+    parseHilbert :: t -> Maybe (t->s,tType)
     parseEq :: s -> Maybe (t,t)
     (.==.) :: t -> t -> s
     parseExistsNot :: s -> Maybe (t->s,tType)
@@ -915,7 +916,7 @@ class (PL.LogicSent s tType) => LogicSent s t tType o | s ->tType, s ->t, s->t, 
     -- create generalization from sentence, var type, and free var index.
     createForall ::s -> tType -> Int -> s
     substX :: Int -> s -> t -> s
-    extractConsts :: s -> Set o
+
 
  
 
@@ -1076,7 +1077,7 @@ multiUGM typeList programCore =
             runProofByUGM outermost_ug_var_type inner_action_yielding_proven_s_idx
 
 
-extractConstsM :: (Monoid r1, ProofStd s eL1 r1 o tType, Monad m,
+extractConstsSentM :: (Monoid r1, ProofStd s eL1 r1 o tType, Monad m,
                        LogicSent s t tType o, Show eL1, Typeable eL1,
                     Show s, Typeable s,
                        MonadThrow m, TypedSent o tType sE s, Show sE, Typeable sE,
@@ -1085,10 +1086,10 @@ extractConstsM :: (Monoid r1, ProofStd s eL1 r1 o tType, Monad m,
                  =>   s
                             -> ProofGenTStd tType r1 s o m (Map o tType)
 
-extractConstsM sentence = do
+extractConstsSentM sentence = do
     state <- getProofState
     let constdict = fmap fst (consts state)
-    let sentConsts = extractConsts sentence     
+    let sentConsts = extractConstsSent sentence     
     return $ Data.Map.restrictKeys constdict sentConsts
 
 

@@ -46,6 +46,7 @@ module Langs.BasicUntyped (
     parseNatSet,
     propDeBrSubX,
     propDeBrSubXs,
+    objDeBrSubXs,
     natSetObj,
     parseSetBuilder,
     parseForallChain,
@@ -53,7 +54,8 @@ module Langs.BasicUntyped (
     propDeBrSwapFreeVarsToX,
     parseImplication,
     parsePair,
-    parseIn
+    parseIn,
+    isSet
 ) where
 
 

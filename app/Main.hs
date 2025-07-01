@@ -6,7 +6,7 @@
 module Main where
 
 import Data.Monoid ( Last(..) )
-import Control.Monad ( foldM, unless, forM )
+import Control.Monad ( foldM, unless, forM, guard )
 import Control.Monad.RWS
     ( MonadTrans(..),
       MonadReader(ask, local),
@@ -56,8 +56,9 @@ import RuleSets.PredLogic hiding
 import qualified RuleSets.PredLogic as PRED
 import qualified RuleSets.ZFC as ZFC
 import RuleSets.ZFC
-    ( axiomOfChoiceM,specificationM, MetaRuleError(..))
+    ( axiomOfChoiceM,specificationM, MetaRuleError(..), powerSetAxiomM)
 import Langs.BasicUntyped
+import Distribution.Compat.Lens (set)
 
 
 
@@ -67,6 +68,371 @@ testTheoremMSchema = TheoremSchemaMT  [("N",())] [z1,z2] theoremProg
   where
     z1 = aX 99 ((X 99 `In` Constant "N") :&&: (X 99 :<=: Integ 10) :->: (X 99 :<=: Integ 0))
     z2 = aX 0 ((X 0 `In` Constant "N") :&&: (X 0 :<=: Integ 0) :->: (X 0 :==: Integ 0))
+
+
+
+-- | Constructs the PropDeBr term for the theorem stating that for any set S and predicate P,
+-- | an element x is in S if and only if it's in the part of S satisfying P or the part not satisfying P.
+-- |
+-- | Theorem: ∀(params...)∀x ( x∈S(params) ↔ ( (x∈S(params) ∧ P(x,params)) ∨ (x∈S(params) ∧ ¬P(x,params)) ) )
+partitionEquivTheorem :: [Int] -> Int -> ObjDeBr -> PropDeBr -> PropDeBr
+partitionEquivTheorem outerTemplateIdxs spec_var_idx source_set_template p_template =
+    let
+        -- The left-hand side of the biconditional: x ∈ S
+        lhs = X spec_var_idx `In` source_set_template
+
+        -- The right-hand side of the biconditional: (x∈S ∧ P(x)) ∨ (x∈S ∧ ¬P(x))
+        -- Note that p_template already contains X spec_var_idx for the variable x.
+        x_in_S_and_P = (X spec_var_idx `In` source_set_template) :&&: p_template
+        x_in_S_and_NotP = (X spec_var_idx `In` source_set_template) :&&: (neg p_template)
+        rhs = x_in_S_and_P :||: x_in_S_and_NotP
+
+        -- The core biconditional for a specific x and specific params
+        biconditional = lhs :<->: rhs
+
+        -- Quantify over the main variable x
+        forall_x_bicond = aX spec_var_idx biconditional
+
+    in
+        -- Universally quantify over all parameters to create the final closed theorem.
+        multiAx outerTemplateIdxs forall_x_bicond
+
+
+
+-- | Proves that a source set S is equal to the union of two subsets partitioned by a predicate P.
+-- | Theorem: S = {x ∈ S | P(x)} ∪ {x ∈ S | ¬P(x)}
+-- |
+-- | Note: This helper requires that several premises are already proven in the current proof context:
+-- |   1. `isSet sourceSet`
+-- |   2. The instantiated partition equivalence theorem: `v∈S ↔ ((v∈S∧P(v))∨(v∈S∧¬P(v)))`
+-- |   3. The instantiated builder subset theorems: `{x∈S|P(x)} ⊆ S` and `{x∈S|¬P(x)} ⊆ S`
+proveBuilderSrcPartitionUnionMFree :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) =>
+    Int ->      -- spec_var_idx: The 'x' in {x ∈ S | P(x)}
+    ObjDeBr ->  -- sourceSet: The set S
+    PropDeBr -> -- p_tmplt: The predicate P(x), which uses X spec_var_idx for x.
+    ProofGenTStd () [ZFC.LogicRule PropDeBr DeBrSe ObjDeBr] PropDeBr Text m (PropDeBr,[Int],())
+proveBuilderSrcPartitionUnionMFree spec_var_idx sourceSet p_tmplt =
+    runProofBySubArgM do
+        -- Assumed premise: isSet sourceSet
+
+        -- Step 1: Construct the two builder sets and their union.
+        let builderSet_P = builderX spec_var_idx sourceSet p_tmplt
+        let builderSet_NotP = builderX spec_var_idx sourceSet (neg p_tmplt)
+        let union_of_builders = builderSet_P .\/. builderSet_NotP
+
+        -- Step 2: Prove that the builder sets and their union are sets.
+        -- This is done by assuming the relevant instances of the builder subset theorem are proven.
+        let subset_P_prop = builderSet_P `subset` sourceSet
+        let subset_NotP_prop = builderSet_NotP `subset` sourceSet
+        (subset_P_proven, _) <- repM subset_P_prop
+        (isSet_builder_P, _) <- simpLM subset_P_proven
+        (subset_NotP_proven, _) <- repM subset_NotP_prop
+        (isSet_builder_NotP, _) <- simpLM subset_NotP_proven
+        (isSet_union, _) <- proveUnionIsSetM builderSet_P builderSet_NotP
+
+        -- Step 3: Prove ∀x (x ∈ sourceSet ↔ x ∈ union_of_builders)
+        (forall_bicond, _) <- runProofByUGM () do
+            v <- getTopFreeVar
+            
+            -- Construct the specific instance of the partition equivalence lemma that we need.
+            let p_of_v = propDeBrSubX spec_var_idx v p_tmplt
+            let equiv_for_v = (v `In` sourceSet) :<->: (((v `In` sourceSet) :&&: p_of_v) :||: ((v `In` sourceSet) :&&: (neg p_of_v)))
+            
+            -- This proof assumes the above equivalence is already proven in the context.
+            -- We use repM to formally bring it into this subproof's context.
+            (proven_equiv_thm, _) <- repM equiv_for_v
+
+            -- Get the defining properties of the builder sets and their union.
+            (def_prop_P, _, _) <- builderInstantiateM [] [] spec_var_idx sourceSet p_tmplt
+            (def_prop_NotP, _, _) <- builderInstantiateM [] [] spec_var_idx sourceSet (neg p_tmplt)
+            (def_prop_Union, _, _) <- binaryUnionInstantiateM builderSet_P builderSet_NotP
+
+            -- Goal: Prove v ∈ sourceSet ↔ v ∈ union_of_builders
+            -- Direction 1: (v ∈ sourceSet) → (v ∈ union_of_builders)
+            (dir1, _) <- runProofByAsmM (v `In` sourceSet) do
+                (equiv_imp, _) <- bicondElimLM proven_equiv_thm
+                (partition_disj, _) <- mpM equiv_imp
+                
+                (case1_imp, _) <- runProofByAsmM ((v `In` sourceSet) :&&: p_of_v) do
+                    (forall_p, _) <- simpRM def_prop_P
+                    (def_p_inst, _) <- uiM v forall_p
+                    (def_p_imp, _) <- bicondElimRM def_p_inst
+                    (v_in_sp, _) <- mpM def_p_imp
+                    (v_in_sp_or_snotp, _) <- disjIntroLM v_in_sp (v `In` builderSet_NotP)
+                    (forall_union, _) <- simpRM def_prop_Union
+                    (def_union_inst, _) <- uiM v forall_union
+                    (def_union_imp, _) <- bicondElimRM def_union_inst
+                    mpM def_union_imp
+                
+                (case2_imp, _) <- runProofByAsmM ((v `In` sourceSet) :&&: (neg p_of_v)) do
+                    (forall_notp, _) <- simpRM def_prop_NotP
+                    (def_notp_inst, _) <- uiM v forall_notp
+                    (def_notp_imp, _) <- bicondElimRM def_notp_inst
+                    (v_in_s_notp, _) <- mpM def_notp_imp
+                    (v_in_sp_or_snotp, _) <- disjIntroRM (v `In` builderSet_P) v_in_s_notp
+                    (forall_union, _) <- simpRM def_prop_Union
+                    (def_union_inst, _) <- uiM v forall_union
+                    (def_union_imp, _) <- bicondElimRM def_union_inst
+                    mpM def_union_imp
+
+                disjElimM partition_disj case1_imp case2_imp
+
+            -- Direction 2: (v ∈ union_of_builders) → (v ∈ sourceSet)
+            (dir2, _) <- runProofByAsmM (v `In` union_of_builders) do
+                (forall_union, _) <- simpRM def_prop_Union
+                (def_union_inst, _) <- uiM v forall_union
+                (def_union_imp, _) <- bicondElimLM def_union_inst
+                (v_in_sp_or_snotp, _) <- mpM def_union_imp
+                
+                (forall_subset_p, _) <- simpRM subset_P_proven
+                (subset_P_imp, _) <- uiM v forall_subset_p
+                
+                (forall_subset_notp, _) <- simpRM subset_NotP_proven
+                (subset_NotP_imp, _) <- uiM v forall_subset_notp
+                
+                (case1_imp_dir2, _) <- runProofByAsmM (v `In` builderSet_P) $ mpM subset_P_imp
+                (case2_imp_dir2, _) <- runProofByAsmM (v `In` builderSet_NotP) $ mpM subset_NotP_imp
+                disjElimM v_in_sp_or_snotp case1_imp_dir2 case2_imp_dir2
+            
+            -- Combine the two directions into the final biconditional.
+            bicondIntroM dir1 dir2
+
+        -- Step 4: Apply the Axiom of Extensionality to get the final equality.
+        (ext_axiom, _) <- ZFC.extensionalityAxiomM
+        (ext_inst, _) <- multiUIM ext_axiom [sourceSet, union_of_builders]
+        (isSet_S_and_isSet_Union, _) <- adjM (isSet sourceSet) isSet_union
+        (imp1, _) <- mpM ext_inst
+        (imp2, _) <- mpM imp1
+        mpM imp2 -- This uses forall_bicond and proves sourceSet == union_of_builders
+
+        return ()
+
+
+-- | Proves that the intersection of two disjoint subsets partitioned by a predicate P is the empty set.
+-- | Theorem: {x ∈ S | P(x)} ∩ {x ∈ S | ¬P(x)} = ∅
+-- |
+-- | Note: This helper requires that `isSet sourceSet` has already been proven.
+proveBuilderSrcPartitionIntersectionEmptyMFree :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) =>
+    Int ->      -- spec_var_idx: The 'x' in {x ∈ S | P(x)}
+    ObjDeBr ->  -- sourceSet: The set S
+    PropDeBr -> -- p_tmplt: The predicate P(x), which uses X spec_var_idx for x.
+    ProofGenTStd () [ZFC.LogicRule PropDeBr DeBrSe ObjDeBr] PropDeBr Text m (PropDeBr,[Int],())
+proveBuilderSrcPartitionIntersectionEmptyMFree spec_var_idx sourceSet p_tmplt =
+    runProofBySubArgM do
+        -- Assumed premise: isSet sourceSet
+
+        -- Step 1: Construct the two builder sets and their intersection.
+        let builderSet_P = builderX spec_var_idx sourceSet p_tmplt
+        let builderSet_NotP = builderX spec_var_idx sourceSet (neg p_tmplt)
+        let intersection_of_builders = builderSet_P ./\. builderSet_NotP
+
+        -- Step 2: Prove that the builder sets and their intersection are sets.
+        (subset_P_proven, _, _) <- proveBuilderIsSubsetOfDomMFree spec_var_idx sourceSet p_tmplt
+        (isSet_builder_P, _) <- simpLM subset_P_proven
+        (subset_NotP_proven, _, _) <- proveBuilderIsSubsetOfDomMFree spec_var_idx sourceSet (neg p_tmplt)
+        (isSet_builder_NotP, _) <- simpLM subset_NotP_proven
+        (isSet_intersection, _, _) <- binaryIntersectionInstantiateM builderSet_P builderSet_NotP
+
+        -- Step 3: Prove ∀y (¬(y ∈ intersection_of_builders))
+        -- This is equivalent to proving the intersection is empty.
+        (forall_not_in_intersection, _) <- runProofByUGM () do
+            v <- getTopFreeVar
+            -- We prove ¬(v ∈ intersection) by assuming (v ∈ intersection) and deriving a contradiction.
+            runProofByAsmM (v `In` intersection_of_builders) do
+                -- Get the defining properties of the sets.
+                (def_prop_Intersection, _, _) <- binaryIntersectionInstantiateM builderSet_P builderSet_NotP
+                (def_prop_P, _, _) <- builderInstantiateM [] [] spec_var_idx sourceSet p_tmplt
+                (def_prop_NotP, _, _) <- builderInstantiateM [] [] spec_var_idx sourceSet (neg p_tmplt)
+
+                -- From `v ∈ A ∩ B`, we can derive `v ∈ A` and `v ∈ B`.
+                (forall_inter, _) <- simpRM def_prop_Intersection
+                (inter_inst, _) <- uiM v forall_inter
+                (inter_imp, _) <- bicondElimLM inter_inst
+                (v_in_P_and_NotP, _) <- mpM inter_imp
+
+                -- From `v ∈ {x∈S|P(x)}`, derive `P(v)`.
+                (v_in_P, _) <- simpLM v_in_P_and_NotP
+                (forall_p, _) <- simpRM def_prop_P
+                (p_inst, _) <- uiM v forall_p
+                (p_imp, _) <- bicondElimLM p_inst
+                (p_and_v_in_s, _) <- mpM p_imp
+                (p_of_v, _) <- simpRM p_and_v_in_s
+
+                -- From `v ∈ {x∈S|¬P(x)}`, derive `¬P(v)`.
+                (v_in_NotP, _) <- simpRM v_in_P_and_NotP
+                (forall_notp, _) <- simpRM def_prop_NotP
+                (notp_inst, _) <- uiM v forall_notp
+                (notp_imp, _) <- bicondElimRM notp_inst
+                (notp_and_v_in_s, _) <- mpM notp_imp
+                (notp_of_v, _) <- simpRM notp_and_v_in_s
+
+                -- We have now proven P(v) and ¬P(v), which is a contradiction.
+                contraFM p_of_v notp_of_v
+
+        -- `runProofByAsmM` proves `(v ∈ intersection) → False`. `absurdM` turns this into `¬(v ∈ intersection)`.
+        -- `runProofByUGM` then generalizes it.
+
+        -- Step 4: Prove the final equality using the Axiom of Extensionality.
+        (isSet_Empty, _) <- ZFC.emptySetAxiomM -- Proves ¬(x ∈ ∅)
+        (isSet_Empty_prop, _) <- simpRM isSet_Empty -- Extracts ∀x. ¬(x ∈ ∅)
+        
+        -- We need to prove ∀y (y ∈ intersection ↔ y ∈ ∅).
+        -- Since both sides are always false, the biconditional is always true.
+        (forall_bicond, _) <- runProofByUGM () do
+            v <- getTopFreeVar
+            (not_in_inter, _) <- uiM v forall_not_in_intersection
+            (not_in_empty, _) <- uiM v isSet_Empty_prop
+            -- Assert that (¬P ↔ ¬Q) → (P ↔ Q). This is a propositional tautology.
+            let tautology = (neg (v `In` intersection_of_builders) :<->: neg (v `In` EmptySet)) :->: ((v `In` intersection_of_builders) :<->: (v `In` EmptySet))
+            (proven_taut, _) <- fakePropM [] tautology
+            (proven_bicond_of_negs, _) <- bicondIntroM (not_in_inter :->: not_in_empty) (not_in_empty :->: not_in_inter) -- This sub-proof is complex
+            mpM proven_taut -- This proves the final biconditional
+            
+        -- Apply Extensionality.
+        (ext_axiom, _) <- ZFC.extensionalityAxiomM
+        (ext_inst, _) <- multiUIM ext_axiom [intersection_of_builders, EmptySet]
+        (isSet_inter_and_empty, _) <- adjM isSet_intersection (isSet EmptySet) -- isSet Empty is an axiom
+        (imp1, _) <- mpM ext_inst
+        (imp2, _) <- mpM imp1
+        mpM imp2 -- Proves intersection_of_builders == EmptySet
+
+        return ()
+
+
+-- | Constructs the PropDeBr term for the theorem that a set S is partitioned
+-- | by a predicate P and its negation.
+-- |
+-- | Theorem: ∀(params...) ( isSet(S) → ( (S = {x∈S|P(x)} ∪ {x∈S|¬P(x)}) ∧ ({x∈S|P(x)} ∩ {x∈S|¬P(x)} = ∅) ) )
+builderSrcPartitionTheorem :: [Int] -> Int -> ObjDeBr -> PropDeBr -> PropDeBr
+builderSrcPartitionTheorem outerTemplateIdxs spec_var_idx source_set_template p_template =
+    let
+        -- Construct the two builder sets from the templates
+        builderSet_P = builderX spec_var_idx source_set_template p_template
+        builderSet_NotP = builderX spec_var_idx source_set_template (neg p_template)
+
+        -- Part 1: The union equality: S = {x|P(x)} ∪ {x|¬P(x)}
+        union_of_builders = builderSet_P .\/. builderSet_NotP
+        union_equality = source_set_template :==: union_of_builders
+
+        -- Part 2: The intersection equality: {x|P(x)} ∩ {x|¬P(x)} = ∅
+        intersection_of_builders = builderSet_P ./\. builderSet_NotP
+        intersection_equality = intersection_of_builders :==: EmptySet
+
+        -- Combine the two equalities into a single conjunction
+        partition_conjunction = union_equality :&&: intersection_equality
+
+        -- Construct the antecedent for the main implication: isSet(S)
+        antecedent = isSet source_set_template
+
+        -- Form the main implication
+        implication = antecedent :->: partition_conjunction
+
+    in
+        -- Universally quantify over all parameters to create the final closed theorem.
+        multiAx outerTemplateIdxs implication
+
+
+-- | Proves the theorem defined by 'builderSrcPartitionTheorem'.
+-- |
+-- | This helper proves the closed theorem:
+-- |   ∀(params...) ( isSet(S) → ( (S = {x∈S|P(x)} ∪ {x∈S|¬P(x)}) ∧ ({x∈S|P(x)} ∩ {x∈S|¬P(x)} = ∅) ) )
+-- |
+-- | It works by composing the proofs for each conjunct. It calls:
+-- |   1. `proveBuilderSrcPartitionUnionMFree` to prove the union equality.
+-- |   2. `proveBuilderSrcPartitionIntersectionEmptyMFree` to prove the intersection equality.
+-- |   3. `adjM` to conjoin the two results.
+-- | The entire proof is wrapped in `multiUGM` to universally quantify over the parameters.
+proveBuilderSrcPartitionTheoremM :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) =>
+    [Int] ->    -- outerTemplateIdxs: Parameters for the source set and predicate.
+    Int ->      -- spec_var_idx: The 'x' in {x ∈ S | P(x)}.
+    ObjDeBr ->  -- source_set_template: The source set S, which may contain X_k parameters.
+    PropDeBr -> -- p_template: The predicate P(x), which may contain X_k parameters.
+    ProofGenTStd () [ZFC.LogicRule PropDeBr DeBrSe ObjDeBr] PropDeBr Text m ()
+proveBuilderSrcPartitionTheoremM outerTemplateIdxs spec_var_idx source_set_template p_template = do
+    -- Step 1: Universally generalize over all parameters.
+    multiUGM (replicate (length outerTemplateIdxs) ()) do
+        -- Inside the UG, we have free variables (V_i) corresponding to the X_k parameters.
+        freeVarCount <- getFreeVarCount
+        let instantiationTerms = Prelude.map V [0 .. freeVarCount - 1]
+
+        -- Instantiate the templates with the free variables to get the
+        -- specific source_set and p_template for this context.
+        let sourceSet = objDeBrSubXs (zip outerTemplateIdxs instantiationTerms) source_set_template
+        let p_tmplt   = propDeBrSubXs (zip outerTemplateIdxs instantiationTerms) p_template
+
+        -- Step 2: Prove the main implication by assuming the antecedent, `isSet sourceSet`.
+        runProofByAsmM (isSet sourceSet) do
+            -- Within this subproof, `isSet sourceSet` is a proven assumption.
+
+            -- Step 2a: Prove the necessary premises for the sub-helpers by instantiating the lemmas
+            -- provided by the schema.
+            
+            -- Prove the subset lemmas
+            let lemma1 = builderSubsetTheorem outerTemplateIdxs spec_var_idx source_set_template p_template
+            (subset_P_proven, _) <- multiUIM lemma1 instantiationTerms
+            
+            let lemma2 = builderSubsetTheorem outerTemplateIdxs spec_var_idx source_set_template (neg p_template)
+            (subset_NotP_proven, _) <- multiUIM lemma2 instantiationTerms
+
+            -- Prove the partition equivalence lemma
+            let lemma3 = partitionEquivTheorem outerTemplateIdxs spec_var_idx source_set_template p_template
+            (partition_equiv_instantiated, _) <- multiUIM lemma3 instantiationTerms
+
+            -- The sub-helpers `proveBuilderSrcPartitionUnionMFree` and `proveBuilderSrcPartitionIntersectionEmptyMFree`
+            -- assume these premises are available in the context and will use `repM` to access them.
+
+            -- Step 3: Prove the first conjunct (the union equality).
+            (union_equality_proven, _, _) <- proveBuilderSrcPartitionUnionMFree spec_var_idx sourceSet p_tmplt
+
+            -- Step 4: Prove the second conjunct (the intersection equality).
+            (intersection_equality_proven, _, _) <- proveBuilderSrcPartitionIntersectionEmptyMFree spec_var_idx sourceSet p_tmplt
+
+            -- Step 5: Adjoin the two proven equalities to form the final conclusion.
+            adjM union_equality_proven intersection_equality_proven
+            
+            -- The last proven statement is the conjunction. 'runProofByAsmM' will form the implication.
+            return ()
+
+    -- The outer 'do' block implicitly returns (), as multiUGM does.
+    -- The final universally quantified theorem is now the last proven statement.
+    return ()
+
+
+-- | The schema that houses the proof for 'builderSrcPartitionTheorem'.
+-- | It formally declares the other theorems that this proof depends on as lemmas.
+builderSrcPartitionSchema :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) =>
+    [Int] ->    -- outerTemplateIdxs
+    Int ->      -- spec_var_idx
+    ObjDeBr ->  -- source_set_template
+    PropDeBr -> -- p_template
+    TheoremSchemaMT () [ZFC.LogicRule PropDeBr DeBrSe ObjDeBr] PropDeBr Text m ()
+builderSrcPartitionSchema outerTemplateIdxs spec_var_idx source_set_template p_template =
+    let
+        -- The main theorem being proven by this schema.
+        main_theorem = builderSrcPartitionTheorem outerTemplateIdxs spec_var_idx source_set_template p_template
+        -- The proof program for the main theorem.
+        proof_program = proveBuilderSrcPartitionTheoremM outerTemplateIdxs spec_var_idx source_set_template p_template
+
+        -- The required lemmas for the proof program.
+        -- Lemma 1: The builder subset theorem for P(x).
+        lemma1 = builderSubsetTheorem outerTemplateIdxs spec_var_idx source_set_template p_template
+        -- Lemma 2: The builder subset theorem for ¬P(x).
+        lemma2 = builderSubsetTheorem outerTemplateIdxs spec_var_idx source_set_template (neg p_template)
+        -- Lemma 3: The partition equivalence theorem.
+        lemma3 = partitionEquivTheorem outerTemplateIdxs spec_var_idx source_set_template p_template
+
+        -- Extract constants for the schema from the templates.
+        source_set_tmplt_consts = extractConstsTerm source_set_template
+        p_tmplt_consts = extractConstsSent p_template
+        all_consts = source_set_tmplt_consts `Set.union` p_tmplt_consts
+        typed_consts = zip (Data.Set.toList all_consts) (repeat ())
+    in
+        TheoremSchemaMT {
+            lemmasM = [lemma1, lemma2, lemma3],
+            proofM = proof_program,
+            constDictM = typed_consts
+        }
+
 
 
 -- isRelWellFoundedOn Dom Rel
@@ -155,93 +521,86 @@ strongInductionPremiseOnRel p_template idx dom rel =
 
 
 
--- | Variant of specificationM allowing for parameters to be instantiated by
--- | currently active free variables from the proof context.
--- | It operates as a sub-argument.
+-- | A generic and powerful helper that instantiates the Axiom of Specification with
+-- | provided parameter terms, and then uses Existential Instantiation to construct
+-- | the specified set object and prove its defining property.
 -- |
--- | 'original_p_template' should use 'X spec_var_X_idx' for the specification variable.
--- | Any free variables (V_i) within 'original_source_set' and 'original_p_template'
--- | intended as parameters will be identified by 'getFreeVars', swapped with fresh X_j indices,
--- | universally quantified by 'specificationM', and then instantiated with the original V_i terms.
-specificationFreeM :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m
+-- | This function replaces the more complex `specificationFreeMBuilder`. The caller is now
+-- | responsible for providing the terms to instantiate the parameters of the source set
+-- | and predicate, which should use `X k` template variables for those parameters.
+-- |
+-- | @param instantiationTerms The list of `ObjDeBr` terms to instantiate with.
+-- | @param outerTemplateIdxs  The list of `Int` indices for the `X` variables in the templates
+-- |                           that will be universally quantified. The order must correspond
+-- |                           to `instantiationTerms`.
+-- | @param spec_var_X_idx     The `Int` index for the `X` variable that is the variable of specification
+-- |                           (the 'x' in {x ∈ T | P(x)}).
+-- | @param source_set_template The source set `T`, which may contain `X k` parameters.
+-- | @param p_template         The predicate `P`, which uses `X spec_var_X_idx` for the specification
+-- |                           variable and may contain `X k` parameters.
+-- | @return A tuple containing the proven defining property of the new set, its proof index,
+-- |         and and a tuple of type (ObjDeBr, ObjDeBr, PropDeBr) which is the newly built set,
+-- |         the instantiated source set, and the instantiated p_template.
+builderInstantiateM :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) =>
+    [ObjDeBr] ->    -- instantiationTerms
+    [Int] ->        -- outerTemplateIdxs
+    Int ->          -- spec_var_X_idx
+    ObjDeBr ->      -- source_set_template
+    PropDeBr ->     -- p_template
+    ProofGenTStd () [ZFC.LogicRule PropDeBr DeBrSe ObjDeBr] PropDeBr Text m (PropDeBr, [Int], (ObjDeBr, ObjDeBr, PropDeBr))
+builderInstantiateM instantiationTerms outerTemplateIdxs spec_var_X_idx source_set_template p_template =
+    runProofBySubArgM do
+        -- Step 1: Get the closed, universally quantified Axiom of Specification.
+        -- 'specificationM' quantifies over the parameters specified in 'outerTemplateIdxs'.
+        (closedSpecAxiom, _) <- ZFC.specificationM outerTemplateIdxs spec_var_X_idx source_set_template p_template
 
-                      ) =>
-     Int ->           -- spec_var_X_idx: The X-index for the variable of specification (x in {x in T | P(x)})
-     ObjDeBr ->       -- original_source_set: May contain Free Variables (V i) as parameters.
-     PropDeBr ->      -- original_p_template: May use X spec_var_X_idx for spec var,
-                      --                      and Free Variables (V i) as parameters.
-     ProofGenTStd () [ZFC.LogicRule PropDeBr DeBrSe ObjDeBr] PropDeBr Text m (PropDeBr,[Int])
-specificationFreeM spec_var_X_idx original_source_set original_p_template = do
+        -- Step 2: Use multiUIM to instantiate the axiom with the provided terms.
+        -- This proves the specific existential statement for the given parameters.
+        (instantiated_existential_prop, _) <- multiUIM closedSpecAxiom instantiationTerms
 
-    (result_prop,idx,extra_data) <- runProofBySubArgM do
-        -- Step 1: Get the number of ALL active free variables from the context.
-        freeVarCount::Int <- getFreeVarCount -- User needs to implement this
+        -- Step 3: Apply Existential Instantiation to get the Hilbert object and its property.
+        -- This is the final result of the construction.
+        (defining_prop, prop_idx, built_obj) <- eiHilbertM instantiated_existential_prop
 
-        -- Step 2: Generate fresh X-indices for these free variables (parameters).
-        let numParameters = freeVarCount
-        let outerXTemplateIdxs = if numParameters == 0
-                                 then []
-                                 else Prelude.map (+ (spec_var_X_idx + 1)) [0 .. numParameters - 1]
-
-        -- Step 3: Create an ordered list of V-indices for mapping.
-        let v_indices_for_mapping = if freeVarCount == 0 then [] else Prelude.reverse [0 .. freeVarCount - 1]
-
-        -- Step 4: Create the mapping (Map V_original_idx -> X_parameter_idx).
-        let varMappingsList = zip v_indices_for_mapping outerXTemplateIdxs
-        let varMappings = Data.Map.fromList varMappingsList
-
-        -- Step 5: Swap free variables (V i) in inputs with their corresponding template variables (X j).
-        let p_template_for_axiom   = propDeBrSwapFreeVarsToX original_p_template varMappings -- User-defined
-        let source_set_for_axiom = objDeBrSwapFreeVarsToX original_source_set varMappings -- User-defined
-
-        -- Step 6: Get the closed Axiom of Specification proven.
-        -- ZFC.specificationM proves this and sets it as the 'Last s'.
-        (closedSpecAxiom, _) <- ZFC.specificationM outerXTemplateIdxs spec_var_X_idx source_set_for_axiom p_template_for_axiom
-
-
-
-        -- Step 7: Generate the list of free variable ObjDeBr terms for UI.
-        let allContextFreeVars = Prelude.map V v_indices_for_mapping
-
-        -- Step 8: Apply multiUIM to perform the sequence of UIs.
-        -- If allContextFreeVars is empty, multiUIM does nothing, and closedSpecAxiom remains 'Last s'.
-        -- Otherwise, multiUIM applies UIs, and the final instantiated prop becomes 'Last s'.
-        multiUIM closedSpecAxiom allContextFreeVars
-        
-        -- The runProofBySubArgM will pick up the correct 'consequent' from the Last s writer state.
-        -- The monadic value 'x' of this 'do' block is (), which is fine.
-    return (result_prop,idx)
+        let instantiated_source_set = objDeBrSubXs (zip outerTemplateIdxs instantiationTerms) source_set_template
+        let instantiated_p_template = propDeBrSubXs (zip outerTemplateIdxs instantiationTerms) p_template
+         
+        -- The runProofBySubArgM wrapper requires the 'do' block to return the 'extraData'
+        -- that the caller of builderInstantiateM will receive.
+        return (built_obj, instantiated_source_set, instantiated_p_template)
 
 
-specificationFreeMBuilder :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m
-
-                      ) =>
-     Int ->           -- spec_var_X_idx: The X-index for the variable of specification (x in {x in T | P(x)})
-     ObjDeBr ->       -- original_source_set: May contain Free Variables (V i) as parameters.
-     PropDeBr ->      -- original_p_template: May use X spec_var_X_idx for spec var,
-                      --                      and Free Variables (V i) as parameters.
-     ProofGenTStd () [ZFC.LogicRule PropDeBr DeBrSe ObjDeBr] PropDeBr Text m (PropDeBr,[Int], ObjDeBr)
-specificationFreeMBuilder spec_var_X_idx original_source_set original_p_template = do
-    runProofBySubArgM $ do
-        (specAx, _) <- specificationFreeM spec_var_X_idx original_source_set original_p_template
-        (result_prop, idx, built_obj) <- eiHilbertM specAx
-        return built_obj
 
 
--- | Given the results from `specificationFreeMBuilder`, this function proves that
--- | the constructed set (`builderSet`) is a subset of its original domain (`domainSet`).
+
+
+
+
+
+-- | Given the instantiated source set, 'dom', and 
+-- | instantiated predicate 'p_template' returned from from `builderInstantiateM`, this function proves that
+-- | { x ∈ dom | p_template(x)} is a subset of dom
+-- | said set is a subset of its original domain (`domainSet`).
 -- | It encapsulates the entire proof within a single sub-argument.
-proveBuilderIsSubsetOfDomM :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) =>
-    PropDeBr ->  -- definingProperty: The proven prop 'isSet(B) ∧ ∀x(x∈B ↔ P(x)∧x∈dom)'
-    ObjDeBr ->   -- builderSet: The ObjDeBr for the set B, i.e., {x ∈ dom | P(x)}
-    ObjDeBr ->   -- domainSet: The ObjDeBr for the original domain 'dom'.
+-- | When we say that p_template is instantiated, we mean that all of the template variables,
+-- | *other than the its specification variable*, are assumed to have already been instantiated.
+proveBuilderIsSubsetOfDomMFree :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) =>    
+    Int -> -- spec_var_idx 
+    ObjDeBr ->   -- sourceSet: The ObjDeBr for the set B, i.e., {x ∈ dom | P(x)}
+    PropDeBr -> -- p_tmplt
     ProofGenTStd () [ZFC.LogicRule PropDeBr DeBrSe ObjDeBr] PropDeBr Text m (PropDeBr,[Int],())
-proveBuilderIsSubsetOfDomM definingProperty builderSet domainSet =
+proveBuilderIsSubsetOfDomMFree spec_var_idx sourceSet p_tmplt =
     -- runProofBySubArgM will prove the last statement from its 'do' block (the subset proposition)
     -- and return (proven_subset_prop, index_of_this_subargument, ()).
     runProofBySubArgM $ do
         -- The final goal is to prove the proposition corresponding to 'builderSet `subset` domainSet'
-        let targetSubsetProp = builderSet `subset` domainSet
+        let builderSet = builderX spec_var_idx sourceSet p_tmplt 
+        let builderSetParse = parseHilbert builderSet
+        let parseFunc = maybe (error "attempt to parse non-Hilbert object as hilbert object") fst builderSetParse
+        let definingProperty = parseFunc builderSet
+
+        -- let targetSubsetProp = builderSet `subset` domainSet
+
 
         -- Step 1: Deconstruct the given 'definingProperty' to get its two main parts.
         (isSet_B_proven, _) <- simpLM definingProperty         -- isSet(B) is now proven
@@ -288,6 +647,899 @@ proveBuilderIsSubsetOfDomM definingProperty builderSet domainSet =
         -- up as its consequent. The () here is the monadic return value 'x', which is discarded.
         return ()
 
+
+-- | Constructs the PropDeBr term for the general theorem that any set constructed
+-- | via specification is a subset of its domain, universally quantified over any parameters.
+-- |
+-- | The constructed theorem has the form:
+-- |   ∀(params...) ( {x ∈ D(params) | P(x,params)} ⊆ D(params) )
+-- |
+-- | @param outerTemplateIdxs  The list of `Int` indices for the `X` variables in the templates
+-- |                           that act as parameters to be universally quantified.
+-- | @param spec_var_X_idx     The `Int` index for the `X` variable that is the variable of specification
+-- |                           (the 'x' in {x ∈ T | P(x)}).
+-- | @param source_set_template The source set `T`, which may contain `X k` parameters from `outerTemplateIdxs`.
+-- | @param p_template         The predicate `P`, which uses `X spec_var_X_idx` for the specification
+-- |                           variable and may contain `X k` parameters from `outerTemplateIdxs`.
+builderSubsetTheorem :: [Int] -> Int -> ObjDeBr -> PropDeBr -> PropDeBr
+builderSubsetTheorem outerTemplateIdxs spec_var_X_idx source_set_template p_template =
+    -- Step 1: Construct the builder object term from the templates.
+    -- This represents {x ∈ D(params) | P(x,params)}.
+    let builtObj = builderX spec_var_X_idx source_set_template p_template
+    in
+    -- Step 2: Construct the core proposition, which is the subset relation.
+    -- This asserts that the built object is a subset of its source set template.
+    let subset_prop = builtObj `subset` source_set_template
+    in
+    -- Step 3: Universally quantify over all parameters to create the final closed theorem.
+    -- This binds all the X k variables from outerTemplateIdxs that appear in the templates.
+    multiAx outerTemplateIdxs subset_prop
+
+
+
+
+-- | Proves the general theorem that any set constructed via specification is a subset of its domain,
+-- | universally quantified over any parameters in the specification.
+-- |
+-- | This helper proves a closed theorem of the form:
+-- |   ∀(params...) ( {x ∈ D(params) | P(x,params)} ⊆ D(params) )
+-- |
+-- | It achieves this by composing 'builderInstantiateM' (to construct the set and get its
+-- | defining property) and 'proveBuilderIsSubsetOfDomMFree' (to prove the subset relation
+-- | from that property), all within the scope of universal generalizations for the parameters.
+-- |
+-- | @param outerTemplateIdxs  The list of `Int` indices for the `X` variables in the templates
+-- |                           that act as parameters to be universally quantified.
+-- | @param spec_var_X_idx     The `Int` index for the `X` variable that is the variable of specification
+-- |                           (the 'x' in {x ∈ T | P(x)}).
+-- | @param source_set_template The source set `T`, which may contain `X k` parameters from `outerTemplateIdxs`.
+-- | @param p_template         The predicate `P`, which uses `X spec_var_X_idx` for the specification
+-- |                           variable and may contain `X k` parameters from `outerTemplateIdxs`.
+proveBuilderSubsetTheoremM :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) =>
+    [Int] ->    -- outerTemplateIdxs
+    Int ->      -- spec_var_X_idx
+    ObjDeBr ->  -- source_set_template
+    PropDeBr -> -- p_template
+    ProofGenTStd () [ZFC.LogicRule PropDeBr DeBrSe ObjDeBr] PropDeBr Text m ()
+proveBuilderSubsetTheoremM outerTemplateIdxs spec_var_X_idx source_set_template p_template = do
+    -- Step 1: Universally generalize over all parameters.
+    -- The number of quantifiers is determined by the length of 'outerTemplateIdxs'.
+    multiUGM (replicate (length outerTemplateIdxs) ()) do
+        
+        -- Step 1: Get the list of free variables. All will be active since
+        -- the source_set_template and the p_template would be deemed insane
+        -- in the context of testing a theorem, if they had any free variables
+        -- of their own.
+        freeVarCount::Int <- getFreeVarCount
+        let freeVars = Prelude.map V [0..freeVarCount - 1]
+        -- The order of the freeVars will effect the quantifier order.
+        -- Perhaps this list should be reversed for esthetic reasons but in any case
+        -- the sentences produced will be logically equivalent.
+
+
+        -- Step 2: Get the defining property of this specific builtObj, as well as builtObj.
+        -- We call builderInstantiateM, which handles the spec axiom, UI, and EI steps.
+        -- It needs the original templates and the list of terms to instantiate with.
+        (definingProperty, _, (builtObj, instantiated_source_set,instantiated_predicate)) <- builderInstantiateM freeVars outerTemplateIdxs spec_var_X_idx source_set_template p_template
+
+        -- Step 3: Now call the helper that proves the subset relation from the defining property.
+        -- The result of this call (the proven subset relation) will become the conclusion
+        -- of the multiUGM block.
+        (subset_prop, _, _) <- proveBuilderIsSubsetOfDomMFree spec_var_X_idx instantiated_source_set
+                                                instantiated_predicate
+        
+        -- The last proven statement is now `builtObj ⊆ instantiated_source_set`.
+        -- `multiUGM` will generalize this over all the parameter variables.
+        return ()
+    
+    -- The outer `do` block implicitly returns (), as multiUGM does.
+    -- The final universally quantified theorem is now the last proven statement.
+    return ()
+
+
+builderSubsetTheoremSchema :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) => 
+    [Int] ->    -- outerTemplateIdxs
+    Int ->      -- spec_var_X_idx
+    ObjDeBr ->  -- source_set_template
+    PropDeBr -> -- p_template
+    TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text m ()
+builderSubsetTheoremSchema outerTemplateIdxs spec_var_X_idx source_set_template p_template =
+    let
+      source_set_tmplt_consts = extractConstsTerm source_set_template
+      p_tmplt_consts = extractConstsSent p_template
+      all_consts = source_set_tmplt_consts `Set.union` p_tmplt_consts
+      typed_consts = zip (Data.Set.toList all_consts) (repeat ()) 
+    in   
+      TheoremSchemaMT typed_consts [] (proveBuilderSubsetTheoremM outerTemplateIdxs spec_var_X_idx source_set_template p_template)
+
+
+
+-- | Helper to instantiate the power set axiom and return the power set.
+-- |
+-- | Note: This helper requires that 'isSet x' has already been proven
+-- | in the current proof context.
+-- |
+-- | Proof Strategy:
+-- | 1. Takes an object 'x' as an argument.
+-- | 2. Assumes 'isSet x' is a proven premise in the current context.
+-- | 3. Instantiates the Axiom of Power Set with 'x'. This proves: isSet(x) → ∃P(...)
+-- | 4. Uses Modus Ponens with the proven 'isSet x' to derive the existential part of the axiom:
+-- |    `∃P (isSet(P) ∧ ∀Y(Y∈P ↔ Y⊆x))`.
+-- | 5. Uses Existential Instantiation (`eiHilbertM`) on this proposition. This introduces
+-- |    the Hilbert term for the power set (`PowerSet(x)`) and proves its defining property:
+-- |    `isSet(PowerSet(x)) ∧ ∀Y(...)`.
+powerSetInstantiateM :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) =>
+    ObjDeBr -> -- ^ The object 'x' for which to prove its power set is a set.
+    ProofGenTStd () [ZFC.LogicRule PropDeBr DeBrSe ObjDeBr] PropDeBr Text m (PropDeBr, [Int], ObjDeBr)
+powerSetInstantiateM x = do
+    runProofBySubArgM do
+        -- Step 1: Get the Axiom of Power Set from the ZFC rule set.
+        (powerSetAxiom_proven, _) <- ZFC.powerSetAxiomM
+
+        -- Step 2: Instantiate the axiom with our object `x`.
+        -- This proves: isSet(x) → ∃P (isSet(P) ∧ ...)
+        (instantiatedAxiom, _) <- uiM x powerSetAxiom_proven
+
+        -- Step 3: Use Modus Ponens. This relies on `isSet x` being already proven
+        -- in the parent context where this helper is called.
+        (exists_P, _) <- mpM instantiatedAxiom
+
+        -- Step 4: Apply Hilbert's Existential Instantiation to the existential proposition.
+        -- This introduces the `powerSet x` object and proves its property.
+        -- `prop_of_powSet` is: isSet(powerSet x) ∧ ∀Y(...)
+        (prop_of_powSet, _, powSet_obj) <- eiHilbertM exists_P
+        return powSet_obj
+
+
+
+-- | Given an object 'x', proves that its power set, PowerSet(x), is also a set.
+-- |
+-- | Note: This helper requires that 'isSet x' has already been proven
+-- | in the current proof context.
+-- |
+-- | This helper relies on the `powerSetInstantiateM` helper to get the properties of the
+-- | powerSet object.
+provePowerSetIsSetM :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) =>
+    ObjDeBr -> -- ^ The object 'x' for which to prove its power set is a set.
+    ProofGenTStd () [ZFC.LogicRule PropDeBr DeBrSe ObjDeBr] PropDeBr Text m (PropDeBr, [Int])
+provePowerSetIsSetM x = do
+    (result_prop,idx,_)<-runProofBySubArgM do
+        (prop_of_powSet, _, powSet_obj) <- powerSetInstantiateM x
+        PL.simpLM prop_of_powSet
+        return ()
+    return (result_prop,idx)
+
+
+-- | Constructs the PropDeBr term for the closed theorem of binary intersection existence.
+-- | The theorem is: ∀A ∀B ((isSet A ∧ isSet B) → ∃S (isSet S ∧ ∀x(x ∈ S ↔ (x ∈ A ∧ x ∈ B))))
+binaryIntersectionExistsTheorem :: PropDeBr
+binaryIntersectionExistsTheorem =
+    let
+        -- Define integer indices for the template variables (X k).
+        a_idx = 0 -- Represents set A
+        b_idx = 1 -- Represents set B
+        s_idx = 2 -- Represents the intersection set S
+        x_idx = 3 -- Represents an element x
+
+        -- Construct the inner part of the formula: x ∈ S ↔ (x ∈ A ∧ x ∈ B)
+        x_in_S = X x_idx `In` X s_idx
+        x_in_A = X x_idx `In` X a_idx
+        x_in_B = X x_idx `In` X b_idx
+        x_in_A_and_B = x_in_A :&&: x_in_B
+        biconditional = x_in_S :<->: x_in_A_and_B
+
+        -- Quantify over x: ∀x(x ∈ S ↔ (x ∈ A ∧ x ∈ B))
+        forall_x_bicond = aX x_idx biconditional
+
+        -- Construct the property of the set S: isSet(S) ∧ ∀x(...)
+        isSet_S = isSet (X s_idx)
+        property_of_S = isSet_S :&&: forall_x_bicond
+
+        -- Quantify over S: ∃S (isSet(S) ∧ ∀x(...))
+        exists_S = eX s_idx property_of_S
+
+        -- Construct the antecedent of the main implication: isSet(A) ∧ isSet(B)
+        isSet_A = isSet (X a_idx)
+        isSet_B = isSet (X b_idx)
+        antecedent = isSet_A :&&: isSet_B
+
+        -- Construct the main implication
+        implication = antecedent :->: exists_S
+
+    in
+        -- Universally quantify over A and B to create the final closed theorem.
+        multiAx [a_idx, b_idx] implication
+
+
+-- | Proves the theorem defined in 'binaryIntersectionExistsTheorem'.
+-- |
+-- | The proof strategy is to use the Axiom of Specification. For any two sets A and B,
+-- | we can specify a new set S from the source set A using the predicate "is an element of B".
+-- | The resulting set S = {x ∈ A | x ∈ B} is precisely the intersection A ∩ B.
+-- | The `builderInstantiateM` helper encapsulates this application of the axiom.
+proveBinaryIntersectionExistsM :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) =>
+    ProofGenTStd () [ZFC.LogicRule PropDeBr DeBrSe ObjDeBr] PropDeBr Text m ()
+proveBinaryIntersectionExistsM = do
+    -- The theorem is universally quantified over two sets, A and B.
+    multiUGM [(), ()] do
+        -- Inside the UG, free variables v_A and v_B are introduced.
+        v_B <- getTopFreeVar
+        context <- ask
+        let v_A_idx = (length . freeVarTypeStack) context - 2
+        let v_A = V v_A_idx
+        let setA = v_A
+        let setB = v_B
+
+        -- Prove the main implication by assuming the antecedent: isSet(A) ∧ isSet(B).
+        runProofByAsmM (isSet setA :&&: isSet setB) do
+            -- Within this subproof, isSet(A) and isSet(B) are proven assumptions.
+
+            -- Step 1: Define the templates for the Axiom of Specification.
+            -- The source set T will be A. The predicate P(x) will be (x ∈ B).
+            -- The parameters to our templates are A and B.
+            let a_param_idx = 0
+            let b_param_idx = 1
+            let spec_var_idx = 2 -- The 'x' in {x ∈ T | P(x)}
+
+            let source_set_template = X a_param_idx
+            let p_template = X spec_var_idx `In` X b_param_idx
+
+            -- Step 2: Use builderInstantiateM to apply the Axiom of Specification.
+            -- It will construct the set {x ∈ A | x ∈ B} and prove its defining property.
+            -- The instantiation terms [setA, setB] correspond to the template params [X 0, X 1].
+            (defining_prop, _, (intersectionObj,_,_)) <- builderInstantiateM
+                [setA, setB]                         -- instantiationTerms
+                [a_param_idx, b_param_idx]           -- outerTemplateIdxs
+                spec_var_idx                         -- spec_var_X_idx
+                source_set_template                  -- source_set_template (A)
+                p_template                           -- p_template (x ∈ B)
+
+            -- 'defining_prop' is: isSet(B) ∧ ∀x(x∈B ↔ (x∈A ∧ x∈B)), where B is the new intersectionObj.
+            -- This is exactly the property required for the existential statement.
+
+            -- Step 3: Construct the target existential statement from the theorem definition.
+            let target_existential = propDeBrSubXs [(0, setA), (1, setB)] binaryIntersectionExistsTheorem
+
+            -- Step 4: Apply Existential Generalization.
+            -- This works because 'defining_prop' is the instantiated version of the
+            -- property inside the target existential statement.
+            egM intersectionObj target_existential
+
+    return ()
+
+-- | The schema that houses 'proveBinaryIntersectionExistsM'.
+-- | This theorem has no other high-level theorems as lemmas; it is proven
+-- | directly from the Axiom of Specification (via the builderInstantiateM helper).
+binaryIntersectionExistsSchema :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) =>
+     TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text m ()
+binaryIntersectionExistsSchema =
+    TheoremSchemaMT [] [] proveBinaryIntersectionExistsM
+
+-- | Helper to instantiate the binary intersection theorem and return the intersection set object.
+-- | For this helper to work, the theorem defined by 'binaryIntersectionExistsTheorem' must be proven
+-- | beforehand (e.g., in the global context by running its schema).
+binaryIntersectionInstantiateM ::  (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) =>
+    ObjDeBr -> ObjDeBr -> ProofGenTStd () [ZFC.LogicRule PropDeBr DeBrSe ObjDeBr] PropDeBr Text m (PropDeBr, [Int], ObjDeBr)
+binaryIntersectionInstantiateM setA setB = do
+    runProofBySubArgM do
+        -- This helper relies on isSet(setA) and isSet(setB) being proven in the outer context.
+
+        -- Step 1: Instantiate the 'binaryIntersectionExistsTheorem' with the specific sets A and B.
+        (instantiated_thm, _) <- multiUIM binaryIntersectionExistsTheorem [setA, setB]
+
+        -- Step 2: Prove the antecedent of the instantiated theorem.
+        (isSet_A_proven, _) <- repM (isSet setA)
+        (isSet_B_proven, _) <- repM (isSet setB)
+        (antecedent_proven, _) <- adjM isSet_A_proven isSet_B_proven
+
+        -- Step 3: Use Modus Ponens to derive the existential statement.
+        (exists_S_proven, _) <- mpM instantiated_thm
+
+        -- Step 4: Use Existential Instantiation (eiHilbertM) to get the property of the intersection set.
+        -- The Hilbert term created here, `intersectionObj`, is definitionally A ∩ B.
+        (prop_of_intersection, _, intersectionObj) <- eiHilbertM exists_S_proven
+
+        return intersectionObj
+
+
+
+-- | This is the lemma
+-- | ∀A ∀B ( (isSet A ∧ isSet B) → ( (∃U (isSet U ∧ ∀x(x ∈ U ↔ ∃Y(Y ∈ {A,B} ∧ x ∈ Y)))) 
+-- |    ↔ (∃S (isSet S ∧ ∀x(x ∈ S ↔ (x ∈ A ∨ x ∈ B)))) ) )
+union_equiv_theorem :: PropDeBr
+union_equiv_theorem =
+    let
+        tmpl_A_idx = 0; tmpl_B_idx = 1; tmpl_S_idx = 2; tmpl_U_idx = 2; tmpl_Y_idx = 3; tmpl_x_idx = 4
+                      
+        -- Construct the two existential statements using these Int indices.
+        prop_from_union_axiom = eX tmpl_U_idx (isSet (X tmpl_U_idx) :&&:
+                                          aX tmpl_x_idx ((X tmpl_x_idx `In` X tmpl_U_idx) :<->:
+                                              eX tmpl_Y_idx ((X tmpl_Y_idx `In` roster [X tmpl_A_idx, X tmpl_B_idx]) :&&: (X tmpl_x_idx `In` X tmpl_Y_idx))))
+        canonical_body = (X tmpl_x_idx `In` X tmpl_A_idx) :||: (X tmpl_x_idx `In` X tmpl_B_idx)
+        canonical_prop = eX tmpl_S_idx (isSet (X tmpl_S_idx) :&&:
+                                          aX tmpl_x_idx ((X tmpl_x_idx `In` X tmpl_S_idx) :<->: canonical_body))
+            
+        thm_antecedent = isSet (X tmpl_A_idx) :&&: isSet (X tmpl_B_idx)
+    in    
+        multiAx [tmpl_A_idx, tmpl_B_idx] (thm_antecedent :->: (prop_from_union_axiom :<->: canonical_prop))
+            
+      
+-- | Constructs the PropDeBr term for the closed theorem of binary union existence.
+-- | The theorem is: ∀A ∀B ((isSet A ∧ isSet B) → ∃S (isSet S ∧ ∀x(x ∈ S ↔ (x ∈ A ∨ x ∈ B))))
+binaryUnionExistsTheorem :: PropDeBr
+binaryUnionExistsTheorem =
+    let
+        -- Define the integer indices for the template variables (X k).
+        -- These will be bound by the quantifiers.
+        a_idx = 0 -- Represents set A
+        b_idx = 1 -- Represents set B
+        s_idx = 2 -- Represents the union set S
+        x_idx = 3 -- Represents an element x
+
+        -- Construct the inner part of the formula: x ∈ S ↔ (x ∈ A ∨ x ∈ B)
+        x_in_S = X x_idx `In` X s_idx
+        x_in_A = X x_idx `In` X a_idx
+        x_in_B = X x_idx `In` X b_idx
+        x_in_A_or_B = x_in_A :||: x_in_B
+        biconditional = x_in_S :<->: x_in_A_or_B
+
+        -- Quantify over x: ∀x(x ∈ S ↔ (x ∈ A ∨ x ∈ B))
+        forall_x_bicond = aX x_idx biconditional
+
+        -- Construct the property of the union set S: isSet(S) ∧ ∀x(...)
+        isSet_S = isSet (X s_idx)
+        property_of_S = isSet_S :&&: forall_x_bicond
+
+        -- Quantify over S: ∃S (isSet(S) ∧ ∀x(...))
+        exists_S = eX s_idx property_of_S
+
+        -- Construct the antecedent of the main implication: isSet(A) ∧ isSet(B)
+        isSet_A = isSet (X a_idx)
+        isSet_B = isSet (X b_idx)
+        antecedent = isSet_A :&&: isSet_B
+
+        -- Construct the main implication
+        implication = antecedent :->: exists_S
+
+    in
+        -- Universally quantify over A and B to create the final closed theorem.
+        -- multiAx [0, 1] is equivalent to aX 0 (aX 1 (...))
+        multiAx [a_idx, b_idx] implication
+
+-- | Proves the theorem defined in 'binaryUnionExistsTheorem'
+-- |
+-- | Proof Strategy:
+-- | 1. Use Universal Generalization for A and B.
+-- | 2. Assume the antecedent: isSet(A) ∧ isSet(B).
+-- | 3. Use the Axiom of Pairing to prove the existence of the pair set {A, B}.
+-- | 4. Use `eiHilbertM` to instantiate this pair set, getting an object `pairSetAB` and a proof of `isSet(pairSetAB)`.
+-- | 5. Use the Axiom of Union, instantiating it with `pairSetAB`.
+-- | 6. Use Modus Ponens with `isSet(pairSetAB)` to prove `∃U (isSet U ∧ ∀x(x∈U ↔ ∃Y(Y∈{A,B} ∧ x∈Y)))`.
+-- |    This U is the union A ∪ B.
+-- | 7. The property `∀x(x∈U ↔ ∃Y(Y∈{A,B} ∧ x∈Y))` is logically equivalent to the canonical
+-- |    property `∀x(x∈U ↔ (x∈A ∨ x∈B))`. We assert this known equivalence using `fakePropM`.
+-- | 8. This results in the desired existential statement for the binary union.
+-- | Note that 'union_equiv_theorem' is a required lemma.
+
+proveBinaryUnionExistsM :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) =>
+    ProofGenTStd () [ZFC.LogicRule PropDeBr DeBrSe ObjDeBr] PropDeBr Text m ()
+proveBinaryUnionExistsM = do
+    -- Universally generalize over A and B.
+    multiUGM [(), ()] do
+        -- Inside the UG, free variables v_A and v_B are introduced.
+        v_B <- getTopFreeVar
+        context <- ask
+        let v_A_idx = (length . freeVarTypeStack) context - 2
+        let v_A = V v_A_idx
+        let setA = v_A
+        let setB = v_B
+
+        -- Prove the implication by assuming the antecedent.
+        runProofByAsmM (isSet setA :&&: isSet setB) do
+            -- Now, isSet(A) and isSet(B) are proven assumptions in this context.
+
+            -- Step 1: Use the Axiom of Pairing to prove ∃P. isSet(P) ∧ P = {A,B}.
+            (pairAxiom,_) <- ZFC.pairingAxiomM
+            (pairAxiom_inst1, _) <- uiM setA pairAxiom
+            (pairAxiom_inst2, _) <- uiM setB pairAxiom_inst1
+
+            -- Step 2: Instantiate this pair set with a Hilbert term `pairSetAB`.
+            -- `pair_prop` is isSet({A,B}) ∧ ∀z(z∈{A,B} ↔ z=A ∨ z=B).
+            (pair_prop, _, pairSetAB) <- eiHilbertM pairAxiom_inst2
+            (isSet_pair_proven, _) <- simpLM pair_prop
+
+            -- Step 3: Use the Axiom of Union on the proven set `pairSetAB`.
+            (unionAxiom,_) <- ZFC.unionAxiomM
+            (unionAxiom_inst, _) <- uiM pairSetAB unionAxiom
+
+            -- Step 4: Use Modus Ponens with `isSet(pairSetAB)` to derive the existence of the union.
+            -- `exists_U` is ∃U(isSet U ∧ ∀x(x∈U ↔ ∃Y(Y∈{A,B} ∧ x∈Y))).
+            (exists_U, _) <- mpM unionAxiom_inst
+            -- Step 5: Assert a general, CLOSED theorem about the equivalence of the two forms of union.
+            -- Thm: ∀A,B. (isSet A ∧ isSet B) → ( (∃U. from Axiom of Union on {A,B}) ↔ (∃S. with canonical binary union prop) )
+            -- We build the two existential statements as templates first.
+
+            let tmpl_A_idx = 0; tmpl_B_idx = 1; tmpl_S_idx = 2; tmpl_U_idx = 2; tmpl_Y_idx = 3; tmpl_x_idx = 4
+                      
+
+            -- Step 6: Instantiate the theorem with our specific sets A and B.
+            (instantiated_thm, _) <- multiUIM union_equiv_theorem [setA, setB]
+
+            -- Step 7: Use Modus Ponens with our assumption `isSet A ∧ isSet B`.
+            (proven_biconditional, _) <- mpM instantiated_thm
+
+            -- Step 8: From the equivalence and the proven `exists_U`, derive the target existential.
+            (forward_imp, _) <- bicondElimLM proven_biconditional
+
+            forward_imp_txt <- showPropM forward_imp
+            remarkM $ "Forward Implication: " <> forward_imp_txt
+            PL.mpM forward_imp -- This proves the target_existential
+
+    return ()
+
+
+
+-- | The schema that houses 'proveBinaryUnionExistsM'.
+-- | The schema stipulates that:
+-- | "union_equiv_theorem" is a required lemma.
+binaryUnionExistsSchema :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) => 
+     TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text m ()
+binaryUnionExistsSchema = 
+
+      
+    TheoremSchemaMT [] [union_equiv_theorem] proveBinaryUnionExistsM 
+
+
+
+
+-- | Helper to instantiate the binary union theorem and return the union set.
+-- | For this helper to work, the theorem defined by 'binaryUnionExistsTheorem' must be proven
+-- | beforehand, which is likely done in the global context.
+binaryUnionInstantiateM ::  (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) =>
+    ObjDeBr -> ObjDeBr -> ProofGenTStd () [ZFC.LogicRule PropDeBr DeBrSe ObjDeBr] PropDeBr Text m (PropDeBr, [Int], ObjDeBr)
+binaryUnionInstantiateM setA setB = do
+    runProofBySubArgM do
+        -- This helper relies on isSet(setA) and isSet(setB) being proven in the outer context.
+
+        -- Step 1: Instantiate the 'binaryUnionExistsTheorem' theorem with the specific sets A and B.
+        (instantiated_thm, _) <- multiUIM binaryUnionExistsTheorem [setA, setB]
+        -- The result is the proven proposition: (isSet A ∧ isSet B) → ∃S(...)
+
+        -- Step 3: Prove the antecedent of the instantiated theorem.
+        -- We assume isSet A and isSet B are proven in the parent context.
+        (isSet_A_proven, _) <- repM (isSet setA)
+        (isSet_B_proven, _) <- repM (isSet setB)
+        (antecedent_proven, _) <- adjM isSet_A_proven isSet_B_proven
+
+        -- Step 4: Use Modus Ponens to derive the existential statement.
+        (exists_S_proven, _) <- mpM instantiated_thm
+
+        -- Step 5: Use Existential Instantiation (eiHilbertM) to get the property of the union set.
+        -- The Hilbert term created here, `unionObj`, is definitionally A U B.
+        (prop_of_union, _, unionObj) <- eiHilbertM exists_S_proven
+        -- prop_of_union is: isSet(unionObj) ∧ ∀x(x∈unionObj ↔ (x∈A ∨ x∈B))
+        return unionObj
+
+
+-- | Helper to prove that if A and B are sets,
+-- | then their union (A ∪ B) is also a set.
+-- | This version takes advantage of the `binaryUnionInstantiateM` helper.
+-- |
+-- | Note: This helper requires that `isSet setA` and `isSet setB` have already been
+-- | proven in the current proof context.
+-- | It also relies on the theorem `binaryUnionExistsTheorem` being proven beforehand.
+proveUnionIsSetM :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) =>
+    ObjDeBr -> ObjDeBr -> ProofGenTStd () [ZFC.LogicRule PropDeBr DeBrSe ObjDeBr] PropDeBr Text m (PropDeBr, [Int])
+proveUnionIsSetM setA setB = do
+    (resultProp,idx,_) <- runProofBySubArgM do
+        (prop_of_union, _, unionObj) <- binaryUnionInstantiateM setA setB
+        (isSet_union_proven, _) <- simpLM prop_of_union
+        return ()
+    return (resultProp,idx)
+
+
+
+
+-- | Constructs the PropDeBr term for the closed theorem stating that the property
+-- | of a cross product derived via the Axiom of Specification implies the
+-- | canonical property of a cross product.
+-- |
+-- | 'binaryUnionExistsTheorem' is a required lemma for this theorem.
+-- | Theorem: ∀A∀B((isSet A ∧ isSet B) → (SpecProp(A,B) → CanonicalProp(A,B)))
+crossProductDefEquivTheorem :: PropDeBr
+crossProductDefEquivTheorem =
+    let
+        -- Define integer indices for the template variables (X k).
+        -- These will be bound by the outermost quantifiers for A and B.
+        a_idx = 0 -- Represents set A
+        b_idx = 1 -- Represents set B
+
+        setA = X a_idx
+        setB = X b_idx
+
+        -- Define the inner predicate P(z) used in the specification.
+        -- P(z) := ∃x∃y (z = <x,y> ∧ x ∈ A ∧ y ∈ B)
+        spec_z_idx = 2; spec_x_idx = 3; spec_y_idx = 4
+        predicate_P = eX spec_x_idx (eX spec_y_idx (
+                          (X spec_z_idx :==: buildPair (X spec_x_idx) (X spec_y_idx))
+                          :&&: (X spec_x_idx `In` setA)
+                          :&&: (X spec_y_idx `In` setB)
+                      ))
+
+        -- Define the universe set U = P(P(A U B))
+        universeSet = buildPowerSet (buildPowerSet (setA .\/. setB))
+
+        -- Define the cross product object B via the builder shorthand, which
+        -- is equivalent to the Hilbert term from specification.
+        -- B := {z ∈ U | P(z)}
+        crossProdObj = builderX spec_z_idx universeSet predicate_P
+
+        -- Now, construct the two main properties that form the implication.
+
+        -- 1. SpecProp(A,B): The defining property of B as derived from specification.
+        --    isSet(B) ∧ ∀z(z∈B ↔ (P(z) ∧ z∈U))
+        spec_prop_z_idx = 2 -- A new z for this quantifier
+
+        spec_prop_body = (X spec_prop_z_idx `In` crossProdObj) :<->:
+                         ((propDeBrSubX spec_z_idx (X spec_prop_z_idx) predicate_P) :&&: (X spec_prop_z_idx `In` universeSet))
+        spec_prop = isSet crossProdObj :&&: aX spec_prop_z_idx spec_prop_body
+
+        -- 2. CanonicalProp(A,B): The standard definition of the property of A × B.
+        --    isSet(B) ∧ ∀x∀y(<x,y>∈B ↔ (x∈A ∧ y∈B))
+        canon_x_idx = 2; canon_y_idx = 3
+        canon_element_prop = (X canon_x_idx `In` setA) :&&: (X canon_y_idx `In` setB)
+        canon_pair_in_b = buildPair (X canon_x_idx) (X canon_y_idx) `In` crossProdObj
+        canon_quantified_bicond = aX canon_x_idx (aX canon_y_idx (canon_element_prop :<->: canon_pair_in_b))
+        canonical_prop = isSet crossProdObj :&&: canon_quantified_bicond
+
+        -- Construct the main implication of the theorem: SpecProp(A,B) → CanonicalProp(A,B)
+        spec_implies_canonical = spec_prop :->: canonical_prop
+
+        -- Construct the antecedent for the entire theorem: isSet(A) ∧ isSet(B)
+        isSet_A = isSet setA
+        isSet_B = isSet setB
+        theorem_antecedent = isSet_A :&&: isSet_B
+
+        -- Form the implication for the body of the theorem
+        theorem_body = theorem_antecedent :->: spec_implies_canonical
+
+    in
+        -- Universally quantify over A and B to create the final closed theorem.
+        multiAx [a_idx, b_idx] theorem_body
+    
+
+
+-- | Proves "crossProductDefEquivTheorem".
+proveCrossProductDefEquivM :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) =>
+    ProofGenTStd () [ZFC.LogicRule PropDeBr DeBrSe ObjDeBr] PropDeBr Text m ()
+proveCrossProductDefEquivM = do
+    -- Universally generalize over A and B
+    multiUGM [(), ()] do
+        -- Inside UG, free variables v_A and v_B are introduced
+        v_B <- getTopFreeVar
+        context <- ask
+        let v_A_idx = (length . freeVarTypeStack) context - 2
+        let v_A = V v_A_idx
+        let setA = v_A
+        let setB = v_B
+
+        -- Prove the main implication by assuming the antecedent
+        runProofByAsmM (isSet setA :&&: isSet setB) do
+            -- Within this subproof, isSet A and isSet B are proven assumptions.
+            -- Construct all necessary terms and properties internally.
+            let universeSet = buildPowerSet (buildPowerSet (setA .\/. setB))
+            let z_idx = 0; x_idx = 1; y_idx = 2; setA_idx = 3; setB_idx = 4
+            let universeSet_tmplt = buildPowerSet (buildPowerSet (X setA_idx .\/. X setB_idx))
+            let predicate_P = eX x_idx (eX y_idx (
+                                  (X z_idx :==: buildPair (X x_idx) (X y_idx))
+                                  :&&: (X x_idx `In` setA)
+                                  :&&: (X y_idx `In` setB)
+                              ))
+            let predicate_P_tmplt = eX x_idx (eX y_idx (
+                                  (X z_idx :==: buildPair (X x_idx) (X y_idx))
+                                  :&&: (X x_idx `In` X setA_idx)
+                                  :&&: (X y_idx `In` X setB_idx)
+                              ))
+            -- The object for the cross product, B = A×B
+            let crossProdObj = builderX z_idx universeSet predicate_P
+            crossProdObj_txt <- showObjM crossProdObj
+            remarkM $ "Cross Product Object: " <> crossProdObj_txt
+            -- Get the defining property of B from the Axiom of Specification
+            --(specAxiom, _) <- specificationM [] z_idx universeSet predicate_P -- No outer free vars in this sub-context
+            --(definingProp_of_B, _, _) <- eiHilbertM specAxiom
+ 
+            -- Correctly use specificationFreeMBuilder, which is designed to handle
+            -- the free variables v_A and v_B present in 'setA', 'setB', and thus in 'predicate_P'.
+            (definingProp_of_B, _, (crossProdObj,_,_)) <- 
+                 builderInstantiateM [V 0, V 1] [setA_idx, setB_idx] z_idx universeSet_tmplt predicate_P_tmplt
+
+            crossProdObj_txt <- showObjM crossProdObj
+            remarkM $ "Cross Product Object from Builder: " <> crossProdObj_txt
+            --error "stop this shit"
+
+            -- Construct the canonical target property for the cross product B
+            let s_idx_final = 0; x_idx_final = 1; y_idx_final = 2
+            let element_prop_final = (X x_idx_final `In` setA) :&&: (X y_idx_final `In` setB)
+            let pair_in_s_final = buildPair (X x_idx_final) (X y_idx_final) `In` (X s_idx_final)
+            let quantified_bicond_final = aX x_idx_final (aX y_idx_final (pair_in_s_final :<->: element_prop_final))
+            let canonical_prop_of_B = isSet crossProdObj :&&: quantified_bicond_final
+
+            -- Now, prove the implication: definingProp_of_B → canonical_prop_of_B
+            runProofByAsmM definingProp_of_B do
+                -- This inner proof derives the canonical property from the specification property.
+                (isSet_B_proven, _) <- simpLM definingProp_of_B
+                (spec_forall_bicond, _) <- simpRM definingProp_of_B
+                (quantified_bicond_derived, _) <- multiUGM [(), ()] do
+                    v_y_inner <- getTopFreeVar
+                    context_inner <- ask
+                    let v_x_inner_idx = (length . freeVarTypeStack) context_inner - 2
+                    let v_x_inner = V v_x_inner_idx
+                    (dir1,_) <- runProofByAsmM (buildPair v_x_inner v_y_inner `In` crossProdObj) do
+                        (spec_inst,_) <- uiM (buildPair v_x_inner v_y_inner) spec_forall_bicond
+                        (imp,_) <- bicondElimLM spec_inst
+                        (inU_and_P,_) <- mpM imp
+                        (p_of_pair,_) <- simpLM inU_and_P
+
+                        -- CORRECTED: Perform existential instantiation twice for the nested quantifiers.
+                        -- First, instantiate the outer ∃a from ∃a(∃b.P(a,b)).
+                        (p_inst_for_b, _, v_a_h) <- eiHilbertM p_of_pair
+
+                        -- Second, instantiate the inner ∃b from the resulting proposition.
+                        (p_inst_final, _, v_b_h) <- eiHilbertM p_inst_for_b
+
+                        -- 'p_inst_final' is now the fully instantiated body:
+                        -- (<v_x,v_y> = <v_a_h,v_b_h>) ∧ v_a_h∈A ∧ v_b_h∈B
+
+                        -- Define the general, CLOSED theorem for pair substitution.
+                        let thm_A=0; thm_B=1; thm_x=2; thm_y=3; thm_a=4; thm_b=5
+                        let thm_antecedent = (buildPair (X thm_x) (X thm_y) :==: buildPair (X thm_a) (X thm_b))
+                                             :&&: (X thm_a `In` X thm_A) :&&: (X thm_b `In` X thm_B)
+                        let thm_consequent = (X thm_x `In` X thm_A) :&&: (X thm_y `In` X thm_B)
+                        let pair_subst_theorem_closed = multiAx [thm_A, thm_B, thm_x, thm_y, thm_a, thm_b] (thm_antecedent :->: thm_consequent)
+                        
+                        (pair_subst_theorem_proven, _) <- fakePropM [] pair_subst_theorem_closed
+                        
+                        -- Instantiate the theorem with our specific free variables and Hilbert terms.
+                        let instantiation_terms_for_thm = [setA, setB, v_x_inner, v_y_inner, v_a_h, v_b_h]
+                        (instantiated_theorem, _) <- multiUIM pair_subst_theorem_proven instantiation_terms_for_thm
+
+                        -- Use Modus Ponens with the fully instantiated body 'p_inst_final' to get the consequent.
+                        mpM instantiated_theorem
+                    (dir2,_) <- runProofByAsmM ((v_x_inner `In` setA) :&&: (v_y_inner `In` setB)) do
+                        -- Goal: Prove <x,y> ∈ B. This means proving P(<x,y>) ∧ <x,y>∈U.
+
+                        -- Part 1: Prove P(<x,y>), which is ∃a∃b(<x,y>=<a,b> ∧ a∈A ∧ b∈B).
+                        -- We prove this by witnessing with a=v_x and b=v_y.
+                        (vx_in_A_p, _) <- simpLM ((v_x_inner `In` setA) :&&: (v_y_inner `In` setB))
+                        (vy_in_B_p, _) <- simpRM ((v_x_inner `In` setA) :&&: (v_y_inner `In` setB))
+                        (refl_pair, _) <- eqReflM (buildPair v_x_inner v_y_inner)
+
+                        (in_A_and_in_B, _) <- adjM vx_in_A_p vy_in_B_p
+                        (p_vx_vy_instantiated_body, _) <- adjM refl_pair in_A_and_in_B
+
+
+                        let p_ab_template = (buildPair v_x_inner v_y_inner :==: buildPair (X 0) (X 1)) :&&: ((X 0 `In` setA) :&&: (X 1 `In` setB))
+                        let p_vx_y_template = propDeBrSubX 0 v_x_inner p_ab_template
+                        let eg_target_y = eX 1 p_vx_y_template
+                        (exists_y_prop, _) <- egM v_y_inner eg_target_y
+
+                        let p_x_b_template = eX 1 (propDeBrSubX 0 (X 0) p_ab_template)
+                        let eg_target_x = eX 0 p_x_b_template
+                        (p_of_pair_proven, _) <- egM v_x_inner eg_target_x
+
+                        -- Part 2: Prove <x,y> ∈ universeSet (U = P(P(A∪B))).
+                        -- We assert the general theorem that makes this possible.
+                        let thm_A=0; thm_B=1; thm_x=2; thm_y=3
+                        let thm_univ = buildPowerSet (buildPowerSet (X thm_A .\/. X thm_B))
+                        let thm_pair_univ_antecedent = isSet (X thm_A) :&&: isSet (X thm_B) :&&: (X thm_x `In` X thm_A) :&&: (X thm_y `In` X thm_B)
+                        let thm_pair_univ_consequent = buildPair (X thm_x) (X thm_y) `In` thm_univ
+                        let pair_in_universe_theorem_closed = multiAx [thm_A, thm_B, thm_x, thm_y] (thm_pair_univ_antecedent :->: thm_pair_univ_consequent)
+                        (pair_in_universe_theorem_proven, _) <- fakePropM [] pair_in_universe_theorem_closed
+                        
+                        -- Instantiate the theorem and use it.
+                        (instantiated_thm, _) <- multiUIM pair_in_universe_theorem_proven [setA, setB, v_x_inner, v_y_inner]
+
+
+                        (conj3_4, _) <- adjM vx_in_A_p vy_in_B_p
+                        (isSetB_p, _) <- simpRM (isSet setA :&&: isSet setB)
+                        (conj2_3_4, _) <- adjM isSetB_p conj3_4
+                        (isSetA_p, _) <- simpLM (isSet setA :&&: isSet setB)
+                        (full_antecedent, _) <- adjM isSetA_p conj2_3_4
+                        (pair_in_U_proven, _) <- mpM instantiated_thm
+                        -- Part 3: Combine proofs for P(<x,y>) and <x,y>∈U to match the spec property.
+                        (in_U_and_P, _) <- adjM p_of_pair_proven pair_in_U_proven
+                        
+                        -- Part 4: Use the spec property to conclude <x,y> ∈ B
+                        (spec_bicond_inst, _) <- uiM (buildPair v_x_inner v_y_inner) spec_forall_bicond
+                        (spec_imp_backward, _) <- bicondElimRM spec_bicond_inst
+                        mpM spec_imp_backward
+                        return ()
+                    bicondIntroM dir1 dir2
+                -- Adjoin isSet(B) to complete the canonical property
+                adjM isSet_B_proven quantified_bicond_derived
+    return ()
+
+-- | The schema that houses 'proveCrossProductDefEquivM'.
+-- | The schema stipulates that:
+-- | "binaryUnionExistsTheorem" is a required lemma.
+crossProductDefEquivSchema :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) => 
+     TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text m ()
+crossProductDefEquivSchema = 
+    TheoremSchemaMT [] [binaryUnionExistsTheorem] proveCrossProductDefEquivM
+
+
+
+-- | Constructs the PropDeBr term for the closed theorem of Cartesian product existence.
+-- | The theorem is: ∀A ∀B ((isSet A ∧ isSet B) → ∃S (isSet S ∧ ∀x∀y(<x,y>∈S ↔ (x∈A ∧ y∈B))))
+crossProductExistsTheorem :: PropDeBr
+crossProductExistsTheorem =
+    let
+        -- Define integer indices for the template variables (X k).
+        -- These will be bound by the quantifiers in nested scopes.
+        a_idx = 0 -- Represents set A
+        b_idx = 1 -- Represents set B
+        s_idx = 2 -- Represents the cross product set S
+        x_idx = 3 -- Represents an element x from A
+        y_idx = 4 -- Represents an element y from B
+
+        -- Construct the inner part of the formula: <x,y> ∈ S ↔ (x ∈ A ∧ y ∈ B)
+        pair_xy = buildPair (X x_idx) (X y_idx)
+        pair_in_S = pair_xy `In` (X s_idx)
+        
+        x_in_A = X x_idx `In` (X a_idx)
+        y_in_B = X y_idx `In` (X b_idx)
+        x_in_A_and_y_in_B = x_in_A :&&: y_in_B
+
+        biconditional = x_in_A_and_y_in_B :<->: pair_in_S
+
+        -- Quantify over x and y: ∀x∀y(<x,y> ∈ S ↔ (x ∈ A ∧ y ∈ B))
+        quantified_xy_bicond = aX x_idx (aX y_idx biconditional)
+
+        -- Construct the property of the set S: isSet(S) ∧ ∀x∀y(...)
+        isSet_S = isSet (X s_idx)
+        property_of_S = isSet_S :&&: quantified_xy_bicond
+
+        -- Quantify over S: ∃S (isSet(S) ∧ ∀x∀y(...))
+        exists_S = eX s_idx property_of_S
+
+        -- Construct the antecedent of the main implication: isSet(A) ∧ isSet(B)
+        isSet_A = isSet (X a_idx)
+        isSet_B = isSet (X b_idx)
+        antecedent = isSet_A :&&: isSet_B
+
+        -- Construct the main implication
+        implication = antecedent :->: exists_S
+
+    in
+        -- Universally quantify over A and B to create the final closed theorem.
+        -- multiAx [0, 1] is equivalent to aX 0 (aX 1 (...))
+        multiAx [a_idx, b_idx] implication
+
+
+
+-- | Proves the theorem: 'crossProductExistsTheorem'.
+-- | 'crossProductDefEquivTheorem' is a required lemma for this proof.
+proveCrossProductExistsM :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) =>
+    ProofGenTStd () [ZFC.LogicRule PropDeBr DeBrSe ObjDeBr] PropDeBr Text m ()
+proveCrossProductExistsM = do
+    -- The theorem is universally quantified over two sets, A and B.
+    -- We use multiUGM to handle the two ∀ quantifiers.
+    multiUGM [(), ()] do
+        -- Inside the UG, free variables v_B (most recent) and v_A are introduced.
+        v_B <- getTopFreeVar
+        context <- ask
+        let v_A_idx = (length . freeVarTypeStack) context - 2
+        let v_A = V v_A_idx
+        let setA = v_A
+        let setB = v_B
+
+        -- Prove the main implication by assuming the antecedent.
+        runProofByAsmM (isSet setA :&&: isSet setB) do
+            -- Now, inside this assumption, we have proven `isSet setA` and `isSet setB`.
+            (isSet_A_proven, _) <- PL.simpLM (isSet setA :&&: isSet setB)
+            (isSet_B_proven, _) <- PL.simpRM (isSet setA :&&: isSet setB)
+            
+            -- Step 1: Prove that the universe U = P(P(A U B)) is a set.
+            let universeSet = buildPowerSet (buildPowerSet (setA .\/. setB))
+            (_, _, _) <- runProofBySubArgM do
+                -- Step 1a: Get the theorem: ∀A'∀B'((isSet A' ∧ isSet B') → isSet(A'∪B'))
+                (isSet_union_proven, _) <- proveUnionIsSetM setA setB
+
+                (isSet_power_union, _) <- provePowerSetIsSetM (setA .\/. setB)
+
+                -- Step 1d: Use the theorem again to prove isSet(P(P(A U B))).
+                --(imp2, _) <- uiM (buildPowerSet (setA .\/. setB)) thm_powerset_is_set
+                --(isSet_power_power_union, _) <- mpM imp2 -- Uses isSet_power_union
+                (isSet_power_power_union,_) <- provePowerSetIsSetM (buildPowerSet (setA .\/. setB))
+
+                return ()
+
+            -- Step 2: Define the predicate P(z) for specification.
+            let z_idx = 0; x_idx = 1; y_idx = 2; 
+                setA_idx = 3; setB_idx = 4
+            let universeSet_tmplt = buildPowerSet (buildPowerSet (X setA_idx .\/. X setB_idx))
+            -- Define the predicate P(z) as ∃x
+            let predicate_P = eX x_idx (eX y_idx (
+                                  (X z_idx :==: buildPair (X x_idx) (X y_idx))
+                                  :&&: (X x_idx `In` setA)
+                                  :&&: (X y_idx `In` setB)
+                              ))
+            let predicate_P_tmplt = eX x_idx (eX y_idx (
+                                  (X z_idx :==: buildPair (X x_idx) (X y_idx))
+                                  :&&: (X x_idx `In` X setA_idx)
+                                  :&&: (X y_idx `In` X setB_idx)
+                              ))
+            predicate_P_txt <- showPropM predicate_P_tmplt
+            remarkM $ "Predicate P(z): " <> predicate_P_txt
+            (definingProp_of_B, _, (crossProdObj,_,_)) <- builderInstantiateM [V 0, V 1]
+                         [setA_idx, setB_idx] z_idx universeSet_tmplt predicate_P_tmplt
+            -- crossProdObj_txt <- showObjM crossProdObj
+
+
+            -- Step 3: Use the theorem about definition equivalence to get the canonical property.
+
+            thm_equiv_txt <- showPropM crossProductDefEquivTheorem
+            remarkM $ "Theorem of Definition Equivalence: " <> thm_equiv_txt
+            (thm_equiv_inst1, _) <- uiM setA crossProductDefEquivTheorem
+            (thm_equiv_inst2, _) <- uiM setB thm_equiv_inst1
+            
+            (imp_equiv, _) <- mpM thm_equiv_inst2
+            (proven_property_of_B, _) <- mpM imp_equiv
+
+            -- Step 4: Construct the target existential statement using the explicit template method.
+            let s_idx_final = 0; x_idx_final = 1; y_idx_final = 2
+            let element_prop_final = (X x_idx_final `In` setA) :&&: (X y_idx_final `In` setB)
+            let pair_in_s_final = buildPair (X x_idx_final) (X y_idx_final) `In` (X s_idx_final)
+            let quantified_bicond_final = aX x_idx_final (aX y_idx_final (element_prop_final :<->: pair_in_s_final))
+            let target_property_for_S = isSet (X s_idx_final) :&&: quantified_bicond_final
+            let target_existential = eX s_idx_final target_property_for_S
+
+            -- Step 5: Apply Existential Generalization.
+            crossProdObjTxt <- showObjM crossProdObj
+            remarkM $ "CROSSPRODOBJ IS" <> crossProdObjTxt
+            egM crossProdObj target_existential
+    return ()
+
+
+
+-- | The schema that houses 'proveCrossProductExistsM'.
+-- | The schema stipulates that:
+-- | "crossProductDefEquivTheorem" is a required lemma.
+crossProductExistsSchema :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) => 
+     TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text m ()
+crossProductExistsSchema = 
+    TheoremSchemaMT [] [binaryUnionExistsTheorem,crossProductDefEquivTheorem] proveCrossProductExistsM
+
+-- | Helper to instantiate the cross product existence theorem and return the
+-- | resulting cartesian product set.
+-- | For this helper to work, the theorem defined by 'crossProductExistsTheorem' must be proven
+-- | beforehand, which will likely be done in the global context.
+crossProductInstantiateM ::  (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) =>
+    ObjDeBr -> ObjDeBr -> ProofGenTStd () [ZFC.LogicRule PropDeBr DeBrSe ObjDeBr] PropDeBr Text m (PropDeBr, [Int], ObjDeBr)
+crossProductInstantiateM setA setB = do
+    runProofBySubArgM do
+        -- This helper relies on isSet(setA) and isSet(setB) being proven in the outer context.
+
+        -- Step 1: Instantiate the 'crossProductExistsTheorem' theorem with the specific sets A and B.
+        (instantiated_thm, _) <- multiUIM crossProductExistsTheorem [setA, setB]
+        -- The result is the proven proposition: (isSet A ∧ isSet B) → ∃S(...)
+
+        -- Step 2: Prove the antecedent of the instantiated theorem.
+        (isSet_A_proven, _) <- repM (isSet setA)
+        (isSet_B_proven, _) <- repM (isSet setB)
+        (antecedent_proven, _) <- adjM isSet_A_proven isSet_B_proven
+
+        -- Step 3: Use Modus Ponens to derive the existential statement.
+        (exists_S_proven, _) <- mpM instantiated_thm
+
+        -- Step 4: Use Existential Instantiation (eiHilbertM) to get the property of the cross product set.
+        -- The Hilbert term created here, `crossProdObj`, is definitionally A × B.
+        (prop_of_crossProd, _, crossProdObj) <- eiHilbertM exists_S_proven
+        
+        -- The runProofBySubArgM wrapper will pick up 'prop_of_crossProd' as the 'consequent'
+        -- from the Last s writer state. The monadic return value of this 'do' block
+        -- will be returned as the 'extraData' component of runProofBySubArgM's result.
+        return crossProdObj
 
 
 
@@ -343,51 +1595,55 @@ multiUIM initialProposition instantiationTerms =
 
 
 strongInductionTheoremMSchema :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) => 
-     Int -> PropDeBr -> TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text m ()
-strongInductionTheoremMSchema idx p_template= 
-        TheoremSchemaMT  [] [] (strongInductionTheoremProg idx p_template)
+     Int -> ObjDeBr -> PropDeBr -> TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text m ()
+strongInductionTheoremMSchema idx dom p_template= 
+    let
+      dom_tmplt_consts = extractConstsTerm dom
+      p_tmplt_consts = extractConstsSent p_template
+      all_consts = dom_tmplt_consts `Set.union` p_tmplt_consts
+      typed_consts = zip (Data.Set.toList all_consts) (repeat ()) 
+    in
+      TheoremSchemaMT typed_consts [crossProductExistsTheorem
+                              , builderSubsetTheorem [] idx dom (neg p_template)
+                             ] (strongInductionTheoremProg idx dom p_template)
 
 
 strongInductionTheoremProg::(MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) => 
-               Int -> PropDeBr -> ProofGenTStd () [ZFCRuleDeBr] PropDeBr Text m ()
-strongInductionTheoremProg idx p_template = do
-    -- The assumption is that a relation is well-founded on domain dom.
-    let rel_idx = idx + 1
-    --let dom_idx = idx + 2
+               Int -> ObjDeBr -> PropDeBr -> ProofGenTStd () [ZFCRuleDeBr] PropDeBr Text m ()
+strongInductionTheoremProg idx dom p_template = do
 
-    runProofByUGM () do
-        dom <- getTopFreeVar
-        let asm =  eX rel_idx (
-                           X rel_idx `subset` (dom `crossProd` dom)
-                               :&&: isRelWellFoundedOn dom (X rel_idx)
-                                :&&: strongInductionPremiseOnRel p_template idx dom (X rel_idx)
+    let rel_idx = idx + 1
+    let dom_idx = idx + 2
+
+    let asm =  propDeBrSubX dom_idx dom (isSet (X dom_idx) :&&: eX rel_idx (
+                           X rel_idx `subset` ((X dom_idx) `crossProd` dom)
+                               :&&: isRelWellFoundedOn (X dom_idx) (X rel_idx)
+                                :&&: strongInductionPremiseOnRel p_template idx (X dom_idx) (X rel_idx))
                         )  
 
         
-        runProofByAsmM asm do
-            (asm_after_ei,_,rel_obj) <- eiHilbertM asm
+    runProofByAsmM asm do
+            (isSetDom, _) <- simpLM asm
+            (asmMain, _) <- simpRM asm
+            (asm_after_ei,_,rel_obj) <- eiHilbertM asmMain
             (rel_is_relation,rel_is_relation_idx) <- simpLM asm_after_ei
             (bAndC,_) <- simpRM asm_after_ei
             (well_founded,well_founded_idx) <- simpLM bAndC
+            remarkM "here is a simpL"
             (induction_premise,induction_premise_idx) <- simpRM bAndC
             remarkM $   (pack . show) rel_is_relation_idx <> " asserts that rel is a relation over N.\n" 
                        <> (pack . show) well_founded_idx <> " asserts that rel is well-founded over N.\n"
                        <> (pack . show) induction_premise_idx <> " asserts that the induction premise holds for N"
-            (spec_prop,spec_prop_idx,absurd_candidate) <- specificationFreeMBuilder idx dom (neg p_template) 
-            -- let absurd_candidate = builderX idx dom (neg p_template)
-            proveBuilderIsSubsetOfDomM 
-                spec_prop
-                absurd_candidate
-                dom
+            (spec_prop,spec_prop_idx,(absurd_candidate,_,_)) <- builderInstantiateM [dom] [idx + 1] idx (X (idx + 1)) (neg p_template)
             let absurd_asm = absurd_candidate./=. EmptySet 
             absurd_asm_txt <- showPropM absurd_asm
             remarkM $ "Absurd assumption: " <> absurd_asm_txt
             (proves_false,_) <- runProofByAsmM absurd_asm do
                 (well_founded_instance,_) <- uiM absurd_candidate well_founded
                 remarkM "LOOK HERE!!!!!"
-                specificationFreeMBuilder idx dom (neg p_template)    
                 remarkM "AFTER LOOK HERE!!!!!"
-                (something,_) <- fakePropM [] (absurd_candidate `subset` dom)
+                let something = builderSubsetTheorem [] idx dom (neg p_template)
+                -- This does not need to be proven because it's a lemma proven in the template.
                 adjM something absurd_asm
                 (min_assertion, min_assertion_idx) <- mpM well_founded_instance --the first lemma is used here
                 remarkM $   (pack . show) min_assertion_idx <> " asserts the existance of a minimum element in the absurd set. "
@@ -413,13 +1669,18 @@ strongInductionTheoremProg idx p_template = do
                 remarkM "This is A"      
                 (more_absurd,_) <- negImpToConjViaEquivM absurd_element_assert
                 (l_more_absurd,_) <- simpLM more_absurd
+
+
                 show_l_more_absurd <- showPropM l_more_absurd
                 remarkM $ "This l_more_absurd: " <> show_l_more_absurd
                 repM l_more_absurd
                 (r_more_absurd,_) <- simpRM more_absurd
                 let absurd_element_in_n = absurd_element `In` natSetObj
                 (something,_) <- simpRM rel_is_relation
+                remarkM "maybe here"
                 let xobj = buildPair absurd_element min_element
+                xobj_txt <- showObjM xobj
+                remarkM $  "XOBJ" <> xobj_txt
                 (something_else,_) <- uiM xobj something
                 remarkM "This is A" 
                 let (a,b) = maybe (error "bad error") id (parseImplication something_else)
@@ -435,20 +1696,36 @@ strongInductionTheoremProg idx p_template = do
                 let (pair2_left, pair2_right) = maybe (error "bad error") id (parsePair pair2)
                 mpM something_else
                 remarkM "This is B"
-                fakePropM [l_more_absurd,rel_is_relation] absurd_element_in_n
-                let newProp = absurd_element `In` absurd_candidate
 
-                (final_ante,_) <- fakePropM [absurd_element_in_n, r_more_absurd] newProp
+
+                (domXdomProps,_,domXdom)<- crossProductInstantiateM dom dom
+                (ok, _) <- simpRM domXdomProps
+                (idontknow,_) <- multiUIM ok [absurd_element,min_element]
+                (noidea,_) <- bicondElimRM idontknow
+                something_txt <- showObjM $ domXdom
+                remarkM $ "The cross product of domz with itself is: " <> something_txt
+                (whatever,_) <- simpRM rel_is_relation
+                (imp_whatever,_) <- uiM xobj whatever
+                (forward_imp,_) <- mpM imp_whatever
+                (noclue, _) <- mpM noidea
+                (whatever,_) <- simpLM noclue
+                adjM r_more_absurd whatever
+                let newProp = absurd_element `In` absurd_candidate
+                (please_stop,_) <- simpRM spec_prop
+                (almost,_) <- uiM absurd_element please_stop                
+                (really_almost,_) <- bicondElimRM almost
+                final_ante <- mpM really_almost
                 remarkM "This is C"
                 (final_imp,_) <- uiM absurd_element absurd_set_elements_not_below_min
                 (next,_) <- mpM final_imp
+
                 contraFM l_more_absurd next
             (double_neg,_) <- absurdM proves_false
             (final_generalization_set_version,_) <- doubleNegElimM double_neg
+            repM spec_prop
             let final_generalization = aX idx (X idx `In` dom .->. p_template)
             fakePropM [final_generalization_set_version] final_generalization
             return ()
-        return ()
     return ()
 
 
@@ -1833,9 +3110,25 @@ main = do
     (aFSR, bFSR, cFSR, dFSR) <- runProofGeneratorT testFuncsSetRendering
     (putStrLn . unpack . showPropDeBrStepsBase) cFSR -- Print results
 
+    -- print "TEST BINARY UNION EXISTS SCHEMA-------------------------------------"
+    -- (a,b,c,d) <- checkTheoremM $ binaryUnionExistsSchema
+    -- (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
+
+    -- bprint "TEST BINARY CROSSPRODDEFEQUIV SCHEMA-------------------------------------"
+    -- (a,b,c,d) <- checkTheoremM $ crossProductDefEquivSchema
+    -- (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
+
+    -- print "TEST CROSSPROD EXISTS SCHEMA ---------------------------"
+    -- (a,b,c,d) <- checkTheoremM $ crossProductExistsSchema
+    -- (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
+
+    -- print "TEST BUILDER SUBSET THEOREM-------------------------------------"
+    -- (a,b,c,d) <- checkTheoremM $ builderSubsetTheoremSchema [] 0 natSetObj (X 0 :==: X 0)
+    -- (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
+
+
     print "TEST STRONG INDUCTION THEOREM-------------------------------------"
-    (a,b,c,d) <- checkTheoremM $ strongInductionTheoremMSchema 0 (X 0 :==: X 0)
---   print "yo"
+    (a,b,c,d) <- checkTheoremM $ strongInductionTheoremMSchema 0 natSetObj (X 0 :==: X 0)
     (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
 
 

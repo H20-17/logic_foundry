@@ -60,7 +60,9 @@ module Langs.Internal.BasicUntyped.Core (
     roster,
     parseRoster,
     propMaxXIdx,
-    objMaxXIdx
+    objMaxXIdx,
+    objDeBrRosterNormalize,
+    propDeBrRosterNormalize
 
 ) where
 import Control.Monad ( unless, guard,msum )
@@ -500,6 +502,8 @@ instance TypeableTerm ObjDeBr Text () DeBrSe where
      const2Term = Constant
      free2Term :: Int -> ObjDeBr
      free2Term = V
+     extractConstsTerm :: ObjDeBr -> Set Text
+     extractConstsTerm obj = objDeBrExtractConsts obj
 
 
 instance TypedSent  Text () DeBrSe PropDeBr where
@@ -507,6 +511,9 @@ instance TypedSent  Text () DeBrSe PropDeBr where
     checkSanity tsTypes freeVarStack constDict prop = checkSanityPropDeBr
         prop (Prelude.length freeVarStack)
         (Data.Map.keysSet tsTypes)  (keysSet constDict) mempty
+    extractConstsSent :: PropDeBr -> Set Text
+    extractConstsSent prop = propDeBrExtractConsts prop
+
 
 
 

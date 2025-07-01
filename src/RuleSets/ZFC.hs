@@ -385,6 +385,7 @@ class LogicRuleClass r s sE t | r->s, r->sE, r->t where
      intOrderMulCompatibility :: r
      natWellOrdering :: r
 
+
 instance LogicRuleClass [LogicRule s sE t] s sE t where
      specification :: [Int] -> Int -> t -> s -> [LogicRule s sE t]
      specification outerIdxs idx t s = [Specification outerIdxs idx t s]
@@ -453,6 +454,7 @@ instance LogicRuleClass [LogicRule s sE t] s sE t where
      intOrderMulCompatibility = [IntOrderMulCompatibility]
      natWellOrdering :: [LogicRule s sE t]
      natWellOrdering = [NatWellOrderingAxiom]
+
 
 
 
@@ -902,6 +904,7 @@ intDistributivityAxiomM    = standardRuleM intDistributivity
 intOrderAddCompatibilityAxiomM = standardRuleM intOrderAddCompatibility
 intOrderMulCompatibilityAxiomM = standardRuleM intOrderMulCompatibility
 natWellOrderingAxiomM = standardRuleM natWellOrdering
+
 
 data MetaRuleError s where
    MetaRuleErrNotClosed :: s -> MetaRuleError s
