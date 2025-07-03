@@ -6,7 +6,8 @@ module RuleSets.PropLogic
     ProofByAsmSchema(..), SubproofError, runProofByAsm, runProofByAsmM, LogicSent(..),
     SubproofMException(..), contraFM, absurdM, MetaRuleError(..), disjIntroLM, disjIntroRM, disjElimM, doubleNegElimM,
     deMorganConjM, deMorganDisjM, bicondIntroM, bicondElimLM, bicondElimRM, absorpAndM, absorpOrM, distAndOverOrM, distOrOverAndM,
-    peircesLawM, modusTollensM, imp2DisjM, negAndNotToOrM, negImpToConjViaEquivM
+    peircesLawM, modusTollensM, imp2DisjM, negAndNotToOrM, negImpToConjViaEquivM,
+    disjunctiveSyllogismM
 ) where
 
 import Data.Monoid ( Last(..) )
@@ -914,6 +915,61 @@ doubleNegIntroM p = do
     (negNegP, negNegPIdx) <- absurdM negP_imp_False
     return (negNegP, negNegPIdx)
 
+
+-- | Proves the Disjunctive Syllogism theorem: ((P ∨ Q) ∧ ¬Q) → P
+-- | This is a fundamental tautology of classical logic.
+disjunctiveSyllogismM :: (Monoid r1, MonadThrow m, LogicSent s tType,
+                   Proof eL r1 (PrfStdState s o tType) (PrfStdContext tType) [PrfStdStep s o tType] s,
+                   Show eL, Show s, Show tType, Typeable eL, Typeable s, Typeable tType,
+                   TypedSent o tType sE s, StdPrfPrintMonad s o tType m, REM.SubproofRule r1 s,
+                   Show sE, Typeable sE, SubproofRule r1 s, LogicRuleClass r1 s tType sE o,
+                   StdPrfPrintMonad s o tType (Either SomeException), Show o, Typeable o,
+                   REM.LogicRuleClass r1 s o tType sE) =>
+    s -> -- ^ The proposition P
+    s -> -- ^ The proposition Q
+    ProofGenTStd tType r1 s o m (s, [Int])
+disjunctiveSyllogismM p q = do
+    (result_sent, idx, _) <- runProofBySubArgM $ do
+        -- The goal is to prove the theorem ((P ∨ Q) ∧ ¬Q) → P
+        let antecedent = (p .||. q) .&&. (neg q)
+        
+        -- Prove the implication by assuming the antecedent.
+        runProofByAsmM antecedent $ do
+            -- Within this subproof, (P ∨ Q) ∧ ¬Q is a proven assumption.
+
+            -- Step 1: Deconstruct the assumption.
+            (p_or_q, _) <- simpLM antecedent
+            (not_q, _)  <- simpRM antecedent
+
+            -- Step 2: Prove the goal P by using Disjunction Elimination (Proof by Cases) on P ∨ Q.
+            
+            -- Case 1: Assume P. The goal is to derive P.
+            (p_implies_p, _) <- runProofByAsmM p $ do
+                -- We assumed P, so we can reiterate it as the conclusion of this subproof.
+                repM p
+                return ()
+
+            -- Case 2: Assume Q. The goal is to derive P.
+            (q_implies_p, _) <- runProofByAsmM q $ do
+                (neg_p_implies_falsity, _) <- runProofByAsmM (neg p) $ do 
+
+                    -- We assumed Q from the parent assumption, 
+                    -- but we also have ¬Q from the parent of the parent assumption.
+                    -- This is a contradiction.
+                    contraFM q not_q -- falsity is the consequent
+                (neg_neg_p,_) <- absurdM neg_p_implies_falsity
+                doubleNegElimM neg_neg_p --p is the consequent
+                return ()
+
+            -- Step 3: Apply Disjunction Elimination.
+            -- We have proven:
+            --   1. P ∨ Q
+            --   2. P → P
+            --   3. Q → P
+            -- Therefore, we can conclude P.
+            disjElimM p_or_q p_implies_p q_implies_p
+            return ()
+    return (result_sent, idx)
 
  
 data ProofByAsmSchema s r where

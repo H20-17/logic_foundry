@@ -289,7 +289,7 @@ instance SubexpDeBr ObjDeBr where
                 return $ BinaryOp "×" (toSubexpParseTree o1 dict) (toSubexpParseTree o2 dict)
             parseIntPlus' = do
                 (o1,o2) <- parseIntPlus obj
-                return $ BinaryOp "×" (toSubexpParseTree o1 dict) (toSubexpParseTree o2 dict)
+                return $ BinaryOp "+" (toSubexpParseTree o1 dict) (toSubexpParseTree o2 dict)
             parseIntSet' = do
                 () <- parseIntSet obj
                 return $ ParseTreeConst "ℤ"
