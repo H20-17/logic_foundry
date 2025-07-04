@@ -744,6 +744,10 @@ runProofAtomic rule context state  =
               let axiomInstance = natWellOrderingAxiom
               let step = PrfStdStepStep axiomInstance "AXIOM_NAT_WELL_ORDERING" []
               return (Just axiomInstance, Nothing, step)
+          EmptySetNotIntAxiom -> do
+              let axiomInstance = emptySetNotIntAxiom
+              let step = PrfStdStepStep axiomInstance "AXIOM_EMPTY_SET_IS_SET" []
+              return (Just axiomInstance, Nothing, step)
 
     where
         proven = (keysSet . provenSents) state
