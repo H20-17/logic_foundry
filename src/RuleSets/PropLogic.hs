@@ -6,8 +6,8 @@ module RuleSets.PropLogic
     ProofByAsmSchema(..), SubproofError, runProofByAsm, runProofByAsmM, LogicSent(..),
     SubproofMException(..), contraFM, absurdM, MetaRuleError(..), disjIntroLM, disjIntroRM, disjElimM, doubleNegElimM,
     deMorganConjM, deMorganDisjM, bicondIntroM, bicondElimLM, bicondElimRM, absorpAndM, absorpOrM, distAndOverOrM, distOrOverAndM,
-    peircesLawM, modusTollensM, imp2DisjM, negAndNotToOrM, negImpToConjViaEquivM,
-    disjunctiveSyllogismM
+    peircesLawM, modusTollensM, imp2DisjM, negAndNotToOrM, negImpToConjViaEquivM, negBicondToPosBicondM,
+    disjunctiveSyllogismM, exFalsoM
 ) where
 
 import Data.Monoid ( Last(..) )
@@ -916,6 +916,48 @@ doubleNegIntroM p = do
     return (negNegP, negNegPIdx)
 
 
+-- | Proves an arbitrary proposition from a contradiction (Ex Falso Quodlibet).
+-- | Theorem: False ⊢ P
+-- |
+-- | This helper function implements the principle of explosion. It takes a target
+-- | proposition 'p' to be proven. It requires that the proposition 'false' has
+-- | already been proven in the current proof context.
+-- |
+-- | The proof strategy is a standard Reductio Ad Absurdum (RAA):
+-- | 1. Assume ¬P (the negation of the target).
+-- | 2. Reiterate the proven 'false' into this subproof using 'repM false'.
+-- | 3. The subproof concludes, having proven ¬P → False.
+-- | 4. Apply 'absurdM' to get ¬¬P.
+-- | 5. Apply 'doubleNegElimM' to get P.
+exFalsoM :: (Monoid r1, MonadThrow m, LogicSent s tType,
+                   Proof eL r1 (PrfStdState s o tType) (PrfStdContext tType) [PrfStdStep s o tType] s,
+                   Show eL, Show s, Show tType, Typeable eL, Typeable s, Typeable tType,
+                   TypedSent o tType sE s, StdPrfPrintMonad s o tType m, REM.SubproofRule r1 s,
+                   Show sE, Typeable sE, SubproofRule r1 s, LogicRuleClass r1 s tType sE o,
+                   StdPrfPrintMonad s o tType (Either SomeException), Show o, Typeable o,
+                   REM.LogicRuleClass r1 s o tType sE) =>
+    s -> -- ^ s_target: The arbitrary proposition 'p' to be proven.
+    ProofGenTStd tType r1 s o m (s, [Int])
+exFalsoM s_target = do
+    (s_target_proven,idx,_) <- runProofBySubArgM $ do
+        -- Step 1: Start a subproof assuming the negation of our target.
+        -- This will prove (¬P → False).
+        (not_p_implies_false, _) <- runProofByAsmM (neg s_target) $ do
+            -- Inside this subproof, ¬P is an assumption.
+            -- We assume 'false' is proven in the outer context and reiterate it.
+            repM false
+            return () -- The subproof concludes 'false'.
+
+        -- Step 2: From (¬P → False), derive ¬¬P using the absurd rule (RAA).
+        (not_not_p, _) <- absurdM not_p_implies_false
+
+        -- Step 3: From ¬¬P, derive P using Double Negation Elimination.
+        doubleNegElimM not_not_p
+        return ()
+    return (s_target_proven,idx)
+
+
+
 -- | Proves the Disjunctive Syllogism theorem: ((P ∨ Q) ∧ ¬Q) → P
 -- | This is a fundamental tautology of classical logic.
 disjunctiveSyllogismM :: (Monoid r1, MonadThrow m, LogicSent s tType,
@@ -929,6 +971,8 @@ disjunctiveSyllogismM :: (Monoid r1, MonadThrow m, LogicSent s tType,
     s -> -- ^ The proposition Q
     ProofGenTStd tType r1 s o m (s, [Int])
 disjunctiveSyllogismM p q = do
+    -- The runProofBySubArgM is not strictly necessary if this function is just
+    -- proving the implication, but it's a good practice for encapsulating a theorem proof.
     (result_sent, idx, _) <- runProofBySubArgM $ do
         -- The goal is to prove the theorem ((P ∨ Q) ∧ ¬Q) → P
         let antecedent = (p .||. q) .&&. (neg q)
@@ -951,14 +995,12 @@ disjunctiveSyllogismM p q = do
 
             -- Case 2: Assume Q. The goal is to derive P.
             (q_implies_p, _) <- runProofByAsmM q $ do
-                (neg_p_implies_falsity, _) <- runProofByAsmM (neg p) $ do 
-
-                    -- We assumed Q from the parent assumption, 
-                    -- but we also have ¬Q from the parent of the parent assumption.
-                    -- This is a contradiction.
-                    contraFM q not_q -- falsity is the consequent
-                (neg_neg_p,_) <- absurdM neg_p_implies_falsity
-                doubleNegElimM neg_neg_p --p is the consequent
+                -- We assumed Q, but we also have ¬Q from the parent assumption.
+                -- This is a contradiction.
+                (falsity, _) <- contraFM q not_q
+                
+                -- From the proven 'falsity', derive the target 'p' using Ex Falso Quodlibet.
+                exFalsoM p
                 return ()
 
             -- Step 3: Apply Disjunction Elimination.
@@ -972,6 +1014,78 @@ disjunctiveSyllogismM p q = do
     return (result_sent, idx)
 
  
+-- | Proves the tautology (¬P ↔ ¬Q) → (P ↔ Q).
+-- | This version uses an explicit Reductio Ad Absurdum proof strategy.
+negBicondToPosBicondM :: (Monoid r1, MonadThrow m, LogicSent s tType,
+                   Proof eL r1 (PrfStdState s o tType) (PrfStdContext tType) [PrfStdStep s o tType] s,
+                   Show eL, Show s, Show tType, Typeable eL, Typeable s, Typeable tType,
+                   TypedSent o tType sE s, StdPrfPrintMonad s o tType m, REM.SubproofRule r1 s,
+                   Show sE, Typeable sE, SubproofRule r1 s, LogicRuleClass r1 s tType sE o,
+                   StdPrfPrintMonad s o tType (Either SomeException), Show o, Typeable o,
+                   REM.LogicRuleClass r1 s o tType sE) =>
+    s -> -- ^ The proposition P
+    s -> -- ^ The proposition Q
+    ProofGenTStd tType r1 s o m (s, [Int])
+negBicondToPosBicondM p q = do
+    -- The goal is to prove the theorem (¬P ↔ ¬Q) → (P ↔ Q).
+    -- We prove this by assuming the antecedent and deriving the consequent.
+    let antecedent = neg p .<->. neg q
+    
+    runProofByAsmM antecedent $ do
+        -- Within this subproof, ¬P ↔ ¬Q is a proven assumption.
+
+        -- To prove P ↔ Q, we must prove P → Q and Q → P.
+
+        -- == Prove P → Q ==
+        (p_implies_q, _) <- runProofByAsmM p $ do
+            -- Assume P. Goal: derive Q.
+            -- We prove Q by contradiction: assume ¬Q and derive False.
+            (not_q_implies_false, _) <- runProofByAsmM (neg q) $ do
+                -- From ¬P ↔ ¬Q, get the implication ¬Q → ¬P.
+                (not_q_implies_not_p, _) <- bicondElimRM antecedent
+                -- From ¬Q (current assumption) and ¬Q → ¬P, derive ¬P.
+                (not_p, _) <- mpM not_q_implies_not_p
+                -- We now have a contradiction between P (parent assumption) and ¬P (derived).
+                -- error "Here"
+                -- x <- showPropM p
+                -- y <- showPropM not_p
+                -- remarkM x 
+                -- remarkM y
+                contraFM p not_p
+                -- error "Here"
+                return ()
+            
+            -- From the proven (¬Q → False), derive ¬¬Q.
+            (not_not_q, _) <- absurdM not_q_implies_false
+            -- From ¬¬Q, derive Q.
+            doubleNegElimM not_not_q
+            return ()
+
+        -- == Prove Q → P ==
+        (q_implies_p, _) <- runProofByAsmM q $ do
+            -- Assume Q. Goal: derive P.
+            -- We prove P by contradiction: assume ¬P and derive False.
+            (not_p_implies_false, _) <- runProofByAsmM (neg p) $ do
+                -- From ¬P ↔ ¬Q, get the implication ¬P → ¬Q.
+                (not_p_implies_not_q, _) <- bicondElimLM antecedent
+                -- From ¬P (current assumption) and ¬P → ¬Q, derive ¬Q.
+                (not_q, _) <- mpM not_p_implies_not_q
+                -- We now have a contradiction between Q (parent assumption) and ¬Q (derived).
+                contraFM q not_q
+                return ()
+
+            -- From the proven (¬P → False), derive ¬¬P.
+            (not_not_p, _) <- absurdM not_p_implies_false
+            -- From ¬¬P, derive P.
+            doubleNegElimM not_not_p
+            return ()
+
+        -- == Combine into P ↔ Q ==
+        bicondIntroM p_implies_q q_implies_p
+        return ()
+
+
+
 data ProofByAsmSchema s r where
    ProofByAsmSchema :: {
                        asmPrfAsm :: s,

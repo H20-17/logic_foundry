@@ -214,6 +214,7 @@ partitionEquivTheorem outerTemplateIdxs spec_var_idx source_set_template p_templ
 
 
 
+
 -- | Constructs the PropDeBr term for the theorem stating that a specification
 -- | over a set S with predicate P is redundant (i.e., results in S) if and only if
 -- | all elements of S already satisfy P.
@@ -420,9 +421,16 @@ specRedundancySchema outerTemplateIdxs spec_var_idx source_set_template p_templa
             constDictM = typed_consts
         }
 
-
-specAxiomFree :: Int -> ObjDeBr -> PropDeBr -> PropDeBr
-specAxiomFree idx t p_template =
+-- | Gives us properties of a builder set, after builderInstantiateM has been called
+-- | Reproduces some of the work of builderInstantiateM but allows
+-- | us to pass less information to functions as a consequence.
+builderPropsFree :: 
+    Int ->      -- idx: The 'x' in {x ∈ S | P(x)}
+    ObjDeBr ->  -- t: The instantiated set, with all of the original outer context
+                --    variables instantiated
+    PropDeBr -> -- p_template: the original p_template with all outer context variables
+    PropDeBr    --             instantiated with free variables
+builderPropsFree idx t p_template =
         let
             new_idx_base = idx + 1
             internalBIdx = new_idx_base -- Placeholder index for the specified set 'B' (which will be XInternal internalBIdx)
@@ -432,6 +440,8 @@ specAxiomFree idx t p_template =
             -- XInternal internalBIdx represents 'B' (the set being specified)
             -- XInternal internalTIdx represents 't' (the source set)
             -- p_template represents P(x)
+            -- Observe that t won't have any template variables in it so there is
+            -- no risk of capture at this time.
             core_prop_template :: PropDeBr
             core_prop_template = (X idx `In` X internalBIdx)
                              :<->:
@@ -448,7 +458,6 @@ specAxiomFree idx t p_template =
 
             -- Combine the conditions for B: isSet(B) ∧ ∀x(...)
             full_condition_for_B :: PropDeBr
-            -- full_condition_for_B = condition_B_isSet :&&: quantified_over_x
             full_condition_for_B = 
                       (condition_B_isSet :&&: quantified_over_x)
 
@@ -457,26 +466,24 @@ specAxiomFree idx t p_template =
             hilbert_obj :: ObjDeBr
             hilbert_obj = hX internalBIdx full_condition_for_B
 
-            -- substitute the hilbert obj and t into the template
+            -- substitute the hilbert obj into the template
 
-            free_axiom = propDeBrSubX internalBIdx hilbert_obj
+            free_props = propDeBrSubX internalBIdx hilbert_obj
                     full_condition_for_B
-
-
-            -- Substitute the actual source set 't' (for XInternal internalTIdx)
-            -- This results in: ∃B (isSet(B) ∧ ∀x (x ∈ B ↔ (P(x) ∧ x ∈ t_actual)))
-            --a xiom_body_with_t :: PropDeBr
-            -- axiom_body_with_t = propDeBrSubX internalTIdx t quantified_over_B
-
-            -- Close over any outer template variables (parameters in P(x) or t)
-            -- closed_axiom :: PropDeBr
-            -- closed_axiom = multiAx outerIdxs axiom_body_with_t
             
 
         in
-            free_axiom
+            free_props
 
-
+-- | This is to be used after the partition EquivTHeorem is instantiated with free
+-- | variables. It will reconstruct the instantiated theorem using
+-- | the instantiated source set and the instantiated p_template
+-- | Even though it reproduces some of the output created by
+-- | instantiating the theorem (with multiUIM and free variables),
+-- | it allows us to pass less information to functions.
+partitionEquivTheoremFree :: Int -> ObjDeBr -> PropDeBr -> PropDeBr
+partitionEquivTheoremFree spec_var_idx source_set_inst p_template_inst =
+    partitionEquivTheorem [] spec_var_idx source_set_inst p_template_inst
 
 -- | Proves that a source set S is equal to the union of two subsets partitioned by a predicate P.
 -- | Theorem: S = {x ∈ S | P(x)} ∪ {x ∈ S | ¬P(x)}
@@ -485,20 +492,20 @@ specAxiomFree idx t p_template =
 -- |   1. `isSet sourceSet`
 -- |   2. The instantiated partition equivalence theorem: `v∈S ↔ ((v∈S∧P(v))∨(v∈S∧¬P(v)))`
 -- |   3. The instantiated builder subset theorems: `{x∈S|P(x)} ⊆ S` and `{x∈S|¬P(x)} ⊆ S`
+-- |   4. The binary union exists theorem, stated with 'binaryUnionExists'
+-- | It also requires that the sets {x∈S|P(x)} and {x∈S|¬P(x)}
+-- | have already been instantied with builderInstantiateM
 proveBuilderSrcPartitionUnionMFree :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) =>
     Int ->      -- spec_var_idx: The 'x' in {x ∈ S | P(x)}
     ObjDeBr ->  -- sourceSet: The set S
     PropDeBr -> -- p_tmplt: The predicate P(x), which uses X spec_var_idx for x.
-    -- PropDeBr -> -- def_prop_P: Proven defining property of {x∈S|¬P(x)}
-    -- PropDeBr -> -- def_prop_NotP: Proven defining property of {x∈S|¬P(x)}
-    PropDeBr -> -- partition_equiv_tm_free: partitionEquivTheorem instantiated with free variables
     ProofGenTStd () [ZFC.LogicRule PropDeBr DeBrSe ObjDeBr] PropDeBr Text m (PropDeBr,[Int],())
-proveBuilderSrcPartitionUnionMFree spec_var_idx sourceSet p_tmplt
-               partition_equiv_theorem_free =
+proveBuilderSrcPartitionUnionMFree spec_var_idx sourceSet p_tmplt =
+              -- partition_equiv_theorem_free =
     runProofBySubArgM do
-
-        let def_prop_P = specAxiomFree spec_var_idx sourceSet p_tmplt
-        let def_prop_NotP = specAxiomFree spec_var_idx sourceSet (neg p_tmplt)
+        let partition_equiv_theorem_free = partitionEquivTheoremFree spec_var_idx sourceSet p_tmplt
+        let def_prop_P = builderPropsFree spec_var_idx sourceSet p_tmplt
+        let def_prop_NotP = builderPropsFree spec_var_idx sourceSet (neg p_tmplt)
 
         -- Assumed premise: isSet sourceSet
 
@@ -570,13 +577,6 @@ proveBuilderSrcPartitionUnionMFree spec_var_idx sourceSet p_tmplt
                     (def_union_inst, _) <- uiM v forall_union
                     (def_union_imp, _) <- bicondElimRM def_union_inst
                     mpM def_union_imp
-                remarkM "ICI2"
-                a<-showPropM partition_disj
-                b<-showPropM case1_imp
-                c<-showPropM case2_imp
-                remarkM a
-                remarkM b
-                remarkM c
                 disjElimM partition_disj case1_imp case2_imp
 
             -- Direction 2: (v ∈ union_of_builders) → (v ∈ sourceSet)
@@ -605,20 +605,9 @@ proveBuilderSrcPartitionUnionMFree spec_var_idx sourceSet p_tmplt
 
         (isSet_Union_and_forall_bicond,_) <- adjM isSet_union forall_bicond
         (full_adj,_) <- adjM (isSet sourceSet) isSet_Union_and_forall_bicond
-        -- (isSet_S_and_isSet_Union, _) <- adjM (isSet sourceSet) isSet_union
 
-        -- New
-
-        --(newAnte,_) <- adjM isSet_S_and_isSet_Union forall_bicond
-        --
-
-        a <- showPropM ext_inst
-        remarkM "ext_int is"
-        remarkM a
         (imp1, _) <- mpM ext_inst
-        -- (imp2, _) <- mpM imp1
-        -- mpM imp2 -- This uses forall_bicond and proves sourceSet == union_of_builders
-        remarkM "I think we got to the end of this subarg"
+
         return ()
     
     --return () 
@@ -626,19 +615,23 @@ proveBuilderSrcPartitionUnionMFree spec_var_idx sourceSet p_tmplt
 -- | Proves that the intersection of two disjoint subsets partitioned by a predicate P is the empty set.
 -- | Theorem: {x ∈ S | P(x)} ∩ {x ∈ S | ¬P(x)} = ∅
 -- |
--- | Note: This helper requires that `isSet sourceSet` has already been proven.
+-- | Note: This helper requires that the following be
+-- | already proven:
+-- |   1. `isSet sourceSet` has already been proven.
+-- |   2. The instantiated builder subset theorems: `{x∈S|P(x)} ⊆ S` and `{x∈S|¬P(x)} ⊆ S`
+-- |   3. The 'Binary Intersection Exists' theorem, as stated by 'binaryIntersectionExists'.
+-- | It also requires that the sets {x∈S|P(x)} and {x∈S|¬P(x)}
+-- | have already been instantied with builderInstantiateM
 proveBuilderSrcPartitionIntersectionEmptyMFree :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) =>
     Int ->      -- spec_var_idx: The 'x' in {x ∈ S | P(x)}
     ObjDeBr ->  -- sourceSet: The set S
     PropDeBr -> -- p_tmplt: The predicate P(x), which uses X spec_var_idx for x.
-    -- PropDeBr -> -- def_prop_P
-    -- PropDeBr -> -- def_prop_NotP
     ProofGenTStd () [ZFC.LogicRule PropDeBr DeBrSe ObjDeBr] PropDeBr Text m (PropDeBr,[Int],())
 proveBuilderSrcPartitionIntersectionEmptyMFree spec_var_idx sourceSet p_tmplt -- def_prop_P def_prop_NotP 
            =
     runProofBySubArgM do
-        let def_prop_P = specAxiomFree spec_var_idx sourceSet p_tmplt
-        let def_prop_NotP = specAxiomFree spec_var_idx sourceSet (neg p_tmplt)
+        let def_prop_P = builderPropsFree spec_var_idx sourceSet p_tmplt
+        let def_prop_NotP = builderPropsFree spec_var_idx sourceSet (neg p_tmplt)
         -- Assumed premise: isSet sourceSet
 
         -- Step 1: Construct the two builder sets and their intersection.
@@ -668,7 +661,7 @@ proveBuilderSrcPartitionIntersectionEmptyMFree spec_var_idx sourceSet p_tmplt --
         (forall_not_in_intersection, _) <- runProofByUGM () do
             v <- getTopFreeVar
             -- We prove ¬(v ∈ intersection) by assuming (v ∈ intersection) and deriving a contradiction.
-            runProofByAsmM (v `In` intersection_of_builders) do
+            (absurd_imp,_) <- runProofByAsmM (v `In` intersection_of_builders) do
                 -- Get the defining properties of the sets.
                 (def_prop_Intersection, _, _) <- binaryIntersectionInstantiateM builderSet_P builderSet_NotP
 
@@ -698,13 +691,12 @@ proveBuilderSrcPartitionIntersectionEmptyMFree spec_var_idx sourceSet p_tmplt --
 
                 -- We have now proven P(v) and ¬P(v), which is a contradiction.
                 contraFM p_of_v notp_of_v
-
+            absurdM absurd_imp
         -- `runProofByAsmM` proves `(v ∈ intersection) → False`. `absurdM` turns this into `¬(v ∈ intersection)`.
         -- `runProofByUGM` then generalizes it.
 
         -- Step 4: Prove the final equality using the Axiom of Extensionality.
-        -- (isSet_Empty, _) <- ZFC.emptySetAxiomM -- Proves ¬(x ∈ ∅)
-        -- (isSet_Empty_prop, _) <- simpRM isSet_Empty -- Extracts ∀x. ¬(x ∈ ∅)
+
         (isSet_Empty_prop, _) <- ZFC.emptySetAxiomM -- Extracts ∀x. ¬(x ∈ ∅)
         -- We need to prove ∀y (y ∈ intersection ↔ y ∈ ∅).
         -- Since both sides are always false, the biconditional is always true.
@@ -719,35 +711,20 @@ proveBuilderSrcPartitionIntersectionEmptyMFree spec_var_idx sourceSet p_tmplt --
             (bicond_of_negs, _) <- bicondIntroM dir1 dir2
 
             -- Assert that (¬P ↔ ¬Q) → (P ↔ Q). This is a propositional tautology.
-            let tautology = bicond_of_negs :->: ((v `In` intersection_of_builders) :<->: (v `In` EmptySet))
-            (proven_taut, _) <- fakePropM [] tautology
             
-            -- Apply MP to get the final biconditional.
+
+            (proven_taut,_) <- negBicondToPosBicondM (v `In` intersection_of_builders) (v `In` EmptySet)
+
             mpM proven_taut
 
-        x<-showPropM forall_bicond
-        remarkM x
-        -- error "forall_bicond"
-        -- Apply Extensionality.
+
         (ext_axiom, _) <- ZFC.extensionalityAxiomM
         (ext_inst, _) <- multiUIM ext_axiom [intersection_of_builders, EmptySet]
         (isSetEmptySet,_) <- ZFC.emptySetNotIntM
         (adj1, _) <- adjM isSetEmptySet forall_bicond
         x <- showPropM adj1
-        showPropM adj1
-        -- error "adj1"
-        -- (intersecion_empty,_) <- simpLM isSet_intersection 
         (full_antecedent_for_ext, _) <- adjM isSet_intersection adj1
         
-        
-        --(isSet_inter_and_empty, _) <- adjM isSet_intersection isSetEmptySet -- isSet Empty is an axiom
-
-
-        b <- showPropM full_antecedent_for_ext
-        remarkM b
-        a <- showPropM ext_inst
-        remarkM a
-
         mpM ext_inst
 
 
@@ -831,21 +808,21 @@ proveBuilderSrcPartitionTheoremM outerTemplateIdxs spec_var_idx source_set_templ
 
             -- Prove the partition equivalence lemma
             let lemma3 = partitionEquivTheorem outerTemplateIdxs spec_var_idx source_set_template p_template
-            (partition_equiv_instantiated, _) <- multiUIM lemma3 instantiationTerms
+            multiUIM lemma3 instantiationTerms
 
             -- The sub-helpers `proveBuilderSrcPartitionUnionMFree` and `proveBuilderSrcPartitionIntersectionEmptyMFree`
             -- assume these premises are available in the context and will use `repM` to access them.
 
             -- instantiate both builder sets of the partition
-            (def_prop_P,_,_) <- builderInstantiateM instantiationTerms outerTemplateIdxs spec_var_idx source_set_template p_template 
+            builderInstantiateM instantiationTerms outerTemplateIdxs spec_var_idx source_set_template p_template 
 
-            (def_prop_NotP,_,_) <- builderInstantiateM instantiationTerms outerTemplateIdxs spec_var_idx source_set_template (neg p_template) 
+            builderInstantiateM instantiationTerms outerTemplateIdxs spec_var_idx source_set_template (neg p_template) 
 
             
             -- Step 3: Prove the first conjunct (the union equality).
             (union_equality_proven, _, _) <- proveBuilderSrcPartitionUnionMFree spec_var_idx sourceSet p_tmplt 
                    -- def_prop_P def_prop_NotP 
-                   partition_equiv_instantiated
+                   -- partition_equiv_instantiated
 
             -- Step 4: Prove the second conjunct (the intersection equality).
             (intersection_equality_proven, _, _) <- proveBuilderSrcPartitionIntersectionEmptyMFree spec_var_idx sourceSet p_tmplt
@@ -884,7 +861,7 @@ builderSrcPartitionSchema outerTemplateIdxs spec_var_idx source_set_template p_t
         -- Lemma 3: The partition equivalence theorem.
         lemma3 = partitionEquivTheorem outerTemplateIdxs spec_var_idx source_set_template p_template
         -- Lemma 4: binaryUnionExistsTheorem
-        -- needed because the unionIsSet helper is used.
+        -- needed because the proveUnionIsSet helper is used.
         lemma4 = binaryUnionExistsTheorem
         -- Lemma 5: binaryIntersectionExistsTheorem
         lemma5 = binaryIntersectionExistsTheorem
@@ -3639,11 +3616,9 @@ main = do
     -- (a,b,c,d) <- checkTheoremM $ builderSubsetTheoremSchema [] 0 natSetObj (X 0 :==: X 0)
     -- (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
 
-    print "TEST BUILDER SOURCE PARTITION INTERSECTION EMPTY THEOREM--------------------"
+    print "TEST BUILDER SOURCE PARTITION THEOREM--------------------"
     let p_template = Constant "C" :+: X 0 :==: (X 1 :+: X 2)
-    -- let p_template = Constant "A1" :<=: X 0 
     let source_set_template = X 1 .\/. X 2
-    -- let source_set_template = Constant "Source"
     (a,b,c,d) <- checkTheoremM $ builderSrcPartitionSchema [1,2] 0 source_set_template p_template
     (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
 
