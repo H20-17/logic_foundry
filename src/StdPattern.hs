@@ -6,7 +6,8 @@ module StdPattern(
     monadifyProofStd,
     getProofState, runProofGeneratorT, Proof, runProof, ProofGeneratorT, modifyPS, getTopFreeVar, 
     getFreeVarCount,
-    TypedSent(..)
+    TypedSent(..),
+    ShowableSubexp(..)
     
 ) where
 import Kernel
@@ -32,4 +33,5 @@ import Internal.StdPattern
       monadifyProofStd,
       getTopFreeVar,
       TypedSent(..),
-      getFreeVarCount)
+      getFreeVarCount,
+      ShowableSubexp(..))

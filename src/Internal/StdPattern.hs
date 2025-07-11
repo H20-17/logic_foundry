@@ -12,8 +12,9 @@ module Internal.StdPattern(
     ProofGenTStd,
     LogicConst(..),
     newConstM,
-    getFreeVarCount
-    
+    getFreeVarCount,
+    showTermM, showSentM,
+    ShowableSubexp(..)
 
 
 ) where
@@ -129,7 +130,13 @@ class (Eq tType, Ord o) => TypeableTerm t o tType sE | t -> o, t ->tType, t -> s
     const2Term :: o -> t
     free2Term :: Int -> t
     extractConstsTerm :: t -> Set o
-        
+
+
+
+
+
+
+
 class LogicConst o where
     newConst :: Set o -> o
 
@@ -138,6 +145,21 @@ class (Ord s, Eq tType, Ord o) => TypedSent o tType sE s | s-> tType, s-> sE, s 
     -- a list of free variable types and a const dictionary
     checkSanity :: Map Int tType -> [tType] -> Map o tType -> s -> Maybe sE
     extractConstsSent :: s -> Set o
+
+
+
+
+
+
+class ShowableSubexp s t | s -> t where
+    showSent :: Map s [Int] -> s -> Text
+    showTerm :: Map s [Int] -> t -> Text
+    -- show a sentence using a map of proven sentences to indices, and a sentence
+    -- to show. The map is used to resolve the indices of the sentences in the
+    -- sentence to the indices of the proven sentences.
+
+
+
 
 data TestSubproofErr s sE eL where
    TestSubproofErrResultNotSane :: s -> sE -> TestSubproofErr s sE eL
@@ -297,3 +319,24 @@ runSubproofM context baseState preambleState preambleSteps mayPreambleLastProp p
           let endState = preambleState <> newState
           let finalSteps = preambleSteps <> newSteps
           return (extraData, prfResult, r,finalSteps)
+
+
+showTermM :: (Monad m, Monoid r,
+             Proof eL r (PrfStdState s o tType) (PrfStdContext tType) [PrfStdStep s o tType] s, ShowableSubexp s t)
+                     => t -> ProofGenTStd tType r s o m Text
+showTermM obj = 
+    do
+      state <- getProofState
+      let dict = provenSents state
+      return $ showTerm dict obj
+
+showSentM :: (Monad m, Monoid r,
+             Proof eL r (PrfStdState s o tType) (PrfStdContext tType) [PrfStdStep s o tType] s, ShowableSubexp s t)
+                     => s -> ProofGenTStd tType r s o m Text
+showSentM obj =
+    do
+      state <- getProofState
+      let dict = provenSents state
+      return $ showSent dict obj
+
+      

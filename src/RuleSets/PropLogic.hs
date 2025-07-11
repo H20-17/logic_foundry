@@ -832,7 +832,7 @@ negImpToConjViaEquivM :: (SubproofRule r1 s, MonadThrow m, Monoid r1,  TypedSent
   StdPrfPrintMonad s o tType m,  StdPrfPrintMonad s o tType (Either SomeException),  LogicSent s tType,
   Proof eL r1 (PrfStdState s o tType) (PrfStdContext tType) [PrfStdStep s o tType] s,
   Show eL, Show o, Show s, Show sE, Show tType, Typeable eL,
-  Typeable o, Typeable s, Typeable sE, Typeable tType) =>
+  Typeable o, Typeable s, Typeable sE, Typeable tType, ShowableSubexp s t, REM.LogicRuleClass r1 s o tType sE) =>
             s -- ^ A proven proposition 's_input' of the form ¬(A → B).
             -> ProofGeneratorT s [PrfStdStep s o tType] (PrfStdContext tType) r1 (PrfStdState s o tType) m (s, [Int]) -- ^ Returns the proven proposition (A ∧ ¬B) and its proof index.
 negImpToConjViaEquivM s_input_neg_A_implies_B = do
@@ -845,6 +845,10 @@ negImpToConjViaEquivM s_input_neg_A_implies_B = do
 
     -- 2. Construct the assumption for RAA: ¬(A ∧ ¬B)
     let assumption_for_raa = neg (a_term .&&. neg b_term)
+
+    x <- showSentM assumption_for_raa
+
+    remarkM x
 
     -- 3. Start the RAA subproof: Assume ¬(A ∧ ¬B) and derive False.
     --    This will prove (¬(A ∧ ¬B) → False).
