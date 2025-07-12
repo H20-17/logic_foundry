@@ -572,6 +572,7 @@ data MetaRuleError s where
     MetaRuleErrNotDisj :: s -> MetaRuleError s
     MetaRuleErrNotNegBicond :: s -> MetaRuleError s
     MetaRuleErrNotBicond :: s -> MetaRuleError s
+    MetaRuleErrDisjSyllNotDisj :: s -> MetaRuleError s
     deriving (Show,Typeable)
 
 
@@ -970,7 +971,13 @@ exFalsoM s_target = do
 
 
 
--- | Proves the Disjunctive Syllogism theorem: ((P ∨ Q) ∧ ¬Q) → P
+ 
+-- | Takes P ∨ Q as an argument.
+-- | For this function to succeed, the following must be already proven
+-- | in the current context:
+-- | 1. P ∨ Q
+-- | 2. ¬Q
+-- | If the required sentences are already proven then P will be derived.
 -- | This is a fundamental tautology of classical logic.
 disjunctiveSyllogismM :: (Monoid r1, MonadThrow m, LogicSent s tType,
                    Proof eL r1 (PrfStdState s o tType) (PrfStdContext tType) [PrfStdStep s o tType] s,
@@ -979,54 +986,41 @@ disjunctiveSyllogismM :: (Monoid r1, MonadThrow m, LogicSent s tType,
                    Show sE, Typeable sE, SubproofRule r1 s, LogicRuleClass r1 s tType sE o,
                    StdPrfPrintMonad s o tType (Either SomeException), Show o, Typeable o,
                    REM.LogicRuleClass r1 s o tType sE) =>
-    s -> -- ^ The proposition P
-    s -> -- ^ The proposition Q
+    s -> -- ^ The proposition P ∨ Q
     ProofGenTStd tType r1 s o m (s, [Int])
-disjunctiveSyllogismM p q = do
-    -- The runProofBySubArgM is not strictly necessary if this function is just
-    -- proving the implication, but it's a good practice for encapsulating a theorem proof.
+disjunctiveSyllogismM pOrQ = do
+    (p,q) <- maybe (throwM $ MetaRuleErrDisjSyllNotDisj pOrQ) return (parseDisj pOrQ)
+    let negQ = neg q
     (result_sent, idx, _) <- runProofBySubArgM $ do
-        -- The goal is to prove the theorem ((P ∨ Q) ∧ ¬Q) → P
-        let antecedent = (p .||. q) .&&. (neg q)
-        
-        -- Prove the implication by assuming the antecedent.
-        runProofByAsmM antecedent $ do
-            -- Within this subproof, (P ∨ Q) ∧ ¬Q is a proven assumption.
-
-            -- Step 1: Deconstruct the assumption.
-            (p_or_q, _) <- simpLM antecedent
-            (not_q, _)  <- simpRM antecedent
-
-            -- Step 2: Prove the goal P by using Disjunction Elimination (Proof by Cases) on P ∨ Q.
+        repM pOrQ -- Re-assert P ∨ Q to emphasize that it should already be proven
+        repM negQ -- Re-Assert ¬Q to emphasize that it should already be proven.
+        -- Prove the goal P by using Disjunction Elimination (Proof by Cases) on P ∨ Q.
             
-            -- Case 1: Assume P. The goal is to derive P.
-            (p_implies_p, _) <- runProofByAsmM p $ do
-                -- We assumed P, so we can reiterate it as the conclusion of this subproof.
-                repM p
-                return ()
-
-            -- Case 2: Assume Q. The goal is to derive P.
-            (q_implies_p, _) <- runProofByAsmM q $ do
-                -- We assumed Q, but we also have ¬Q from the parent assumption.
-                -- This is a contradiction.
-                (falsity, _) <- contraFM q not_q
-                
-                -- From the proven 'falsity', derive the target 'p' using Ex Falso Quodlibet.
-                exFalsoM p
-                return ()
-
-            -- Step 3: Apply Disjunction Elimination.
-            -- We have proven:
-            --   1. P ∨ Q
-            --   2. P → P
-            --   3. Q → P
-            -- Therefore, we can conclude P.
-            disjElimM p_or_q p_implies_p q_implies_p
+        -- Case 1: Assume P. The goal is to derive P.
+        (p_implies_p, _) <- runProofByAsmM p $ do
+            -- We assumed P, so we can reiterate it as the conclusion of this subproof.
+            repM p
             return ()
+
+        -- Case 2: Assume Q. The goal is to derive P.
+        (q_implies_p, _) <- runProofByAsmM q $ do
+            -- We assumed Q, but we also have ¬Q from the parent assumption.
+            -- This is a contradiction.
+            (falsity, _) <- contraFM q negQ
+                
+            -- From the proven 'falsity', derive the target 'p' using Ex Falso Quodlibet.
+            exFalsoM p
+            return ()
+
+        -- Apply Disjunction Elimination.
+        -- We have proven:
+        --   1. P ∨ Q
+        --   2. P → P
+        --   3. Q → P
+        -- Therefore, we can conclude P.
+        disjElimM pOrQ p_implies_p q_implies_p
+        return ()
     return (result_sent, idx)
-
- 
-
 
 
 

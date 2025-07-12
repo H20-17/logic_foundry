@@ -96,7 +96,8 @@ unionWithEmptySetTheorem =
 
 -- | Proves the theorem defined by 'unionWithEmptySetTheorem'.
 -- |
--- | This proof relies on the Axiom of Extensionality. To prove A = B, we must show:
+-- | This proof relies on the Axiom of Extensionality and the
+-- | 'binaryUnionExists' theorem. To prove A = B, we must show:
 -- |   isSet(A) ∧ isSet(B) ∧ ∀y(y ∈ A ↔ y ∈ B)
 proveUnionWithEmptySetM :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) =>
     ProofGenTStd () [ZFC.LogicRule PropDeBr DeBrSe ObjDeBr] PropDeBr Text m ()
@@ -116,18 +117,40 @@ proveUnionWithEmptySetM = do
             -- Step 2: Prove the necessary `isSet` properties for Extensionality.
             -- We already have `isSet v` by assumption.
             -- We need to prove `isSet (v ∪ ∅)`.
-            (isSet_EmptySet_axiom, _) <- ZFC.emptySetAxiomM
-            (isSet_EmptySet_proven, _) <- simpLM isSet_EmptySet_axiom
+
+            -- (isSet_EmptySet_axiom, _) <- ZFC.emptySetAxiomM
+
+            (forall_not_in_empty, _) <- ZFC.emptySetAxiomM
+
+            -- (isSet_EmptySet_proven, _) <- simpLM isSet_EmptySet_axiom
+            
+            (isSet_EmptySet_proven, _) <- ZFC.emptySetNotIntM
+
             -- proveUnionIsSetM requires isSet v and isSet ∅ to be proven.
             (isSet_unionObj_proven, _) <- proveUnionIsSetM v EmptySet
 
-            -- Step 3: Prove ∀y (y ∈ (v ∪ ∅) ↔ y ∈ v)
+            -- Step 3: Prove ∀y (y ∈ v ↔ y ∈ (v ∪ ∅))
             (forall_bicond, _) <- runProofByUGM () do
                 y <- getTopFreeVar
 
+               -- Direction 1: y ∈ v → y ∈ (v ∪ ∅)
+                (dir1, _) <- runProofByAsmM (y `In` v) do
+                    -- This is a simple Disjunction Introduction.
+                    disjIntroLM (y `In` v) (y `In` EmptySet)
+
+                    -- Now, use the definition of union to get back to y ∈ (v ∪ ∅)
+                    (def_prop_union, _, _) <- binaryUnionInstantiateM v EmptySet
+                    (forall_union_bicond, _) <- simpRM def_prop_union
+                    (inst_union_bicond, _) <- uiM y forall_union_bicond
+                    (imp_to_union, _) <- bicondElimRM inst_union_bicond
+                    
+                    -- Apply Modus Ponens to get the final conclusion of this subproof.
+                    mpM imp_to_union
+                    return ()
+
                 -- To prove the biconditional, we prove each direction.
-                -- Direction 1: y ∈ (v ∪ ∅) → y ∈ v
-                (dir1, _) <- runProofByAsmM (y `In` unionObj) do
+                -- Direction 2: y ∈ (v ∪ ∅) → y ∈ v
+                (dir2, _) <- runProofByAsmM (y `In` unionObj) do
                     -- Get the defining property of the union.
                     (def_prop_union, _, _) <- binaryUnionInstantiateM v EmptySet
                     (forall_union_bicond, _) <- simpRM def_prop_union
@@ -137,22 +160,17 @@ proveUnionWithEmptySetM = do
                     (y_in_v_or_empty, _) <- mpM imp_from_union
 
                     -- We need a proof of ¬(y ∈ ∅) to use Disjunctive Syllogism.
-                    (forall_not_in_empty, _) <- simpRM isSet_EmptySet_axiom
+
+                    -- (forall_not_in_empty, _) <- simpRM isSet_EmptySet_axiom
+
                     (not_y_in_empty, _) <- uiM y forall_not_in_empty
 
-                    -- Prove the Disjunctive Syllogism theorem for this specific instance.
-                    let p_term = y `In` v
-                    let q_term = y `In` EmptySet
-                    (proven_disj_syllogism, _) <- disjunctiveSyllogismM p_term q_term
-                    
-                    -- Apply the theorem to get the result.
-                    (conj, _) <- adjM y_in_v_or_empty not_y_in_empty
-                    mpM proven_disj_syllogism
+                    -- Use the Disjunctive Syllogism argument to prove y_in_v.
 
-                -- Direction 2: y ∈ v → y ∈ (v ∪ ∅)
-                (dir2, _) <- runProofByAsmM (y `In` v) do
-                    -- This is a simple Disjunction Introduction.
-                    disjIntroLM (y `In` v) (y `In` EmptySet)
+                    disjunctiveSyllogismM y_in_v_or_empty
+
+                    -- y_in_v should now be proved
+   
 
                 -- Combine the two directions.
                 bicondIntroM dir1 dir2
@@ -160,10 +178,10 @@ proveUnionWithEmptySetM = do
             -- Step 4: Apply the Axiom of Extensionality.
             (ext_axiom, _) <- ZFC.extensionalityAxiomM
             (ext_inst, _) <- multiUIM ext_axiom [v, unionObj]
-            (isSet_conj, _) <- adjM (isSet v) isSet_unionObj_proven
-            (imp1, _) <- mpM ext_inst
-            (imp2, _) <- mpM imp1
-            mpM imp2 -- This proves v == unionObj
+            (adj1,_) <- adjM isSet_unionObj_proven forall_bicond
+            (full_antecedent,_) <- adjM (isSet v) adj1
+
+            mpM ext_inst
 
     return ()
 
@@ -3610,11 +3628,11 @@ main = do
     -- (a,b,c,d) <- checkTheoremM $ builderSubsetTheoremSchema [] 0 natSetObj (X 0 :==: X 0)
     -- (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
 
-    print "TEST BUILDER SOURCE PARTITION THEOREM--------------------"
-    let p_template = Constant "C" :+: X 0 :==: (X 1 :+: X 2)
-    let source_set_template = X 1 .\/. X 2
-    (a,b,c,d) <- checkTheoremM $ builderSrcPartitionSchema [1,2] 0 source_set_template p_template
-    (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
+    -- print "TEST BUILDER SOURCE PARTITION THEOREM--------------------"
+    -- let p_template = Constant "C" :+: X 0 :==: (X 1 :+: X 2)
+    -- let source_set_template = X 1 .\/. X 2
+    -- (a,b,c,d) <- checkTheoremM $ builderSrcPartitionSchema [1,2] 0 source_set_template p_template
+    -- (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
 
 
 
@@ -3624,6 +3642,10 @@ main = do
     -- let source_set_template = X 1 .\/. X 2
     -- (a,b,c,d) <- checkTheoremM $ strongInductionTheoremMSchema [1,2] 0 source_set_template p_template
     -- (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
+
+    print "TEST UNION WITH EMPTY SET THEOREM-------------------------------------"
+    (a,b,c,d) <- checkTheoremM unionWithEmptySetSchema
+    (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
 
 
     return ()
