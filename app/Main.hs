@@ -161,8 +161,6 @@ proveUnionWithEmptySetM = do
 
                     -- We need a proof of ¬(y ∈ ∅) to use Disjunctive Syllogism.
 
-                    -- (forall_not_in_empty, _) <- simpRM isSet_EmptySet_axiom
-
                     (not_y_in_empty, _) <- uiM y forall_not_in_empty
 
                     -- Use the Disjunctive Syllogism argument to prove y_in_v.
