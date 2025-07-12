@@ -753,8 +753,10 @@ showPropDeBrStepsBaseM steps = do
       return $ showPropDeBrStepsBase steps
 
 
-instance ShowableSubexp PropDeBr ObjDeBr where
-    showTerm :: Map PropDeBr [Int] -> ObjDeBr -> Text
-    showTerm = showObj
+instance ShowableSent PropDeBr where
     showSent :: Map PropDeBr [Int] -> PropDeBr -> Text
     showSent = showProp
+
+instance ShowableTerm PropDeBr ObjDeBr where
+    showTerm :: Map PropDeBr [Int] -> ObjDeBr -> Text
+    showTerm = showObj

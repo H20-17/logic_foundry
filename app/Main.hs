@@ -710,19 +710,13 @@ proveBuilderSrcPartitionIntersectionEmptyMFree spec_var_idx sourceSet p_tmplt --
             (dir2, _) <- runProofByAsmM not_in_empty $ repM not_in_inter
             (bicond_of_negs, _) <- bicondIntroM dir1 dir2
 
-            -- Assert that (¬P ↔ ¬Q) → (P ↔ Q). This is a propositional tautology.
-            
 
-            (proven_taut,_) <- negBicondToPosBicondM (v `In` intersection_of_builders) (v `In` EmptySet)
-
-            mpM proven_taut
-
-
+            negBicondToPosBicondM bicond_of_negs
+            -- This gives us the biconditional: y ∈ intersection ↔ y ∈ ∅
         (ext_axiom, _) <- ZFC.extensionalityAxiomM
         (ext_inst, _) <- multiUIM ext_axiom [intersection_of_builders, EmptySet]
         (isSetEmptySet,_) <- ZFC.emptySetNotIntM
         (adj1, _) <- adjM isSetEmptySet forall_bicond
-        x <- showPropM adj1
         (full_antecedent_for_ext, _) <- adjM isSet_intersection adj1
         
         mpM ext_inst

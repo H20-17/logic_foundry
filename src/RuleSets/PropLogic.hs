@@ -570,6 +570,8 @@ data MetaRuleError s where
     MetaRuleErrNotAdj :: s -> MetaRuleError s
     MetaRuleErrNotNeg :: s -> MetaRuleError s
     MetaRuleErrNotDisj :: s -> MetaRuleError s
+    MetaRuleErrNotNegBicond :: s -> MetaRuleError s
+    MetaRuleErrNotBicond :: s -> MetaRuleError s
     deriving (Show,Typeable)
 
 
@@ -832,7 +834,7 @@ negImpToConjViaEquivM :: (SubproofRule r1 s, MonadThrow m, Monoid r1,  TypedSent
   StdPrfPrintMonad s o tType m,  StdPrfPrintMonad s o tType (Either SomeException),  LogicSent s tType,
   Proof eL r1 (PrfStdState s o tType) (PrfStdContext tType) [PrfStdStep s o tType] s,
   Show eL, Show o, Show s, Show sE, Show tType, Typeable eL,
-  Typeable o, Typeable s, Typeable sE, Typeable tType, ShowableSubexp s t, REM.LogicRuleClass r1 s o tType sE) =>
+  Typeable o, Typeable s, Typeable sE, Typeable tType, ShowableSent s, REM.LogicRuleClass r1 s o tType sE) =>
             s -- ^ A proven proposition 's_input' of the form ¬(A → B).
             -> ProofGeneratorT s [PrfStdStep s o tType] (PrfStdContext tType) r1 (PrfStdState s o tType) m (s, [Int]) -- ^ Returns the proven proposition (A ∧ ¬B) and its proof index.
 negImpToConjViaEquivM s_input_neg_A_implies_B = do
@@ -881,8 +883,8 @@ modusTollensM :: (Monoid r1,
                   MonadThrow m, LogicSent s tType,
                 Proof eL r1 (PrfStdState s o tType) (PrfStdContext tType) [PrfStdStep s o tType] s,
                  Show eL, Show s, Show tType, Typeable eL, Typeable s, Typeable tType, TypedSent o tType sE s, StdPrfPrintMonad s o tType m,
-                 REM.SubproofRule r1 s, Show sE, Typeable sE, SubproofRule r1 s, LogicRuleClass r1 s tType sE o, 
-                 StdPrfPrintMonad s o tType (Either SomeException), Show o, Typeable o)
+                 REM.SubproofRule r1 s, Show sE, Typeable sE, SubproofRule r1 s, LogicRuleClass r1 s tType sE o,
+                 StdPrfPrintMonad s o tType (Either SomeException), Show o, Typeable o, REM.LogicRuleClass r1 s o tType sE, ShowableSent s)
     => s
     -> ProofGeneratorT s [PrfStdStep s o tType] (PrfStdContext tType) r1 (PrfStdState s o tType) m (s, [Int])
 modusTollensM s = do
@@ -891,14 +893,20 @@ modusTollensM s = do
     let negQ = neg q
 
 
-    (result_prop, idx, extra_data) <- runProofBySubArgM $ do
+    repM s -- We are assuming P → Q is already proven in the context and we reiterate it for emphasis.
     -- Derive ¬P from ¬Q and P → Q (Modus Tollens)
+    repM negQ -- We are assuming ¬Q is already proven in the context and we reiterate it for emphasis.
+    (negPImpNegQ,_) <- runProofByAsmM negQ $ do
+
         (absurdity,_) <- runProofByAsmM p $ do
-            (q,_) <- mpM s
-            contraFM q negQ
-            --False now derived
+                (q,_) <- mpM s
+                -- Use contraFM to derive False from q and negQ    
+                contraFM q negQ
+                --False now derived
         absurdM absurdity
-    return (neg p, idx)
+        -- proves ¬P
+    mpM negPImpNegQ
+    -- this will prove neg p
 
 doubleNegIntroM :: (Monoid r1, MonadThrow m, LogicSent s tType,
                    Proof eL r1 (PrfStdState s o tType) (PrfStdContext tType) [PrfStdStep s o tType] s,
@@ -1018,75 +1026,112 @@ disjunctiveSyllogismM p q = do
     return (result_sent, idx)
 
  
--- | Proves the tautology (¬P ↔ ¬Q) → (P ↔ Q).
--- | This version uses an explicit Reductio Ad Absurdum proof strategy.
+
+
+
+
+
+
+
+-- | From P ↔ Q, derive ¬P ↔ ¬Q 
+posBicondToNegBicondM :: (Monoid r1, MonadThrow m, LogicSent s tType,
+                   Proof eL r1 (PrfStdState s o tType) (PrfStdContext tType) [PrfStdStep s o tType] s,
+                   Show eL, Show s, Show tType, Typeable eL, Typeable s, Typeable tType,
+                   TypedSent o tType sE s, StdPrfPrintMonad s o tType m, REM.SubproofRule r1 s,
+                   Show sE, Typeable sE, SubproofRule r1 s, LogicRuleClass r1 s tType sE o,
+                   StdPrfPrintMonad s o tType (Either SomeException), Show o, Typeable o,
+                   REM.LogicRuleClass r1 s o tType sE, ShowableSent s) =>
+    s -> -- ^ The proposition P ↔ Q
+    ProofGenTStd tType r1 s o m (s, [Int])
+posBicondToNegBicondM s = do
+    -- The goal is to prove the proposition (¬P ↔ ¬Q).
+    -- We prove this by assuming the antecedent and deriving the consequent.
+    (p,q) <- maybe (throwM $ MetaRuleErrNotBicond s) return (parseIff s)
+    let negP = neg p
+    let negQ = neg q
+
+    repM s -- We are assuming P ↔ Q is already proven in the context and we reiterate it for emphasis.
+    
+    (target,subarg_idx,_) <- runProofBySubArgM $ do
+        (notP_implies_notQ, _) <- runProofByAsmM negP $ do
+            -- Assume ¬P.
+            -- From P ↔ Q, we can derive Q → P.
+            (q_implies_p, _) <- bicondElimRM s
+            
+            -- We have the implication Q → P and the premise ¬P.
+            -- This is a direct application of Modus Tollens.
+            -- modusTollensM takes Q → P and uses the proven assumption ¬P`
+            -- to derive ¬Q.
+
+            modusTollensM q_implies_p
+            -- Now eliminate the double negation to get ¬Q.
+            
+            -- The subproof concludes ¬Q.
+
+        -- Part B: Prove Q → P (symmetric proof)
+        (notQ_implies_notP, _) <- runProofByAsmM negQ $ do
+            -- Assume ¬Q.
+            -- From P ↔ Q, we can derive P → Q.
+            (p_implies_q, _) <- bicondElimLM s
+            
+            -- Apply Modus Tollens to P → Q. It uses the proven assumption ¬Q
+            -- to derive ¬P.
+            modusTollensM p_implies_q
+
+
+            -- The subproof concludes P.
+        -- Combine the two implications into the biconditional P ↔ Q.
+        bicondIntroM notP_implies_notQ notQ_implies_notP
+        return ()
+    return (target, subarg_idx)
+
+
+
+-- | From ¬P ↔ ¬Q, derive P ↔ Q.
 negBicondToPosBicondM :: (Monoid r1, MonadThrow m, LogicSent s tType,
                    Proof eL r1 (PrfStdState s o tType) (PrfStdContext tType) [PrfStdStep s o tType] s,
                    Show eL, Show s, Show tType, Typeable eL, Typeable s, Typeable tType,
                    TypedSent o tType sE s, StdPrfPrintMonad s o tType m, REM.SubproofRule r1 s,
                    Show sE, Typeable sE, SubproofRule r1 s, LogicRuleClass r1 s tType sE o,
                    StdPrfPrintMonad s o tType (Either SomeException), Show o, Typeable o,
-                   REM.LogicRuleClass r1 s o tType sE) =>
-    s -> -- ^ The proposition P
-    s -> -- ^ The proposition Q
+                   REM.LogicRuleClass r1 s o tType sE, ShowableSent s) =>
+    s -> -- ^ The proposition ¬P ↔ ¬Q
     ProofGenTStd tType r1 s o m (s, [Int])
-negBicondToPosBicondM p q = do
-    -- The goal is to prove the theorem (¬P ↔ ¬Q) → (P ↔ Q).
+negBicondToPosBicondM s = do
+    -- The goal is to derive the proposition P ↔ Q.
     -- We prove this by assuming the antecedent and deriving the consequent.
-    let antecedent = neg p .<->. neg q
+    (negP,negQ) <- maybe (throwM $ MetaRuleErrNotNegBicond s) return (parseIff s)
+    p <- maybe (throwM $ MetaRuleErrNotNegBicond s) return (parseNeg negP)
+    q <- maybe (throwM $ MetaRuleErrNotNegBicond s) return (parseNeg negQ)
+    let negBicond = neg p .<->. neg q
     
-    runProofByAsmM antecedent $ do
-        -- Within this subproof, ¬P ↔ ¬Q is a proven assumption.
-
-        -- To prove P ↔ Q, we must prove P → Q and Q → P.
-
-        -- == Prove P → Q ==
+    (target,subarg_idx,_) <- runProofBySubArgM $ do
+        (posBicondPre,_) <- posBicondToNegBicondM negBicond
+        (negNegP_imp_negNegQ,_) <- bicondElimLM posBicondPre
         (p_implies_q, _) <- runProofByAsmM p $ do
-            -- Assume P. Goal: derive Q.
-            -- We prove Q by contradiction: assume ¬Q and derive False.
-            (not_q_implies_false, _) <- runProofByAsmM (neg q) $ do
-                -- From ¬P ↔ ¬Q, get the implication ¬Q → ¬P.
-                (not_q_implies_not_p, _) <- bicondElimRM antecedent
-                -- From ¬Q (current assumption) and ¬Q → ¬P, derive ¬P.
-                (not_p, _) <- mpM not_q_implies_not_p
-                -- We now have a contradiction between P (parent assumption) and ¬P (derived).
-                -- error "Here"
-                -- x <- showPropM p
-                -- y <- showPropM not_p
-                -- remarkM x 
-                -- remarkM y
-                contraFM p not_p
-                -- error "Here"
-                return ()
-            
-            -- From the proven (¬Q → False), derive ¬¬Q.
-            (not_not_q, _) <- absurdM not_q_implies_false
-            -- From ¬¬Q, derive Q.
-            doubleNegElimM not_not_q
-            return ()
+            -- Assume P.
 
-        -- == Prove Q → P ==
+            (negNegP,_) <- doubleNegIntroM p --prove ¬(¬P).
+            (negNegQderived, _) <- mpM negNegP_imp_negNegQ 
+            -- Now eliminate the double negation to get Q.
+            doubleNegElimM negNegQderived
+
+            -- The subproof concludes Q.
+
+        -- Part B: Prove Q → P (symmetric proof)
+        (negNegQ_imp_negNegP, _) <- bicondElimRM posBicondPre
         (q_implies_p, _) <- runProofByAsmM q $ do
-            -- Assume Q. Goal: derive P.
-            -- We prove P by contradiction: assume ¬P and derive False.
-            (not_p_implies_false, _) <- runProofByAsmM (neg p) $ do
-                -- From ¬P ↔ ¬Q, get the implication ¬P → ¬Q.
-                (not_p_implies_not_q, _) <- bicondElimLM antecedent
-                -- From ¬P (current assumption) and ¬P → ¬Q, derive ¬Q.
-                (not_q, _) <- mpM not_p_implies_not_q
-                -- We now have a contradiction between Q (parent assumption) and ¬Q (derived).
-                contraFM q not_q
-                return ()
+            -- Assume Q.
+            (negNegQ,_) <- doubleNegIntroM q --prove ¬(¬Q).
+            (negNegPderived, _) <- mpM negNegQ_imp_negNegP
+            -- Now eliminate the double negation to get P.
+            doubleNegElimM negNegPderived
 
-            -- From the proven (¬P → False), derive ¬¬P.
-            (not_not_p, _) <- absurdM not_p_implies_false
-            -- From ¬¬P, derive P.
-            doubleNegElimM not_not_p
-            return ()
-
-        -- == Combine into P ↔ Q ==
+            -- The subproof concludes P.
+        -- Combine the two implications into the biconditional P ↔ Q.
         bicondIntroM p_implies_q q_implies_p
         return ()
+    return (target, subarg_idx)
 
 
 

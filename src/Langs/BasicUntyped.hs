@@ -55,7 +55,8 @@ module Langs.BasicUntyped (
     parseImplication,
     parsePair,
     parseIn,
-    isSet
+    isSet,
+    parseBiconditional
 ) where
 
 

@@ -14,7 +14,8 @@ module Internal.StdPattern(
     newConstM,
     getFreeVarCount,
     showTermM, showSentM,
-    ShowableSubexp(..)
+    ShowableSent(..),
+    ShowableTerm(..)
 
 
 ) where
@@ -151,15 +152,19 @@ class (Ord s, Eq tType, Ord o) => TypedSent o tType sE s | s-> tType, s-> sE, s 
 
 
 
-class ShowableSubexp s t | s -> t where
+class ShowableSent s where
     showSent :: Map s [Int] -> s -> Text
-    showTerm :: Map s [Int] -> t -> Text
     -- show a sentence using a map of proven sentences to indices, and a sentence
-    -- to show. The map is used to resolve the indices of the sentences in the
-    -- sentence to the indices of the proven sentences.
+    -- to show. The map is used to determine hilbert shorthands for certain terms,
+    -- A term introduced via the EI_hilbert rule can be identified by the index
+    -- of the sentence whereby it was introduced.
 
-
-
+class ShowableTerm s t | s -> t where
+    showTerm :: Map s [Int] -> t -> Text
+    -- show a term using a map of proven sentences to indices, and a term
+    -- to show. The map is used to determine hilbert shorthands for certain terms,
+    -- A term introduced via the EI_hilbert rule can be identified by the index
+    -- of the sentence whereby it was introduced.
 
 data TestSubproofErr s sE eL where
    TestSubproofErrResultNotSane :: s -> sE -> TestSubproofErr s sE eL
@@ -322,7 +327,7 @@ runSubproofM context baseState preambleState preambleSteps mayPreambleLastProp p
 
 
 showTermM :: (Monad m, Monoid r,
-             Proof eL r (PrfStdState s o tType) (PrfStdContext tType) [PrfStdStep s o tType] s, ShowableSubexp s t)
+             Proof eL r (PrfStdState s o tType) (PrfStdContext tType) [PrfStdStep s o tType] s, ShowableTerm s t)
                      => t -> ProofGenTStd tType r s o m Text
 showTermM obj = 
     do
@@ -331,7 +336,7 @@ showTermM obj =
       return $ showTerm dict obj
 
 showSentM :: (Monad m, Monoid r,
-             Proof eL r (PrfStdState s o tType) (PrfStdContext tType) [PrfStdStep s o tType] s, ShowableSubexp s t)
+             Proof eL r (PrfStdState s o tType) (PrfStdContext tType) [PrfStdStep s o tType] s, ShowableSent s)
                      => s -> ProofGenTStd tType r s o m Text
 showSentM obj =
     do

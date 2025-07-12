@@ -7,7 +7,8 @@ module StdPattern(
     getProofState, runProofGeneratorT, Proof, runProof, ProofGeneratorT, modifyPS, getTopFreeVar, 
     getFreeVarCount,
     TypedSent(..),
-    ShowableSubexp(..)
+    ShowableSent(..),
+    ShowableTerm(..)
     
 ) where
 import Kernel
@@ -34,4 +35,5 @@ import Internal.StdPattern
       getTopFreeVar,
       TypedSent(..),
       getFreeVarCount,
-      ShowableSubexp(..))
+      ShowableSent(..),
+      ShowableTerm(..))
