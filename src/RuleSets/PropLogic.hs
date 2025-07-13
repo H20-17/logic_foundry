@@ -77,7 +77,6 @@ data LogicError s sE o tType where
     LogicErrRepOriginNotProven :: s -> LogicError s sE o tType
     LogicErrFakeSanityErr :: s -> sE -> LogicError s sE o tType
     LogicErrBasic :: REM.LogicError s sE o -> LogicError s sE o tType
-    LogicErrSentencesNotContra :: s -> s -> LogicError s sE o tType
     LogicErrContraPNotProven :: s -> LogicError s sE o tType
     LogicErrContraNotPNotProven :: s -> LogicError s sE o tType
     LogicErrAbsurdityNotProven :: s -> LogicError s sE o tType
@@ -133,7 +132,7 @@ data LogicRule tType s sE o where
     SimpL :: s -> LogicRule tType s sE o
     SimpR :: s -> LogicRule tType s sE o
     Adj :: s -> s -> LogicRule tType s sE o
-    ContraF:: s -> s -> LogicRule tType s sE o
+    ContraF:: s -> LogicRule tType s sE o
     Absurd :: s -> LogicRule tType s sE o
     DisjIntroL :: s -> s -> LogicRule tType s sE o
     DisjIntroR :: s -> s -> LogicRule tType s sE o
@@ -193,9 +192,8 @@ runProofAtomic rule context state =
             rightIndex <- maybe ((throwError . LogicErrAdjRightNotProven) b) return (Data.Map.lookup b (provenSents state))
             let aAndB = a .&&. b
             return (Just aAndB, Nothing, PrfStdStepStep aAndB "ADJ" [leftIndex,rightIndex])
-        ContraF p notP -> do
-            pOther <- maybe ((throwError . LogicErrSentenceNotNeg) notP) return (parseNeg notP)
-            unless (p == pOther) (throwError $ LogicErrSentencesNotContra p notP)
+        ContraF p -> do
+            let notP = neg p
             idx <- maybe ((throwError . LogicErrContraPNotProven) p) return (Data.Map.lookup p (provenSents state))
             idx' <- maybe ((throwError . LogicErrContraNotPNotProven) notP) return (Data.Map.lookup notP (provenSents state))
             return (Just false, Nothing, PrfStdStepStep false "CONTRA" [idx,idx'])
@@ -426,7 +424,7 @@ class LogicRuleClass r s tType sE o | r-> s, r->tType, r->sE, r->o where
     simpL :: s -> r
     simpR :: s -> r
     adj :: s -> s -> r
-    contraF :: s -> s -> r
+    contraF :: s -> r
     absurd :: s -> r
     disjIntroL :: s -> s -> r
     disjIntroR :: s -> s -> r
@@ -454,8 +452,8 @@ instance LogicRuleClass [LogicRule tType s sE o] s tType sE o where
     simpR s = [SimpL s]
     adj :: s -> s -> [LogicRule tType s sE o]
     adj a b = [Adj a b]
-    contraF :: s -> s -> [LogicRule tType s sE o]
-    contraF s notS = [ContraF s notS]
+    contraF :: s -> [LogicRule tType s sE o]
+    contraF s = [ContraF s]
     absurd :: s -> [LogicRule tType s sE o]
     absurd s = [Absurd s]
     disjIntroL :: s -> s -> [LogicRule tType s sE o]
@@ -514,8 +512,8 @@ standardRuleM rule = do
 
 
 mpM, exclMidM, simpLM, simpRM, absurdM, doubleNegElimM, deMorganConjM, 
-       deMorganDisjM, bicondElimLM, bicondElimRM, absorpAndM, absorpOrM, distAndOverOrM, distOrOverAndM,
-       peircesLawM ::
+       deMorganDisjM, bicondElimLM, bicondElimRM, absorpAndM, absorpOrM, distAndOverOrM, distOrOverAndM, 
+       peircesLawM, contraFM ::
        (Monad m, LogicSent s tType, Ord o, Show sE, Typeable sE, Show s, Typeable s,
        MonadThrow m, Show o, Typeable o, Show tType, Typeable tType, TypedSent o tType sE s,
        Monoid (PrfStdState s o tType), StdPrfPrintMonad s o tType m,
@@ -524,7 +522,7 @@ mpM, exclMidM, simpLM, simpRM, absurdM, doubleNegElimM, deMorganConjM,
        ProofStd s eL r o tType, Typeable eL, Show eL )
           => s -> ProofGenTStd tType r s o m (s,[Int])
 
-adjM, disjIntroLM, disjIntroRM,  bicondIntroM, contraFM  ::
+adjM, disjIntroLM, disjIntroRM,  bicondIntroM  ::
        (Monad m, LogicSent s tType, Ord o, Show sE, Typeable sE, Show s, Typeable s,
        MonadThrow m, Show o, Typeable o, Show tType, Typeable tType, TypedSent o tType sE s,
        Monoid (PrfStdState s o tType), StdPrfPrintMonad s o tType m,
@@ -547,7 +545,7 @@ exclMidM s = standardRuleM (exclMid s)
 simpLM s = standardRuleM (simpL s)
 simpRM s = standardRuleM (simpR s)
 adjM a b = standardRuleM (adj a b)
-contraFM s notS = standardRuleM (contraF s notS)
+contraFM s = standardRuleM (contraF s)
 absurdM s = standardRuleM (absurd s)
 disjIntroLM a b = standardRuleM (disjIntroL a b)
 disjIntroRM a b = standardRuleM (disjIntroR a b)
@@ -712,13 +710,13 @@ disj2ImpM s_notA_or_B_proven = do
             -- Case 1: Assume ¬A (which is 'not_a_term_parsed')
             (case1_notA_implies_false, _) <- runProofByAsmM not_a_term_parsed $ do
                 -- We have 'a_term_parsed' (A) and 'not_a_term_parsed' (¬A). Contradiction.
-                contraFM a_term_parsed not_a_term_parsed -- Derives False
+                contraFM a_term_parsed -- Derives False
                 return ()
 
             -- Case 2: Assume B (which is 'b_term_parsed')
             (case2_B_implies_false, _) <- runProofByAsmM b_term_parsed $ do
                 -- We have 'b_term_parsed' (B) and 'not_b_to_assume' (¬B). Contradiction.
-                contraFM b_term_parsed not_b_to_assume -- Derives False
+                contraFM b_term_parsed-- Derives False
                 return ()
 
             -- Apply DisjElim: from (¬A ∨ B), (¬A → False), (B → False), conclude False.
@@ -866,7 +864,7 @@ negImpToConjViaEquivM s_input_neg_A_implies_B = do
 
         -- 3c. We have 'a_implies_b_derived' (A → B) and the original 's_input_neg_A_implies_B' (¬(A → B)).
         --     This is a contradiction. Derive False using `contraFM`.
-        (falsity, _) <- contraFM a_implies_b_derived s_input_neg_A_implies_B
+        (falsity, _) <- contraFM a_implies_b_derived
         
         -- The subproof (assuming ¬(A ∧ ¬B)) concludes with 'falsity' (False).
         return ()
@@ -902,7 +900,7 @@ modusTollensM s = do
         (absurdity,_) <- runProofByAsmM p $ do
                 (q,_) <- mpM s
                 -- Use contraFM to derive False from q and negQ    
-                contraFM q negQ
+                contraFM q
                 --False now derived
         absurdM absurdity
         -- proves ¬P
@@ -922,7 +920,7 @@ doubleNegIntroM p = do
     (negP_imp_False, _) <- runProofByAsmM (neg p) $ do
         -- Inside this subproof, (neg p) is assumed.
         -- contraFM uses 'p' (proven outside) and 'neg p' (the assumption).
-        contraFM p (neg p) -- Derive False (⊥)
+        contraFM p -- Derive False (⊥)
 
     -- Use the Absurd rule: (¬P → ⊥) ⊢ ¬¬P
     (negNegP, negNegPIdx) <- absurdM negP_imp_False
@@ -1006,7 +1004,7 @@ disjunctiveSyllogismM pOrQ = do
         (q_implies_p, _) <- runProofByAsmM q $ do
             -- We assumed Q, but we also have ¬Q from the parent assumption.
             -- This is a contradiction.
-            (falsity, _) <- contraFM q negQ
+            (falsity, _) <- contraFM q
                 
             -- From the proven 'falsity', derive the target 'p' using Ex Falso Quodlibet.
             exFalsoM p

@@ -269,8 +269,8 @@ instance PL.LogicRuleClass [LogicRule s sE t] s () sE Text where
 
      adj:: s -> s -> [LogicRule s sE t]
      adj a b = [PredRule $ PREDL.PropRule $ PL.Adj a b]
-     contraF :: s -> s -> [LogicRule s sE t]
-     contraF a notA = [PredRule $ PREDL.PropRule $ PL.ContraF a notA]
+     contraF :: s -> [LogicRule s sE t]
+     contraF a = [PredRule $ PREDL.PropRule $ PL.ContraF a]
      absurd:: s -> [LogicRule s sE t]
      absurd a = [(PredRule . PREDL.PropRule . PL.Absurd) a]    
      disjIntroL :: s -> s -> [LogicRule s sE t]

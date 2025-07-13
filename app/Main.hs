@@ -706,7 +706,7 @@ proveBuilderSrcPartitionIntersectionEmptyMFree spec_var_idx sourceSet p_tmplt --
                 (notp_of_v, _) <- simpLM notp_and_v_in_s
 
                 -- We have now proven P(v) and ¬P(v), which is a contradiction.
-                contraFM p_of_v notp_of_v
+                contraFM p_of_v
             absurdM absurd_imp
         -- `runProofByAsmM` proves `(v ∈ intersection) → False`. `absurdM` turns this into `¬(v ∈ intersection)`.
         -- `runProofByUGM` then generalizes it.
@@ -2204,7 +2204,7 @@ strongInductionTheoremProg outerTemplateIdxs idx dom_template p_template = do
                     (final_imp,_) <- uiM absurd_element absurd_set_elements_not_below_min
                     (next,_) <- mpM final_imp
 
-                    contraFM l_more_absurd next
+                    contraFM l_more_absurd
                 (double_neg,_) <- absurdM proves_false
                 (final_generalization_set_version,_) <- doubleNegElimM double_neg
                 --(ok,_) <- mpM builderSrcPartTm
@@ -3678,7 +3678,7 @@ testprog = do
       runTmSilentM  testTheoremMSchema
       (absurdImp,_) <- runProofByAsmM z2 do
         (notZ1,_) <- fakePropM [](Neg z1)
-        (falseness,_) <- contraFM z1 notZ1
+        (falseness,_) <- contraFM z1
         showF <- showPropM falseness
         remarkM $ showF <> " is the falseness"
       showAbsurdImp <- showPropM absurdImp

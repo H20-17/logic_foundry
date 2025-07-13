@@ -165,8 +165,8 @@ instance PL.LogicRuleClass [LogicRule s sE o t tType ] s tType sE o where
 
      adj:: s -> s -> [LogicRule s sE o t tType ]
      adj a b = [PropRule  (PL.Adj a b)]
-     contraF :: s -> s -> [LogicRule s sE o t tType ]
-     contraF a notA = [PropRule  (PL.ContraF a notA)]
+     contraF :: s -> [LogicRule s sE o t tType ]
+     contraF a = [PropRule  (PL.ContraF a)]
      absurd:: s -> [LogicRule s sE o t tType ]
      absurd a = [PropRule  (PL.Absurd a)]    
      disjIntroL :: s -> s -> [LogicRule s sE o t tType]
@@ -629,7 +629,7 @@ reverseANegIntroM existsXNotPx = do
          let forallXPx = reverseParseQuantToForall f tType
          (absurdity,_) <- runProofByAsmM forallXPx $ do         
             (pc,_) <- uiM hObj forallXPx
-            contraFM pc notPc
+            contraFM pc
          absurdM absurdity
       return (result_prop, idx)
 
@@ -642,7 +642,7 @@ reverseENegIntroM forallXNotPx = do
          (absurdity,_) <- runProofByAsmM existsXPx $ do
             (pc,_,obj)<- eiHilbertM existsXPx
             (notPc,_) <- uiM obj forallXNotPx        
-            contraFM pc notPc
+            contraFM pc
          absurdM absurdity
       return (result_prop, idx)
 
