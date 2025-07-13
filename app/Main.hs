@@ -262,26 +262,40 @@ specRedundancyTheorem outerTemplateIdxs spec_var_idx source_set_template p_templ
         -- Universally quantify over all parameters to create the final closed theorem.
         multiAx outerTemplateIdxs implication
 
+-- | This function composes the following sentence:
+-- | ∀𝑥₂(∀𝑥₁(∀𝑥₀(𝑥₁ = 𝑥₀ → 𝑥₂ ∈ 𝑥₁ → 𝑥₂ ∈ 𝑥₀)))
+eqSubstTheorem :: PropDeBr
+eqSubstTheorem = 
+    let
+       eq_subst_thm_tmplt = (X 0 :==: X 1) :->: ((X 2 `In` X 0) :->: (X 2 `In` X 1))
+       eq_subst_thm = multiAx [2,0,1] eq_subst_thm_tmplt
+    in
+       eq_subst_thm
 
-
-
--- | Proves the theorem: {x ∈ S | P(x)} = S ↔ ∀x(x ∈ S → P(x))
--- |
--- | This helper proves the equivalence between a set defined by a "redundant" predicate
--- | (one that is true for all elements of the source set) and the source set itself.
--- |
--- | Note: This helper requires that `isSet sourceSet` has already been proven
--- | in the current proof context.
+-- | Given an instantiated source set, predicate, and the proven defining property of a builder set,
+-- | this function proves the biconditional: {x ∈ S | P(x)} = S ↔ ∀x(x ∈ S → P(x)).
+-- | It encapsulates the core logical derivation for the spec redundancy theorem.
+-- | This function requires that
+-- |   1. `isSet sourceSet` is already proven in the context.
+-- |   2. The set {x ∈ S | P(x)} has already been instantiated with builderInstantiateM.
+-- |   3. The theorem ∀𝑥₂(∀𝑥₁(∀𝑥₀(𝑥₁ = 𝑥₀ → 𝑥₂ ∈ 𝑥₁ → 𝑥₂ ∈ 𝑥₀))) is already asserted, probably as a theorem lemma.
+-- |      This function is defined by the function, eqSubstTheorem.
 proveSpecRedundancyMFree :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) =>
     Int ->      -- spec_var_idx: The 'x' in {x ∈ S | P(x)}
-    ObjDeBr ->  -- sourceSet: The set S
-    PropDeBr -> -- p_tmplt: The predicate P(x), which uses X spec_var_idx for x.
-    PropDeBr -> -- def_prop_b: The defining properties of the builder set
-    ProofGenTStd () [ZFC.LogicRule PropDeBr DeBrSe ObjDeBr] PropDeBr Text m (PropDeBr,[Int],())
-proveSpecRedundancyMFree spec_var_idx sourceSet p_tmplt def_prop_B =
-    runProofBySubArgM do
+    ObjDeBr ->  -- sourceSet: The instantiated source set S
+    PropDeBr -> -- p_tmplt: The instantiated predicate P(x)
+    -- PropDeBr -> -- def_prop_B: The proven defining property of the builder set
+    ProofGenTStd () [ZFC.LogicRule PropDeBr DeBrSe ObjDeBr] PropDeBr Text m (PropDeBr,[Int])
+proveSpecRedundancyMFree spec_var_idx sourceSet p_tmplt 
+         -- def_prop_B 
+         = do
+    let def_prop_B = builderPropsFree spec_var_idx sourceSet p_tmplt
+    (resultProp,idx,_) <- runProofBySubArgM $ do
         -- Assumed premise: isSet sourceSet
 
+        repM (isSet sourceSet) -- We assert this here to emphasize that it should already be proven in the context.
+        repM def_prop_B -- We assert this here to emphasize that {x ∈ S | P(x)} has already been instantiated with builderInstantiateM.
+        repM eqSubstTheorem -- We assert this here to emphasize that eqSubstTheorem has already been asserted as a lemma.
         -- Step 1: Construct the builder set B = {x ∈ S | P(x)}
         let builderSet = builderX spec_var_idx sourceSet p_tmplt
 
@@ -290,86 +304,64 @@ proveSpecRedundancyMFree spec_var_idx sourceSet p_tmplt def_prop_B =
         -- == Direction 1: ({x ∈ S | P(x)} = S) → (∀x(x ∈ S → P(x))) ==
         (dir1_implication, _) <- runProofByAsmM (builderSet :==: sourceSet) do
             -- Assume B = S. Goal: ∀x(x ∈ S → P(x))
-            (forall_x_S_implies_P, _) <- runProofByUGM () do
+            runProofByUGM () do
                 v <- getTopFreeVar
                 -- Goal: v ∈ S → P(v)
                 runProofByAsmM (v `In` sourceSet) do
-                    -- From v ∈ S and B = S, we can get v ∈ B.
-                    -- This requires a theorem for equality substitution. We assert it.
-                    let eq_subst_thm = (X 0 :==: X 1) :->: ((v `In` X 0) :->: (v `In` X 1))
-                    (inst_thm, _) <- multiUIM (multiAx [0,1] eq_subst_thm) [builderSet, sourceSet]
+                    -- The property of equality substitution states: S=B → (v∈S → v∈B)
+                
+                    -- Instantiate with v, S, and B in the correct order.
+                    (inst_thm, _) <- multiUIM eqSubstTheorem [v, sourceSet, builderSet]
+
+                    -- We need to prove S=B from B=S. This requires symmetry of equality.
+                    (s_eq_b, _) <- eqSymM (builderSet .==. sourceSet)
+                    --(symm_inst, _) <- multiUIM symm_thm [builderSet, sourceSet]
+                    -- (s_eq_b, _) <- mpM symm_inst
+
+                    -- Now apply MP twice to get v ∈ B
                     (imp_from_eq, _) <- mpM inst_thm
                     (v_in_B, _) <- mpM imp_from_eq
 
-                    -- Get the defining property of B.
-                    -- REMOVED
-                    -- (def_prop_B, _, _) <- builderInstantiateM [] [] spec_var_idx sourceSet p_tmplt
+                    -- Now that we have `v ∈ B`, we can use the defining property of B to get P(v).
                     (forall_bicond_B, _) <- simpRM def_prop_B
                     (inst_bicond_B, _) <- uiM v forall_bicond_B
                     (imp_B_to_P, _) <- bicondElimLM inst_bicond_B
                     (p_and_v_in_s, _) <- mpM imp_B_to_P
                     (p_of_v, _) <- simpLM p_and_v_in_s
-
-                    -- The subproof concludes P(v), so we have proven v ∈ S → P(v).
                     return ()
-            -- UG concludes ∀x(x ∈ S → P(x)).
-            return ()
 
         -- == Direction 2: (∀x(x ∈ S → P(x))) → ({x ∈ S | P(x)} = S) ==
         (dir2_implication, _) <- runProofByAsmM (aX spec_var_idx ((X spec_var_idx `In` sourceSet) :->: p_tmplt)) do
             -- Assume ∀x(x ∈ S → P(x)). Goal: B = S.
-            -- To prove B = S, we use extensionality. We need to prove ∀y(y ∈ B ↔ y ∈ S).
-
-            -- First, get the necessary `isSet` properties.
             (subset_prop, _, _) <- proveBuilderIsSubsetOfDomMFree spec_var_idx sourceSet p_tmplt
             (isSet_B, _) <- simpLM subset_prop
-
-            -- Prove ∀y(y ∈ B ↔ y ∈ S)
             (forall_bicond_sets, _) <- runProofByUGM () do
                 v <- getTopFreeVar
-                -- Goal: v ∈ B ↔ v ∈ S
-
-                -- Part A: v ∈ B → v ∈ S
                 (forall_subset_imp, _) <- simpRM subset_prop
                 (imp_B_to_S, _) <- uiM v forall_subset_imp
-
-                -- Part B: v ∈ S → v ∈ B
                 (imp_S_to_B, _) <- runProofByAsmM (v `In` sourceSet) do
-                    -- From assumption ∀x(x∈S→P(x)), get P(v).
                     let forall_S_implies_P = aX spec_var_idx ((X spec_var_idx `In` sourceSet) :->: p_tmplt)
                     (instantiated_imp, _) <- uiM v forall_S_implies_P
                     (p_of_v, _) <- mpM instantiated_imp
-                    -- We have v ∈ S and P(v). Adjoin them.
                     (v_in_S_and_P, _) <- adjM (v `In` sourceSet) p_of_v
-
-                    -- From the defining property of B, get (v∈S ∧ P(v)) → v∈B
-
-                    -- REMOVED:
-                    -- (def_prop_B, _, _) <- builderInstantiateM [] [] spec_var_idx sourceSet p_tmplt
                     (forall_bicond_B, _) <- simpRM def_prop_B
                     (inst_bicond_B, _) <- uiM v forall_bicond_B
                     (imp_to_B, _) <- bicondElimRM inst_bicond_B
-
-                    -- Use MP to conclude v ∈ B.
+                    adjM p_of_v (v `In` sourceSet)
                     mpM imp_to_B
                     return ()
-
-                -- Combine the two implications into v ∈ B ↔ v ∈ S
                 bicondIntroM imp_B_to_S imp_S_to_B
-
-            -- We have isSet B, isSet S, and ∀y(y∈B ↔ y∈S). Apply extensionality.
             (ext_axiom, _) <- ZFC.extensionalityAxiomM
             (ext_inst, _) <- multiUIM ext_axiom [builderSet, sourceSet]
-            (isSet_conj, _) <- adjM isSet_B (isSet sourceSet)
+            (ante1, _) <- adjM (isSet sourceSet) forall_bicond_sets
+            (full_antecedent, _) <- adjM isSet_B ante1
             (imp1, _) <- mpM ext_inst
-            (imp2, _) <- mpM imp1
-            mpM imp2 -- This proves B = S.
             return ()
 
         -- Final Step: Combine the two main implications into the final biconditional.
         bicondIntroM dir1_implication dir2_implication
         return ()
-
+    return (resultProp,idx)
 
 -- | Proves the theorem defined by 'specRedundancyTheorem'.
 -- | This version correctly composes the `proveSpecRedundancyMFree` helper.
@@ -393,13 +385,14 @@ proveSpecRedundancyTheoremM outerTemplateIdxs spec_var_idx source_set_template p
         -- Step 2: Prove the main implication by assuming its antecedent, `isSet sourceSet`.
         runProofByAsmM (isSet sourceSet) do
             -- Establish the properties of the builderSet here.
-            (def_prop_B,_,_) <- builderInstantiateM instantiationTerms outerTemplateIdxs spec_var_idx sourceSet p_tmplt
+
+            (def_prop_B,_,_) <- builderInstantiateM instantiationTerms outerTemplateIdxs spec_var_idx source_set_template p_template
 
             -- Now that `isSet sourceSet` is a proven assumption in this context,
             -- we can call the specific proof helper `proveSpecRedundancyMFree`.
             -- That helper will create its own sub-argument and prove the biconditional.
             
-            (bicond_proven, _, _) <- proveSpecRedundancyMFree spec_var_idx sourceSet p_tmplt def_prop_B
+            (bicond_proven, _) <- proveSpecRedundancyMFree spec_var_idx sourceSet p_tmplt
             
             -- The last proven statement is the desired biconditional.
             -- `runProofByAsmM` will use this to conclude the implication.
@@ -432,7 +425,7 @@ specRedundancySchema outerTemplateIdxs spec_var_idx source_set_template p_templa
         typed_consts = zip (Data.Set.toList all_consts) (repeat ())
     in
         TheoremSchemaMT {
-            lemmasM = [], -- This proof is derived from axioms and helpers, not other theorems.
+            lemmasM = [eqSubstTheorem],
             proofM = proof_program,
             constDictM = typed_consts
         }
@@ -3641,9 +3634,23 @@ main = do
     -- (a,b,c,d) <- checkTheoremM $ strongInductionTheoremMSchema [1,2] 0 source_set_template p_template
     -- (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
 
-    print "TEST UNION WITH EMPTY SET THEOREM-------------------------------------"
-    (a,b,c,d) <- checkTheoremM unionWithEmptySetSchema
+    -- print "TEST UNION WITH EMPTY SET THEOREM-------------------------------------"
+    -- (a,b,c,d) <- checkTheoremM unionWithEmptySetSchema
+    -- (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
+
+
+    print "SPEC REDUNDANCY THEOREM-------------------------------------"
+    let p_template = Constant "C" :+: X 0 :==: (X 1 :+: X 2)
+    let source_set_template = X 1 .\/. X 2
+    (a,b,c,d) <- checkTheoremM $ specRedundancySchema [1,2] 0 source_set_template p_template
     (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
+
+
+    -- print "SPEC REDUNDANCY THEOREM TEST 2-------------------------------------"
+    -- let p_template = X 0 .==. X 0
+    -- let source_set_template = Constant "SourceSet"
+    -- (a,b,c,d) <- checkTheoremM $ specRedundancySchema [] 0 source_set_template p_template
+    -- (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
 
 
     return ()
