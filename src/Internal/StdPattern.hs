@@ -89,7 +89,7 @@ instance (Ord s, Ord o) => Semigroup (PrfStdState s o tType ) where
     (<>) :: PrfStdState s o tType
               -> PrfStdState s o tType -> PrfStdState s o tType
     (<>) (PrfStdState proven1 consts1 count1) (PrfStdState proven2 consts2 count2)
-            = PrfStdState (proven1 <> proven2) (consts1 <> consts2) (count1 + count2)
+            = PrfStdState (proven2 <> proven1) (consts1 <> consts2) (count1 + count2)
 
 
 instance (Ord s, Ord o) => Monoid (PrfStdState s o tType ) where
