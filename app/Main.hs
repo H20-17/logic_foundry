@@ -1009,6 +1009,7 @@ proveBuilderSrcPartitionTheoremM outerTemplateIdxs spec_var_idx source_set_templ
             -- Step 4: Prove the first conjunct (the union equality).
             (union_equality_proven, _, _) <- proveBuilderSrcPartitionUnionMFree spec_var_idx sourceSet p_tmplt 
 
+
             -- Step 5: Prove the second conjunct (the intersection equality).
             (intersection_equality_proven, _, _) <- proveBuilderSrcPartitionIntersectionEmptyMFree spec_var_idx sourceSet p_tmplt
 
