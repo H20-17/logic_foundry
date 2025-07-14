@@ -1033,13 +1033,11 @@ proveBuilderIsSubsetOfDomMFree :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text 
 proveBuilderIsSubsetOfDomMFree spec_var_idx sourceSet p_tmplt =
     -- runProofBySubArgM will prove the last statement from its 'do' block (the subset proposition)
     -- and return (proven_subset_prop, index_of_this_subargument, ()).
+    
     runProofBySubArgM $ do
         -- The final goal is to prove the proposition corresponding to 'builderSet `subset` domainSet'
-        let builderSet = builderX spec_var_idx sourceSet p_tmplt 
-        let builderSetParse = parseHilbert builderSet
-        let parseFunc = maybe (error "attempt to parse non-Hilbert object as hilbert object") fst builderSetParse
-        let definingProperty = parseFunc builderSet
-
+        let (definingProperty,builderSet) = builderPropsFree spec_var_idx sourceSet p_tmplt
+        
         -- let targetSubsetProp = builderSet `subset` domainSet
 
 
@@ -3608,15 +3606,17 @@ main = do
     -- (a,b,c,d) <- checkTheoremM $ crossProductExistsSchema
     -- (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
 
-    -- print "TEST BUILDER SUBSET THEOREM-------------------------------------"
-    -- (a,b,c,d) <- checkTheoremM $ builderSubsetTheoremSchema [] 0 natSetObj (X 0 :==: X 0)
-    -- (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
-
-    print "TEST BUILDER SOURCE PARTITION THEOREM--------------------"
+    print "TEST BUILDER SUBSET THEOREM-------------------------------------"
     let p_template = Constant "C" :+: X 0 :==: (X 1 :+: X 2)
     let source_set_template = X 1 .\/. X 2
-    (a,b,c,d) <- checkTheoremM $ builderSrcPartitionSchema [1,2] 0 source_set_template p_template
+    (a,b,c,d) <- checkTheoremM $ builderSubsetTheoremSchema [1,2] 0 source_set_template p_template
     (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
+
+    -- print "TEST BUILDER SOURCE PARTITION THEOREM--------------------"
+    -- let p_template = Constant "C" :+: X 0 :==: (X 1 :+: X 2)
+    -- let source_set_template = X 1 .\/. X 2
+    -- (a,b,c,d) <- checkTheoremM $ builderSrcPartitionSchema [1,2] 0 source_set_template p_template
+    -- (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
 
 
 
