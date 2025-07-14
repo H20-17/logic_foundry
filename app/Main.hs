@@ -379,12 +379,9 @@ proveSpecRedundancyTheoremM outerTemplateIdxs spec_var_idx source_set_template p
         freeVarCount <- getFreeVarCount
         let instantiationTerms = Prelude.map V [0 .. freeVarCount - 1]
 
-        -- Instantiate the templates with these free variables for this specific proof context.
-        let sourceSet = objDeBrSubXs (zip outerTemplateIdxs instantiationTerms) source_set_template
-        let p_tmplt   = propDeBrSubXs (zip outerTemplateIdxs instantiationTerms) p_template
-
-        -- Establish the properties of the builderSet here.
-        builderInstantiateM instantiationTerms outerTemplateIdxs spec_var_idx source_set_template p_template
+        -- Establish the properties of the builderSet here
+        -- and acquire the instantiated templates with the free variables for this specific proof context.
+        (_,_,(_,sourceSet,p_tmplt)) <- builderInstantiateM instantiationTerms outerTemplateIdxs spec_var_idx source_set_template p_template
 
         let lemma2 = builderSubsetTheorem outerTemplateIdxs spec_var_idx source_set_template p_template
         multiUIM lemma2 instantiationTerms
@@ -783,47 +780,38 @@ proveBuilderSrcPartitionTheoremM outerTemplateIdxs spec_var_idx source_set_templ
         freeVarCount <- getFreeVarCount
         let instantiationTerms = Prelude.map V [0 .. freeVarCount - 1]
 
-        -- Instantiate the templates with the free variables to get the
-        -- specific source_set and p_template for this context.
-        let sourceSet = objDeBrSubXs (zip outerTemplateIdxs instantiationTerms) source_set_template
-        let p_tmplt   = propDeBrSubXs (zip outerTemplateIdxs instantiationTerms) p_template
+        -- Step 1:
+        -- instantiate both builder sets of the partition, and acquire the specific source_set and
+        -- p_tmplt for this context.
+        (_,_,(_,sourceSet,p_tmplt)) <- builderInstantiateM instantiationTerms outerTemplateIdxs spec_var_idx source_set_template p_template 
 
-        -- Step 2: Prove the main implication by assuming the antecedent, `isSet sourceSet`.
+        builderInstantiateM instantiationTerms outerTemplateIdxs spec_var_idx source_set_template (neg p_template) 
+
+        -- Step 2:
+        -- Instantiate the context-dependent lemmas with the context-dependent free variables.
+        let lemma1 = builderSubsetTheorem outerTemplateIdxs spec_var_idx source_set_template p_template
+        multiUIM lemma1 instantiationTerms
+        let lemma2 = builderSubsetTheorem outerTemplateIdxs spec_var_idx source_set_template (neg p_template)
+        multiUIM lemma2 instantiationTerms
+        let lemma3 = partitionEquivTheorem outerTemplateIdxs spec_var_idx source_set_template p_template
+        multiUIM lemma3 instantiationTerms
+
+        -- The sub-helpers `proveBuilderSrcPartitionUnionMFree` and `proveBuilderSrcPartitionIntersectionEmptyMFree`
+        -- assume these premises are available in the context and will use `repM` to access them.
+
+
+        -- Step 3: Prove the main implication by assuming the antecedent, `isSet sourceSet`.
         runProofByAsmM (isSet sourceSet) do
             -- Within this subproof, `isSet sourceSet` is a proven assumption.
-
-            -- Step 2a: Prove the necessary premises for the sub-helpers by instantiating the lemmas
-            -- provided by the schema.
             
-            -- Prove the subset lemmas
-            let lemma1 = builderSubsetTheorem outerTemplateIdxs spec_var_idx source_set_template p_template
-            (subset_P_proven, _) <- multiUIM lemma1 instantiationTerms
             
-            let lemma2 = builderSubsetTheorem outerTemplateIdxs spec_var_idx source_set_template (neg p_template)
-            (subset_NotP_proven, _) <- multiUIM lemma2 instantiationTerms
-
-            -- Prove the partition equivalence lemma
-            let lemma3 = partitionEquivTheorem outerTemplateIdxs spec_var_idx source_set_template p_template
-            multiUIM lemma3 instantiationTerms
-
-            -- The sub-helpers `proveBuilderSrcPartitionUnionMFree` and `proveBuilderSrcPartitionIntersectionEmptyMFree`
-            -- assume these premises are available in the context and will use `repM` to access them.
-
-            -- instantiate both builder sets of the partition
-            builderInstantiateM instantiationTerms outerTemplateIdxs spec_var_idx source_set_template p_template 
-
-            builderInstantiateM instantiationTerms outerTemplateIdxs spec_var_idx source_set_template (neg p_template) 
-
-            
-            -- Step 3: Prove the first conjunct (the union equality).
+            -- Step 4: Prove the first conjunct (the union equality).
             (union_equality_proven, _, _) <- proveBuilderSrcPartitionUnionMFree spec_var_idx sourceSet p_tmplt 
-                   -- def_prop_P def_prop_NotP 
-                   -- partition_equiv_instantiated
 
-            -- Step 4: Prove the second conjunct (the intersection equality).
+            -- Step 5: Prove the second conjunct (the intersection equality).
             (intersection_equality_proven, _, _) <- proveBuilderSrcPartitionIntersectionEmptyMFree spec_var_idx sourceSet p_tmplt
 
-            -- Step 5: Adjoin the two proven equalities to form the final conclusion.
+            -- Step 6: Adjoin the two proven equalities to form the final conclusion.
             adjM union_equality_proven intersection_equality_proven
             
             -- The last proven statement is the conjunction. 'runProofByAsmM' will form the implication.
@@ -1912,13 +1900,9 @@ proveCrossProductExistsM = do
             remarkM $ "Predicate P(z): " <> predicate_P_txt
             (definingProp_of_B, _, (crossProdObj,_,_)) <- builderInstantiateM [V 0, V 1]
                          [setA_idx, setB_idx] z_idx universeSet_tmplt predicate_P_tmplt
-            -- crossProdObj_txt <- showObjM crossProdObj
-
 
             -- Step 3: Use the theorem about definition equivalence to get the canonical property.
 
-            thm_equiv_txt <- showPropM crossProductDefEquivTheorem
-            remarkM $ "Theorem of Definition Equivalence: " <> thm_equiv_txt
             (thm_equiv_inst1, _) <- uiM setA crossProductDefEquivTheorem
             (thm_equiv_inst2, _) <- uiM setB thm_equiv_inst1
             
@@ -3606,17 +3590,17 @@ main = do
     -- (a,b,c,d) <- checkTheoremM $ crossProductExistsSchema
     -- (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
 
-    print "TEST BUILDER SUBSET THEOREM-------------------------------------"
-    let p_template = Constant "C" :+: X 0 :==: (X 1 :+: X 2)
-    let source_set_template = X 1 .\/. X 2
-    (a,b,c,d) <- checkTheoremM $ builderSubsetTheoremSchema [1,2] 0 source_set_template p_template
-    (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
-
-    -- print "TEST BUILDER SOURCE PARTITION THEOREM--------------------"
+    -- print "TEST BUILDER SUBSET THEOREM-------------------------------------"
     -- let p_template = Constant "C" :+: X 0 :==: (X 1 :+: X 2)
     -- let source_set_template = X 1 .\/. X 2
-    -- (a,b,c,d) <- checkTheoremM $ builderSrcPartitionSchema [1,2] 0 source_set_template p_template
+    -- (a,b,c,d) <- checkTheoremM $ builderSubsetTheoremSchema [1,2] 0 source_set_template p_template
     -- (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
+
+    print "TEST BUILDER SOURCE PARTITION THEOREM--------------------"
+    let p_template = Constant "C" :+: X 0 :==: (X 1 :+: X 2)
+    let source_set_template = X 1 .\/. X 2
+    (a,b,c,d) <- checkTheoremM $ builderSrcPartitionSchema [1,2] 0 source_set_template p_template
+    (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
 
 
 
