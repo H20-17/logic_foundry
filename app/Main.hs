@@ -278,7 +278,8 @@ eqSubstTheorem =
 -- | This function requires that
 -- |   1. `isSet sourceSet` is already proven in the context.
 -- |   2. The set {x ∈ S | P(x)} has already been instantiated with builderInstantiateM.
--- |   3. The theorem ∀𝑥₂(∀𝑥₁(∀𝑥₀(𝑥₁ = 𝑥₀ → 𝑥₂ ∈ 𝑥₁ → 𝑥₂ ∈ 𝑥₀))) is already asserted, probably as a theorem lemma.
+-- |   3. The instantiated builder subset theorem (i.e. {x ∈ S | P(x)} ⊆ S) is already proven in the context.
+-- |   4. The theorem ∀𝑥₂(∀𝑥₁(∀𝑥₀(𝑥₁ = 𝑥₀ → 𝑥₂ ∈ 𝑥₁ → 𝑥₂ ∈ 𝑥₀))) is already asserted, probably as a theorem lemma.
 -- |      This function is defined by the function, eqSubstTheorem.
 proveSpecRedundancyMFree :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) =>
     Int ->      -- spec_var_idx: The 'x' in {x ∈ S | P(x)}
@@ -289,15 +290,14 @@ proveSpecRedundancyMFree :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) 
 proveSpecRedundancyMFree spec_var_idx sourceSet p_tmplt 
          -- def_prop_B 
          = do
-    let def_prop_B = builderPropsFree spec_var_idx sourceSet p_tmplt
+    let (def_prop_B, builderSet) = builderPropsFree spec_var_idx sourceSet p_tmplt
+    let builderSubsetTmInst = builderSubsetTheorem [] spec_var_idx sourceSet p_tmplt
     (resultProp,idx,_) <- runProofBySubArgM $ do
-        -- Assumed premise: isSet sourceSet
-
         repM (isSet sourceSet) -- We assert this here to emphasize that it should already be proven in the context.
         repM def_prop_B -- We assert this here to emphasize that {x ∈ S | P(x)} has already been instantiated with builderInstantiateM.
         repM eqSubstTheorem -- We assert this here to emphasize that eqSubstTheorem has already been asserted as a lemma.
-        -- Step 1: Construct the builder set B = {x ∈ S | P(x)}
-        let builderSet = builderX spec_var_idx sourceSet p_tmplt
+        repM builderSubsetTmInst -- We assert this here to emphasize that the instantiated builder subset theorem should
+                                 -- already be proven in the context.
 
         -- The proof is a biconditional, so we prove each direction separately.
 
@@ -333,11 +333,12 @@ proveSpecRedundancyMFree spec_var_idx sourceSet p_tmplt
         -- == Direction 2: (∀x(x ∈ S → P(x))) → ({x ∈ S | P(x)} = S) ==
         (dir2_implication, _) <- runProofByAsmM (aX spec_var_idx ((X spec_var_idx `In` sourceSet) :->: p_tmplt)) do
             -- Assume ∀x(x ∈ S → P(x)). Goal: B = S.
-            (subset_prop, _, _) <- proveBuilderIsSubsetOfDomMFree spec_var_idx sourceSet p_tmplt
-            (isSet_B, _) <- simpLM subset_prop
+            (isSet_B, _) <- simpLM builderSubsetTmInst
+
             (forall_bicond_sets, _) <- runProofByUGM () do
                 v <- getTopFreeVar
-                (forall_subset_imp, _) <- simpRM subset_prop
+                (forall_subset_imp, _) <- simpRM builderSubsetTmInst
+
                 (imp_B_to_S, _) <- uiM v forall_subset_imp
                 (imp_S_to_B, _) <- runProofByAsmM (v `In` sourceSet) do
                     let forall_S_implies_P = aX spec_var_idx ((X spec_var_idx `In` sourceSet) :->: p_tmplt)
@@ -382,11 +383,18 @@ proveSpecRedundancyTheoremM outerTemplateIdxs spec_var_idx source_set_template p
         let sourceSet = objDeBrSubXs (zip outerTemplateIdxs instantiationTerms) source_set_template
         let p_tmplt   = propDeBrSubXs (zip outerTemplateIdxs instantiationTerms) p_template
 
+        -- Establish the properties of the builderSet here.
+        builderInstantiateM instantiationTerms outerTemplateIdxs spec_var_idx source_set_template p_template
+
+        let lemma2 = builderSubsetTheorem outerTemplateIdxs spec_var_idx source_set_template p_template
+        multiUIM lemma2 instantiationTerms
+
+
         -- Step 2: Prove the main implication by assuming its antecedent, `isSet sourceSet`.
         runProofByAsmM (isSet sourceSet) do
-            -- Establish the properties of the builderSet here.
+            
 
-            (def_prop_B,_,_) <- builderInstantiateM instantiationTerms outerTemplateIdxs spec_var_idx source_set_template p_template
+
 
             -- Now that `isSet sourceSet` is a proven assumption in this context,
             -- we can call the specific proof helper `proveSpecRedundancyMFree`.
@@ -425,12 +433,14 @@ specRedundancySchema outerTemplateIdxs spec_var_idx source_set_template p_templa
         typed_consts = zip (Data.Set.toList all_consts) (repeat ())
     in
         TheoremSchemaMT {
-            lemmasM = [eqSubstTheorem],
+            lemmasM = [eqSubstTheorem, 
+                       builderSubsetTheorem outerTemplateIdxs spec_var_idx source_set_template p_template],
             proofM = proof_program,
             constDictM = typed_consts
         }
 
--- | Gives us properties of a builder set, after builderInstantiateM has been called
+-- | Gives us properties of a builder set, as well as the builder set object,
+-- | after builderInstantiateM has been called
 -- | Reproduces some of the work of builderInstantiateM but allows
 -- | us to pass less information to functions as a consequence.
 builderPropsFree :: 
@@ -438,7 +448,8 @@ builderPropsFree ::
     ObjDeBr ->  -- t: The instantiated set, with all of the original outer context
                 --    variables instantiated
     PropDeBr -> -- p_template: the original p_template with all outer context variables
-    PropDeBr    --             instantiated with free variables
+                -- instantiated with free variables
+    (PropDeBr, ObjDeBr) -- the properties of the builderset and the builder set object
 builderPropsFree idx t p_template =
         let
             new_idx_base = idx + 1
@@ -482,17 +493,9 @@ builderPropsFree idx t p_template =
             
 
         in
-            free_props
+            (free_props, hilbert_obj)
 
--- | This is to be used after the partition EquivTHeorem is instantiated with free
--- | variables. It will reconstruct the instantiated theorem using
--- | the instantiated source set and the instantiated p_template
--- | Even though it reproduces some of the output created by
--- | instantiating the theorem (with multiUIM and free variables),
--- | it allows us to pass less information to functions.
-partitionEquivTheoremFree :: Int -> ObjDeBr -> PropDeBr -> PropDeBr
-partitionEquivTheoremFree spec_var_idx source_set_inst p_template_inst =
-    partitionEquivTheorem [] spec_var_idx source_set_inst p_template_inst
+
 
 -- | Proves that a source set S is equal to the union of two subsets partitioned by a predicate P.
 -- | Theorem: S = {x ∈ S | P(x)} ∪ {x ∈ S | ¬P(x)}
@@ -512,15 +515,13 @@ proveBuilderSrcPartitionUnionMFree :: (MonadThrow m, StdPrfPrintMonad PropDeBr T
 proveBuilderSrcPartitionUnionMFree spec_var_idx sourceSet p_tmplt =
               -- partition_equiv_theorem_free =
     runProofBySubArgM do
-        let partition_equiv_theorem_free = partitionEquivTheoremFree spec_var_idx sourceSet p_tmplt
-        let def_prop_P = builderPropsFree spec_var_idx sourceSet p_tmplt
-        let def_prop_NotP = builderPropsFree spec_var_idx sourceSet (neg p_tmplt)
+        let partition_equiv_theorem_free = partitionEquivTheorem [] spec_var_idx sourceSet p_tmplt
+        let (def_prop_P,builderSet_P) = builderPropsFree spec_var_idx sourceSet p_tmplt
+        let (def_prop_NotP,builderSet_NotP) = builderPropsFree spec_var_idx sourceSet (neg p_tmplt)
 
         -- Assumed premise: isSet sourceSet
 
-        -- Step 1: Construct the two builder sets and their union.
-        let builderSet_P = builderX spec_var_idx sourceSet p_tmplt
-        let builderSet_NotP = builderX spec_var_idx sourceSet (neg p_tmplt)
+        -- Step 1: Construct the union of the builder sets.
         let union_of_builders = builderSet_P .\/. builderSet_NotP
 
         -- Step 2: Prove that the builder sets and their union are sets.
@@ -534,9 +535,7 @@ proveBuilderSrcPartitionUnionMFree spec_var_idx sourceSet p_tmplt =
         (isSet_builder_P, _) <- simpLM subset_P_proven
         (subset_NotP_proven, _) <- repM subset_NotP_prop
         (isSet_builder_NotP, _) <- simpLM subset_NotP_proven
-        remarkM "FUCK"
         (isSet_union, _) <- proveUnionIsSetM builderSet_P builderSet_NotP
-        remarkM "SHIT"
         -- Step 3: Prove ∀x (x ∈ sourceSet ↔ x ∈ union_of_builders)
         (forall_bicond, _) <- runProofByUGM () do
             v <- getTopFreeVar
@@ -549,15 +548,12 @@ proveBuilderSrcPartitionUnionMFree spec_var_idx sourceSet p_tmplt =
             -- We use repM to formally bring it into this subproof's context.
             (tm_statement, _) <- repM partition_equiv_theorem_free
             (proven_equiv_thm,_) <- uiM v tm_statement
-            p_text <- showPropM proven_equiv_thm
-            remarkM $ "p_text" <> p_text
 
             (def_prop_Union, _, _) <- binaryUnionInstantiateM builderSet_P builderSet_NotP
 
             -- Goal: Prove v ∈ sourceSet ↔ v ∈ union_of_builders
             -- Direction 1: (v ∈ sourceSet) → (v ∈ union_of_builders)
             (dir1, _) <- runProofByAsmM (v `In` sourceSet) do
-                remarkM "ici"
                 (equiv_imp, _) <- bicondElimLM proven_equiv_thm
                 (partition_disj, _) <- mpM equiv_imp
                 
@@ -565,15 +561,12 @@ proveBuilderSrcPartitionUnionMFree spec_var_idx sourceSet p_tmplt =
                     (forall_p, _) <- simpRM def_prop_P
                     (def_p_inst, _) <- uiM v forall_p
                     (def_p_imp, _) <- bicondElimRM def_p_inst
-                    remarkM "apres le deluge une"
-                    a <-showPropM def_p_imp
-                    remarkM a
+
                     (v_in_sp, _) <- mpM def_p_imp
                     (v_in_sp_or_snotp, _) <- disjIntroLM v_in_sp (v `In` builderSet_NotP)
                     (forall_union, _) <- simpRM def_prop_Union
                     (def_union_inst, _) <- uiM v forall_union
                     (def_union_imp, _) <- bicondElimRM def_union_inst
-                    remarkM "apres le deluge"
                     mpM def_union_imp
                 
                 (case2_imp, _) <- runProofByAsmM ((neg p_of_v) :&&: (v `In` sourceSet)) do
@@ -639,13 +632,13 @@ proveBuilderSrcPartitionIntersectionEmptyMFree :: (MonadThrow m, StdPrfPrintMona
 proveBuilderSrcPartitionIntersectionEmptyMFree spec_var_idx sourceSet p_tmplt -- def_prop_P def_prop_NotP 
            =
     runProofBySubArgM do
-        let def_prop_P = builderPropsFree spec_var_idx sourceSet p_tmplt
-        let def_prop_NotP = builderPropsFree spec_var_idx sourceSet (neg p_tmplt)
+        let (def_prop_P,builderSet_P) = builderPropsFree spec_var_idx sourceSet p_tmplt
+        let (def_prop_NotP,builderSet_NotP) = builderPropsFree spec_var_idx sourceSet (neg p_tmplt)
         -- Assumed premise: isSet sourceSet
 
         -- Step 1: Construct the two builder sets and their intersection.
-        let builderSet_P = builderX spec_var_idx sourceSet p_tmplt
-        let builderSet_NotP = builderX spec_var_idx sourceSet (neg p_tmplt)
+        -- et builderSet_P = builderX spec_var_idx sourceSet p_tmplt
+        -- let builderSet_NotP = builderX spec_var_idx sourceSet (neg p_tmplt)
         let intersection_of_builders = builderSet_P ./\. builderSet_NotP
 
         -- Step 2: Prove that the builder sets and their intersection are sets.
@@ -3619,11 +3612,11 @@ main = do
     -- (a,b,c,d) <- checkTheoremM $ builderSubsetTheoremSchema [] 0 natSetObj (X 0 :==: X 0)
     -- (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
 
-    -- print "TEST BUILDER SOURCE PARTITION THEOREM--------------------"
-    -- let p_template = Constant "C" :+: X 0 :==: (X 1 :+: X 2)
-    -- let source_set_template = X 1 .\/. X 2
-    -- (a,b,c,d) <- checkTheoremM $ builderSrcPartitionSchema [1,2] 0 source_set_template p_template
-    -- (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
+    print "TEST BUILDER SOURCE PARTITION THEOREM--------------------"
+    let p_template = Constant "C" :+: X 0 :==: (X 1 :+: X 2)
+    let source_set_template = X 1 .\/. X 2
+    (a,b,c,d) <- checkTheoremM $ builderSrcPartitionSchema [1,2] 0 source_set_template p_template
+    (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
 
 
 
@@ -3639,11 +3632,11 @@ main = do
     -- (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
 
 
-    print "SPEC REDUNDANCY THEOREM-------------------------------------"
-    let p_template = Constant "C" :+: X 0 :==: (X 1 :+: X 2)
-    let source_set_template = X 1 .\/. X 2
-    (a,b,c,d) <- checkTheoremM $ specRedundancySchema [1,2] 0 source_set_template p_template
-    (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
+    -- print "SPEC REDUNDANCY THEOREM-------------------------------------"
+    -- let p_template = Constant "C" :+: X 0 :==: (X 1 :+: X 2)
+    -- let source_set_template = X 1 .\/. X 2
+    -- (a,b,c,d) <- checkTheoremM $ specRedundancySchema [1,2] 0 source_set_template p_template
+    -- (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
 
 
     -- print "SPEC REDUNDANCY THEOREM TEST 2-------------------------------------"
