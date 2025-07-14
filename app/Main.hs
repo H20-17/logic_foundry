@@ -1564,8 +1564,36 @@ proveUnionIsSetM setA setB = do
         return ()
     return (resultProp,idx)
 
+-- | This function composes the "pair substitution theorem":
+-- |  
+-- |  ∀𝑥₅(∀𝑥₄(∀𝑥₃(∀𝑥₂(∀𝑥₁(∀𝑥₀((𝑥₃,𝑥₂) = 
+-- |      (𝑥₁,𝑥₀) ∧ 𝑥₁ ∈ 𝑥₅ ∧ 𝑥₀ ∈ 𝑥₄ → 𝑥₃ ∈ 𝑥₅ ∧ 𝑥₂ ∈ 𝑥₄))))))
+-- |  
+pairSubstTheorem :: PropDeBr
+pairSubstTheorem = 
+    let
+        thm_A=0; thm_B=1; thm_x=2; thm_y=3; thm_a=4; thm_b=5
+        thm_antecedent = (buildPair (X thm_x) (X thm_y) :==: buildPair (X thm_a) (X thm_b))
+                            :&&: (X thm_a `In` X thm_A) :&&: (X thm_b `In` X thm_B)
+        thm_consequent = (X thm_x `In` X thm_A) :&&: (X thm_y `In` X thm_B)
+        pair_subst_theorem_closed = multiAx [thm_A, thm_B, thm_x, thm_y, thm_a, thm_b] (thm_antecedent :->: thm_consequent)
+    in
+        pair_subst_theorem_closed
 
-
+-- | This function composes the "pair in universe theorem":
+-- |
+-- |  ∀𝑥₃(∀𝑥₂(∀𝑥₁(∀𝑥₀(isSet(𝑥₃) ∉ ℤ ∧ isSet(𝑥₂) ∧ 𝑥₁ ∈ 𝑥₃ ∧ 𝑥₀ ∈ 𝑥₂ 
+-- |         → (𝑥₁,𝑥₀) ∈ 𝒫(𝒫(𝑥₃ ∪ 𝑥₂))))))
+-- |
+pairInUniverseTheorem :: PropDeBr
+pairInUniverseTheorem =
+    let thm_A=0; thm_B=1; thm_x=2; thm_y=3
+        thm_univ = buildPowerSet (buildPowerSet (X thm_A .\/. X thm_B))
+        thm_pair_univ_antecedent = isSet (X thm_A) :&&: isSet (X thm_B) :&&: (X thm_x `In` X thm_A) :&&: (X thm_y `In` X thm_B)
+        thm_pair_univ_consequent = buildPair (X thm_x) (X thm_y) `In` thm_univ
+        pair_in_universe_theorem_closed = multiAx [thm_A, thm_B, thm_x, thm_y] (thm_pair_univ_antecedent :->: thm_pair_univ_consequent)
+    in
+        pair_in_universe_theorem_closed
 
 -- | Constructs the PropDeBr term for the closed theorem stating that the property
 -- | of a cross product derived via the Axiom of Specification implies the
@@ -1716,19 +1744,10 @@ proveCrossProductDefEquivM = do
 
                         -- 'p_inst_final' is now the fully instantiated body:
                         -- (<v_x,v_y> = <v_a_h,v_b_h>) ∧ v_a_h∈A ∧ v_b_h∈B
-
-                        -- Define the general, CLOSED theorem for pair substitution.
-                        let thm_A=0; thm_B=1; thm_x=2; thm_y=3; thm_a=4; thm_b=5
-                        let thm_antecedent = (buildPair (X thm_x) (X thm_y) :==: buildPair (X thm_a) (X thm_b))
-                                             :&&: (X thm_a `In` X thm_A) :&&: (X thm_b `In` X thm_B)
-                        let thm_consequent = (X thm_x `In` X thm_A) :&&: (X thm_y `In` X thm_B)
-                        let pair_subst_theorem_closed = multiAx [thm_A, thm_B, thm_x, thm_y, thm_a, thm_b] (thm_antecedent :->: thm_consequent)
-                        
-                        (pair_subst_theorem_proven, _) <- fakePropM [] pair_subst_theorem_closed
-                        
-                        -- Instantiate the theorem with our specific free variables and Hilbert terms.
+                                               
+                        -- Instantiate the pair substitution theorem with our specific free variables and Hilbert terms.
                         let instantiation_terms_for_thm = [setA, setB, v_x_inner, v_y_inner, v_a_h, v_b_h]
-                        (instantiated_theorem, _) <- multiUIM pair_subst_theorem_proven instantiation_terms_for_thm
+                        (instantiated_theorem, _) <- multiUIM pairSubstTheorem instantiation_terms_for_thm
 
                         -- Use Modus Ponens with the fully instantiated body 'p_inst_final' to get the consequent.
                         mpM instantiated_theorem
@@ -1754,17 +1773,8 @@ proveCrossProductDefEquivM = do
                         let eg_target_x = eX 0 p_x_b_template
                         (p_of_pair_proven, _) <- egM v_x_inner eg_target_x
 
-                        -- Part 2: Prove <x,y> ∈ universeSet (U = P(P(A∪B))).
-                        -- We assert the general theorem that makes this possible.
-                        let thm_A=0; thm_B=1; thm_x=2; thm_y=3
-                        let thm_univ = buildPowerSet (buildPowerSet (X thm_A .\/. X thm_B))
-                        let thm_pair_univ_antecedent = isSet (X thm_A) :&&: isSet (X thm_B) :&&: (X thm_x `In` X thm_A) :&&: (X thm_y `In` X thm_B)
-                        let thm_pair_univ_consequent = buildPair (X thm_x) (X thm_y) `In` thm_univ
-                        let pair_in_universe_theorem_closed = multiAx [thm_A, thm_B, thm_x, thm_y] (thm_pair_univ_antecedent :->: thm_pair_univ_consequent)
-                        (pair_in_universe_theorem_proven, _) <- fakePropM [] pair_in_universe_theorem_closed
-                        
-                        -- Instantiate the theorem and use it.
-                        (instantiated_thm, _) <- multiUIM pair_in_universe_theorem_proven [setA, setB, v_x_inner, v_y_inner]
+                        -- Instantiate the pair in universe theorem and use it.
+                        (instantiated_thm, _) <- multiUIM pairInUniverseTheorem [setA, setB, v_x_inner, v_y_inner]
 
 
                         (conj3_4, _) <- adjM vx_in_A_p vy_in_B_p
@@ -1792,7 +1802,11 @@ proveCrossProductDefEquivM = do
 crossProductDefEquivSchema :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) => 
      TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text m ()
 crossProductDefEquivSchema = 
-    TheoremSchemaMT [] [binaryUnionExistsTheorem] proveCrossProductDefEquivM
+    TheoremSchemaMT [] 
+                    [binaryUnionExistsTheorem
+                    , pairSubstTheorem
+                    , pairInUniverseTheorem] 
+                    proveCrossProductDefEquivM
 
 
 
@@ -3582,9 +3596,9 @@ main = do
     -- (a,b,c,d) <- checkTheoremM $ binaryUnionExistsSchema
     -- (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
 
-    -- bprint "TEST BINARY CROSSPRODDEFEQUIV SCHEMA-------------------------------------"
-    -- (a,b,c,d) <- checkTheoremM $ crossProductDefEquivSchema
-    -- (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
+    print "TEST BINARY CROSSPRODDEFEQUIV SCHEMA-------------------------------------"
+    (a,b,c,d) <- checkTheoremM $ crossProductDefEquivSchema
+    (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
 
     -- print "TEST CROSSPROD EXISTS SCHEMA ---------------------------"
     -- (a,b,c,d) <- checkTheoremM $ crossProductExistsSchema
@@ -3596,11 +3610,11 @@ main = do
     -- (a,b,c,d) <- checkTheoremM $ builderSubsetTheoremSchema [1,2] 0 source_set_template p_template
     -- (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
 
-    print "TEST BUILDER SOURCE PARTITION THEOREM--------------------"
-    let p_template = Constant "C" :+: X 0 :==: (X 1 :+: X 2)
-    let source_set_template = X 1 .\/. X 2
-    (a,b,c,d) <- checkTheoremM $ builderSrcPartitionSchema [1,2] 0 source_set_template p_template
-    (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
+    -- print "TEST BUILDER SOURCE PARTITION THEOREM--------------------"
+    -- let p_template = Constant "C" :+: X 0 :==: (X 1 :+: X 2)
+    -- let source_set_template = X 1 .\/. X 2
+    -- (a,b,c,d) <- checkTheoremM $ builderSrcPartitionSchema [1,2] 0 source_set_template p_template
+    -- (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
 
 
 
