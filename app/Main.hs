@@ -2048,43 +2048,25 @@ strongInductionTheoremMSchema outerTemplateIdxs spec_var_idx dom p_template=
                              ] (strongInductionTheoremProg outerTemplateIdxs spec_var_idx dom p_template)
 
 
-strongInductionTheoremProg::(MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) => 
-               [Int] -> Int -> ObjDeBr -> PropDeBr -> ProofGenTStd () [ZFCRuleDeBr] PropDeBr Text m ()
-strongInductionTheoremProg outerTemplateIdxs idx dom_template p_template = do
 
 
+strongInductionTheoremProgFree::(MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) => 
+               Int -> ObjDeBr -> PropDeBr -> ProofGenTStd () [ZFCRuleDeBr] PropDeBr Text m (PropDeBr,[Int])
+strongInductionTheoremProgFree idx dom p_pred = do
+            let rel_idx = idx + 1
+            let asmMain = eX rel_idx (
+                           X rel_idx `subset` (dom `crossProd` dom)
+                               :&&: isRelWellFoundedOn dom (X rel_idx)
+                                :&&: strongInductionPremiseOnRel p_pred idx dom (X rel_idx))
+            let (anti_spec_prop,anti_absurd_candidate) = builderPropsFree idx dom p_pred
+            let (spec_prop, absurd_candidate) = builderPropsFree idx dom (neg p_pred)
+            let builderSubsetTmFree = builderSubsetTheorem [] idx dom (neg p_pred)
+            let builderSrcPartitionTmFreeConditional = builderSrcPartitionTheorem [] idx dom p_pred
+            let specRedundancyTmFreeConditional = specRedundancyTheorem [] idx dom p_pred
+            runProofByAsmM asmMain do
+                (builderSrcPartitionTmFree,_) <- mpM builderSrcPartitionTmFreeConditional
 
-    let builderSubsetTmInstance = builderSubsetTheorem outerTemplateIdxs idx dom_template (neg p_template)
-    let builderSrcPartitionTmInstance = builderSrcPartitionTheorem outerTemplateIdxs idx dom_template p_template
-    let specRedundancyTmInstance = specRedundancyTheorem outerTemplateIdxs idx dom_template p_template
-    
-
-    multiUGM (replicate (length outerTemplateIdxs) ()) do
-        -- Inside the UG, we have free variables (V_i) corresponding to the X_k parameters.
-        freeVarCount <- getFreeVarCount
-        let instantiationTerms = Prelude.map V [0 .. freeVarCount - 1]
-
-        -- Instantiate the templates with these free variables for this specific proof context.
-        let dom = objDeBrSubXs (zip outerTemplateIdxs instantiationTerms) dom_template
-        let p_pred   = propDeBrSubXs (zip outerTemplateIdxs instantiationTerms) p_template
-
-        let rel_idx = idx + 1
-        let dom_idx = idx + 2
-
-        let asm =  propDeBrSubX dom_idx dom (isSet (X dom_idx) :&&: eX rel_idx (
-                           X rel_idx `subset` ((X dom_idx) `crossProd` (X dom_idx))
-                               :&&: isRelWellFoundedOn (X dom_idx) (X rel_idx)
-                                :&&: strongInductionPremiseOnRel p_pred idx (X dom_idx) (X rel_idx))
-                        )  
-
-        (builderSubsetTmFree, _) <- multiUIM builderSubsetTmInstance instantiationTerms
-        (builderSrcPartitionTmFreeConditionaal,_) <- multiUIM builderSrcPartitionTmInstance instantiationTerms
-        (specRedundancyTmFreeConditional,_) <- multiUIM specRedundancyTmInstance instantiationTerms
-        runProofByAsmM asm do
-                (isSetDom, _) <- simpLM asm
-                (builderSrcPartitionTmFree,_) <- mpM builderSrcPartitionTmFreeConditionaal
                 (specRedundancyTmFree,_) <- mpM specRedundancyTmFreeConditional
-                (asmMain, _) <- simpRM asm
                 (asm_after_ei,_,rel_obj) <- eiHilbertM asmMain
                 (rel_is_relation,rel_is_relation_idx) <- simpLM asm_after_ei
                 (bAndC,_) <- simpRM asm_after_ei
@@ -2094,19 +2076,20 @@ strongInductionTheoremProg outerTemplateIdxs idx dom_template p_template = do
                 remarkM $   (pack . show) rel_is_relation_idx <> " asserts that rel is a relation over N.\n" 
                            <> (pack . show) well_founded_idx <> " asserts that rel is well-founded over N.\n"
                            <> (pack . show) induction_premise_idx <> " asserts that the induction premise holds for N"
-                (spec_prop,spec_prop_idx,(absurd_candidate,_,_)) <- builderInstantiateM instantiationTerms outerTemplateIdxs idx 
-                          dom_template (neg p_template)
-                (anti_spec_prop,_,(anti_absurd_candidate,_,_)) <- 
-                          builderInstantiateM instantiationTerms outerTemplateIdxs idx dom_template p_template
+                
                 let absurd_asm = absurd_candidate./=. EmptySet 
                 absurd_asm_txt <- showPropM absurd_asm
                 remarkM $ "Absurd assumption: " <> absurd_asm_txt
                 (proves_false,_) <- runProofByAsmM absurd_asm do
                     (well_founded_instance,_) <- uiM absurd_candidate well_founded
+
+                    x <- showSentM well_founded_instance
+                    remarkM x
                     remarkM "LOOK HERE!!!!!"
                     remarkM "AFTER LOOK HERE!!!!!"
                     -- This does not need to be proven because it's a lemma proven in the template.
                     adjM builderSubsetTmFree absurd_asm
+                    -- x <- showSentM
                     (min_assertion, min_assertion_idx) <- mpM well_founded_instance --the first lemma is used here
                     remarkM $   (pack . show) min_assertion_idx <> " asserts the existance of a minimum element in the absurd set. "
                     (witnessed_min_assertion,_,min_element) <- eiHilbertM min_assertion
@@ -2207,7 +2190,52 @@ strongInductionTheoremProg outerTemplateIdxs idx dom_template p_template = do
                 mpM final_imp
                 let final_generalization = aX idx (X idx `In` dom .->. p_pred)
                 fakePropM [final_generalization_set_version] final_generalization
-                --return ()
+
+
+
+
+
+strongInductionTheoremProg::(MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) => 
+               [Int] -> Int -> ObjDeBr -> PropDeBr -> ProofGenTStd () [ZFCRuleDeBr] PropDeBr Text m ()
+strongInductionTheoremProg outerTemplateIdxs idx dom_template p_template = do
+
+
+
+    let builderSubsetTmInstance = builderSubsetTheorem outerTemplateIdxs idx dom_template (neg p_template)
+    let builderSrcPartitionTmInstance = builderSrcPartitionTheorem outerTemplateIdxs idx dom_template p_template
+    let specRedundancyTmInstance = specRedundancyTheorem outerTemplateIdxs idx dom_template p_template
+    
+
+    multiUGM (replicate (length outerTemplateIdxs) ()) do
+        -- Inside the UG, we have free variables (V_i) corresponding to the X_k parameters.
+        freeVarCount <- getFreeVarCount
+        let instantiationTerms = Prelude.map V [0 .. freeVarCount - 1]
+
+        (_,_,(_,dom,_)) <- builderInstantiateM instantiationTerms outerTemplateIdxs idx 
+                          dom_template (neg p_template)
+        (_,_,(_,_,p_pred)) <- 
+                          builderInstantiateM instantiationTerms outerTemplateIdxs idx dom_template p_template
+
+                        
+
+        multiUIM builderSubsetTmInstance instantiationTerms
+        multiUIM builderSrcPartitionTmInstance instantiationTerms
+        multiUIM specRedundancyTmInstance instantiationTerms
+        let rel_idx = idx + 1
+
+        let isSetDom = isSet dom
+        (main_imp, _) <- runProofByAsmM isSetDom do
+            strongInductionTheoremProgFree idx dom p_pred
+        let asmMain = eX rel_idx (
+                           X rel_idx `subset` (dom `crossProd` dom)
+                               :&&: isRelWellFoundedOn dom (X rel_idx)
+                                :&&: strongInductionPremiseOnRel p_pred idx dom (X rel_idx))
+        let full_asm = isSetDom .&&. asmMain
+        runProofByAsmM full_asm do
+            (isSet_dom,_) <- simpLM full_asm
+            (sub_imp,_) <- mpM main_imp
+            (inductive_asm,_) <- simpRM full_asm
+            mpM sub_imp
     return ()
 
 
@@ -3596,9 +3624,9 @@ main = do
     -- (a,b,c,d) <- checkTheoremM $ binaryUnionExistsSchema
     -- (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
 
-    print "TEST BINARY CROSSPRODDEFEQUIV SCHEMA-------------------------------------"
-    (a,b,c,d) <- checkTheoremM $ crossProductDefEquivSchema
-    (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
+    -- print "TEST BINARY CROSSPRODDEFEQUIV SCHEMA-------------------------------------"
+    -- (a,b,c,d) <- checkTheoremM $ crossProductDefEquivSchema
+    -- (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
 
     -- print "TEST CROSSPROD EXISTS SCHEMA ---------------------------"
     -- (a,b,c,d) <- checkTheoremM $ crossProductExistsSchema
@@ -3619,11 +3647,11 @@ main = do
 
 
 
-    -- print "TEST STRONG INDUCTION THEOREM-------------------------------------"
-    -- let p_template = Constant "C" :+: X 0 :==: (X 1 :+: X 2)
-    -- let source_set_template = X 1 .\/. X 2
-    -- (a,b,c,d) <- checkTheoremM $ strongInductionTheoremMSchema [1,2] 0 source_set_template p_template
-    -- (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
+    print "TEST STRONG INDUCTION THEOREM-------------------------------------"
+    let p_template = Constant "C" :+: X 0 :==: (X 1 :+: X 2)
+    let source_set_template = X 1 .\/. X 2
+    (a,b,c,d) <- checkTheoremM $ strongInductionTheoremMSchema [1,2] 0 source_set_template p_template
+    (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
 
     -- print "TEST UNION WITH EMPTY SET THEOREM-------------------------------------"
     -- (a,b,c,d) <- checkTheoremM unionWithEmptySetSchema
