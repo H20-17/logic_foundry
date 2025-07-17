@@ -2031,24 +2031,6 @@ multiUIM initialProposition instantiationTerms =
 
 
 
-strongInductionTheoremMSchema :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) => 
-     [Int] -> Int -> ObjDeBr -> PropDeBr -> TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text m ()
-strongInductionTheoremMSchema outerTemplateIdxs spec_var_idx dom p_template= 
-    let
-      dom_tmplt_consts = extractConstsTerm dom
-      p_tmplt_consts = extractConstsSent p_template
-      all_consts = dom_tmplt_consts `Set.union` p_tmplt_consts
-      typed_consts = zip (Data.Set.toList all_consts) (repeat ()) 
-    in
-      TheoremSchemaMT typed_consts [crossProductExistsTheorem
-                              , builderSubsetTheorem outerTemplateIdxs spec_var_idx dom (neg p_template)
-                              , builderSrcPartitionTheorem outerTemplateIdxs spec_var_idx dom p_template
-                              , unionWithEmptySetTheorem
-                              , specRedundancyTheorem outerTemplateIdxs spec_var_idx dom p_template
-                             ] (strongInductionTheoremProg outerTemplateIdxs spec_var_idx dom p_template)
-
-
-
 
 strongInductionTheoremProgFree::(MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) => 
                Int -> ObjDeBr -> PropDeBr -> ProofGenTStd () [ZFCRuleDeBr] PropDeBr Text m (PropDeBr,[Int])
@@ -2071,7 +2053,6 @@ strongInductionTheoremProgFree idx dom p_pred = do
                 (rel_is_relation,rel_is_relation_idx) <- simpLM asm_after_ei
                 (bAndC,_) <- simpRM asm_after_ei
                 (well_founded,well_founded_idx) <- simpLM bAndC
-                remarkM "here is a simpL"
                 (induction_premise,induction_premise_idx) <- simpRM bAndC
                 remarkM $   (pack . show) rel_is_relation_idx <> " asserts that rel is a relation over N.\n" 
                            <> (pack . show) well_founded_idx <> " asserts that rel is well-founded over N.\n"
@@ -2083,67 +2064,33 @@ strongInductionTheoremProgFree idx dom p_pred = do
                 (proves_false,_) <- runProofByAsmM absurd_asm do
                     (well_founded_instance,_) <- uiM absurd_candidate well_founded
 
-                    x <- showSentM well_founded_instance
-                    remarkM x
-                    remarkM "LOOK HERE!!!!!"
-                    remarkM "AFTER LOOK HERE!!!!!"
-                    -- This does not need to be proven because it's a lemma proven in the template.
                     adjM builderSubsetTmFree absurd_asm
-                    -- x <- showSentM
                     (min_assertion, min_assertion_idx) <- mpM well_founded_instance --the first lemma is used here
-                    remarkM $   (pack . show) min_assertion_idx <> " asserts the existance of a minimum element in the absurd set. "
                     (witnessed_min_assertion,_,min_element) <- eiHilbertM min_assertion
                     (min_element_in_absurd_set,idx_witnessed_min_assert) <- simpLM witnessed_min_assertion
                     (absurd_set_elements_not_below_min,idxB) <- simpRM witnessed_min_assertion
                     minObjTxt <- showObjM min_element
-                    remarkM $ "The minimum element in the absurd set is: " <> minObjTxt <> ".\n"
-                       <> (pack . show) idx_witnessed_min_assert <> " asserts that this element is in the absurd set.\n"
-                          <> (pack . show)  idxB <> " asserts that all elements in the absurd set are not below this element."
-            
-                    
 
+            
                     (induction_premise_on_min,idxA) <- uiM min_element induction_premise
-                    remarkM $ (pack . show) idxA <> " asserts that the induction premise holds for the minimum element.\n"
-                    -- fakePropM [witnessed_min_assertion] (propDeBrSubX idx min_element (neg p_pred))
                     (some_statement,_) <- simpRM spec_prop
                     (another_statement,_) <- uiM min_element some_statement
                     (forward,_) <- bicondElimLM another_statement
                     (after_forward,_) <- mpM forward
                     simpLM after_forward
-                    -- error "STOP HERE"
                     (x,_) <- modusTollensM induction_premise_on_min
                     (exists_statement, idx) <- aNegIntroM x
-                    remarkM $ (pack . show) idx <> " asserts that there is an element under the minimum element minimum element" 
-                                            <> " that is in the absurd set. Essentially, we already have our contradiction"
                     (absurd_element_assert,_, absurd_element) <- eiHilbertM exists_statement     
-                    remarkM "This is A"      
                     (more_absurd,_) <- negImpToConjViaEquivM absurd_element_assert
                     (l_more_absurd,_) <- simpLM more_absurd
 
 
-                    show_l_more_absurd <- showPropM l_more_absurd
-                    remarkM $ "This l_more_absurd: " <> show_l_more_absurd
                     repM l_more_absurd
                     (r_more_absurd,_) <- simpRM more_absurd
                     let absurd_element_in_n = absurd_element `In` natSetObj
                     (something,_) <- simpRM rel_is_relation
-                    remarkM "maybe here"
                     let xobj = buildPair absurd_element min_element
-                    xobj_txt <- showObjM xobj
-                    remarkM $  "XOBJ" <> xobj_txt
                     (something_else,_) <- uiM xobj something
-                    remarkM "This is A" 
-                    let (a,b) = maybe (error "bad error") id (parseImplication something_else)
-                    imp_left_txt <- showPropM a
-                    remarkM $ "The left side of the implication is: " <> imp_left_txt
-                    let (pair1,_) = maybe (error "bad error") id (parseIn a)
-                    let (pair2,_) = maybe (error "bad error") id (parseIn l_more_absurd)
-                    pair1_txt <- showObjM pair1
-                    pair2_txt <- showObjM pair2
-                    remarkM $ "The first pair is: " <> pair1_txt
-                    remarkM $ "The second pair is: " <> pair2_txt
-                    let (pair1_left, pair1_right) = maybe (error "bad error") id (parsePair pair1)
-                    let (pair2_left, pair2_right) = maybe (error "bad error") id (parsePair pair2)
                     mpM something_else
                     remarkM "This is B"
 
@@ -2153,7 +2100,6 @@ strongInductionTheoremProgFree idx dom p_pred = do
                     (idontknow,_) <- multiUIM ok [absurd_element,min_element]
                     (noidea,_) <- bicondElimRM idontknow
                     something_txt <- showObjM $ domXdom
-                    remarkM $ "The cross product of domz with itself is: " <> something_txt
                     (whatever,_) <- simpRM rel_is_relation
                     (imp_whatever,_) <- uiM xobj whatever
                     (forward_imp,_) <- mpM imp_whatever
@@ -2165,14 +2111,12 @@ strongInductionTheoremProgFree idx dom p_pred = do
                     (almost,_) <- uiM absurd_element please_stop                
                     (really_almost,_) <- bicondElimRM almost
                     final_ante <- mpM really_almost
-                    remarkM "This is C"
                     (final_imp,_) <- uiM absurd_element absurd_set_elements_not_below_min
                     (next,_) <- mpM final_imp
 
                     contraFM l_more_absurd
                 (double_neg,_) <- absurdM proves_false
                 (final_generalization_set_version,_) <- doubleNegElimM double_neg
-                --(ok,_) <- mpM builderSrcPartTm
                 (ok_union,_) <- simpLM builderSrcPartitionTmFree
                 let substTmplt = dom :==: (anti_absurd_candidate .\/. X 0)
                 eqSubstM 0 substTmplt final_generalization_set_version
@@ -2180,16 +2124,12 @@ strongInductionTheoremProgFree idx dom p_pred = do
                 (abc_isSet,_) <- simpLM anti_spec_prop
                 (actual_union_w_emptyset,_) <- mpM yesyes
                 let substTmplt = dom .==. X 0
-                -- error "Did we get here?"
                 (whatsthis,_) <- eqSubstM 0 substTmplt actual_union_w_emptyset
                 eqSymM whatsthis
                 repM spec_prop
-                --let srTheorem = specRedundancyTheorem [] idx dom p_template
-                --(sr_theorem_actual,_) <- mpM srTheorem
                 (final_imp,_) <- bicondElimLM specRedundancyTmFree
                 mpM final_imp
-                let final_generalization = aX idx (X idx `In` dom .->. p_pred)
-                fakePropM [final_generalization_set_version] final_generalization
+
 
 
 
@@ -2237,6 +2177,23 @@ strongInductionTheoremProg outerTemplateIdxs idx dom_template p_template = do
             (inductive_asm,_) <- simpRM full_asm
             mpM sub_imp
     return ()
+
+
+strongInductionTheoremMSchema :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) => 
+     [Int] -> Int -> ObjDeBr -> PropDeBr -> TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text m ()
+strongInductionTheoremMSchema outerTemplateIdxs spec_var_idx dom p_template= 
+    let
+      dom_tmplt_consts = extractConstsTerm dom
+      p_tmplt_consts = extractConstsSent p_template
+      all_consts = dom_tmplt_consts `Set.union` p_tmplt_consts
+      typed_consts = zip (Data.Set.toList all_consts) (repeat ()) 
+    in
+      TheoremSchemaMT typed_consts [crossProductExistsTheorem
+                              , builderSubsetTheorem outerTemplateIdxs spec_var_idx dom (neg p_template)
+                              , builderSrcPartitionTheorem outerTemplateIdxs spec_var_idx dom p_template
+                              , unionWithEmptySetTheorem
+                              , specRedundancyTheorem outerTemplateIdxs spec_var_idx dom p_template
+                             ] (strongInductionTheoremProg outerTemplateIdxs spec_var_idx dom p_template)
 
 
 
