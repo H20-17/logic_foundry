@@ -54,6 +54,7 @@ module Langs.Internal.BasicUntyped.Shorthands (
     parseNatSet,     -- Exporting the NatSet parser
     parseForallChain,
     parseImplication,
+    isRelationOn
 
 ) where
 import Langs.Internal.BasicUntyped.Core
