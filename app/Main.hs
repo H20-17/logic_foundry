@@ -2422,18 +2422,7 @@ applyWellFoundednessM subsetS domainD relationR =
 
 -- | A monadic helper that is employed by strongInductionTheoremProgFree.
 -- |
--- | Given a domain D, a relation R, and a subset S, this function proves that
--- | S has a minimal element.
 -- |
--- | Note: This helper requires that the following premises have already been proven
--- | in the current proof context:
--- |   1. `isRelWellFoundedOn domainD relationR`
--- |   2. `subsetS ⊆ domainD ∧ subsetS ≠ ∅`
--- |
--- | @param subsetS The specific non-empty subset of the domain.
--- | @param domainD The domain over which the relation is well-founded.
--- | @param relationR The well-founded relation.
--- | @return The proven proposition `hasMinimalElement subsetS relationR`.
 deriveInductiveContradictionM :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) =>
     ObjDeBr ->  -- absurd_candidate
     ObjDeBr ->  -- dom
