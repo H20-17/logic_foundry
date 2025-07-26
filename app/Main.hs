@@ -384,10 +384,10 @@ proveSpecRedundancyTheoremM outerTemplateIdxs spec_var_idx source_set_template p
         -- Establish the properties of the builderSet here
         -- and acquire the instantiated templates with the free variables for this specific proof context.
         (_,_,(_,sourceSet,p_tmplt)) <- builderInstantiateM instantiationTerms outerTemplateIdxs spec_var_idx source_set_template p_template
-
+        builderInstantiateM instantiationTerms outerTemplateIdxs spec_var_idx source_set_template (neg p_template)
         let lemma2 = builderSubsetTheorem outerTemplateIdxs spec_var_idx source_set_template p_template
         multiUIM lemma2 instantiationTerms
-
+        
 
         -- Step 2: Prove the main implication by assuming its antecedent, `isSet sourceSet`.
         runProofByAsmM (isSet sourceSet) do
@@ -439,17 +439,140 @@ specRedundancySchema outerTemplateIdxs spec_var_idx source_set_template p_templa
         }
 
 
+
+disjointSubsetIsEmptyTheorem :: PropDeBr
+disjointSubsetIsEmptyTheorem = aX 0 (aX 1 (isSet (X 0) :&&: (X 0 ./\. X 1) :==: EmptySet :&&: (X 1 `subset` X 0) :->: X 1 :==: EmptySet))
+
+
+-- | Proves the theorem defined by 'disjointSubsetIsEmptyTheorem'.
+-- |
+-- | The proof strategy is as follows:
+-- | 1. Assume the antecedent: isSet(a), a ∩ b = ∅, and b ⊆ a.
+-- | 2. To prove b = ∅, we must show they are extensionally equal: ∀x(x ∈ b ↔ x ∈ ∅).
+-- | 3. This is equivalent to showing ∀x(¬(x ∈ b)), since nothing is in ∅.
+-- | 4. We prove ∀x(¬(x ∈ b)) by contradiction. Assume ∃x(x ∈ b).
+-- | 5. Let 'y' be such an element in 'b'.
+-- | 6. Since b ⊆ a, it follows that y ∈ a.
+-- | 7. Since y ∈ a and y ∈ b, it follows that y ∈ (a ∩ b).
+-- | 8. But this contradicts the premise that a ∩ b = ∅.
+-- | 9. Therefore, our assumption must be false, so ¬∃x(x ∈ b), which is ∀x(¬(x ∈ b)).
+-- | 10. With ∀x(x ∈ b ↔ x ∈ ∅) proven, the Axiom of Extensionality gives b = ∅.
+proveDisjointSubsetIsEmptyM :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) =>
+    ProofGenTStd () [ZFC.LogicRule PropDeBr DeBrSe ObjDeBr] PropDeBr Text m ()
+proveDisjointSubsetIsEmptyM = do
+    -- Prove: ∀a ∀b (isSet(a) ∧ a ∩ b = ∅ ∧ b ⊆ a → b=∅)
+    multiUGM [(), ()] do
+        -- Inside UG, free variables for a and b are introduced (v_a, v_b).
+        v_b <- getTopFreeVar
+        context <- ask
+        let v_a_idx = (length . freeVarTypeStack) context - 2
+        let v_a = V v_a_idx
+
+        -- Prove the main implication by assuming the antecedent.
+        let antecedent = isSet v_a :&&: ((v_a ./\. v_b) :==: EmptySet) :&&: (v_b `subset` v_a)
+        runProofByAsmM antecedent do
+            -- Step 1: Deconstruct the antecedent assumption.
+            (isSet_a_proven, _) <- simpLM antecedent
+            (rest1,_) <- simpRM antecedent
+            (intersection_is_empty, subset_b_a) <- simpLM rest1
+            (subset_b_a,_) <- simpRM rest1 
+
+            -- Step 2: Prove ∀x(¬(x ∈ v_b)) by contradiction.
+            (forall_not_in_b, _) <- runProofByUGM () do
+                x <- getTopFreeVar
+                (x_in_b_implies_false, _) <- runProofByAsmM (x `In` v_b) do
+                    -- From b ⊆ a and x ∈ b, we get x ∈ a.
+                    (isSet_b, _) <- simpLM subset_b_a
+                    (forall_imp, _) <- simpRM subset_b_a
+                    (x_in_b_implies_x_in_a, _) <- uiM x forall_imp
+                    (x_in_a, _) <- mpM x_in_b_implies_x_in_a
+
+                    -- From x ∈ a and x ∈ b, we get x ∈ (a ∩ b).
+                    (def_prop_inter, _, _) <- binaryIntersectionInstantiateM v_a v_b
+                    (forall_inter_bicond, _) <- simpRM def_prop_inter
+                    (inst_inter_bicond, _) <- uiM x forall_inter_bicond
+                    (imp_to_inter, _) <- bicondElimRM inst_inter_bicond
+                    (x_in_a_and_b, _) <- adjM x_in_a (x `In` v_b)
+                    (x_in_intersection, _) <- mpM imp_to_inter
+
+                    -- From a ∩ b = ∅ and x ∈ (a ∩ b), we get x ∈ ∅.
+                    let eqSubstTmplt = x `In` X 0
+                    --(x_in_empty, _) <- eqSubstM 1 (X 0 :==: X 1 :->: ((x `In` X 0) :->: (x `In` X 1)))
+                    --                         [v_a ./\. v_b, EmptySet]
+                    (x_in_empty, _) <- eqSubstM 0 eqSubstTmplt intersection_is_empty
+
+
+                    -- But we know from the empty set axiom that ¬(x ∈ ∅).
+                    (forall_not_in_empty, _) <- ZFC.emptySetAxiomM
+                    (not_x_in_empty, _) <- uiM x forall_not_in_empty
+
+                    -- This is a contradiction.
+                    contraFM x_in_empty
+                
+                -- From (x ∈ b → False), we derive ¬(x ∈ b).
+                absurdM x_in_b_implies_false
+
+            -- Step 3: Use the result from Step 2 to prove ∀x(x ∈ b ↔ x ∈ ∅).
+            (forall_bicond, _) <- runProofByUGM () do
+                x <- getTopFreeVar
+                (not_in_b, _) <- uiM x forall_not_in_b
+                (forall_not_in_empty, _) <- ZFC.emptySetAxiomM
+                (not_in_empty, _) <- uiM x forall_not_in_empty
+                
+                (dir1, _) <- runProofByAsmM (neg (x `In` v_b)) 
+                                            (repM not_in_empty)
+
+                (dir2, _) <- runProofByAsmM (neg (x `In` EmptySet)) 
+                                   (repM not_in_b)
+                (bicond_of_negs,_) <- bicondIntroM dir1 dir2
+
+                -- Use our tautology helper to get the positive biconditional.
+                negBicondToPosBicondM bicond_of_negs
+
+            -- Step 4: Apply the Axiom of Extensionality to prove b = ∅.
+            (isSet_b, _) <- simpLM subset_b_a
+            (isSet_empty, _) <- ZFC.emptySetNotIntM
+            (ext_axiom, _) <- ZFC.extensionalityAxiomM
+            (ext_inst, _) <- multiUIM ext_axiom [v_b, EmptySet]
+            
+            (adj1, _) <- adjM isSet_empty forall_bicond
+            (full_antecedent, _) <- adjM isSet_b adj1
+            
+            mpM ext_inst
+            return ()
+
+    return ()
+
+-- | The schema that houses the proof for 'disjointSubsetIsEmptyTheorem'.
+-- | It declares its dependencies on other theorems.
+disjointSubsetIsEmptySchema :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) =>
+     TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text m ()
+disjointSubsetIsEmptySchema =
+    let
+        -- The lemmas required for this proof.
+        lemmas_needed = [
+            binaryIntersectionExistsTheorem
+          ]
+    in
+        TheoremSchemaMT {
+            lemmasM = lemmas_needed,
+            proofM = proveDisjointSubsetIsEmptyM,
+            constDictM = [] -- No specific object constants needed
+        }
+
+
+
 -- | Constructs the PropDeBr term for the theorem stating that a specification
--- | over a set S with predicate P is redundant (i.e., results in S) if and only if
+-- | over a set S with predicate ¬P is identical with the empty set if and only if
 -- | all elements of S already satisfy P.
 -- |
--- | Theorem: ∀(params...) (isSet(S(params)) → ({x ∈ S(params) | P(x,params)} = S(params) ↔ ∀x(x ∈ S(params) → P(x,params))))
+-- | Theorem: ∀(params...) (isSet(S(params)) → ({x ∈ S(params) | ¬P(x,params)} = ∅ ↔ ∀x(x ∈ S(params) → P(x,params))))
 specAntiRedundancyTheorem :: [Int] -> Int -> ObjDeBr -> PropDeBr -> PropDeBr
 specAntiRedundancyTheorem outerTemplateIdxs spec_var_idx source_set_template p_template =
     let
-        -- Part 1: The LHS of the biconditional: {x ∈ S | P(x)} = S
-        builderSet = builderX spec_var_idx source_set_template p_template
-        lhs_equality = builderSet :==: source_set_template
+        -- Part 1: The LHS of the biconditional: {x ∈ S | ¬P(x)} = ∅
+        builderSet = builderX spec_var_idx source_set_template (neg p_template)
+        lhs_equality = builderSet :==: EmptySet
 
         -- Part 2: The RHS of the biconditional: ∀x(x ∈ S → P(x))
         -- Note that p_template already uses X spec_var_idx for the variable x.
@@ -472,15 +595,21 @@ specAntiRedundancyTheorem outerTemplateIdxs spec_var_idx source_set_template p_t
 
 
 
+
 -- | Given an instantiated source set, predicate, and the proven defining property of a builder set,
--- | this function proves the biconditional: {x ∈ S | P(x)} = S ↔ ∀x(x ∈ S → P(x)).
+-- | this function proves the biconditional: {x ∈ S | ¬P(x)} = ∅ ↔ ∀x(x ∈ S → P(x)).
 -- | It encapsulates the core logical derivation for the spec redundancy theorem.
 -- | This function requires that
 -- |   1. `isSet sourceSet` is already proven in the context.
 -- |   2. The set {x ∈ S | P(x)} has already been instantiated with builderInstantiateM.
--- |   3. The instantiated builder subset theorem (i.e. {x ∈ S | P(x)} ⊆ S) is already proven in the context.
--- |   4. The theorem ∀𝑥₂(∀𝑥₁(∀𝑥₀(𝑥₁ = 𝑥₀ → 𝑥₂ ∈ 𝑥₁ → 𝑥₂ ∈ 𝑥₀))) is already asserted, probably as a theorem lemma.
--- |      This function is defined by the function, eqSubstTheorem.
+-- |   3. The set {x ∈ S | ¬P(x)} has already been instantiated with builderInstantiateM.
+-- |   3. The following instance of the builder subset theorem is alread proven:
+-- |       {x ∈ S | ¬P(x)} ⊆ S
+-- |   4. The instatinated builderSrcPartition theorem is already proven in this context:
+-- |       isSet(S) → S = ({𝑥₀ ∈ S | P(𝑥₀)} ∪ {𝑥₀ ∈ S | ¬P(𝑥₀)}) ∧ ({𝑥₀ ∈ S | P(𝑥₀)} ∩ {𝑥₀ ∈ S | ¬P(𝑥₀)}) = ∅
+-- |   5. The instantiated spec redundancy theorem is already proven in the context (i.e
+-- |        isSet(S) → {𝑥₀ ∈ S | P(𝑥₀)} = S ↔ ∀𝑥₀(𝑥₀ ∈ S → P(𝑥₀)) 
+-- |   6. The disjoingSubsetIsEmpty theoremm, ∀a (∀b(isSet(a) ∧ a ∩ b = ∅ ∧ b ⊆ a → b=∅)), is already proven.
 proveSpecAntiRedundancyMFree :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) =>
     Int ->      -- spec_var_idx: The 'x' in {x ∈ S | P(x)}
     ObjDeBr ->  -- sourceSet: The instantiated source set S
@@ -490,82 +619,92 @@ proveSpecAntiRedundancyMFree :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text ()
 proveSpecAntiRedundancyMFree spec_var_idx sourceSet p_tmplt 
          -- def_prop_B 
          = do
-    let (def_prop_B, builderSet) = builderPropsFree spec_var_idx sourceSet p_tmplt
-    let builderSubsetTmInst = builderSubsetTheorem [] spec_var_idx sourceSet p_tmplt
+    let (anti_spec_prop, negBuilderSet) = builderPropsFree spec_var_idx sourceSet (neg p_tmplt)
+    let (spec_prop, builderSet) = builderPropsFree spec_var_idx sourceSet p_tmplt
+    let negBuilderSubsetTmInst = builderSubsetTheorem [] spec_var_idx sourceSet (neg p_tmplt)
+    let builderSrcPartitionTmInst = builderSrcPartitionTheorem [] spec_var_idx sourceSet p_tmplt
+    let specRedundancyTmInst = specRedundancyTheorem [] spec_var_idx sourceSet p_tmplt
     (resultProp,idx,_) <- runProofBySubArgM $ do
+        repM disjointSubsetIsEmptyTheorem
+            -- We assert the following which should already be proven: ∀a (∀b(isSet(a) ∧ a ∩ b = ∅ ∧ b ⊆ a → b=∅))
         repM (isSet sourceSet) -- We assert this here to emphasize that it should already be proven in the context.
-        repM def_prop_B -- We assert this here to emphasize that {x ∈ S | P(x)} has already been instantiated with builderInstantiateM.
-        repM eqSubstTheorem -- We assert this here to emphasize that eqSubstTheorem has already been asserted as a lemma.
-        repM builderSubsetTmInst -- We assert this here to emphasize that the instantiated builder subset theorem should
+
+        repM anti_spec_prop -- We assert this here to emphasize that {x ∈ S | ¬P(x)} has already been instantiated with builderInstantiateM.
+ 
+        repM negBuilderSubsetTmInst 
+        -- We assert this here to emphasize that {x ∈ S | ¬P(x)} ⊆ S has already been asserted as a lemma.
+
+        repM specRedundancyTmInst -- We assert this here to emphasize that the instantiated spec redundancy theorem should
                                  -- already be proven in the context.
+
+        repM builderSrcPartitionTmInst -- We assert this here to emphasize that the instantiated builder source partition theorem should
+                                 -- already be proven in the context.
+        (builderSrcPartitionTmInstMain,_) <- mpM builderSrcPartitionTmInst
+        -- We have now proven: S = ({𝑥₀ ∈ S | P(𝑥₀)} ∪ {𝑥₀ ∈ S | ¬P(𝑥₀)}) ∧ ({𝑥₀ ∈ S | P(𝑥₀)} ∩ {𝑥₀ ∈ S | ¬P(𝑥₀)}) = ∅
+
+        (specRedundancyTmInstMain,_) <- mpM specRedundancyTmInst
+        -- We have now proven: {𝑥₀ ∈ S | P(𝑥₀)} = S ↔ ∀𝑥₀(𝑥₀ ∈ S → P(𝑥₀)) 
 
         -- The proof is a biconditional, so we prove each direction separately.
 
-        -- == Direction 1: ({x ∈ S | P(x)} = S) → (∀x(x ∈ S → P(x))) ==
-        (dir1_implication, _) <- runProofByAsmM (builderSet :==: sourceSet) do
-            -- Assume B = S. Goal: ∀x(x ∈ S → P(x))
-            runProofByUGM () do
-                v <- getTopFreeVar
-                -- Goal: v ∈ S → P(v)
-                runProofByAsmM (v `In` sourceSet) do
-                    -- The property of equality substitution states: S=B → (v∈S → v∈B)
-                
-                    -- Instantiate with v, S, and B in the correct order.
-                    (inst_thm, _) <- multiUIM eqSubstTheorem [v, sourceSet, builderSet]
+        -- == Direction 1: ({x ∈ S | ¬P(x)} = ∅) → (∀x(x ∈ S → P(x))) ==
+        let cond_ls = negBuilderSet :==: EmptySet
+        (dir1_implication, _) <- runProofByAsmM cond_ls do
+            -- Assume {x ∈ S | ¬P(x)} = ∅. Goal: ∀x(x ∈ S → P(x)).
+            simpLM builderSrcPartitionTmInstMain
+            -- We have now proven: S = ({𝑥₀ ∈ S | P(𝑥₀)} ∪ {𝑥₀ ∈ S | ¬P(𝑥₀)})
+            let substTmplt = sourceSet :==: (builderSet .\/. X 0)
+            eqSubstM 0 substTmplt cond_ls
+            -- We have now proven: S = ({𝑥₀ ∈ S | P(𝑥₀)} ∪ ∅)
+            (unionWithEmptySetTmInstance,_) <- uiM builderSet unionWithEmptySetTheorem
+            -- We have now proven:  IsSet ({𝑥₀ ∈ S | P(𝑥₀)}) → ({𝑥₀ ∈ S | P(𝑥₀)} ∪ ∅) = {𝑥₀ ∈ S | P(𝑥₀)} 
+            (negBuilderSet_isSet,_) <- simpLM spec_prop
+            -- We have now proven: IsSet  ({𝑥₀ ∈ S | P(𝑥₀)}) 
+            (actual_union_w_emptyset,_) <- mpM unionWithEmptySetTmInstance
+            -- We have now proven: ({𝑥₀ ∈ S | P(𝑥₀)} ∪ ∅) = {𝑥₀ ∈ S | P(𝑥₀)}
+            let substTmplt = sourceSet .==. X 0
+            (specRedCond,_) <- eqSubstM 0 substTmplt actual_union_w_emptyset
+            -- We have proven: S = {𝑥₀ ∈ S | 𝑥₀ = 𝑥₀}
+            eqSymM specRedCond
+            -- We have now proven: {𝑥₀ ∈ S | P(𝑥₀)} = S
+            (final_imp,_) <- bicondElimLM specRedundancyTmInstMain
+            -- We have now proven: {𝑥₀ ∈ S | P(𝑥₀)} = S → ∀𝑥₀(𝑥₀ ∈ S → P(𝑥₀))
+            mpM final_imp
+            -- We have now proven: ∀𝑥₀(𝑥₀ ∈ S → P(𝑥₀))
 
-                    -- We need to prove S=B from B=S. This requires symmetry of equality.
-                    (s_eq_b, _) <- eqSymM (builderSet .==. sourceSet)
-                    --(symm_inst, _) <- multiUIM symm_thm [builderSet, sourceSet]
-                    -- (s_eq_b, _) <- mpM symm_inst
+        -- == Direction 2: (∀x(x ∈ S → P(x))) → ({x ∈ S | ¬P(x)} = ∅) ==
+        let cond_rs = aX spec_var_idx ((X spec_var_idx `In` sourceSet) :->: p_tmplt)
+        (dir2_implication,_) <- runProofByAsmM cond_rs do
+            -- Assume ∀x(x ∈ S → P(x)). Goal: {x ∈ S | ¬P(x)} = ∅.
+            (specRedImpBwd,_) <- bicondElimRM specRedundancyTmInstMain
+            (builderSetEqSrcSet,_) <- mpM specRedImpBwd
+            -- We have now proven: {x ∈ S | P(x)} = S
 
-                    -- Now apply MP twice to get v ∈ B
-                    (imp_from_eq, _) <- mpM inst_thm
-                    (v_in_B, _) <- mpM imp_from_eq
+            
+            (partDisjoint,_) <- simpRM builderSrcPartitionTmInstMain
+            -- We have now proven: ({𝑥₀ ∈ S | P(𝑥₀)} ∩ {𝑥₀ ∈ S | ~P(𝑥₀)}) = ∅
+            let eqSubstTemplate = (X 0 ./\. negBuilderSet) :==: EmptySet
+            (sourceNegBuilderDisjoint,_) <- eqSubstM 0 eqSubstTemplate builderSetEqSrcSet
+            -- We have now proven: S ∩ {𝑥₀ ∈ S | ~P(𝑥₀)} = ∅
+            
+            (finalImp,_) <- multiUIM disjointSubsetIsEmptyTheorem [sourceSet, negBuilderSet]
+            -- We have now proven: isSet(S) ∧ S ∩ {x ∈ S | ¬P(x)} = ∅ ∧ {x ∈ S | ¬P(x)} ⊆ S → {x ∈ S | ¬P(x)} =∅
+            
+            (adj1,_) <- adjM sourceNegBuilderDisjoint negBuilderSubsetTmInst
+            (adj2,_) <- adjM (isSet sourceSet) adj1
 
-                    -- Now that we have `v ∈ B`, we can use the defining property of B to get P(v).
-                    (forall_bicond_B, _) <- simpRM def_prop_B
-                    (inst_bicond_B, _) <- uiM v forall_bicond_B
-                    (imp_B_to_P, _) <- bicondElimLM inst_bicond_B
-                    (p_and_v_in_s, _) <- mpM imp_B_to_P
-                    (p_of_v, _) <- simpLM p_and_v_in_s
-                    return ()
+            -- We have now proven: isSet(S) ∧ S ∩ {x ∈ S | ¬P(x)} = ∅ ∧ {x ∈ S | ¬P(x)} ⊆ S
+            mpM finalImp
+            -- We have now proven: {x ∈ S | ¬P(x)} = ∅
 
-        -- == Direction 2: (∀x(x ∈ S → P(x))) → ({x ∈ S | P(x)} = S) ==
-        (dir2_implication, _) <- runProofByAsmM (aX spec_var_idx ((X spec_var_idx `In` sourceSet) :->: p_tmplt)) do
-            -- Assume ∀x(x ∈ S → P(x)). Goal: B = S.
-            (isSet_B, _) <- simpLM builderSubsetTmInst
-
-            (forall_bicond_sets, _) <- runProofByUGM () do
-                v <- getTopFreeVar
-                (forall_subset_imp, _) <- simpRM builderSubsetTmInst
-
-                (imp_B_to_S, _) <- uiM v forall_subset_imp
-                (imp_S_to_B, _) <- runProofByAsmM (v `In` sourceSet) do
-                    let forall_S_implies_P = aX spec_var_idx ((X spec_var_idx `In` sourceSet) :->: p_tmplt)
-                    (instantiated_imp, _) <- uiM v forall_S_implies_P
-                    (p_of_v, _) <- mpM instantiated_imp
-                    (v_in_S_and_P, _) <- adjM (v `In` sourceSet) p_of_v
-                    (forall_bicond_B, _) <- simpRM def_prop_B
-                    (inst_bicond_B, _) <- uiM v forall_bicond_B
-                    (imp_to_B, _) <- bicondElimRM inst_bicond_B
-                    adjM p_of_v (v `In` sourceSet)
-                    mpM imp_to_B
-                    return ()
-                bicondIntroM imp_B_to_S imp_S_to_B
-            (ext_axiom, _) <- ZFC.extensionalityAxiomM
-            (ext_inst, _) <- multiUIM ext_axiom [builderSet, sourceSet]
-            (ante1, _) <- adjM (isSet sourceSet) forall_bicond_sets
-            (full_antecedent, _) <- adjM isSet_B ante1
-            (imp1, _) <- mpM ext_inst
-            return ()
-
+ 
         -- Final Step: Combine the two main implications into the final biconditional.
         bicondIntroM dir1_implication dir2_implication
         return ()
     return (resultProp,idx)
 
--- | Proves the theorem defined by 'specRedundancyTheorem'.
--- | This version correctly composes the `proveSpecRedundancyMFree` helper.
+-- | Proves the theorem defined by 'specAntiRedundancyTheorem'.
+-- | This version correctly composes the `proveSpecAntiRedundancyMFree` helper.
 proveSpecAntiRedundancyTheoremM :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) =>
     [Int] ->    -- outerTemplateIdxs
     Int ->      -- spec_var_X_idx
@@ -582,9 +721,12 @@ proveSpecAntiRedundancyTheoremM outerTemplateIdxs spec_var_idx source_set_templa
         -- Establish the properties of the builderSet here
         -- and acquire the instantiated templates with the free variables for this specific proof context.
         (_,_,(_,sourceSet,p_tmplt)) <- builderInstantiateM instantiationTerms outerTemplateIdxs spec_var_idx source_set_template p_template
+        builderInstantiateM instantiationTerms outerTemplateIdxs spec_var_idx source_set_template (neg p_template)
 
-        let lemma2 = builderSubsetTheorem outerTemplateIdxs spec_var_idx source_set_template p_template
-        multiUIM lemma2 instantiationTerms
+        multiUIM (builderSrcPartitionTheorem outerTemplateIdxs spec_var_idx source_set_template p_template) instantiationTerms
+        multiUIM (specRedundancyTheorem outerTemplateIdxs spec_var_idx source_set_template p_template) instantiationTerms
+        multiUIM (builderSubsetTheorem outerTemplateIdxs spec_var_idx source_set_template (neg p_template)) instantiationTerms
+
 
 
         -- Step 2: Prove the main implication by assuming its antecedent, `isSet sourceSet`.
@@ -597,7 +739,7 @@ proveSpecAntiRedundancyTheoremM outerTemplateIdxs spec_var_idx source_set_templa
             -- we can call the specific proof helper `proveSpecRedundancyMFree`.
             -- That helper will create its own sub-argument and prove the biconditional.
             
-            (bicond_proven, _) <- proveSpecRedundancyMFree spec_var_idx sourceSet p_tmplt
+            (bicond_proven, _) <- proveSpecAntiRedundancyMFree spec_var_idx sourceSet p_tmplt
             
             -- The last proven statement is the desired biconditional.
             -- `runProofByAsmM` will use this to conclude the implication.
@@ -608,7 +750,7 @@ proveSpecAntiRedundancyTheoremM outerTemplateIdxs spec_var_idx source_set_templa
     return ()
 
 
--- | The schema that houses the proof for 'specRedundancyTheorem'.
+-- | The schema that houses the proof for 'specAntiRedundancyTheorem'.
 -- | This theorem is proven from axioms and does not depend on other high-level theorems.
 specAntiRedundancySchema :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) =>
     [Int] ->    -- outerTemplateIdxs
@@ -619,9 +761,9 @@ specAntiRedundancySchema :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) 
 specAntiRedundancySchema outerTemplateIdxs spec_var_idx source_set_template p_template =
     let
         -- The main theorem being proven by this schema.
-        main_theorem = specRedundancyTheorem outerTemplateIdxs spec_var_idx source_set_template p_template
+        main_theorem = specAntiRedundancyTheorem outerTemplateIdxs spec_var_idx source_set_template p_template
         -- The proof program for the main theorem.
-        proof_program = proveSpecRedundancyTheoremM outerTemplateIdxs spec_var_idx source_set_template p_template
+        proof_program = proveSpecAntiRedundancyTheoremM outerTemplateIdxs spec_var_idx source_set_template p_template
 
         -- Extract constants for the schema from the templates.
         source_set_tmplt_consts = extractConstsTerm source_set_template
@@ -630,8 +772,13 @@ specAntiRedundancySchema outerTemplateIdxs spec_var_idx source_set_template p_te
         typed_consts = zip (Data.Set.toList all_consts) (repeat ())
     in
         TheoremSchemaMT {
-            lemmasM = [eqSubstTheorem, 
-                       builderSubsetTheorem outerTemplateIdxs spec_var_idx source_set_template p_template],
+            lemmasM = [--eqSubstTheorem, 
+                       builderSubsetTheorem outerTemplateIdxs spec_var_idx source_set_template (neg p_template),
+                       
+                       specRedundancyTheorem outerTemplateIdxs spec_var_idx source_set_template p_template,
+                       builderSrcPartitionTheorem outerTemplateIdxs spec_var_idx source_set_template p_template,
+                       unionWithEmptySetTheorem,
+                       disjointSubsetIsEmptyTheorem],
             proofM = proof_program,
             constDictM = typed_consts
         }
@@ -2361,12 +2508,9 @@ strongInductionTheoremProgFree idx dom p_pred = do
             let (anti_spec_prop,anti_absurd_candidate) = builderPropsFree idx dom p_pred
             let (spec_prop, absurd_candidate) = builderPropsFree idx dom (neg p_pred)
             let builderSubsetTmFree = builderSubsetTheorem [] idx dom (neg p_pred)
-            let builderSrcPartitionTmFreeConditional = builderSrcPartitionTheorem [] idx dom p_pred
-            let specRedundancyTmFreeConditional = specRedundancyTheorem [] idx dom p_pred
+            let specAntiRedundancyTmFreeConditional = specAntiRedundancyTheorem [] idx dom p_pred
+            (specAntiRedundancyTmFree,_) <- mpM specAntiRedundancyTmFreeConditional
             runProofByAsmM asmMain do
-                (builderSrcPartitionTmFree,_) <- mpM builderSrcPartitionTmFreeConditional
-
-                (specRedundancyTmFree,_) <- mpM specRedundancyTmFreeConditional
                 (asm_after_ei,_,rel_obj) <- eiHilbertM asmMain
                 (rel_is_relation,rel_is_relation_idx) <- simpLM asm_after_ei
                 (bAndC,_) <- simpRM asm_after_ei
@@ -2381,17 +2525,9 @@ strongInductionTheoremProgFree idx dom p_pred = do
 
                 (double_neg,_) <- absurdM proves_false
                 (final_generalization_set_version,_) <- doubleNegElimM double_neg
-                (ok_union,_) <- simpLM builderSrcPartitionTmFree
-                let substTmplt = dom :==: (anti_absurd_candidate .\/. X 0)
-                eqSubstM 0 substTmplt final_generalization_set_version
-                (yesyes,_) <- uiM anti_absurd_candidate unionWithEmptySetTheorem
-                (abc_isSet,_) <- simpLM anti_spec_prop
-                (actual_union_w_emptyset,_) <- mpM yesyes
-                let substTmplt = dom .==. X 0
-                (whatsthis,_) <- eqSubstM 0 substTmplt actual_union_w_emptyset
-                eqSymM whatsthis
-                repM spec_prop
-                (final_imp,_) <- bicondElimLM specRedundancyTmFree
+                (final_imp,_) <- bicondElimLM specAntiRedundancyTmFree
+
+                
                 mpM final_imp
 
 
@@ -2406,8 +2542,7 @@ strongInductionTheoremProg outerTemplateIdxs idx dom_template p_template = do
 
 
     let builderSubsetTmInstance = builderSubsetTheorem outerTemplateIdxs idx dom_template (neg p_template)
-    let builderSrcPartitionTmInstance = builderSrcPartitionTheorem outerTemplateIdxs idx dom_template p_template
-    let specRedundancyTmInstance = specRedundancyTheorem outerTemplateIdxs idx dom_template p_template
+    let specAntiRedundancyTmInstance = specAntiRedundancyTheorem outerTemplateIdxs idx dom_template p_template
     
 
     multiUGM (replicate (length outerTemplateIdxs) ()) do
@@ -2423,8 +2558,7 @@ strongInductionTheoremProg outerTemplateIdxs idx dom_template p_template = do
                         
 
         multiUIM builderSubsetTmInstance instantiationTerms
-        multiUIM builderSrcPartitionTmInstance instantiationTerms
-        multiUIM specRedundancyTmInstance instantiationTerms
+        multiUIM specAntiRedundancyTmInstance instantiationTerms
         let rel_idx = idx + 1
 
         let isSetDom = isSet dom
@@ -2454,9 +2588,7 @@ strongInductionTheoremMSchema outerTemplateIdxs spec_var_idx dom p_template=
     in
       TheoremSchemaMT typed_consts [crossProductExistsTheorem
                               , builderSubsetTheorem outerTemplateIdxs spec_var_idx dom (neg p_template)
-                              , builderSrcPartitionTheorem outerTemplateIdxs spec_var_idx dom p_template
-                              , unionWithEmptySetTheorem
-                              , specRedundancyTheorem outerTemplateIdxs spec_var_idx dom p_template
+                              , specAntiRedundancyTheorem outerTemplateIdxs spec_var_idx dom p_template
                              ] (strongInductionTheoremProg outerTemplateIdxs spec_var_idx dom p_template)
 
 
@@ -3868,14 +4000,24 @@ main = do
 
 
 
-    print "TEST STRONG INDUCTION THEOREM-------------------------------------"
-    let p_template = Constant "C" :+: X 0 :==: (X 1 :+: X 2)
-    let source_set_template = X 1 .\/. X 2
-    (a,b,c,d) <- checkTheoremM $ strongInductionTheoremMSchema [1,2] 0 source_set_template p_template
+    -- print "TEST STRONG INDUCTION THEOREM-------------------------------------"
+    -- let p_template = Constant "C" :+: X 0 :==: (X 1 :+: X 2)
+    -- let source_set_template = X 1 .\/. X 2
+    -- (a,b,c,d) <- checkTheoremM $ strongInductionTheoremMSchema [1,2] 0 source_set_template p_template
+    -- (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
+
+    print "TEST STRONG INDUCTION THEOREM 2-------------------------------------"
+    let p_template = Constant "C" :==: X 0
+    let source_set_template = Constant "S"
+    (a,b,c,d) <- checkTheoremM $ strongInductionTheoremMSchema [] 0 source_set_template p_template
     (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
 
     -- print "TEST UNION WITH EMPTY SET THEOREM-------------------------------------"
     -- (a,b,c,d) <- checkTheoremM unionWithEmptySetSchema
+    -- (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
+
+    -- print "DISJOINT SUBSET IS EMPTY THEOREM-------------------------------------"
+    -- (a,b,c,d) <- checkTheoremM disjointSubsetIsEmptySchema
     -- (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
 
 
@@ -3890,6 +4032,22 @@ main = do
     -- let p_template = X 0 .==. X 0
     -- let source_set_template = Constant "SourceSet"
     -- (a,b,c,d) <- checkTheoremM $ specRedundancySchema [] 0 source_set_template p_template
+    -- (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
+
+
+
+    -- print "SPEC ANTI-REDUNDANCY THEOREM-------------------------------------"
+    -- let p_template = Constant "C" :+: X 0 :==: (X 1 :+: X 2)
+    -- let source_set_template = X 1 .\/. X 2
+    -- (a,b,c,d) <- checkTheoremM $ specRedundancySchema [1,2] 0 source_set_template p_template
+    -- (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
+
+
+
+    -- print "SPEC ANTI-REDUNDANCY THEOREM TEST 2-------------------------------------"
+    -- let p_template = X 0 .==. X 0
+    -- let source_set_template = Constant "SourceSet"
+    -- (a,b,c,d) <- checkTheoremM $ specAntiRedundancySchema [] 0 source_set_template p_template
     -- (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
 
 
