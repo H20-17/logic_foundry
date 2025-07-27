@@ -2420,6 +2420,12 @@ applyWellFoundednessM subsetS domainD relationR =
         -- The () is the 'extraData' returned by the sub-argument.
         return ()
 
+
+
+
+
+
+
 -- | A monadic helper that is employed by strongInductionTheoremProgFree.
 -- |
 -- |
@@ -2433,6 +2439,7 @@ deriveInductiveContradictionM :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text (
 deriveInductiveContradictionM absurd_candidate dom rel_obj induction_premise spec_prop 
            =
     runProofBySubArgM do
+        remarkM "DERIVING INDUCTIVE CONTRADICTION"
         let builderSubsetTmFree = absurd_candidate `subset` dom
         let absurd_asm = absurd_candidate./=. EmptySet
         let rel_is_relation = rel_obj `subset` (dom `crossProd` dom)
