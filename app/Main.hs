@@ -2447,8 +2447,8 @@ deriveInductiveContradictionM absurd_candidate dom rel_obj induction_premise spe
             adjM builderSubsetTmFree absurd_asm
             (min_assertion,_,_) <- applyWellFoundednessM absurd_candidate dom rel_obj 
             (witnessed_min_assertion,_,min_element) <- eiHilbertM min_assertion
-            (min_element_in_absurd_set,idx_witnessed_min_assert) <- simpLM witnessed_min_assertion
-            (absurd_set_elements_not_below_min,idxB) <- simpRM witnessed_min_assertion            
+            ((min_element_in_absurd_set,idx_witnessed_min_assert) ,
+             (absurd_set_elements_not_below_min,idxB)) <- deconstructAdjM witnessed_min_assertion            
             (induction_premise_on_min,idxA) <- uiM min_element induction_premise
             (some_statement,_) <- simpRM spec_prop
             (another_statement,_) <- uiM min_element some_statement

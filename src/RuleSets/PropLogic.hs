@@ -7,7 +7,7 @@ module RuleSets.PropLogic
     SubproofMException(..), contraFM, absurdM, MetaRuleError(..), disjIntroLM, disjIntroRM, disjElimM, doubleNegElimM,
     deMorganConjM, deMorganDisjM, bicondIntroM, bicondElimLM, bicondElimRM, absorpAndM, absorpOrM, distAndOverOrM, distOrOverAndM,
     peircesLawM, modusTollensM, imp2DisjM, negAndNotToOrM, negImpToConjViaEquivM, negBicondToPosBicondM,
-    disjunctiveSyllogismM, exFalsoM
+    disjunctiveSyllogismM, exFalsoM, deconstructAdjM
 ) where
 
 import Data.Monoid ( Last(..) )
@@ -1126,6 +1126,20 @@ negBicondToPosBicondM s = do
     return (target, subarg_idx)
 
 
+-- | From P ∧ Q, derive both P and Q.
+deconstructAdjM :: (Monoid r1, MonadThrow m, LogicSent s tType,
+                   Proof eL r1 (PrfStdState s o tType) (PrfStdContext tType) [PrfStdStep s o tType] s,
+                   Show eL, Show s, Show tType, Typeable eL, Typeable s, Typeable tType,
+                   TypedSent o tType sE s, StdPrfPrintMonad s o tType m, REM.SubproofRule r1 s,
+                   Show sE, Typeable sE, SubproofRule r1 s, LogicRuleClass r1 s tType sE o,
+                   StdPrfPrintMonad s o tType (Either SomeException), Show o, Typeable o,
+                   REM.LogicRuleClass r1 s o tType sE, ShowableSent s) =>
+    s -> -- ^ The proposition ¬P ↔ ¬Q
+    ProofGenTStd tType r1 s o m ((s, [Int]), (s, [Int]))
+deconstructAdjM s = do
+    adjunct1_data <- simpLM s
+    adjunct2_data <- simpRM s
+    return (adjunct1_data, adjunct2_data)
 
 data ProofByAsmSchema s r where
    ProofByAsmSchema :: {
