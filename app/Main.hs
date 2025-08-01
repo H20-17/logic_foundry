@@ -2394,16 +2394,21 @@ applyWellFoundednessM :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) =>
     ObjDeBr ->  -- subsetS
     ObjDeBr ->  -- domainD
     ObjDeBr ->  -- relationR
-    ProofGenTStd () [ZFC.LogicRule PropDeBr DeBrSe ObjDeBr] PropDeBr Text m (PropDeBr, [Int], ())
-applyWellFoundednessM subsetS domainD relationR =
-    runProofBySubArgM do
+    ProofGenTStd () [ZFC.LogicRule PropDeBr DeBrSe ObjDeBr] PropDeBr Text m ((PropDeBr, [Int]), (PropDeBr, [Int]), ObjDeBr)
+applyWellFoundednessM subsetS domainD relationR = do
+    let builderSubsetTmFree = subsetS `subset` domainD
+    let absurd_asm = subsetS ./=. EmptySet
+    (has_minimal_proven,_,_) <- runProofBySubArgM do
+        adjM builderSubsetTmFree absurd_asm
+        -- We have proven {𝑥₀ ∈ S | ¬P(𝑥₀)} ⊆ S ∧ {𝑥₀ ∈ S | ¬P(𝑥₀)} ≠ ∅ 
         -- Step 1: Formally acknowledge the required premises from the outer context.
         -- The proof will fail if these are not already proven.
         let wellFoundedProp = isRelWellFoundedOn domainD relationR
         (isRelWellFounded_proven, _) <- repM wellFoundedProp
-
+        -- This is the assertion ∀𝑥₂(𝑥₂ ⊆ S ∧ 𝑥₂ ≠ ∅ → ∃𝑥₁(𝑥₁ ∈ 𝑥₂ ∧ ∀𝑥₀(𝑥₀ ∈ 𝑥₂ → 𝑥₀ ≮ 𝑥₁))) 
         let subset_and_nonempty_prop = (subsetS `subset` domainD) :&&: (subsetS ./=. EmptySet)
         (subset_and_nonempty_proven, _) <- repM subset_and_nonempty_prop
+        -- This is the assertion {𝑥₀ ∈ S | ¬P(𝑥₀)} ⊆ S ∧ {𝑥₀ ∈ S | ¬P(𝑥₀)} ≠ ∅ 
 
         -- Step 2: The proposition `isRelWellFounded_proven` is definitionally
         -- equivalent to ∀s((s⊆D ∧ s≠∅) → hasMinimalElement s R).
@@ -2411,17 +2416,27 @@ applyWellFoundednessM subsetS domainD relationR =
         (instantiated_imp, _) <- uiM subsetS isRelWellFounded_proven
         -- `instantiated_imp` is now the proven proposition:
         -- (subsetS ⊆ domainD ∧ subsetS ≠ ∅) → hasMinimalElement subsetS relationR
+        -- This is the assertion 
+        --      {𝑥₀ ∈ S | ¬P(𝑥₀)} ⊆ S ∧ {𝑥₀ ∈ S | ¬P(𝑥₀)} ≠ ∅  
+        --               → ∃𝑥₁(𝑥₁ ∈ {𝑥₀ ∈ S | ¬P(𝑥₀)} ∧ ∀𝑥₀(𝑥₀ ∈ {𝑥₀ ∈ S | ¬P(𝑥₀)} → 𝑥₀ ≮ 𝑥₁))
 
         -- Step 3: Apply Modus Ponens. The antecedent for this implication is
         -- `subset_and_nonempty_proven`, which we acknowledged in Step 1.
         (has_minimal_proven, _) <- mpM instantiated_imp
         
         -- The last proven statement is now `hasMinimalElement subsetS relationR`, which is our goal.
+        -- This is the assertion 
+        --   ∃𝑥₁(𝑥₁ ∈ {𝑥₀ ∈ S | ¬P(𝑥₀)} ∧ ∀𝑥₀(𝑥₀ ∈ {𝑥₀ ∈ S | ¬P(𝑥₀)} → 𝑥₀ ≮ 𝑥₁))
+
+        
+
         -- The () is the 'extraData' returned by the sub-argument.
         return ()
-
-
-
+    (min_assertion, _, min_element) <- eiHilbertM has_minimal_proven
+    -- This is the assertion
+    --  (min ∈ {𝑥₀ ∈ S | ¬P(𝑥₀)} ∧ ∀𝑥₀(𝑥₀ ∈ {𝑥₀ ∈ S | ¬P(𝑥₀)} → 𝑥₀ ≮ min))
+    (a,b) <- deconstructAdjM min_assertion
+    return (a,b, min_element)
 
 
 
@@ -2430,67 +2445,102 @@ applyWellFoundednessM subsetS domainD relationR =
 -- |
 -- |
 deriveInductiveContradictionM :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) =>
-    ObjDeBr ->  -- absurd_candidate
+    ObjDeBr ->  -- counterexamples
     ObjDeBr ->  -- dom
     ObjDeBr ->  -- rel_obj
     PropDeBr -> -- induction_premise
     PropDeBr -> -- spec_prop
     ProofGenTStd () [ZFC.LogicRule PropDeBr DeBrSe ObjDeBr] PropDeBr Text m (PropDeBr, [Int], ())
-deriveInductiveContradictionM absurd_candidate dom rel_obj induction_premise spec_prop 
+deriveInductiveContradictionM counterexamples dom rel_obj induction_premise spec_prop 
            =
     runProofBySubArgM do
-        remarkM "DERIVING INDUCTIVE CONTRADICTION"
-        let builderSubsetTmFree = absurd_candidate `subset` dom
-        let absurd_asm = absurd_candidate./=. EmptySet
+        let builderSubsetTmFree = counterexamples `subset` dom
+        let absurd_asm = counterexamples./=. EmptySet
         let rel_is_relation = rel_obj `subset` (dom `crossProd` dom)
         (proves_false,_) <- runProofByAsmM absurd_asm do
-            adjM builderSubsetTmFree absurd_asm
-            (min_assertion,_,_) <- applyWellFoundednessM absurd_candidate dom rel_obj 
-            (witnessed_min_assertion,_,min_element) <- eiHilbertM min_assertion
-            ((min_element_in_absurd_set,idx_witnessed_min_assert) ,
-             (absurd_set_elements_not_below_min,idxB)) <- deconstructAdjM witnessed_min_assertion            
+            -- The assumption is that {𝑥₀ ∈ S | ¬P(𝑥₀)} ≠ ∅
+            ((min_element_in_counterexamples,_),
+             (counterexample_elems_not_below_min,_),
+             min_element) <- applyWellFoundednessM counterexamples dom rel_obj 
+            -- we have proven 
+            -- 1. min ∈ {𝑥₀ ∈ S | ¬P(𝑥₀)} ∧ 
+            -- 2. ∀𝑥₁(𝑥₁ ∈ {𝑥₀ ∈ S | ¬P(𝑥₀)} → 𝑥₁ ≮ min)  
+            repM spec_prop
+            -- We are asserting the already-proven statement 
+            -- IsSet ({𝑥₀ ∈ S | C ≠ 𝑥₀}) ∧ ∀𝑥₁(𝑥₁ ∈ {𝑥₀ ∈ S | ¬P(𝑥₀)} ↔ ¬P(𝑥₁) ∧ 𝑥₁ ∈ S)
+            (spec_prop_main,_) <- simpRM spec_prop
+            -- We have proven ∀𝑥₁(𝑥₁ ∈ {𝑥₀ ∈ S | ¬P(𝑥₀)} ↔ ¬P(𝑥₁) ∧ 𝑥₁ ∈ S)
+            (spec_prop_inst_min_el,_) <- uiM min_element spec_prop_main
+            -- We have proven
+            -- min ∈ {𝑥₀ ∈ S | ¬P(𝑥₀)} ↔ ¬P(min) ∧ min ∈ S
+            (spec_prop_inst_min_el_fwd,_) <- bicondElimLM spec_prop_inst_min_el
+            -- We have proven
+            -- min ∈ {𝑥₀ ∈ S | ¬P(𝑥₀)} → ¬P(min) ∧ min ∈ S
+            (min_element_prop,_) <- mpM spec_prop_inst_min_el_fwd
+            -- We have proven
+            -- ¬P(min) ∧ min ∈ S
+            simpLM min_element_prop
+            -- We have proven ¬P(min)
             (induction_premise_on_min,idxA) <- uiM min_element induction_premise
-            (some_statement,_) <- simpRM spec_prop
-            (another_statement,_) <- uiM min_element some_statement
-            (forward,_) <- bicondElimLM another_statement
-            (after_forward,_) <- mpM forward
-            simpLM after_forward
+            -- We have proven that ∀𝑥₀(𝑥₀ < min → P(𝑥₀)) → P(min)
             (x,_) <- modusTollensM induction_premise_on_min
+            -- We have proven that ¬∀𝑥₀(𝑥₀ < min → P(𝑥₀))
             (exists_statement, idx) <- aNegIntroM x
-            (absurd_element_assert,_, absurd_element) <- eiHilbertM exists_statement     
-            (more_absurd,_) <- negImpToConjViaEquivM absurd_element_assert
-            (l_more_absurd,_) <- simpLM more_absurd
+            -- We have proven that ∃𝑥₀¬(𝑥₀ < min → P(𝑥₀))
+            (sub_min_element_prop_pre,_, submin_element) <- eiHilbertM exists_statement 
+            -- We have proven that
+            --   ¬(submin < min → P(submin))
+            (sub_min_element_prop,_) <- negImpToConjViaEquivM sub_min_element_prop_pre
+            -- We have proven that
+            --   submin < min ∧ ¬P(submin)
+            (submin_lt_min,_) <- simpLM sub_min_element_prop
+            -- We have proven: submin < min
 
-
-            repM l_more_absurd
-            (r_more_absurd,_) <- simpRM more_absurd
-            let absurd_element_in_n = absurd_element `In` natSetObj
-            (something,_) <- simpRM rel_is_relation
-            let xobj = buildPair absurd_element min_element
-            (something_else,_) <- uiM xobj something
-            mpM something_else
-
+            (notPsubmin,_) <- simpRM sub_min_element_prop
+            -- We have proven: ¬P(submin)
+            let submin_element_in_n = submin_element `In` natSetObj
+            (rel_prop,_) <- simpRM rel_is_relation
+            -- We have proven: ∀𝑥₀(𝑥₀ ∈ (<) → 𝑥₀ ∈ S ⨯ S)
+            let xobj = buildPair submin_element min_element
+            (relprop_instance,_) <- uiM xobj rel_prop
+            -- We have proven that: submin < min → (submin,min) ∈ S ⨯ S)
+            mpM relprop_instance
+            -- We have proven that (submin,min) ∈ S ⨯ S
 
             (domXdomProps,_,domXdom)<- crossProductInstantiateM dom dom
-            (ok, _) <- simpRM domXdomProps
-            (idontknow,_) <- multiUIM ok [absurd_element,min_element]
-            (noidea,_) <- bicondElimRM idontknow
-            something_txt <- showObjM $ domXdom
-            (whatever,_) <- simpRM rel_is_relation
-            (imp_whatever,_) <- uiM xobj whatever
-            (forward_imp,_) <- mpM imp_whatever
-            (noclue, _) <- mpM noidea
-            (whatever,_) <- simpLM noclue
-            adjM r_more_absurd whatever
-            let newProp = absurd_element `In` absurd_candidate
-            (please_stop,_) <- simpRM spec_prop
-            (almost,_) <- uiM absurd_element please_stop                
-            (really_almost,_) <- bicondElimRM almost
-            final_ante <- mpM really_almost
-            (final_imp,_) <- uiM absurd_element absurd_set_elements_not_below_min
-            (next,_) <- mpM final_imp
+            -- We have proven that:
+            -- isSet(S ⨯ S) ∧ ∀𝑥₁(∀𝑥₀(𝑥₁ ∈ S ∧ 𝑥₀ ∈ S ↔ (𝑥₁,𝑥₀) ∈ S ⨯ S))
+            (crossProdProp, _) <- simpRM domXdomProps
+            -- We have proven that: ∀𝑥₁(∀𝑥₀(𝑥₁ ∈ S ∧ 𝑥₀ ∈ S ↔ (𝑥₁,𝑥₀) ∈ S ⨯ S))
+            (crossProdPropInst,_) <- multiUIM crossProdProp [submin_element,min_element]
+            -- We have proven that: min ∈ S ∧ submin ∈ S ↔ (min,submin) ∈ S ⨯ S)
+            (crossProdPropInstFwd,_) <- bicondElimRM crossProdPropInst
+            -- We have proven that: (min,submin) ∈ S ⨯ S → min ∈ S ∧ submin ∈ S
 
-            contraFM l_more_absurd
+            (min_in_s_and_submin_in_s, _) <- mpM crossProdPropInstFwd
+            -- We have proven that: min ∈ S ∧ submin ∈ S
+            (min_in_s,_) <- simpLM min_in_s_and_submin_in_s
+            -- We have proven that: min ∈ S
+            adjM notPsubmin min_in_s
+            -- We have proven that: ¬P(submin) ∧ min ∈ S
+            repM spec_prop_main
+            -- We are reasserting: ∀𝑥₁(𝑥₁ ∈ {𝑥₀ ∈ S | ¬P(𝑥₀)} ↔ ¬P(𝑥₁) ∧ 𝑥₁ ∈ S)
+            (spec_prop_inst_submin_el,_) <- uiM submin_element spec_prop_main
+            -- We have proven that submin ∈ {𝑥₀ ∈ S | ¬P(𝑥₀)} ↔ ¬P(submin) ∧ submin ∈ S
+
+            (spec_prop_inst_submin_el_bwd,_) <- bicondElimRM spec_prop_inst_submin_el
+            -- We have proven that: ¬P(submin) ∧ submin ∈ S → submin ∈ {𝑥₀ ∈ S | ¬P(𝑥₀)}
+            final_ante <- mpM spec_prop_inst_submin_el_bwd
+            -- We have proven that: submin ∈ {𝑥₀ ∈ S | ¬P(𝑥₀)}
+            repM counterexample_elems_not_below_min
+            -- We are reasserting: ∀𝑥₁(𝑥₁ ∈ {𝑥₀ ∈ S | ¬P(𝑥₀)} → 𝑥₁ ≮ min)
+            (final_imp,_) <- uiM submin_element counterexample_elems_not_below_min
+            -- We have proven that: submin ∈ {𝑥₀ ∈ S | ¬P(𝑥₀)} → submin ≮ min
+            (not_submin_lt_min,_) <- mpM final_imp
+            -- We have proven that: submin ≮ min
+            repM submin_lt_min
+            -- We are reasserting: submin < min
+            contraFM submin_lt_min
         return ()
 
 strongInductionTheoremProgFree::(MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) => 
@@ -2501,31 +2551,45 @@ strongInductionTheoremProgFree idx dom p_pred = do
                            X rel_idx `subset` (dom `crossProd` dom)
                                :&&: isRelWellFoundedOn dom (X rel_idx)
                                 :&&: strongInductionPremiseOnRel p_pred idx dom (X rel_idx))
-            let (anti_spec_prop,anti_absurd_candidate) = builderPropsFree idx dom p_pred
-            let (spec_prop, absurd_candidate) = builderPropsFree idx dom (neg p_pred)
+            let (anti_spec_prop,anti_counterexamples) = builderPropsFree idx dom p_pred
+            let (spec_prop, counterexamples) = builderPropsFree idx dom (neg p_pred)
             let builderSubsetTmFree = builderSubsetTheorem [] idx dom (neg p_pred)
             let specAntiRedundancyTmFreeConditional = specAntiRedundancyTheorem [] idx dom p_pred
             (specAntiRedundancyTmFree,_) <- mpM specAntiRedundancyTmFreeConditional
             runProofByAsmM asmMain do
                 (asm_after_ei,_,rel_obj) <- eiHilbertM asmMain
+                -- We have established: (<) ⊆ S ⨯ S ∧ ∀𝑥₂(𝑥₂ ⊆ S ∧ 𝑥₂ ≠ ∅ → ∃𝑥₁(𝑥₁ ∈ 𝑥₂ ∧ ∀𝑥₀(𝑥₀ ∈ 𝑥₂ → 𝑥₀ ≮ 𝑥₁))) 
+                --                                     ∧ ∀𝑥₁(∀𝑥₀(𝑥₀ < 𝑥₁ → P(𝑥₀)) → P(𝑥₁))
+                -- I.e. (<) is a relation over S,
+                -- S is well-founded on (<),
+                -- and the induction premise holds for (<) over S.
                 (rel_is_relation,rel_is_relation_idx) <- simpLM asm_after_ei
+                -- We have established that
+                --  (<) ⊆ S ⨯ S
                 (bAndC,_) <- simpRM asm_after_ei
                 (well_founded,well_founded_idx) <- simpLM bAndC
+                -- We have established that
+                --  ∀𝑥₂(𝑥₂ ⊆ S ∧ 𝑥₂ ≠ ∅ → ∃𝑥₁(𝑥₁ ∈ 𝑥₂ ∧ ∀𝑥₀(𝑥₀ ∈ 𝑥₂ → 𝑥₀ ≮ 𝑥₁))) 
+                -- This is the assertion that S is well-founded on (<).
                 (induction_premise,induction_premise_idx) <- simpRM bAndC
-                remarkM $   (pack . show) rel_is_relation_idx <> " asserts that rel is a relation over N.\n" 
-                           <> (pack . show) well_founded_idx <> " asserts that rel is well-founded over N.\n"
-                           <> (pack . show) induction_premise_idx <> " asserts that the induction premise holds for N"
+                -- We have established that
+                -- ∀𝑥₁(∀𝑥₀(𝑥₀ < 𝑥₁ → P(𝑥₀)) → P(𝑥₁))
+                -- This is the induction premise.
+                remarkM $   (pack . show) rel_is_relation_idx <> " asserts that rel is a relation over S.\n" 
+                           <> (pack . show) well_founded_idx <> " asserts that rel is well-founded over S.\n"
+                           <> (pack . show) induction_premise_idx <> " asserts that the induction premise holds for S"
                 
-                (proves_false,_,()) <- deriveInductiveContradictionM absurd_candidate dom rel_obj 
+                (proves_false,_,()) <- deriveInductiveContradictionM counterexamples dom rel_obj 
                           induction_premise spec_prop
-
+                -- We have proven that {𝑥₀ ∈ S | ¬P(𝑥₀)} ≠ ∅ → ⊥
                 (double_neg,_) <- absurdM proves_false
                 (final_generalization_set_version,_) <- doubleNegElimM double_neg
+                -- We have proven that {𝑥₀ ∈ S | ¬P(𝑥₀)} = ∅
                 (final_imp,_) <- bicondElimLM specAntiRedundancyTmFree
-
+                -- We have proven that {𝑥₀ ∈ S | ¬P(𝑥₀)} = ∅ → ∀𝑥₀(𝑥₀ ∈ S → P(𝑥₀))
                 
                 mpM final_imp
-
+                -- We have proven that ∀𝑥₀(𝑥₀ ∈ S → P(𝑥₀))
 
 
 
