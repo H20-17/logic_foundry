@@ -2541,6 +2541,7 @@ deriveInductiveContradictionM counterexamples dom rel_obj induction_premise spec
             repM submin_lt_min
             -- We are reasserting: submin < min
             contraFM submin_lt_min
+            -- We have proven: ⊥
         return ()
 
 strongInductionTheoremProgFree::(MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) => 
@@ -2583,6 +2584,7 @@ strongInductionTheoremProgFree idx dom p_pred = do
                           induction_premise spec_prop
                 -- We have proven that {𝑥₀ ∈ S | ¬P(𝑥₀)} ≠ ∅ → ⊥
                 (double_neg,_) <- absurdM proves_false
+                -- We have proven that ¬¬{𝑥₀ ∈ S | ¬P(𝑥₀)} = ∅
                 (final_generalization_set_version,_) <- doubleNegElimM double_neg
                 -- We have proven that {𝑥₀ ∈ S | ¬P(𝑥₀)} = ∅
                 (final_imp,_) <- bicondElimLM specAntiRedundancyTmFree
