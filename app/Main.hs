@@ -29,13 +29,13 @@ import GHC.Stack.Types ( HasCallStack )
 import Data.Data (Typeable)
 import GHC.Generics (Associativity (NotAssociative, RightAssociative, LeftAssociative))
 import StdPattern
-import RuleSets.BaseLogic hiding
+import RuleSets.BaseLogic.Core hiding
    (LogicRuleClass,
    SubproofRule,
    LogicError(..),
    SubproofError(..),
    LogicError(..))
-import qualified RuleSets.BaseLogic as BASE
+import qualified RuleSets.BaseLogic.Core as BASE
 import RuleSets.PropLogic hiding
     (LogicRuleClass,
    SubproofRule,
@@ -59,7 +59,7 @@ import RuleSets.ZFC
     ( axiomOfChoiceM,specificationM, MetaRuleError(..), powerSetAxiomM)
 import Langs.BasicUntyped
 import Distribution.Compat.Lens (set)
-
+import RuleSets.BaseLogic.Helpers
 
 
 

@@ -46,7 +46,7 @@ import Data.Maybe ( isNothing )
 import Kernel
 import Internal.StdPattern
 
-import RuleSets.BaseLogic hiding 
+import RuleSets.BaseLogic.Core hiding 
    (LogicRuleClass,
    SubproofRule,
    LogicError(..),
@@ -54,7 +54,7 @@ import RuleSets.BaseLogic hiding
    LogicRule(..),
    LogicError(..),
    runProofAtomic)
-import qualified RuleSets.BaseLogic as REM
+import qualified RuleSets.BaseLogic.Core as REM
 
 import RuleSets.PropLogic hiding 
    (LogicRuleClass,
@@ -69,7 +69,8 @@ import RuleSets.PropLogic hiding
    MetaRuleError(..))
 import qualified RuleSets.PropLogic as PL
 import Distribution.PackageDescription (BuildInfo(asmOptions))
-import qualified RuleSets.BaseLogic as BASE
+import qualified RuleSets.BaseLogic.Core as BASE
+import RuleSets.BaseLogic.Helpers
 
 
 
