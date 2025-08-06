@@ -21,10 +21,10 @@ import Kernel
 import Internal.StdPattern
 
 import Control.Exception (SomeException)
-import qualified RuleSets.PropLogic as PL
-import qualified RuleSets.PredLogic as PREDL
+import qualified RuleSets.PropLogic.Core as PL
+import qualified RuleSets.PredLogic.Core as PREDL
 import qualified RuleSets.ZFC as ZFC
-import RuleSets.PropLogic (LogicSent(parseIff))
+import RuleSets.PropLogic.Core (LogicSent(parseIff))
 import RuleSets.ZFC (specification,parseMemberOf,memberOf)
 
 

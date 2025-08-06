@@ -81,7 +81,7 @@ import RuleSets.BaseLogic.Core hiding
    runProofAtomic)
 import qualified RuleSets.BaseLogic.Core as REM
 
-import RuleSets.PropLogic hiding 
+import RuleSets.PropLogic.Core hiding 
    (LogicRuleClass,
    SubproofRule,
    LogicError(..),
@@ -92,9 +92,9 @@ import RuleSets.PropLogic hiding
    LogicSent,
    SubproofMException(..),
    MetaRuleError(..))
-import qualified RuleSets.PropLogic as PL
+import qualified RuleSets.PropLogic.Core as PL
 
-import RuleSets.PredLogic hiding 
+import RuleSets.PredLogic.Core hiding 
    (LogicRuleClass,
    SubproofRule,
    LogicError(..),
@@ -105,7 +105,7 @@ import RuleSets.PredLogic hiding
    LogicSent,
    SubproofMException(..),
    MetaRuleError(..))
-import qualified RuleSets.PredLogic as PREDL
+import qualified RuleSets.PredLogic.Core as PREDL
 import GHC.Num (integerMul)
 
 

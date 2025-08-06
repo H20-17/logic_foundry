@@ -1,5 +1,5 @@
 {-# LANGUAGE UndecidableInstances #-}
-
+{-# LANGUAGE ConstraintKinds #-}
 
 
 module RuleSets.BaseLogic.Helpers
@@ -28,15 +28,16 @@ import Data.Map (Map,lookup)
 import Internal.StdPattern
 import Kernel
 
+type HelperConstraints r s o tType sE eL m = (Monad m, Ord o, Show sE, Typeable sE, Show s, Typeable s,
+       MonadThrow m, Show o, Typeable o, Show tType, Typeable tType, TypedSent o tType sE s,
+       Monoid (PrfStdState s o tType), StdPrfPrintMonad s o tType m,
+       StdPrfPrintMonad s o tType (Either SomeException), Monoid (PrfStdContext tType), LogicRuleClass r s o tType sE, ProofStd s eL r o tType,
+       Monoid r, Show eL, Typeable eL, SubproofRule r s)
 
 
 
 
-runProofBySubArgM :: (Monoid r1, ProofStd s eL1 r1 o tType, Monad m,
-                        MonadThrow m,
-                       Show s, Typeable s,
-                       Show eL1, Typeable eL1, TypedSent o tType sE s, Show sE, Typeable sE,
-                       StdPrfPrintMonad s o tType m, SubproofRule r1 s )
+runProofBySubArgM :: HelperConstraints r1 s o tType sE eL m
                  =>   ProofGenTStd tType r1 s o m x
                             -> ProofGenTStd tType r1 s o m (s, [Int],x)
 runProofBySubArgM prog =  do
@@ -56,14 +57,7 @@ runProofBySubArgM prog =  do
         return (consequent, idx, extraData)
 
 
-
-
-
-remarkM :: (Monad m, Ord o, Show sE, Typeable sE, Show s, Typeable s,
-       MonadThrow m, Show o, Typeable o, Show tType, Typeable tType, TypedSent o tType sE s,
-       Monoid (PrfStdState s o tType), StdPrfPrintMonad s o tType m,
-       StdPrfPrintMonad s o tType (Either SomeException), Monoid (PrfStdContext tType), LogicRuleClass r s o tType sE, ProofStd s eL r o tType,
-       Monoid r, Show eL, Typeable eL)
+remarkM :: HelperConstraints r s o tType sE eL m
           => Text -> ProofGenTStd tType r s o m [Int]
           
 remarkM txt = do
@@ -77,9 +71,7 @@ remarkM txt = do
     return finalIdx  
 
 
-standardRuleM :: (Monoid r,Monad m, Ord o, Show sE, Typeable sE, Show s, Typeable s, Show eL, Typeable eL,
-       MonadThrow m, Show o, Typeable o, Show tType, Typeable tType, TypedSent o tType sE s,
-       Monoid (PrfStdState s o tType), ProofStd s eL r o tType, StdPrfPrintMonad s o tType m    )
+standardRuleM :: HelperConstraints r s o tType sE eL m
        => r -> ProofGenTStd tType r s o m (s,[Int])
 standardRuleM rule = do
     -- function is unsafe and used for rules that generate one or more sentence.
@@ -92,28 +84,16 @@ standardRuleM rule = do
 
 
 
-repM :: (Monad m, Ord o, Show sE, Typeable sE, Show s, Typeable s,
-       MonadThrow m, Show o, Typeable o, Show tType, Typeable tType, TypedSent o tType sE s,
-       Monoid (PrfStdState s o tType), StdPrfPrintMonad s o tType m,
-       StdPrfPrintMonad s o tType (Either SomeException), Monoid (PrfStdContext tType), LogicRuleClass r s o tType sE, ProofStd s eL r o tType,
-       Monoid r, Show eL, Typeable eL)
+repM :: HelperConstraints r s o tType sE eL m
           => s -> ProofGenTStd tType r s o m (s,[Int])
 repM s = standardRuleM (rep s)
 
-fakePropM :: (Monad m, Ord o, Show sE, Typeable sE, Show s, Typeable s,
-       MonadThrow m, Show o, Typeable o, Show tType, Typeable tType, TypedSent o tType sE s,
-       Monoid (PrfStdState s o tType), StdPrfPrintMonad s o tType m,
-       StdPrfPrintMonad s o tType (Either SomeException), Monoid (PrfStdContext tType), LogicRuleClass r s o tType sE, ProofStd s eL r o tType,
-       Monoid r, Show eL, Typeable eL)
+fakePropM :: HelperConstraints r s o tType sE eL m
           => [s] -> s -> ProofGenTStd tType r s o m (s,[Int])
 fakePropM deps s = standardRuleM (fakeProp deps s)
 
 
-fakeConstM :: (Monad m, Ord o, Show sE, Typeable sE, Show s, Typeable s,
-       MonadThrow m, Show o, Typeable o, Show tType, Typeable tType, TypedSent o tType sE s,
-       Monoid (PrfStdState s o tType), StdPrfPrintMonad s o tType m,
-       StdPrfPrintMonad s o tType (Either SomeException), Monoid (PrfStdContext tType), LogicRuleClass r s o tType sE, ProofStd s eL r o tType,
-       Monoid r, Show eL, Typeable eL)
+fakeConstM :: HelperConstraints r s o tType sE eL m
           => o -> tType -> ProofGenTStd tType  r s o m ()
 fakeConstM name tType = do
      monadifyProofStd (fakeConst name tType)

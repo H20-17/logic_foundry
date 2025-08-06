@@ -36,7 +36,7 @@ import RuleSets.BaseLogic.Core hiding
    SubproofError(..),
    LogicError(..))
 import qualified RuleSets.BaseLogic.Core as BASE
-import RuleSets.PropLogic hiding
+import RuleSets.PropLogic.Core hiding
     (LogicRuleClass,
    SubproofRule,
    LogicError(..),
@@ -44,8 +44,8 @@ import RuleSets.PropLogic hiding
    LogicError(..),
    LogicSent,
    SubproofMException(..))
-import qualified RuleSets.PropLogic as PL
-import RuleSets.PredLogic hiding
+import qualified RuleSets.PropLogic.Core as PL
+import RuleSets.PredLogic.Core hiding
     (LogicRuleClass,
    SubproofRule,
    LogicError(..),
@@ -53,14 +53,15 @@ import RuleSets.PredLogic hiding
    LogicError(..),
    LogicSent,
    SubproofMException(..))
-import qualified RuleSets.PredLogic as PRED
+import qualified RuleSets.PredLogic.Core as PRED
 import qualified RuleSets.ZFC as ZFC
 import RuleSets.ZFC
     ( axiomOfChoiceM,specificationM, MetaRuleError(..), powerSetAxiomM)
 import Langs.BasicUntyped
 import Distribution.Compat.Lens (set)
 import RuleSets.BaseLogic.Helpers
-
+import RuleSets.PropLogic.Helpers
+import RuleSets.PredLogic.Helpers
 
 
 testTheoremMSchema :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) => TheoremSchemaMT () [PredRuleDeBr] PropDeBr Text m ()
@@ -1581,7 +1582,7 @@ provePowerSetIsSetM :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) =>
 provePowerSetIsSetM x = do
     (result_prop,idx,_)<-runProofBySubArgM do
         (prop_of_powSet, _, powSet_obj) <- powerSetInstantiateM x
-        PL.simpLM prop_of_powSet
+        simpLM prop_of_powSet
         return ()
     return (result_prop,idx)
 
@@ -1849,7 +1850,7 @@ proveBinaryUnionExistsM = do
 
             forward_imp_txt <- showPropM forward_imp
             remarkM $ "Forward Implication: " <> forward_imp_txt
-            PL.mpM forward_imp -- This proves the target_existential
+            mpM forward_imp -- This proves the target_existential
 
     return ()
 
@@ -2226,8 +2227,8 @@ proveCrossProductExistsM = do
         -- Prove the main implication by assuming the antecedent.
         runProofByAsmM (isSet setA :&&: isSet setB) do
             -- Now, inside this assumption, we have proven `isSet setA` and `isSet setB`.
-            (isSet_A_proven, _) <- PL.simpLM (isSet setA :&&: isSet setB)
-            (isSet_B_proven, _) <- PL.simpRM (isSet setA :&&: isSet setB)
+            (isSet_A_proven, _) <- simpLM (isSet setA :&&: isSet setB)
+            (isSet_B_proven, _) <- simpRM (isSet setA :&&: isSet setB)
             
             -- Step 1: Prove that the universe U = P(P(A U B)) is a set.
             let universeSet = buildPowerSet (buildPowerSet (setA .\/. setB))
