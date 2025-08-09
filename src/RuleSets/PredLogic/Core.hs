@@ -7,6 +7,7 @@ module RuleSets.PredLogic.Core
     SubproofError(..),
     ProofByUGSchema(..),
     LogicSent(..), 
+    LogicTerm(..),
     TheoremSchemaMT(..),
     TheoremAlgSchema,
     TheoremSchema(..),
@@ -394,7 +395,7 @@ runProofAtomic rule context state  =
               maybe (return ()) (throwError . LogicErrEqSubstTemplateSanityA templateSent termTypeA) tmpltSanityErrorA
 
               -- Instantiate the template with termA to get P(a)
-              let sourceSent = substX idx templateSent termA
+              let sourceSent = sentSubX idx termA templateSent
 
               -- Check if the instantiated source sentence P(a) is proven
               sourceSentIdx <- maybe (throwError $ LogicErrEqSubstSourceNotProven sourceSent)
@@ -412,7 +413,7 @@ runProofAtomic rule context state  =
 
 
               -- Perform the substitution in the template with termB to get P(b)
-              let resultSent = substX idx templateSent termB
+              let resultSent = sentSubX idx termB templateSent
 
 
               return (Just resultSent, Nothing, PrfStdStepStep resultSent "EQ_SUBST" [sourceSentIdx, eqSentIdx])
@@ -766,7 +767,12 @@ class (PL.LogicSent s tType) => LogicSent s t tType o | s ->tType, s ->t, s->t, 
     reverseParseQuantToHilbert :: (t->s) -> tType -> t
     -- create generalization from sentence, var type, and free var index.
     createForall ::s -> tType -> Int -> s
-    substX :: Int -> s -> t -> s
+    sentSubX :: Int -> t -> s -> s
+    sentSubXs :: [(Int, t)] -> s -> s
+
+class LogicTerm t where
+    termSubX :: Int -> t -> t -> t
+    termSubXs :: [(Int, t)] -> t -> t
 
 
  

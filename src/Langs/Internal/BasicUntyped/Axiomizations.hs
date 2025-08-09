@@ -31,6 +31,7 @@ import RuleSets.ZFC.Core (specification,parseMemberOf,memberOf)
 
 
 
+
 instance PL.LogicSent PropDeBr () where
 
   (.&&.) :: PropDeBr -> PropDeBr -> PropDeBr
@@ -155,9 +156,17 @@ instance PREDL.LogicSent PropDeBr ObjDeBr () Text where
     parseEq  = parseEqual
     (.==.) :: ObjDeBr -> ObjDeBr -> PropDeBr
     (.==.) = (:==:)
-    substX :: Int -> PropDeBr -> ObjDeBr -> PropDeBr
-    substX idx template obj = propDeBrSubX idx obj template
+    sentSubX :: Int -> ObjDeBr -> PropDeBr -> PropDeBr
+    sentSubX = propDeBrSubX
+    sentSubXs :: [(Int, ObjDeBr)] -> PropDeBr -> PropDeBr
+    sentSubXs = propDeBrSubXs
  
+instance PREDL.LogicTerm ObjDeBr where
+    termSubX :: Int -> ObjDeBr -> ObjDeBr -> ObjDeBr
+    termSubX = objDeBrSubX
+    termSubXs :: [(Int, ObjDeBr)] -> ObjDeBr -> ObjDeBr
+    termSubXs = objDeBrSubXs
+
 objDeBrApplyUGWorker :: ObjDeBr -> Int -> Int -> ObjDeBr
 objDeBrApplyUGWorker obj freevarIdx boundvarIdx =
     case obj of

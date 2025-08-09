@@ -5,43 +5,7 @@ module RuleSets.ZFC.Core
     runProofAtomic, 
     LogicRuleClass(..),
     LogicSent(..),
-    LogicTerm(..),
-    specificationM,
-    replacementM,
-    integerMembershipM,
-    integerNegationM,
-    integerAdditionM,
-    integerMultiplicationM,
-    integerCompareM,
-    integersAreUrelementsM,
-    integerInequalityM,
-    emptySetAxiomM,
-    extensionalityAxiomM,
-    emptySetNotIntM,
-    regularityAxiomM,
-    unionAxiomM,
-    powerSetAxiomM,
-    pairingAxiomM,
-    axiomOfChoiceM,
-    intOrderAntiSymmetryM,
-    intOrderReflexivityM,
-    intOrderTransitivityM,
-    intOrderTotalityM,
-    intAddClosureAxiomM,
-    intMulClosureAxiomM,
-    intNegClosureAxiomM,
-    intAddAssociativityM,
-    intAddCommutativityAxiomM,
-    intAddIdentityAxiomM,
-    intAddInverseAxiomM,
-    intMulAssociativityAxiomM,
-    intMulCommutativityAxiomM,
-    intMulIdentityAxiomM,
-    intDistributivityAxiomM,
-    intOrderAddCompatibilityAxiomM,
-    intOrderMulCompatibilityAxiomM,
-    natWellOrderingAxiomM,
-    MetaRuleError(..)
+    LogicTerm(..)
 ) where
 
 
@@ -104,7 +68,8 @@ import RuleSets.PredLogic.Core hiding
    runProofAtomic,
    LogicSent,
    SubproofMException(..),
-   MetaRuleError(..))
+   MetaRuleError(..),
+   LogicTerm(..))
 import qualified RuleSets.PredLogic.Core as PREDL
 import GHC.Num (integerMul)
 
@@ -823,101 +788,6 @@ instance PREDL.SubproofRule [LogicRule s sE t] s Text () where
      proofByUG:: s -> [LogicRule s sE t] -> [LogicRule s sE t]
      proofByUG s r  = [ProofByUG $ ProofByUGSchema s r]
 
-standardRuleM :: (Monoid r,Monad m, Ord o, Show sE, Typeable sE, Show s, Typeable s, Show eL, Typeable eL,
-       MonadThrow m, Show o, Typeable o, Show tType, Typeable tType, TypedSent o tType sE s,
-       Monoid (PrfStdState s o tType), ProofStd s eL r o tType, StdPrfPrintMonad s o tType m    )
-       => r -> ProofGenTStd tType r s o m (s,[Int])
-standardRuleM rule = do
-    -- function is unsafe and used for rules that generate one or more sentence.
-    -- probably should not be externally facing.
-     mayPropIndex <- monadifyProofStd rule
-     maybe (error "Critical failure: No index looking up sentence.") return mayPropIndex
-
-
-
-specificationM :: (Monad m, Show sE, Typeable sE, Show s, Typeable s, Show eL, Typeable eL,
-       MonadThrow m, Show o, Typeable o, Show tType, Typeable tType, TypedSent o tType sE s,
-       Monoid (PrfStdState s o tType), ProofStd s eL [LogicRule s sE t] o tType, StdPrfPrintMonad s o tType m    )
-       => [Int] -> Int -> t -> s -> ProofGenTStd tType [LogicRule s sE t] s o m (s,[Int])
-specificationM outerIdxs idx t s = standardRuleM (specification outerIdxs idx t s)
-
-
-
-replacementM :: (Monad m, Show sE, Typeable sE, Show s, Typeable s, Show eL, Typeable eL,
-       MonadThrow m, Show o, Typeable o, Show tType, Typeable tType, TypedSent o tType sE s,
-       Monoid (PrfStdState s o tType), ProofStd s eL [LogicRule s sE t] o tType, StdPrfPrintMonad s o tType m    )
-       => [Int] -> Int -> Int -> t -> s -> ProofGenTStd tType [LogicRule s sE t] s o m (s,[Int])
-replacementM outerIdxs idx1 idx2 t s = standardRuleM (replacement outerIdxs idx1 idx2 t s)
-
-
-integerMembershipM, integerNegationM :: (Monad m, Show sE, Typeable sE, Show s, Typeable s, Show eL, Typeable eL,
-       MonadThrow m, Show o, Typeable o, Show tType, Typeable tType, TypedSent o tType sE s,
-       Monoid (PrfStdState s o tType), ProofStd s eL [LogicRule s sE t] o tType, StdPrfPrintMonad s o tType m    )
-       => Int -> ProofGenTStd tType [LogicRule s sE t] s o m (s,[Int])
-integerMembershipM i = standardRuleM (integerMembership i)
-integerNegationM i = standardRuleM (integerNegation i)
-
-integerAdditionM, integerMultiplicationM, integerCompareM, integerInequalityM
- :: (Monad m, Show sE, Typeable sE, Show s, Typeable s, Show eL, Typeable eL,
-       MonadThrow m, Show o, Typeable o, Show tType, Typeable tType, TypedSent o tType sE s,
-       Monoid (PrfStdState s o tType), ProofStd s eL [LogicRule s sE t] o tType, StdPrfPrintMonad s o tType m    )
-       => Int -> Int -> ProofGenTStd tType [LogicRule s sE t] s o m (s,[Int])
-integerAdditionM i1 i2 = standardRuleM (integerAddition i1 i2)
-integerMultiplicationM i1 i2 = standardRuleM (integerMultiplication i1 i2)
-integerCompareM i1 i2 = standardRuleM (integerCompare i1 i2)
-integerInequalityM i1 i2 = standardRuleM (integerInequality i1 i2)
-
-
-integersAreUrelementsM, emptySetAxiomM, extensionalityAxiomM,emptySetNotIntM,regularityAxiomM, unionAxiomM,
-             powerSetAxiomM, pairingAxiomM, axiomOfChoiceM, intOrderAntiSymmetryM,
-             intOrderReflexivityM, intOrderTransitivityM, intOrderTotalityM,
-             intAddClosureAxiomM, intMulClosureAxiomM, intNegClosureAxiomM,
-             intAddAssociativityM, intAddCommutativityAxiomM, intAddIdentityAxiomM, intAddInverseAxiomM,
-             intMulAssociativityAxiomM, intMulCommutativityAxiomM, intMulIdentityAxiomM,
-             intDistributivityAxiomM,intOrderAddCompatibilityAxiomM, intOrderMulCompatibilityAxiomM,
-             natWellOrderingAxiomM
-       :: (Monad m, Show sE, Typeable sE, Show s, Typeable s, Show eL, Typeable eL,
-       MonadThrow m, Show o, Typeable o, Show tType, Typeable tType, TypedSent o tType sE s,
-       Monoid (PrfStdState s o tType), ProofStd s eL [LogicRule s sE t] o tType, StdPrfPrintMonad s o tType m,
-       LogicRuleClass [LogicRule s sE t] s sE t)
-       => ProofGenTStd tType [LogicRule s sE t] s o m (s,[Int])
-integersAreUrelementsM = standardRuleM integersAreUrelements
-emptySetAxiomM = standardRuleM emptySet
-extensionalityAxiomM = standardRuleM extensionality
-emptySetNotIntM = standardRuleM emptySetNotInt
-regularityAxiomM = standardRuleM regularity
-unionAxiomM = standardRuleM union
-powerSetAxiomM = standardRuleM powerSet
-pairingAxiomM = standardRuleM pairing
-axiomOfChoiceM = standardRuleM choice
-intOrderAntiSymmetryM = standardRuleM intOrderAntiSymmetry
-intOrderReflexivityM = standardRuleM intOrderReflexivity
-intOrderTransitivityM = standardRuleM intOrderTransitivity
-intOrderTotalityM = standardRuleM intOrderTotality
-intAddClosureAxiomM        = standardRuleM intAddClosure
-intMulClosureAxiomM        = standardRuleM intMulClosure
-intNegClosureAxiomM        = standardRuleM intNegClosure
-intAddAssociativityM       = standardRuleM intAddAssociativity -- Was previously started
-intAddCommutativityAxiomM  = standardRuleM intAddCommutativity
-intAddIdentityAxiomM       = standardRuleM intAddIdentity
-intAddInverseAxiomM        = standardRuleM intAddInverse
-intMulAssociativityAxiomM  = standardRuleM intMulAssociativity
-intMulCommutativityAxiomM  = standardRuleM intMulCommutativity
-intMulIdentityAxiomM       = standardRuleM intMulIdentity
-intDistributivityAxiomM    = standardRuleM intDistributivity
-intOrderAddCompatibilityAxiomM = standardRuleM intOrderAddCompatibility
-intOrderMulCompatibilityAxiomM = standardRuleM intOrderMulCompatibility
-natWellOrderingAxiomM = standardRuleM natWellOrdering
-
-
-data MetaRuleError s where
-   MetaRuleErrNotClosed :: s -> MetaRuleError s
-   MetaRuleErrFreeVarsQuantCountMismatch :: MetaRuleError s
-
-   deriving(Show,Typeable)
-
-
-instance (Show s, Typeable s) => Exception (MetaRuleError s)
 
 
 

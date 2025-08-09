@@ -55,8 +55,7 @@ import RuleSets.PredLogic.Core hiding
    SubproofMException(..))
 import qualified RuleSets.PredLogic.Core as PRED
 import qualified RuleSets.ZFC.Core as ZFC
-import RuleSets.ZFC.Core
-    ( axiomOfChoiceM,specificationM, MetaRuleError(..), powerSetAxiomM)
+import RuleSets.ZFC.Helpers
 import Langs.BasicUntyped
 import Distribution.Compat.Lens (set)
 import RuleSets.BaseLogic.Helpers
@@ -121,11 +120,11 @@ proveUnionWithEmptySetM = do
 
             -- (isSet_EmptySet_axiom, _) <- ZFC.emptySetAxiomM
 
-            (forall_not_in_empty, _) <- ZFC.emptySetAxiomM
+            (forall_not_in_empty, _) <- emptySetAxiomM
 
             -- (isSet_EmptySet_proven, _) <- simpLM isSet_EmptySet_axiom
             
-            (isSet_EmptySet_proven, _) <- ZFC.emptySetNotIntM
+            (isSet_EmptySet_proven, _) <- emptySetNotIntM
 
             -- proveUnionIsSetM requires isSet v and isSet ∅ to be proven.
             (isSet_unionObj_proven, _) <- proveUnionIsSetM v EmptySet
@@ -175,7 +174,7 @@ proveUnionWithEmptySetM = do
                 bicondIntroM dir1 dir2
 
             -- Step 4: Apply the Axiom of Extensionality.
-            (ext_axiom, _) <- ZFC.extensionalityAxiomM
+            (ext_axiom, _) <- extensionalityAxiomM
             (ext_inst, _) <- multiUIM ext_axiom [v, unionObj]
             (adj1,_) <- adjM isSet_unionObj_proven forall_bicond
             (full_antecedent,_) <- adjM (isSet v) adj1
@@ -355,7 +354,7 @@ proveSpecRedundancyMFree spec_var_idx sourceSet p_tmplt
                     mpM imp_to_B
                     return ()
                 bicondIntroM imp_B_to_S imp_S_to_B
-            (ext_axiom, _) <- ZFC.extensionalityAxiomM
+            (ext_axiom, _) <- extensionalityAxiomM
             (ext_inst, _) <- multiUIM ext_axiom [builderSet, sourceSet]
             (ante1, _) <- adjM (isSet sourceSet) forall_bicond_sets
             (full_antecedent, _) <- adjM isSet_B ante1
@@ -504,7 +503,7 @@ proveDisjointSubsetIsEmptyM = do
 
 
                     -- But we know from the empty set axiom that ¬(x ∈ ∅).
-                    (forall_not_in_empty, _) <- ZFC.emptySetAxiomM
+                    (forall_not_in_empty, _) <- emptySetAxiomM
                     (not_x_in_empty, _) <- uiM x forall_not_in_empty
 
                     -- This is a contradiction.
@@ -517,7 +516,7 @@ proveDisjointSubsetIsEmptyM = do
             (forall_bicond, _) <- runProofByUGM () do
                 x <- getTopFreeVar
                 (not_in_b, _) <- uiM x forall_not_in_b
-                (forall_not_in_empty, _) <- ZFC.emptySetAxiomM
+                (forall_not_in_empty, _) <- emptySetAxiomM
                 (not_in_empty, _) <- uiM x forall_not_in_empty
                 
                 (dir1, _) <- runProofByAsmM (neg (x `In` v_b)) 
@@ -532,8 +531,8 @@ proveDisjointSubsetIsEmptyM = do
 
             -- Step 4: Apply the Axiom of Extensionality to prove b = ∅.
             (isSet_b, _) <- simpLM subset_b_a
-            (isSet_empty, _) <- ZFC.emptySetNotIntM
-            (ext_axiom, _) <- ZFC.extensionalityAxiomM
+            (isSet_empty, _) <- emptySetNotIntM
+            (ext_axiom, _) <- extensionalityAxiomM
             (ext_inst, _) <- multiUIM ext_axiom [v_b, EmptySet]
             
             (adj1, _) <- adjM isSet_empty forall_bicond
@@ -948,7 +947,7 @@ proveBuilderSrcPartitionUnionMFree spec_var_idx sourceSet p_tmplt =
             bicondIntroM dir1 dir2
 
         -- Step 4: Apply the Axiom of Extensionality to get the final equality.
-        (ext_axiom, _) <- ZFC.extensionalityAxiomM
+        (ext_axiom, _) <- extensionalityAxiomM
         (ext_inst, _) <- multiUIM ext_axiom [sourceSet, union_of_builders]
 
         (isSet_Union_and_forall_bicond,_) <- adjM isSet_union forall_bicond
@@ -1045,7 +1044,7 @@ proveBuilderSrcPartitionIntersectionEmptyMFree spec_var_idx sourceSet p_tmplt --
 
         -- Step 4: Prove the final equality using the Axiom of Extensionality.
 
-        (isSet_Empty_prop, _) <- ZFC.emptySetAxiomM -- Extracts ∀x. ¬(x ∈ ∅)
+        (isSet_Empty_prop, _) <- emptySetAxiomM -- Extracts ∀x. ¬(x ∈ ∅)
         -- We need to prove ∀y (y ∈ intersection ↔ y ∈ ∅).
         -- Since both sides are always false, the biconditional is always true.
         (forall_bicond, _) <- runProofByUGM () do
@@ -1061,9 +1060,9 @@ proveBuilderSrcPartitionIntersectionEmptyMFree spec_var_idx sourceSet p_tmplt --
 
             negBicondToPosBicondM bicond_of_negs
             -- This gives us the biconditional: y ∈ intersection ↔ y ∈ ∅
-        (ext_axiom, _) <- ZFC.extensionalityAxiomM
+        (ext_axiom, _) <- extensionalityAxiomM
         (ext_inst, _) <- multiUIM ext_axiom [intersection_of_builders, EmptySet]
-        (isSetEmptySet,_) <- ZFC.emptySetNotIntM
+        (isSetEmptySet,_) <- emptySetNotIntM
         (adj1, _) <- adjM isSetEmptySet forall_bicond
         (full_antecedent_for_ext, _) <- adjM isSet_intersection adj1
         
@@ -1300,56 +1299,6 @@ strongInductionPremiseOnRel p_template idx dom rel =
 
 
 
--- | A generic and powerful helper that instantiates the Axiom of Specification with
--- | provided parameter terms, and then uses Existential Instantiation to construct
--- | the specified set object and prove its defining property.
--- |
--- | This function replaces the more complex `specificationFreeMBuilder`. The caller is now
--- | responsible for providing the terms to instantiate the parameters of the source set
--- | and predicate, which should use `X k` template variables for those parameters.
--- |
--- | @param instantiationTerms The list of `ObjDeBr` terms to instantiate with.
--- | @param outerTemplateIdxs  The list of `Int` indices for the `X` variables in the templates
--- |                           that will be universally quantified. The order must correspond
--- |                           to `instantiationTerms`.
--- | @param spec_var_X_idx     The `Int` index for the `X` variable that is the variable of specification
--- |                           (the 'x' in {x ∈ T | P(x)}).
--- | @param source_set_template The source set `T`, which may contain `X k` parameters.
--- | @param p_template         The predicate `P`, which uses `X spec_var_X_idx` for the specification
--- |                           variable and may contain `X k` parameters.
--- | @return A tuple containing the proven defining property of the new set, its proof index,
--- |         and and a tuple of type (ObjDeBr, ObjDeBr, PropDeBr) which is the newly built set,
--- |         the instantiated source set, and the instantiated p_template.
-builderInstantiateM :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) =>
-    [ObjDeBr] ->    -- instantiationTerms
-    [Int] ->        -- outerTemplateIdxs
-    Int ->          -- spec_var_X_idx
-    ObjDeBr ->      -- source_set_template
-    PropDeBr ->     -- p_template
-    ProofGenTStd () [ZFC.LogicRule PropDeBr DeBrSe ObjDeBr] PropDeBr Text m (PropDeBr, [Int], (ObjDeBr, ObjDeBr, PropDeBr))
-builderInstantiateM instantiationTerms outerTemplateIdxs spec_var_X_idx source_set_template p_template =
-    runProofBySubArgM do
-        -- Step 1: Get the closed, universally quantified Axiom of Specification.
-        -- 'specificationM' quantifies over the parameters specified in 'outerTemplateIdxs'.
-        (closedSpecAxiom, _) <- ZFC.specificationM outerTemplateIdxs spec_var_X_idx source_set_template p_template
-
-        -- Step 2: Use multiUIM to instantiate the axiom with the provided terms.
-        -- This proves the specific existential statement for the given parameters.
-        (instantiated_existential_prop, _) <- multiUIM closedSpecAxiom instantiationTerms
-
-        -- Step 3: Apply Existential Instantiation to get the Hilbert object and its property.
-        -- This is the final result of the construction.
-        (defining_prop, prop_idx, built_obj) <- eiHilbertM instantiated_existential_prop
-
-        let instantiated_source_set = objDeBrSubXs (zip outerTemplateIdxs instantiationTerms) source_set_template
-        let instantiated_p_template = propDeBrSubXs (zip outerTemplateIdxs instantiationTerms) p_template
-         
-        -- The runProofBySubArgM wrapper requires the 'do' block to return the 'extraData'
-        -- that the caller of builderInstantiateM will receive.
-        return (built_obj, instantiated_source_set, instantiated_p_template)
-
-
-
 
 
 
@@ -1529,43 +1478,6 @@ builderSubsetTheoremSchema outerTemplateIdxs spec_var_X_idx source_set_template 
     in   
       TheoremSchemaMT typed_consts [] (proveBuilderSubsetTheoremM outerTemplateIdxs spec_var_X_idx source_set_template p_template)
 
-
-
--- | Helper to instantiate the power set axiom and return the power set.
--- |
--- | Note: This helper requires that 'isSet x' has already been proven
--- | in the current proof context.
--- |
--- | Proof Strategy:
--- | 1. Takes an object 'x' as an argument.
--- | 2. Assumes 'isSet x' is a proven premise in the current context.
--- | 3. Instantiates the Axiom of Power Set with 'x'. This proves: isSet(x) → ∃P(...)
--- | 4. Uses Modus Ponens with the proven 'isSet x' to derive the existential part of the axiom:
--- |    `∃P (isSet(P) ∧ ∀Y(Y∈P ↔ Y⊆x))`.
--- | 5. Uses Existential Instantiation (`eiHilbertM`) on this proposition. This introduces
--- |    the Hilbert term for the power set (`PowerSet(x)`) and proves its defining property:
--- |    `isSet(PowerSet(x)) ∧ ∀Y(...)`.
-powerSetInstantiateM :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) =>
-    ObjDeBr -> -- ^ The object 'x' for which to prove its power set is a set.
-    ProofGenTStd () [ZFC.LogicRule PropDeBr DeBrSe ObjDeBr] PropDeBr Text m (PropDeBr, [Int], ObjDeBr)
-powerSetInstantiateM x = do
-    runProofBySubArgM do
-        -- Step 1: Get the Axiom of Power Set from the ZFC rule set.
-        (powerSetAxiom_proven, _) <- ZFC.powerSetAxiomM
-
-        -- Step 2: Instantiate the axiom with our object `x`.
-        -- This proves: isSet(x) → ∃P (isSet(P) ∧ ...)
-        (instantiatedAxiom, _) <- uiM x powerSetAxiom_proven
-
-        -- Step 3: Use Modus Ponens. This relies on `isSet x` being already proven
-        -- in the parent context where this helper is called.
-        (exists_P, _) <- mpM instantiatedAxiom
-
-        -- Step 4: Apply Hilbert's Existential Instantiation to the existential proposition.
-        -- This introduces the `powerSet x` object and proves its property.
-        -- `prop_of_powSet` is: isSet(powerSet x) ∧ ∀Y(...)
-        (prop_of_powSet, _, powSet_obj) <- eiHilbertM exists_P
-        return powSet_obj
 
 
 
@@ -1816,7 +1728,7 @@ proveBinaryUnionExistsM = do
             -- Now, isSet(A) and isSet(B) are proven assumptions in this context.
 
             -- Step 1: Use the Axiom of Pairing to prove ∃P. isSet(P) ∧ P = {A,B}.
-            (pairAxiom,_) <- ZFC.pairingAxiomM
+            (pairAxiom,_) <- pairingAxiomM
             (pairAxiom_inst1, _) <- uiM setA pairAxiom
             (pairAxiom_inst2, _) <- uiM setB pairAxiom_inst1
 
@@ -1826,7 +1738,7 @@ proveBinaryUnionExistsM = do
             (isSet_pair_proven, _) <- simpLM pair_prop
 
             -- Step 3: Use the Axiom of Union on the proven set `pairSetAB`.
-            (unionAxiom,_) <- ZFC.unionAxiomM
+            (unionAxiom,_) <- unionAxiomM
             (unionAxiom_inst, _) <- uiM pairSetAB unionAxiom
 
             -- Step 4: Use Modus Ponens with `isSet(pairSetAB)` to derive the existence of the union.
