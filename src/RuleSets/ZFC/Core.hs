@@ -1,5 +1,5 @@
 {-# LANGUAGE TupleSections #-}
-module RuleSets.ZFC 
+module RuleSets.ZFC.Core
 (
     LogicError(..), LogicRule(..), 
     runProofAtomic, 

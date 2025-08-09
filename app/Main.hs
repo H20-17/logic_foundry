@@ -54,8 +54,8 @@ import RuleSets.PredLogic.Core hiding
    LogicSent,
    SubproofMException(..))
 import qualified RuleSets.PredLogic.Core as PRED
-import qualified RuleSets.ZFC as ZFC
-import RuleSets.ZFC
+import qualified RuleSets.ZFC.Core as ZFC
+import RuleSets.ZFC.Core
     ( axiomOfChoiceM,specificationM, MetaRuleError(..), powerSetAxiomM)
 import Langs.BasicUntyped
 import Distribution.Compat.Lens (set)
@@ -2329,51 +2329,6 @@ crossProductInstantiateM setA setB = do
         return crossProdObj
 
 
-
--- | Applies Universal Instantiation (UI) multiple times to a given proposition.
--- | Returns the final instantiated proposition and its proof index.
--- | - Case 0: No instantiation terms -> re-proves the initial proposition.
--- | - Case 1: One instantiation term -> applies PREDL.uiM directly.
--- | - Case >1: Multiple terms -> creates a sub-argument for the sequen
-multiUIM :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) =>
-    PropDeBr ->      -- initialProposition: The proposition to start with.
-    [ObjDeBr] ->    -- instantiationTerms: List of terms to instantiate with, in order.
-    ProofGenTStd () [ZFC.LogicRule PropDeBr DeBrSe ObjDeBr] PropDeBr Text m (PropDeBr,[Int])
-multiUIM initialProposition instantiationTerms =
-    case instantiationTerms of
-        [] ->
-            -- Case 0: No terms to instantiate with.
-            -- Re-prove the initial proposition to ensure it's the active "last proven statement"
-            -- and to get its index in the current context.
-            repM initialProposition
-
-        [singleTerm] ->
-            -- Case 1: Exactly one term to instantiate with.
-            -- Apply PREDL.uiM directly. No need for a sub-argument wrapper.
-            uiM singleTerm initialProposition
-
-        _ -> -- More than one term (list has at least two elements here)
-            -- Case 2: Multiple instantiation terms.
-            -- Create a sub-argument whose internal proof is the sequence of UI steps.
-            do
-                (result_prop, idx, extra_data) <- runProofBySubArgM (
-                    -- Use foldM to iteratively apply PREDL.uiM.
-                    -- The accumulator for foldM is (current_proposition_term, its_index).
-                    foldM
-                        (\(currentProp_term, _currentProp_idx) term_to_instantiate ->
-                            -- PREDL.uiM applies UI, proves the new proposition, adds it to proof steps,
-                            -- updates the Last s writer state, and returns (new_proposition_term, new_index).
-                            -- This (new_prop, new_idx) becomes the new accumulator.
-                            uiM term_to_instantiate currentProp_term
-                        )
-                        (initialProposition, []) -- Start fold with initialProposition and a dummy index.
-                        instantiationTerms
-                    -- The result of this foldM is a monadic action of type m (PropDeBr, [Int]).
-                    -- This is the 'prog' for runProofBySubArgM.
-                    -- Its 'Last s' writer state (set by the last PREDL.uiM) will be used
-                    -- by runProofBySubArgM as the 'consequent' of the sub-argument.
-                    )
-                return (result_prop, idx)
 
 
 

@@ -83,9 +83,9 @@ import Internal.StdPattern
 import Control.Exception (SomeException)
 import qualified RuleSets.PropLogic.Core as PL
 import qualified RuleSets.PredLogic.Core as PREDL
-import qualified RuleSets.ZFC as ZFC
+import qualified RuleSets.ZFC.Core as ZFC
 import RuleSets.PropLogic.Core (LogicSent(parseIff))
-import RuleSets.ZFC (specification,parseMemberOf,memberOf)
+import RuleSets.ZFC.Core (specification,parseMemberOf,memberOf)
 import Control.Monad.State
 import Control.Monad.RWS
     ( MonadReader(ask), runRWS, MonadWriter(tell), RWS )

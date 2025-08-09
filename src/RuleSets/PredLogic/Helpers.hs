@@ -1,3 +1,5 @@
+{-# LANGUAGE ConstraintKinds #-}
+
 module RuleSets.PredLogic.Helpers
 (
     uiM, eiM, reverseANegIntroM, reverseENegIntroM,eNegIntroM, aNegIntroM,
@@ -6,7 +8,7 @@ module RuleSets.PredLogic.Helpers
     MetaRuleError(..),
     eqReflM, eqSymM, eqTransM, eqSubstM,
     extractConstsSentM,
-    multiUGM
+    multiUGM, runTheoremM, runTmSilentM,multiUIM
 ) where
 
 
@@ -66,9 +68,17 @@ import RuleSets.PredLogic.Core
 
 
 
-standardRuleM :: (Monoid r,Monad m, Ord o, Show sE, Typeable sE, Show s, Typeable s, Show eL, Typeable eL,
-       MonadThrow m, Show o, Typeable o, Show tType, Typeable tType, TypedSent o tType sE s,
-       Monoid (PrfStdState s o tType), ProofStd s eL r o tType, StdPrfPrintMonad s o tType m    )
+type HelperConstraints m s tType o t sE eL r = ( Monad m, LogicSent s t tType o, TypeableTerm t o tType sE, Show s,
+                Typeable s, Show sE, Typeable sE, MonadThrow m, Show o, Typeable o, Show t, Typeable t,
+                Show tType, Typeable tType, TypedSent o tType sE s, Monoid (PrfStdState s o tType),
+                StdPrfPrintMonad s o tType m,
+                StdPrfPrintMonad s o tType (Either SomeException), Monoid (PrfStdContext tType),
+                LogicRuleClass r s t tType sE o, ProofStd s eL r o tType, Show eL, Typeable eL, Monoid r, BASE.LogicRuleClass r s o tType sE,
+                BASE.SubproofRule r s, PL.SubproofRule r s, PL.LogicRuleClass r s tType sE o, ShowableSent s,
+                SubproofRule r s o tType, LogicRuleClass r s t tType sE o)
+
+
+standardRuleM :: HelperConstraints m s tType o t sE eL r
        => r -> ProofGenTStd tType r s o m (s,[Int])
 standardRuleM rule = do
     -- function is unsafe and used for rules that generate one or more sentence.
@@ -79,24 +89,14 @@ standardRuleM rule = do
 
 
 
-uiM, egM :: (Monad m, LogicSent s t tType o, TypeableTerm t o tType sE, Show s,
-                Typeable s, Show sE, Typeable sE, MonadThrow m, Show o, Typeable o, Show t, Typeable t,
-                Show tType, Typeable tType, TypedSent o tType sE s, Monoid (PrfStdState s o tType),
-               StdPrfPrintMonad s o tType m, StdPrfPrintMonad s o tType (Either SomeException),
-                Monoid (PrfStdContext tType), LogicRuleClass r s t tType sE o, ProofStd s eL r o tType, Show eL,
-                Typeable eL, Monoid r)
+uiM, egM :: HelperConstraints m s tType o t sE eL r
                    => t -> s -> ProofGenTStd tType r s o m (s,[Int])
 uiM term sent = standardRuleM (ui term sent)
 egM term sent = standardRuleM (eg term sent)
 
 
 
-eiM :: (Monad m, LogicSent s t tType o, TypeableTerm t o tType sE, Show s,
-                Typeable s, Show sE, Typeable sE, MonadThrow m, Show o, Typeable o, Show t, Typeable t,
-                Show tType, Typeable tType, TypedSent o tType sE s, Monoid (PrfStdState s o tType),
-                StdPrfPrintMonad s o tType m,
-                StdPrfPrintMonad s o tType (Either SomeException), Monoid (PrfStdContext tType),
-                LogicRuleClass r s t tType sE o, ProofStd s eL r o tType, Show eL, Typeable eL, Monoid r)
+eiM :: HelperConstraints m s tType o t sE eL r
                    => s -> o -> ProofGenTStd tType r s o m (s,[Int],t)
 eiM sent const = do
                    (instantiated, idx) <- standardRuleM (ei sent const)
@@ -104,12 +104,7 @@ eiM sent const = do
 
 
 
-eNegIntroM, aNegIntroM, eqSymM :: (Monad m, LogicSent s t tType o, TypeableTerm t o tType sE, Show s,
-                Typeable s, Show sE, Typeable sE, MonadThrow m, Show o, Typeable o, Show t, Typeable t,
-                Show tType, Typeable tType, TypedSent o tType sE s, Monoid (PrfStdState s o tType),
-                StdPrfPrintMonad s o tType m,
-                StdPrfPrintMonad s o tType (Either SomeException), Monoid (PrfStdContext tType),
-                LogicRuleClass r s t tType sE o, ProofStd s eL r o tType, Show eL, Typeable eL, Monoid r)
+eNegIntroM, aNegIntroM, eqSymM :: HelperConstraints m s tType o t sE eL r
                    => s -> ProofGenTStd tType r s o m (s,[Int])
 eNegIntroM sent = standardRuleM (eNegIntro sent)
 
@@ -118,12 +113,7 @@ aNegIntroM sent = standardRuleM (aNegIntro sent)
 eqSymM eqSent = standardRuleM (eqSym eqSent)
 
 
-eiHilbertM :: (Monad m, LogicSent s t tType o, TypeableTerm t o tType sE, Show s,
-                Typeable s, Show sE, Typeable sE, MonadThrow m, Show o, Typeable o, Show t, Typeable t,
-                Show tType, Typeable tType, TypedSent o tType sE s, Monoid (PrfStdState s o tType),
-                StdPrfPrintMonad s o tType m,
-                StdPrfPrintMonad s o tType (Either SomeException), Monoid (PrfStdContext tType),
-                LogicRuleClass r s t tType sE o, ProofStd s eL r o tType, Show eL, Typeable eL, Monoid r)
+eiHilbertM :: HelperConstraints m s tType o t sE eL r
                    => s -> ProofGenTStd tType r s o m (s,[Int],t)
 
 eiHilbertM sent = do
@@ -134,45 +124,20 @@ eiHilbertM sent = do
          return (instantiated,idx,hilbertObj)
 
 
-eqTransM :: (Monad m, LogicSent s t tType o, TypeableTerm t o tType sE, Show s,
-             Typeable s, Show sE, Typeable sE, MonadThrow m, Show o, Typeable o, Show t, Typeable t,
-             Show tType, Typeable tType, TypedSent o tType sE s, Monoid (PrfStdState s o tType),
-             StdPrfPrintMonad s o tType m, StdPrfPrintMonad s o tType (Either SomeException),
-             Monoid (PrfStdContext tType), LogicRuleClass r s t tType sE o, ProofStd s eL r o tType, Show eL,
-             Typeable eL, Monoid r)
+eqTransM :: HelperConstraints m s tType o t sE eL r
            => s -> s -> ProofGenTStd tType r s o m (s,[Int])
 eqTransM eqSent1 eqSent2 = standardRuleM (eqTrans eqSent1 eqSent2)
 
-
-
-eqSubstM :: (Monad m, LogicSent s t tType o, TypeableTerm t o tType sE, Show s,
-             Typeable s, Show sE, Typeable sE, MonadThrow m, Show o, Typeable o, Show t, Typeable t,
-             Show tType, Typeable tType, TypedSent o tType sE s, Monoid (PrfStdState s o tType),
-             StdPrfPrintMonad s o tType m, StdPrfPrintMonad s o tType (Either SomeException),
-             Monoid (PrfStdContext tType), LogicRuleClass r s t tType sE o, ProofStd s eL r o tType, Show eL,
-             Typeable eL, Monoid r)
+eqSubstM :: HelperConstraints m s tType o t sE eL r
            => Int -> s -> s -> ProofGenTStd tType r s o m (s,[Int])
 eqSubstM idx templateSent eqSent = standardRuleM (eqSubst idx templateSent eqSent)
 
-eqReflM :: (Monad m, LogicSent s t tType o, TypeableTerm t o tType sE, Show s,
-            Typeable s, Show sE, Typeable sE, MonadThrow m, Show o, Typeable o, Show t, Typeable t,
-            Show tType, Typeable tType, TypedSent o tType sE s, Monoid (PrfStdState s o tType),
-            StdPrfPrintMonad s o tType m, StdPrfPrintMonad s o tType (Either SomeException),
-            Monoid (PrfStdContext tType), LogicRuleClass r s t tType sE o, ProofStd s eL r o tType, Show eL,
-            Typeable eL, Monoid r)
+eqReflM :: HelperConstraints m s tType o t sE eL r
           => t -> ProofGenTStd tType r s o m (s,[Int])
 eqReflM term = standardRuleM (eqRefl term)
 
 
-reverseANegIntroM, reverseENegIntroM :: (Monad m, LogicSent s t tType o, TypeableTerm t o tType sE, Show s,
-                Typeable s, Show sE, Typeable sE, MonadThrow m, Show o, Typeable o, Show t, Typeable t,
-                Show tType, Typeable tType, TypedSent o tType sE s, Monoid (PrfStdState s o tType),
-                StdPrfPrintMonad s o tType m,
-                StdPrfPrintMonad s o tType (Either SomeException), Monoid (PrfStdContext tType),
-                LogicRuleClass r s t tType sE o, ProofStd s eL r o tType, Show eL, Typeable eL, Monoid r,
-                REM.SubproofRule r s, LogicConst o,
-                PL.SubproofRule r s,
-                PL.LogicRuleClass r s tType sE o, BASE.LogicRuleClass r s o tType sE, ShowableSent s)
+reverseANegIntroM, reverseENegIntroM :: HelperConstraints m s tType o t sE eL r
                    => s -> ProofGenTStd tType r s o m (s,[Int])
 
 
@@ -221,15 +186,7 @@ reverseENegIntroM forallXNotPx = do
 
 
 
-
-
-
-
-runProofByUGM :: (Monoid r1, ProofStd s eL1 r1 o tType, Monad m,
-                       LogicSent s t tType o, Show eL1, Typeable eL1,
-                    Show s, Typeable s,
-                       MonadThrow m, TypedSent o tType sE s, Show sE, Typeable sE, 
-                       StdPrfPrintMonad s o tType m,SubproofRule r1 s o tType, BASE.LogicRuleClass r1 s o tType sE)
+runProofByUGM :: HelperConstraints m s tType o t sE eL r1
                  =>  tType -> ProofGenTStd tType r1 s o m x
                             -> ProofGenTStd tType r1 s o m (s, [Int])
 runProofByUGM tt prog =  do
@@ -249,13 +206,7 @@ runProofByUGM tt prog =  do
         idx <- maybe (error "No theorem returned by monadifyProofStd on ug schema. This shouldn't happen") (return . snd) mayMonadifyRes       
         return (resultSent,idx)
 
-multiUGM :: (Monoid r1, ProofStd s eL1 r1 o tType, Monad m,
-                       LogicSent s t tType o, Show eL1, Typeable eL1,
-                    Show s, Typeable s,
-                       MonadThrow m, TypedSent o tType sE s, Show sE, Typeable sE,
-                       StdPrfPrintMonad s o tType m,SubproofRule r1 s o tType, 
-                       BASE.SubproofRule r1 s, BASE.LogicRuleClass r1 s o tType sE,  StdPrfPrintMonad
-                          s o tType (Either SomeException), Show o, Show tType, Typeable o, Typeable tType   ) =>
+multiUGM :: HelperConstraints m s tType o t sE eL r1 =>
     [tType] ->                             -- ^ List of types for UG variables (outermost first).
     ProofGenTStd tType r1 s o m x ->       -- ^ The core program. Its monadic return 'x' is discarded.
                                            --   It must set 'Last s' with the prop to be generalized.
@@ -288,12 +239,7 @@ multiUGM typeList programCore =
             runProofByUGM outermost_ug_var_type inner_action_yielding_proven_s_idx
 
 
-extractConstsSentM :: (Monoid r1, ProofStd s eL1 r1 o tType, Monad m,
-                       LogicSent s t tType o, Show eL1, Typeable eL1,
-                    Show s, Typeable s,
-                       MonadThrow m, TypedSent o tType sE s, Show sE, Typeable sE,
-                       StdPrfPrintMonad s o tType m,SubproofRule r1 s o tType, 
-                       BASE.SubproofRule r1 s    )  
+extractConstsSentM :: HelperConstraints m  s tType o t sE eL r1
                  =>   s
                             -> ProofGenTStd tType r1 s o m (Map o tType)
 
@@ -324,3 +270,81 @@ constDictTest envDict = Data.Map.foldrWithKey f Nothing
                                                                Nothing -- we good
                                               Nothing -> Just (k,Nothing)
          f k aVal (Just x) = Just x
+
+
+
+runTheoremM :: HelperConstraints m s tType o t sE eL r1
+                 =>   TheoremSchemaMT tType r1 s o m x ->
+                               ProofGenTStd tType r1 s o m (s, [Int], x)
+runTheoremM (TheoremSchemaMT constDict lemmas prog) =  do
+        state <- getProofState
+        context <- ask
+        (tm, proof, extra, newSteps) <- lift $ checkTheoremMOpen (Just (state,context)) (TheoremSchemaMT constDict lemmas prog)
+        mayMonadifyRes <- monadifyProofStd (theoremSchema $ TheoremSchema constDict lemmas tm proof)
+        idx <- maybe (error "No theorem returned by monadifyProofStd on theorem schema. This shouldn't happen") (return . snd) mayMonadifyRes
+        return (tm, idx, extra)
+
+
+runTmSilentM :: HelperConstraints m s tType o t sE eL r1
+                 =>   TheoremAlgSchema tType r1 s o x ->
+                               ProofGenTStd tType r1 s o m (s, [Int], x)
+-- runTmSilentM f (TheoremSchemaMT constDict lemmas prog) =  do
+runTmSilentM (TheoremSchemaMT constDict lemmas prog) =  do
+        state <- getProofState
+        context <- ask
+        let eitherResult = checkTheoremMOpen 
+                     (Just (state,context)) 
+                     (TheoremSchemaMT constDict lemmas prog)
+        (tm, proof, extra, newSteps) <- either throwM return eitherResult
+        mayMonadifyRes <- monadifyProofStd (theoremAlgSchema $ TheoremSchemaMT constDict lemmas newProg)
+        idx <- maybe (error "No theorem returned by monadifyProofStd on theorem schema. This shouldn't happen") (return . snd) mayMonadifyRes
+        return (tm, idx, extra)
+    where
+        newProg = do
+             prog
+             return ()
+
+-- | Applies Universal Instantiation (UI) multiple times to a given proposition.
+-- | Returns the final instantiated proposition and its proof index.
+-- | - Case 0: No instantiation terms -> re-proves the initial proposition.
+-- | - Case 1: One instantiation term -> applies PREDL.uiM directly.
+-- | - Case >1: Multiple terms -> creates a sub-argument for the sequen
+multiUIM ::  HelperConstraints m s tType o t sE eL r1 =>
+    s ->      -- initialProposition: The proposition to start with.
+    [t] ->    -- instantiationTerms: List of terms to instantiate with, in order.
+    ProofGenTStd tType r1 s o m (s,[Int])
+multiUIM initialProposition instantiationTerms =
+    case instantiationTerms of
+        [] ->
+            -- Case 0: No terms to instantiate with.
+            -- Re-prove the initial proposition to ensure it's the active "last proven statement"
+            -- and to get its index in the current context.
+            repM initialProposition
+
+        [singleTerm] ->
+            -- Case 1: Exactly one term to instantiate with.
+            -- Apply PREDL.uiM directly. No need for a sub-argument wrapper.
+            uiM singleTerm initialProposition
+
+        _ -> -- More than one term (list has at least two elements here)
+            -- Case 2: Multiple instantiation terms.
+            -- Create a sub-argument whose internal proof is the sequence of UI steps.
+            do
+                (result_prop, idx, extra_data) <- runProofBySubArgM (
+                    -- Use foldM to iteratively apply PREDL.uiM.
+                    -- The accumulator for foldM is (current_proposition_term, its_index).
+                    foldM
+                        (\(currentProp_term, _currentProp_idx) term_to_instantiate ->
+                            -- PREDL.uiM applies UI, proves the new proposition, adds it to proof steps,
+                            -- updates the Last s writer state, and returns (new_proposition_term, new_index).
+                            -- This (new_prop, new_idx) becomes the new accumulator.
+                            uiM term_to_instantiate currentProp_term
+                        )
+                        (initialProposition, []) -- Start fold with initialProposition and a dummy index.
+                        instantiationTerms
+                    -- The result of this foldM is a monadic action of type m (PropDeBr, [Int]).
+                    -- This is the 'prog' for runProofBySubArgM.
+                    -- Its 'Last s' writer state (set by the last PREDL.uiM) will be used
+                    -- by runProofBySubArgM as the 'consequent' of the sub-argument.
+                    )
+                return (result_prop, idx)

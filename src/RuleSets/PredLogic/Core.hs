@@ -3,7 +3,7 @@ module RuleSets.PredLogic.Core
     LogicError(..), LogicRule(..), 
     runProofAtomic, 
     LogicRuleClass(..), SubproofRule(..), checkTheoremM, establishTmSilentM, expandTheoremM,
-    runTheoremM, runTmSilentM,  SubproofMException(..),
+    SubproofMException(..),
     SubproofError(..),
     ProofByUGSchema(..),
     LogicSent(..), 
@@ -12,7 +12,8 @@ module RuleSets.PredLogic.Core
     TheoremSchema(..),
     ChkTheoremError(..),
     establishTheorem,
-    runProofByUG
+    runProofByUG,
+    checkTheoremMOpen
 ) where
 
 
@@ -813,61 +814,10 @@ runProofByUG (ProofByUGSchema generalization subproof) context state =
 
 
 
-
-
 class SubproofRule r s o tType | r->o, r -> tType where
    theoremSchema :: TheoremSchema s r o tType -> r
    theoremAlgSchema :: TheoremAlgSchema tType r s o () -> r
    proofByUG :: s -> r -> r
-
-
-
-
-runTheoremM :: (Monoid r1, ProofStd s eL1 r1 o tType, Monad m,
-                      MonadThrow m, Show tType, Typeable tType,
-                      Show o, Typeable o, Show s, Typeable s,
-                      Show eL1, Typeable eL1, Ord o, TypedSent o tType sE s, Show sE, Typeable sE,
-                      StdPrfPrintMonad s o tType m, SubproofRule r1 s o tType)
-                 =>   TheoremSchemaMT tType r1 s o m x ->
-                               ProofGenTStd tType r1 s o m (s, [Int], x)
-runTheoremM (TheoremSchemaMT constDict lemmas prog) =  do
-        state <- getProofState
-        context <- ask
-        (tm, proof, extra, newSteps) <- lift $ checkTheoremMOpen (Just (state,context)) (TheoremSchemaMT constDict lemmas prog)
-        mayMonadifyRes <- monadifyProofStd (theoremSchema $ TheoremSchema constDict lemmas tm proof)
-        idx <- maybe (error "No theorem returned by monadifyProofStd on theorem schema. This shouldn't happen") (return . snd) mayMonadifyRes
-        return (tm, idx, extra)
-
-
-runTmSilentM :: (Monoid r1, ProofStd s eL1 r1 o tType, Monad m,
-                      MonadThrow m, Show tType, Typeable tType,
-                      Show o, Typeable o, Show s, Typeable s,
-                      Show eL1, Typeable eL1, Ord o, TypedSent o tType sE s, Show sE, Typeable sE,
-                      StdPrfPrintMonad s o tType m, StdPrfPrintMonad s o tType (Either SomeException),
-                      SubproofRule r1 s o tType)
-                 =>   TheoremAlgSchema tType r1 s o x ->
-                               ProofGenTStd tType r1 s o m (s, [Int], x)
--- runTmSilentM f (TheoremSchemaMT constDict lemmas prog) =  do
-runTmSilentM (TheoremSchemaMT constDict lemmas prog) =  do
-        state <- getProofState
-        context <- ask
-        let eitherResult = checkTheoremMOpen 
-                     (Just (state,context)) 
-                     (TheoremSchemaMT constDict lemmas prog)
-        (tm, proof, extra, newSteps) <- either throwM return eitherResult
-        mayMonadifyRes <- monadifyProofStd (theoremAlgSchema $ TheoremSchemaMT constDict lemmas newProg)
-        idx <- maybe (error "No theorem returned by monadifyProofStd on theorem schema. This shouldn't happen") (return . snd) mayMonadifyRes
-        return (tm, idx, extra)
-    where
-        newProg = do
-             prog
-             return ()
-
-
-
-
-
-
 
 
 
@@ -885,3 +835,7 @@ constDictTest envDict = Data.Map.foldrWithKey f Nothing
                                                                Nothing -- we good
                                               Nothing -> Just (k,Nothing)
          f k aVal (Just x) = Just x
+
+
+
+ 
