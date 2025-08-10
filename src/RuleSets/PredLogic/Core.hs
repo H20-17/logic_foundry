@@ -14,7 +14,8 @@ module RuleSets.PredLogic.Core
     ChkTheoremError(..),
     establishTheorem,
     runProofByUG,
-    checkTheoremMOpen
+    checkTheoremMOpen,
+    HelperConstraints(..)
 ) where
 
 
@@ -51,7 +52,8 @@ import RuleSets.BaseLogic.Core hiding
    SubproofError(..),
    LogicRule(..),
    LogicError(..),
-   runProofAtomic)
+   runProofAtomic,
+   HelperConstraints)
 import qualified RuleSets.BaseLogic.Core as REM
 
 import RuleSets.PropLogic.Core hiding 
@@ -64,7 +66,7 @@ import RuleSets.PropLogic.Core hiding
    runProofAtomic,
    LogicSent,
    SubproofMException(..),
-   MetaRuleError(..))
+   HelperConstraints(..))
 import qualified RuleSets.PropLogic.Core as PL
 import qualified RuleSets.BaseLogic.Core as BASE
 import RuleSets.BaseLogic.Helpers
@@ -844,4 +846,12 @@ constDictTest envDict = Data.Map.foldrWithKey f Nothing
 
 
 
- 
+type HelperConstraints m s tType o t sE eL r = ( 
+              PL.HelperConstraints r s o tType sE eL m
+            , LogicSent s t tType o
+            , LogicRuleClass r s t tType sE o
+            , SubproofRule r s o tType
+            , TypeableTerm t o tType sE
+            , LogicTerm t
+
+            )

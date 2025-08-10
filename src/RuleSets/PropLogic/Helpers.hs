@@ -59,21 +59,15 @@ import RuleSets.BaseLogic.Core hiding
    SubproofError,
    LogicRule(..),
    LogicError(..),
-   runProofAtomic)
+   runProofAtomic,
+   HelperConstraints(..))
 import qualified RuleSets.BaseLogic.Core as REM
 import RuleSets.BaseLogic.Helpers
 import RuleSets.PropLogic.Core
 
 
 
-type HelperConstraints r1 s o tType sE eL1 m = (Monoid r1, ProofStd s eL1 r1 o tType, Monad m,
-                       LogicSent s tType, MonadThrow m,
-                       Show s, Typeable s,
-                       Show eL1, Typeable eL1, TypedSent o tType sE s, Show sE, Typeable sE, 
-                       StdPrfPrintMonad s o tType m, SubproofRule r1 s, LogicRuleClass r1 s tType sE o, ShowableSent s,
-                       REM.LogicRuleClass r1 s o tType sE, StdPrfPrintMonad
-                       s o tType (Either SomeException), Show o, Show tType, Typeable o, Typeable tType,
-                       REM.SubproofRule r1 s   )
+
 
 
 

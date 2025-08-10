@@ -5,7 +5,8 @@ module RuleSets.ZFC.Core
     runProofAtomic, 
     LogicRuleClass(..),
     LogicSent(..),
-    LogicTerm(..)
+    LogicTerm(..),
+    HelperConstraints(..)
 ) where
 
 
@@ -42,7 +43,8 @@ import RuleSets.BaseLogic.Core hiding
    SubproofError(..),
    LogicRule(..),
    LogicError(..),
-   runProofAtomic)
+   runProofAtomic,
+   HelperConstraints(..))
 import qualified RuleSets.BaseLogic.Core as REM
 
 import RuleSets.PropLogic.Core hiding 
@@ -55,7 +57,8 @@ import RuleSets.PropLogic.Core hiding
    runProofAtomic,
    LogicSent,
    SubproofMException(..),
-   MetaRuleError(..))
+   MetaRuleError(..),
+   HelperConstraints(..))
 import qualified RuleSets.PropLogic.Core as PL
 
 import RuleSets.PredLogic.Core hiding 
@@ -69,7 +72,8 @@ import RuleSets.PredLogic.Core hiding
    LogicSent,
    SubproofMException(..),
    MetaRuleError(..),
-   LogicTerm(..))
+   LogicTerm(..),
+   HelperConstraints(..))
 import qualified RuleSets.PredLogic.Core as PREDL
 import GHC.Num (integerMul)
 
@@ -808,6 +812,9 @@ instance RuleInject [PREDL.LogicRule s sE Text t ()] [LogicRule s sE t] where
 
 
 
-
-
+type HelperConstraints sE s eL o tType m r t =
+    ( 
+      PREDL.HelperConstraints m s tType o t sE eL r
+    , LogicRuleClass r s sE t
+    )
 

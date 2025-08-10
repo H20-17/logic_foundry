@@ -2,7 +2,8 @@ module RuleSets.PropLogic.Core
 (
     LogicError, LogicRule(..), runProofAtomic,
     LogicRuleClass(..), SubproofRule(..),
-    ProofByAsmSchema(..), SubproofError, runProofByAsm, LogicSent(..)
+    ProofByAsmSchema(..), SubproofError, runProofByAsm, LogicSent(..),
+    HelperConstraints(..)
 ) where
 
 import Data.Monoid ( Last(..) )
@@ -52,7 +53,8 @@ import RuleSets.BaseLogic.Core hiding
    SubproofError,
    LogicRule(..),
    LogicError(..),
-   runProofAtomic)
+   runProofAtomic,
+   HelperConstraints)
 import qualified RuleSets.BaseLogic.Core as REM
 import RuleSets.BaseLogic.Helpers
 
@@ -635,3 +637,11 @@ infixr 3 .&&.
 infixr 2 .||.
 infixr 0 .->.
 infixr 0 .<->.
+
+
+type HelperConstraints r1 s o tType sE eL1 m = (
+                      REM.HelperConstraints r1 s o tType sE eL1 m
+                    , LogicSent s tType
+                    , SubproofRule r1 s
+                    , LogicRuleClass r1 s tType sE o
+          )

@@ -28,12 +28,6 @@ import Data.Map (Map,lookup)
 import Internal.StdPattern
 import Kernel
 
-type HelperConstraints r s o tType sE eL m = (Monad m, Ord o, Show sE, Typeable sE, Show s, Typeable s,
-       MonadThrow m, Show o, Typeable o, Show tType, Typeable tType, TypedSent o tType sE s,
-       Monoid (PrfStdState s o tType), StdPrfPrintMonad s o tType m,
-       StdPrfPrintMonad s o tType (Either SomeException), Monoid (PrfStdContext tType), LogicRuleClass r s o tType sE, ProofStd s eL r o tType,
-       Monoid r, Show eL, Typeable eL, SubproofRule r s)
-
 
 
 

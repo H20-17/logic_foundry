@@ -45,7 +45,8 @@ import RuleSets.BaseLogic.Core hiding
    SubproofError(..),
    LogicRule(..),
    LogicError(..),
-   runProofAtomic)
+   runProofAtomic,
+   HelperConstraints(..))
 import qualified RuleSets.BaseLogic.Core as REM
 
 import RuleSets.PropLogic.Core hiding 
@@ -58,7 +59,8 @@ import RuleSets.PropLogic.Core hiding
    runProofAtomic,
    LogicSent,
    SubproofMException(..),
-   MetaRuleError(..))
+   MetaRuleError(..),
+   HelperConstraints())
 import qualified RuleSets.PropLogic.Core as PL
 import qualified RuleSets.BaseLogic.Core as BASE
 import RuleSets.BaseLogic.Helpers
@@ -68,14 +70,7 @@ import RuleSets.PredLogic.Core
 
 
 
-type HelperConstraints m s tType o t sE eL r = ( Monad m, LogicSent s t tType o, TypeableTerm t o tType sE, Show s,
-                Typeable s, Show sE, Typeable sE, MonadThrow m, Show o, Typeable o, Show t, Typeable t,
-                Show tType, Typeable tType, TypedSent o tType sE s, Monoid (PrfStdState s o tType),
-                StdPrfPrintMonad s o tType m,
-                StdPrfPrintMonad s o tType (Either SomeException), Monoid (PrfStdContext tType),
-                LogicRuleClass r s t tType sE o, ProofStd s eL r o tType, Show eL, Typeable eL, Monoid r, BASE.LogicRuleClass r s o tType sE,
-                BASE.SubproofRule r s, PL.SubproofRule r s, PL.LogicRuleClass r s tType sE o, ShowableSent s,
-                SubproofRule r s o tType, LogicRuleClass r s t tType sE o)
+
 
 
 standardRuleM :: HelperConstraints m s tType o t sE eL r

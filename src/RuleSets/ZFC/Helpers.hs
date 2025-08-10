@@ -76,7 +76,8 @@ import RuleSets.BaseLogic.Core hiding
    SubproofError(..),
    LogicRule(..),
    LogicError(..),
-   runProofAtomic)
+   runProofAtomic,
+   HelperConstraints(..))
 import qualified RuleSets.BaseLogic.Core as REM
 
 import RuleSets.PropLogic.Core hiding 
@@ -89,7 +90,8 @@ import RuleSets.PropLogic.Core hiding
    runProofAtomic,
    LogicSent,
    SubproofMException(..),
-   MetaRuleError(..))
+   MetaRuleError(..),
+   HelperConstraints(..))
 import qualified RuleSets.PropLogic.Core as PL
 
 import RuleSets.PredLogic.Core hiding 
@@ -102,7 +104,8 @@ import RuleSets.PredLogic.Core hiding
    runProofAtomic,
    LogicSent,
    SubproofMException(..),
-   MetaRuleError(..))
+   MetaRuleError(..),
+   HelperConstraints(..))
 import qualified RuleSets.PredLogic.Core as PREDL
 import GHC.Num (integerMul)
 import RuleSets.ZFC.Core
@@ -113,34 +116,7 @@ import RuleSets.PredLogic.Helpers hiding
 import RuleSets.PropLogic.Helpers hiding
      (MetaRuleError(..))
 
-type HelperConstraints sE s eL o tType m r t =
-    ( Monoid r
-    , Monad m
-    , Show sE, Typeable sE
-    , Show s, Typeable s
-    , Show eL, Typeable eL
-    , MonadThrow m
-    , Show o, Typeable o
-    , Show tType, Typeable tType
-    , TypedSent o tType sE s
-    , Monoid (PrfStdState s o tType)
-    , ProofStd s eL r o tType
-    , StdPrfPrintMonad s o tType m
-    , LogicRuleClass r s sE t
-    , PREDL.LogicRuleClass r s t tType sE o
-    , PREDL.SubproofRule r s o tType
-    , ShowableSent s
-    , PL.LogicRuleClass r s tType sE o
-    , PL.SubproofRule r s
-    , Typeable t
-    , Show t
-    , PREDL.LogicSent s t tType o
-    , TypeableTerm t o tType sE
-    , REM.LogicRuleClass r s o tType sE
-    , StdPrfPrintMonad s o tType (Either SomeException)
-    , REM.SubproofRule r s
-    , PREDL.LogicTerm t
-    )
+
 
 
 standardRuleM :: HelperConstraints sE s eL o tType m r t
