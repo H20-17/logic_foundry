@@ -39,6 +39,7 @@ module RuleSets.ZFC.Helpers
     natWellOrderingAxiomM,
     builderInstantiateM,
     powerSetInstantiateM,
+    builderPropsFree,
     MetaRuleError(..)
 ) where
 
@@ -119,8 +120,8 @@ import RuleSets.PropLogic.Helpers hiding
 
 
 
-standardRuleM :: HelperConstraints sE s eL o tType m r t
-       => r -> ProofGenTStd tType r s o m (s,[Int])
+standardRuleM :: HelperConstraints sE s eL m r t
+       => r -> ProofGenTStd () r s Text m (s,[Int])
 standardRuleM rule = do
     -- function is unsafe and used for rules that generate one or more sentence.
     -- probably should not be externally facing.
@@ -129,25 +130,25 @@ standardRuleM rule = do
 
 
 
-specificationM :: HelperConstraints sE s eL o tType m r t
-       => [Int] -> Int -> t -> s -> ProofGenTStd tType r s o m (s,[Int])
+specificationM :: HelperConstraints sE s eL m r t
+       => [Int] -> Int -> t -> s -> ProofGenTStd () r s Text m (s,[Int])
 specificationM outerIdxs idx t s = standardRuleM (specification outerIdxs idx t s)
 
 
 
-replacementM :: HelperConstraints sE s eL o tType m r t
-       => [Int] -> Int -> Int -> t -> s -> ProofGenTStd tType r s o m (s,[Int])
+replacementM :: HelperConstraints sE s eL m r t
+       => [Int] -> Int -> Int -> t -> s -> ProofGenTStd () r s Text m (s,[Int])
 replacementM outerIdxs idx1 idx2 t s = standardRuleM (replacement outerIdxs idx1 idx2 t s)
 
 
-integerMembershipM, integerNegationM :: HelperConstraints sE s eL o tType m r t
-       => Int -> ProofGenTStd tType r s o m (s,[Int])
+integerMembershipM, integerNegationM :: HelperConstraints sE s eL m r t
+       => Int -> ProofGenTStd () r s Text m (s,[Int])
 integerMembershipM i = standardRuleM (integerMembership i)
 integerNegationM i = standardRuleM (integerNegation i)
 
 integerAdditionM, integerMultiplicationM, integerCompareM, integerInequalityM
- :: HelperConstraints sE s eL o tType m r t
-       => Int -> Int -> ProofGenTStd tType r s o m (s,[Int])
+ :: HelperConstraints sE s eL m r t
+       => Int -> Int -> ProofGenTStd () r s Text m (s,[Int])
 integerAdditionM i1 i2 = standardRuleM (integerAddition i1 i2)
 integerMultiplicationM i1 i2 = standardRuleM (integerMultiplication i1 i2)
 integerCompareM i1 i2 = standardRuleM (integerCompare i1 i2)
@@ -162,8 +163,8 @@ integersAreUrelementsM, emptySetAxiomM, extensionalityAxiomM,emptySetNotIntM,reg
              intMulAssociativityAxiomM, intMulCommutativityAxiomM, intMulIdentityAxiomM,
              intDistributivityAxiomM,intOrderAddCompatibilityAxiomM, intOrderMulCompatibilityAxiomM,
              natWellOrderingAxiomM
-       :: HelperConstraints sE s eL o tType m r t
-       => ProofGenTStd tType r s o m (s,[Int])
+       :: HelperConstraints sE s eL m r t
+       => ProofGenTStd () r s Text m (s,[Int])
 integersAreUrelementsM = standardRuleM integersAreUrelements
 emptySetAxiomM = standardRuleM emptySet
 extensionalityAxiomM = standardRuleM extensionality
@@ -213,13 +214,13 @@ natWellOrderingAxiomM = standardRuleM natWellOrdering
 -- | @return A tuple containing the proven defining property of the new set, its proof index,
 -- |         and and a tuple of type (ObjDeBr, ObjDeBr, PropDeBr) which is the newly built set,
 -- |         the instantiated source set, and the instantiated p_template.
-builderInstantiateM :: HelperConstraints sE s eL o tType m r t =>
+builderInstantiateM :: HelperConstraints sE s eL m r t =>
     [t] ->    -- instantiationTerms
     [Int] ->        -- outerTemplateIdxs
     Int ->          -- spec_var_X_idx
     t ->      -- source_set_template
     s ->     -- p_template
-    ProofGenTStd tType r s o m (s,[Int], (t,t,s))
+    ProofGenTStd () r s Text m (s,[Int], (t,t,s))
 builderInstantiateM instantiationTerms outerTemplateIdxs spec_var_X_idx source_set_template p_template =
     runProofBySubArgM $ do
         -- Step 1: Get the closed, universally quantified Axiom of Specification.
@@ -256,9 +257,9 @@ builderInstantiateM instantiationTerms outerTemplateIdxs spec_var_X_idx source_s
 -- | 5. Uses Existential Instantiation (`eiHilbertM`) on this proposition. This introduces
 -- |    the Hilbert term for the power set (`PowerSet(x)`) and proves its defining property:
 -- |    `isSet(PowerSet(x)) ∧ ∀Y(...)`.
-powerSetInstantiateM :: HelperConstraints sE s eL o tType m r t =>
+powerSetInstantiateM :: HelperConstraints sE s eL m r t =>
     t -> -- ^ The object 'x' for which to prove its power set is a set.
-    ProofGenTStd tType r s o m (s, [Int], t)
+    ProofGenTStd () r s Text m (s, [Int], t)
 powerSetInstantiateM x = do
     runProofBySubArgM $ do
         -- Step 1: Get the Axiom of Power Set from the ZFC rule set.
@@ -277,6 +278,69 @@ powerSetInstantiateM x = do
         -- `prop_of_powSet` is: isSet(powerSet x) ∧ ∀Y(...)
         (prop_of_powSet, _, powSet_obj) <- eiHilbertM exists_P
         return powSet_obj
+
+
+
+
+-- | Gives us properties of a builder set, as well as the builder set object,
+-- | after builderInstantiateM has been called
+-- | Reproduces some of the work of builderInstantiateM but allows
+-- | us to pass less information to functions as a consequence.
+builderPropsFree :: SentConstraints s t  =>
+    Int ->      -- idx: The 'x' in {x ∈ S | P(x)}
+    t ->  -- t: The instantiated set, with all of the original outer context
+                --    variables instantiated
+    s -> -- p_template: the original p_template with all outer context variables
+                -- instantiated with free variables
+    (s, t) -- the properties of the builderset and the builder set object
+builderPropsFree idx t p_template =
+        let
+            new_idx_base = idx + 1
+            internalBIdx = new_idx_base -- Placeholder index for the specified set 'B' (which will be XInternal internalBIdx)
+            
+            -- The core relationship: x ∈ B ↔ (P(x) ∧ x ∈ t)
+            -- X idx represents 'x' (the element variable)
+            -- XInternal internalBIdx represents 'B' (the set being specified)
+            -- XInternal internalTIdx represents 't' (the source set)
+            -- p_template represents P(x)
+            -- Observe that t won't have any template variables in it so there is
+            -- no risk of capture at this time.
+            core_prop_template = (x idx `memberOf` x internalBIdx)
+                             .<->.
+                             (p_template .&&. (x idx `memberOf` t))
+
+            -- Universally quantify over x: ∀x (x ∈ B ↔ (P(x) ∧ x ∈ t))
+
+            quantified_over_x = aX idx core_prop_template
+
+            -- Condition that B must be a set: isSet(B)
+            -- isSet is defined in Shorthands as Neg (B `In` IntSet)
+
+            condition_B_isSet = isSet (x internalBIdx) -- Using the isSet shorthand
+
+            -- Combine the conditions for B: isSet(B) ∧ ∀x(...)
+
+            full_condition_for_B = 
+                      (condition_B_isSet .&&. quantified_over_x)
+
+
+            -- hilbertObj
+
+            hilbert_obj = hX internalBIdx full_condition_for_B
+
+            -- substitute the hilbert obj into the template
+
+            free_props = sentSubX internalBIdx hilbert_obj
+                    full_condition_for_B
+            
+
+        in
+            (free_props, hilbert_obj)
+
+
+
+
+
 
 data MetaRuleError s where
    MetaRuleErrNotClosed :: s -> MetaRuleError s

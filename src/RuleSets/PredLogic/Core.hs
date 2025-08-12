@@ -771,15 +771,15 @@ class (PL.LogicSent s tType) => LogicSent s t tType o | s ->tType, s ->t, s->t, 
     createForall ::s -> tType -> Int -> s
     sentSubX :: Int -> t -> s -> s
     sentSubXs :: [(Int, t)] -> s -> s
+    aX :: Int -> s -> s
+    eX :: Int -> s -> s
+    hX :: Int -> s -> t
+    multiAx :: [Int] -> s -> s
 
 class LogicTerm t where
     termSubX :: Int -> t -> t -> t
     termSubXs :: [(Int, t)] -> t -> t
-
-
- 
-
-
+    x :: Int -> t
 
 
 

@@ -75,7 +75,6 @@ import qualified RuleSets.PropLogic.Core as PL
 import qualified RuleSets.PredLogic.Core as PREDL
 import qualified RuleSets.ZFC.Core as ZFC
 import RuleSets.PropLogic.Core (LogicSent(parseIff))
-import RuleSets.ZFC.Core
 import Control.Monad.State
 import Control.Monad.RWS
     ( MonadReader(ask), runRWS, MonadWriter(tell), RWS )

@@ -10,8 +10,8 @@ module Langs.BasicUntyped (
     ZFCRuleDeBr,
     showPropDeBrStepsBase,
     showPropDeBrStepsBaseM,
-    eX, hX, aX,
-    multiAx,
+    -- eX, hX, aX,
+    -- multiAx,
     showProp,
     showObj,
     showPropM,
@@ -35,7 +35,7 @@ module Langs.BasicUntyped (
     (./\.),
     bigUnion,
     bigIntersection,
-    roster,
+    -- roster,
     (.\.),
     buildPowerSet,
     --emptySet,
@@ -55,7 +55,7 @@ module Langs.BasicUntyped (
     parseImplication,
     parsePair,
     parseIn,
-    isSet,
+    -- isSet,
     parseBiconditional,
     isRelationOn
 ) where

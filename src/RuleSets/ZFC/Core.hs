@@ -6,7 +6,8 @@ module RuleSets.ZFC.Core
     LogicRuleClass(..),
     LogicSent(..),
     LogicTerm(..),
-    HelperConstraints(..)
+    HelperConstraints(..),
+    SentConstraints(..)
 ) where
 
 
@@ -92,6 +93,7 @@ class LogicTerm t where
    (.*.) :: t -> t -> t
    intNeg :: t -> t
    intSet :: t
+   roster :: [t] -> t
 
 
 class (PREDL.LogicSent s t () Text) => LogicSent s t | s ->t where
@@ -135,6 +137,9 @@ class (PREDL.LogicSent s t () Text) => LogicSent s t | s ->t where
 
    -- Well ordering axiom
    natWellOrderingAxiom :: s
+
+   isSet :: t -> s
+
 
    
 
@@ -812,9 +817,12 @@ instance RuleInject [PREDL.LogicRule s sE Text t ()] [LogicRule s sE t] where
 
 
 
-type HelperConstraints sE s eL o tType m r t =
+type HelperConstraints sE s eL m r t =
     ( 
-      PREDL.HelperConstraints m s tType o t sE eL r
-    , LogicRuleClass r s sE t
+      PREDL.HelperConstraints m s () Text t sE eL r
+    , LogicRuleClass r s sE t,
+    LogicSent s t, LogicTerm t
     )
 
+type SentConstraints s t  = (PREDL.LogicSent s t () Text, LogicSent s t, RuleSets.ZFC.Core.LogicTerm t,
+                    PREDL.LogicTerm t)

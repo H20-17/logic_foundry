@@ -160,12 +160,23 @@ instance PREDL.LogicSent PropDeBr ObjDeBr () Text where
     sentSubX = propDeBrSubX
     sentSubXs :: [(Int, ObjDeBr)] -> PropDeBr -> PropDeBr
     sentSubXs = propDeBrSubXs
- 
+    aX :: Int -> PropDeBr -> PropDeBr
+    aX = aX
+    eX :: Int -> PropDeBr -> PropDeBr
+    eX = eX
+    hX :: Int -> PropDeBr -> ObjDeBr
+    hX = hX
+    multiAx :: [Int] -> PropDeBr -> PropDeBr
+    multiAx = multiAx
+
 instance PREDL.LogicTerm ObjDeBr where
     termSubX :: Int -> ObjDeBr -> ObjDeBr -> ObjDeBr
     termSubX = objDeBrSubX
     termSubXs :: [(Int, ObjDeBr)] -> ObjDeBr -> ObjDeBr
     termSubXs = objDeBrSubXs
+    x :: Int -> ObjDeBr
+    x = X     
+
 
 objDeBrApplyUGWorker :: ObjDeBr -> Int -> Int -> ObjDeBr
 objDeBrApplyUGWorker obj freevarIdx boundvarIdx =
@@ -217,6 +228,8 @@ instance ZFC.LogicTerm ObjDeBr where
     intNeg = Intneg
     intSet :: ObjDeBr
     intSet = IntSet
+    roster :: [ObjDeBr] -> ObjDeBr
+    roster = roster
 
 
 instance ZFC.LogicSent PropDeBr ObjDeBr where
@@ -754,5 +767,8 @@ instance ZFC.LogicSent PropDeBr ObjDeBr where
 
         in
             aX idx_S ( antecedent_S :->: consequent_exists_x )
+
+    isSet :: ObjDeBr -> PropDeBr
+    isSet = isSet
 
 
