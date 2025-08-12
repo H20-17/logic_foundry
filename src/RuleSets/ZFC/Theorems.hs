@@ -3,7 +3,9 @@
 module RuleSets.ZFC.Theorems
 (
     unionEquivTheorem,
-    binaryUnionExistsTheorem
+    binaryUnionExistsTheorem,
+    binaryUnionExistsSchema,
+    binaryUnionInstantiateM
 ) where
 
 
@@ -223,6 +225,38 @@ binaryUnionExistsSchema ::  HelperConstraints sE s eL m r t =>
      TheoremSchemaMT () r s Text m ()
 binaryUnionExistsSchema =       
     TheoremSchemaMT [] [unionEquivTheorem] proveBinaryUnionExistsM 
+
+
+
+-- | Helper to instantiate the binary union theorem and return the union set.
+-- | For this helper to work, the theorem defined by 'binaryUnionExistsTheorem' must be proven
+-- | beforehand, which is likely done in the global context.
+binaryUnionInstantiateM ::  HelperConstraints sE s eL m r t =>
+    t -> t -> ProofGenTStd () r s Text m (s, [Int], t)
+binaryUnionInstantiateM setA setB = do
+    runProofBySubArgM $ do
+        -- This helper relies on isSet(setA) and isSet(setB) being proven in the outer context.
+
+        -- Step 1: Instantiate the 'binaryUnionExistsTheorem' theorem with the specific sets A and B.
+        (instantiated_thm, _) <- multiUIM binaryUnionExistsTheorem [setA, setB]
+        -- The result is the proven proposition: (isSet A ∧ isSet B) → ∃S(...)
+
+        -- Step 3: Prove the antecedent of the instantiated theorem.
+        -- We assume isSet A and isSet B are proven in the parent context.
+        (isSet_A_proven, _) <- repM (isSet setA)
+        (isSet_B_proven, _) <- repM (isSet setB)
+        (antecedent_proven, _) <- adjM isSet_A_proven isSet_B_proven
+
+        -- Step 4: Use Modus Ponens to derive the existential statement.
+        (exists_S_proven, _) <- mpM instantiated_thm
+
+        -- Step 5: Use Existential Instantiation (eiHilbertM) to get the property of the union set.
+        -- The Hilbert term created here, `unionObj`, is definitionally A U B.
+        (prop_of_union, _, unionObj) <- eiHilbertM exists_S_proven
+        -- prop_of_union is: isSet(unionObj) ∧ ∀x(x∈unionObj ↔ (x∈A ∨ x∈B))
+        return unionObj
+
+
 
 
 --data MetaRuleError s where
