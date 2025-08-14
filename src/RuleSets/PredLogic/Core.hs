@@ -776,6 +776,7 @@ class (PL.LogicSent s tType) => LogicSent s t tType o | s ->tType, s ->t, s->t, 
     hX :: Int -> s -> t
     multiAx :: [Int] -> s -> s
     (./=.) :: t -> t -> s
+    eXBang :: Int -> s -> s
 
 infix 4 .==.
 infix 4 ./=.

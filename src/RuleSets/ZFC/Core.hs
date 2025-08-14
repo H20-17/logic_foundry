@@ -123,7 +123,7 @@ class (PREDL.LogicSent s t () Text) => LogicSent s t | s ->t where
    emptySetNotIntAxiom :: s
    regularityAxiom :: s
    unionAxiom :: s
-   powerSetAxiom :: s
+   powerSetAxStatement :: s
    pairingAxiom :: s
    axiomOfChoice :: s
 
@@ -158,6 +158,7 @@ class (PREDL.LogicSent s t () Text) => LogicSent s t | s ->t where
    subset :: t -> t -> s
    strictSubset :: t -> t -> s
    notSubset :: t -> t -> s
+
 
 
 infix 4 `memberOf`
@@ -357,7 +358,7 @@ class LogicRuleClass r s sE t | r->s, r->sE, r->t where
      emptySetNotInt       :: r
      regularity :: r
      union :: r
-     powerSet :: r
+     powerSetAxiom :: r
      pairing :: r
      choice :: r
      intOrderAntiSymmetry :: r
@@ -409,8 +410,8 @@ instance LogicRuleClass [LogicRule s sE t] s sE t where
      regularity =  [RegularityAxiom]
      union :: [LogicRule s sE t]
      union = [UnionAxiom]
-     powerSet :: [LogicRule s sE t]
-     powerSet = [PowerSetAxiom]
+     powerSetAxiom :: [LogicRule s sE t]
+     powerSetAxiom = [PowerSetAxiom]
      pairing :: [LogicRule s sE t]
      pairing = [PairingAxiom]
      choice :: [LogicRule s sE t]
@@ -654,7 +655,7 @@ runProofAtomic rule context state  =
               let step = PrfStdStepStep axiomInstance "AXIOM_UNION" []
               return (Just axiomInstance, Nothing, step)
           PowerSetAxiom -> do
-              let axiomInstance = powerSetAxiom -- From LogicSent s t constraint
+              let axiomInstance = powerSetAxStatement -- From LogicSent s t constraint
               let step = PrfStdStepStep axiomInstance "AXIOM_POWER_SET" []
               return (Just axiomInstance, Nothing, step)
           PairingAxiom -> do

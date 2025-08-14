@@ -170,6 +170,8 @@ instance PREDL.LogicSent PropDeBr ObjDeBr () Text where
     multiAx = multiAx
     (./=.) :: ObjDeBr -> ObjDeBr -> PropDeBr
     (./=.) = (./=.)
+    eXBang :: Int -> PropDeBr -> PropDeBr
+    eXBang = eXBang
 
 instance PREDL.LogicTerm ObjDeBr where
     termSubX :: Int -> ObjDeBr -> ObjDeBr -> ObjDeBr
@@ -483,8 +485,8 @@ instance ZFC.LogicSent PropDeBr ObjDeBr where
 
     -- Axiom of Power Set:
     -- Forall X (isSet(X) -> Exists P (isSet(P) /\ Forall Y (Y In P <-> Y subset X)))
-    powerSetAxiom :: PropDeBr
-    powerSetAxiom =
+    powerSetAxStatement :: PropDeBr
+    powerSetAxStatement =
         aX 0 ( -- Forall X (X 0 is X)
                (isSet (X 0)) -- isSet(X)
             :->:        -- ->

@@ -1,7 +1,6 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE DoAndIfThenElse #-}
 module Langs.Internal.BasicUntyped.Shorthands (
-    eXBang,
     (./=.),
     builderX,
     nIn,

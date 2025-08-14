@@ -18,7 +18,7 @@ module Langs.BasicUntyped (
     showObj,
     showPropM,
     showObjM,
-    eXBang,
+    -- eXBang,
     -- (./=.),
     builderX,
     nIn,
