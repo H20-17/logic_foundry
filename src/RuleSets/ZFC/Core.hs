@@ -101,6 +101,7 @@ class LogicTerm t where
    crossProd :: t -> t -> t
    (.@.) :: t -> t -> t
    (.:.) :: t -> t -> t
+   powerSet :: t -> t
 
 infixr 2 .\/.
 infixr 3 ./\.
@@ -158,6 +159,7 @@ class (PREDL.LogicSent s t () Text) => LogicSent s t | s ->t where
    subset :: t -> t -> s
    strictSubset :: t -> t -> s
    notSubset :: t -> t -> s
+
 
 
 

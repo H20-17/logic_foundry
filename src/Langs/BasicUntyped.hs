@@ -39,7 +39,7 @@ module Langs.BasicUntyped (
     bigIntersection,
     -- roster,
     -- (.\.),
-    buildPowerSet,
+    -- powerSet,
     --emptySet,
     (.<.),
     parseIntSet,

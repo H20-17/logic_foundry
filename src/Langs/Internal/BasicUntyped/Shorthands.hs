@@ -38,7 +38,7 @@ module Langs.Internal.BasicUntyped.Shorthands (
     parseBigIntersection,
     (.\.),
     parseSetDifference,
-    buildPowerSet,
+    powerSet,
     parsePowerSet,
     (.<.),
     parseLessThan,
@@ -1517,8 +1517,8 @@ parseSetDifference obj = do
 -- | Constructs the ObjDeBr term representing the power set of A, P(A).
 --   Uses the definition: P(A) = hX P (isSet(P) ∧ ∀x (x ∈ P ↔ x ⊆ A))
 --   Since x ⊆ A itself implies isSet(x), this is inherently handled.
-buildPowerSet :: ObjDeBr -> ObjDeBr
-buildPowerSet setA =
+powerSet :: ObjDeBr -> ObjDeBr
+powerSet setA =
     let
         -- Template indices
         setA_idx = 0 -- Placeholder for input setA (becomes XInternal in subset if used directly)
