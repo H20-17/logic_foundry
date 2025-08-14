@@ -5,7 +5,10 @@ module RuleSets.ZFC.Theorems
     unionEquivTheorem,
     binaryUnionExistsTheorem,
     binaryUnionExistsSchema,
-    binaryUnionInstantiateM
+    binaryUnionInstantiateM,
+    proveUnionIsSetM,
+    unionWithEmptySetSchema,
+    unionWithEmptySetTheorem
 ) where
 
 
@@ -82,7 +85,7 @@ import RuleSets.PropLogic.Helpers hiding
      (MetaRuleError(..))
 import RuleSets.ZFC.Helpers
 
-
+----begin binary union section------
 
 -- | This is the lemma
 -- | ∀A ∀B ( (isSet A ∧ isSet B) → ( (∃U (isSet U ∧ ∀x(x ∈ U ↔ ∃Y(Y ∈ {A,B} ∧ x ∈ Y)))) 
@@ -255,6 +258,162 @@ binaryUnionInstantiateM setA setB = do
         (prop_of_union, _, unionObj) <- eiHilbertM exists_S_proven
         -- prop_of_union is: isSet(unionObj) ∧ ∀x(x∈unionObj ↔ (x∈A ∨ x∈B))
         return unionObj
+
+
+
+-- | Helper to prove that if A and B are sets,
+-- | then their union (A ∪ B) is also a set.
+-- | This version takes advantage of the `binaryUnionInstantiateM` helper.
+-- |
+-- | Note: This helper requires that `isSet setA` and `isSet setB` have already been
+-- | proven in the current proof context.
+-- | It also relies on the theorem `binaryUnionExistsTheorem` being proven beforehand.
+proveUnionIsSetM :: HelperConstraints sE s eL m r t =>
+    t -> t -> ProofGenTStd () r s Text m (s, [Int])
+proveUnionIsSetM setA setB = do
+    (resultProp,idx,_) <- runProofBySubArgM $ do
+        (prop_of_union, _, unionObj) <- binaryUnionInstantiateM setA setB
+        (isSet_union_proven, _) <- simpLM prop_of_union
+        return ()
+    return (resultProp,idx)
+
+
+------end binary union section------------
+
+-----begin union with emptyset section
+
+
+-- | Constructs the PropDeBr term for the theorem stating that for any set x,
+-- | the union of x with the empty set is x itself.
+-- |
+-- | Theorem: ∀x (isSet x → (x ∪ ∅ = x))
+unionWithEmptySetTheorem :: SentConstraints s t => s
+unionWithEmptySetTheorem =
+    let
+        x_idx = 0
+        setX = x x_idx
+        
+        -- The equality: x U emptySet == x
+        equality = (setX .\/. emptySet) .==. setX
+        
+        -- The antecedent: isSet x
+        antecedent = isSet setX
+        
+        -- The implication
+        implication = antecedent .->. equality
+    in
+        -- Universally quantify over x
+        aX x_idx implication
+
+
+
+-- | Proves the theorem defined by 'unionWithEmptySetTheorem'.
+-- |
+-- | This proof relies on the Axiom of Extensionality and the
+-- | 'binaryUnionExists' theorem. To prove A = B, we must show:
+-- |   isSet(A) ∧ isSet(B) ∧ ∀y(y ∈ A ↔ y ∈ B)
+proveUnionWithEmptySetM :: HelperConstraints sE s eL m r t =>
+    ProofGenTStd () r s Text m ()
+proveUnionWithEmptySetM = do
+    -- Prove the theorem: ∀x (isSet x → x ∪ ∅ = x)
+    runProofByUGM () $ do
+        -- Inside UG, a free variable 'v' is introduced for 'x'.
+        v <- getTopFreeVar
+        
+        -- Prove the implication by assuming the antecedent.
+        runProofByAsmM (isSet v) $ do
+            -- Now, `isSet v` is a proven assumption.
+
+            -- Step 1: Define the objects we are working with.
+            let unionObj = v .\/. emptySet
+
+            -- Step 2: Prove the necessary `isSet` properties for Extensionality.
+            -- We already have `isSet v` by assumption.
+            -- We need to prove `isSet (v ∪ ∅)`.
+
+            -- (isSet_EmptySet_axiom, _) <- ZFC.emptySetAxiomM
+
+            (forall_not_in_empty, _) <- emptySetAxiomM
+
+            -- (isSet_EmptySet_proven, _) <- simpLM isSet_EmptySet_axiom
+            
+            (isSet_EmptySet_proven, _) <- emptySetNotIntM
+
+            -- proveUnionIsSetM requires isSet v and isSet ∅ to be proven.
+            (isSet_unionObj_proven, _) <- proveUnionIsSetM v emptySet
+
+            -- Step 3: Prove ∀y (y ∈ v ↔ y ∈ (v ∪ ∅))
+            (forall_bicond, _) <- runProofByUGM () $ do
+                y <- getTopFreeVar
+
+               -- Direction 1: y ∈ v → y ∈ (v ∪ ∅)
+                (dir1, _) <- runProofByAsmM (y `memberOf` v) $ do
+                    -- This is a simple Disjunction Introduction.
+                    disjIntroLM (y `memberOf` v) (y `memberOf` emptySet)
+
+                    -- Now, use the definition of union to get back to y ∈ (v ∪ ∅)
+                    (def_prop_union, _, _) <- binaryUnionInstantiateM v emptySet
+                    (forall_union_bicond, _) <- simpRM def_prop_union
+                    (inst_union_bicond, _) <- uiM y forall_union_bicond
+                    (imp_to_union, _) <- bicondElimRM inst_union_bicond
+                    
+                    -- Apply Modus Ponens to get the final conclusion of this subproof.
+                    mpM imp_to_union
+                    return ()
+
+                -- To prove the biconditional, we prove each direction.
+                -- Direction 2: y ∈ (v ∪ ∅) → y ∈ v
+                (dir2, _) <- runProofByAsmM (y `memberOf` unionObj) $ do
+                    -- Get the defining property of the union.
+                    (def_prop_union, _, _) <- binaryUnionInstantiateM v emptySet
+                    (forall_union_bicond, _) <- simpRM def_prop_union
+                    (inst_union_bicond, _) <- uiM y forall_union_bicond
+                    (imp_from_union, _) <- bicondElimLM inst_union_bicond
+                    -- We have now proven: y ∈ (v ∪ ∅) → (y ∈ v ∨ y ∈ ∅)
+                    (y_in_v_or_empty, _) <- mpM imp_from_union
+
+                    -- We need a proof of ¬(y ∈ ∅) to use Disjunctive Syllogism.
+
+                    (not_y_in_empty, _) <- uiM y forall_not_in_empty
+
+                    -- Use the Disjunctive Syllogism argument to prove y_in_v.
+
+                    disjunctiveSyllogismM y_in_v_or_empty
+
+                    -- y_in_v should now be proved
+   
+
+                -- Combine the two directions.
+                bicondIntroM dir1 dir2
+
+            -- Step 4: Apply the Axiom of Extensionality.
+            (ext_axiom, _) <- extensionalityAxiomM
+            (ext_inst, _) <- multiUIM ext_axiom [v, unionObj]
+            (adj1,_) <- adjM isSet_unionObj_proven forall_bicond
+            (full_antecedent,_) <- adjM (isSet v) adj1
+
+            mpM ext_inst
+
+    return ()
+
+
+
+-- | The schema that houses the proof for 'unionWithEmptySetTheorem'.
+-- | It declares its dependencies on other theorems.
+unionWithEmptySetSchema :: HelperConstraints sE s eL m r t =>
+     TheoremSchemaMT () r s Text m ()
+unionWithEmptySetSchema =
+    let
+        -- The lemmas required for this proof.
+        lemmas_needed = [
+            binaryUnionExistsTheorem -- Needed by proveUnionIsSetM and binaryUnionInstantiateM
+          ]
+    in
+        TheoremSchemaMT {
+            lemmasM = lemmas_needed,
+            proofM = proveUnionWithEmptySetM,
+            constDictM = [] -- No specific object constants needed
+        }
 
 
 

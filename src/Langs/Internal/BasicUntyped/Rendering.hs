@@ -120,31 +120,46 @@ binaryOpInData :: [(Text,(Associativity,Int))]
 binaryOpInData = [
     -- Logical Operators
     ("→", (RightAssociative, 1)), -- Implication: Right assoc, lowest precedence (standard)
+    --
     ("↔", (RightAssociative, 1)), -- Biconditional: Right assoc (common), same low precedence as →
+    --
     ("∨", (RightAssociative, 3)), -- Logical OR: Right assoc (common), precedence higher than →/↔
+    --
     ("∧", (RightAssociative, 4)), -- Logical AND: Right assoc (common), precedence higher than ∨ (standard)
+    --
 
     -- Relational Operators (Equality, Membership, Ordering, Subsets)
     ("=", (NotAssociative, 5)),   -- Equality: Non-associative (standard), precedence higher than logical
+    --
     ("≠", (NotAssociative, 5)),   -- Inequality: Non-associative, same precedence as =
+    --
     ("∈", (NotAssociative, 5)),   -- Set Membership: Non-associative, same precedence as =
+    --
     ("∉", (NotAssociative, 5)),   -- Not Set Membership: Non-associative, same precedence as =
+    --
     ("≤", (NotAssociative, 5)),   -- Less/Equal: Non-associative, same precedence as =
+    --
     ("⊆", (NotAssociative, 5)),   -- Subset/Equal: Non-associative, same precedence as =
+    --
     ("⊂", (NotAssociative, 5)),   -- Proper Subset: Non-associative, same precedence as =
+    --
     ("⊈", (NotAssociative, 5)),   -- Not Subset/Equal: Non-associative, same precedence as =
     ("<", (NotAssociative, 5)),   -- Less than: Non-associative, same precedence as =
     -- Note: Other relations like <, >, ≥, ⊇, ⊃, etc., would also typically go here (NotAssociative, 5)
 
     -- Set Operators
     ("∪", (RightAssociative, 3)), -- Set Union: Right assoc (common convention), precedence same as ∨
+    --
     ("∩", (RightAssociative, 4)), -- Set Intersection: Right assoc (common convention), precedence same as ∧
+    --
     ("∖", (LeftAssociative, 6)),  -- Set Difference: Changed to Left assoc (more intuitive like subtraction), precedence raised to level 6 (like +)
+    --
+
 
     -- Arithmetic / Algebraic Operators
     ("+", (LeftAssociative, 6)),   -- Addition: Left associative (standard), precedence higher than relations
     ("×", (LeftAssociative, 7)),   -- Multiplication: Left associative (standard), precedence higher than +
-    ("⨯", (RightAssociative, 7)),   -- Cartesian Product: Left associative, same precedence as ×
+    ("⨯", (LeftAssociative, 7)),   -- Cartesian Product: Left associative, same precedence as ×
 
     -- Function/Relation Composition
     ("∘", (RightAssociative, 9))  -- Composition: Right associative (standard), highest precedence

@@ -775,6 +775,11 @@ class (PL.LogicSent s tType) => LogicSent s t tType o | s ->tType, s ->t, s->t, 
     eX :: Int -> s -> s
     hX :: Int -> s -> t
     multiAx :: [Int] -> s -> s
+    (./=.) :: t -> t -> s
+
+infix 4 .==.
+infix 4 ./=.
+
 
 class LogicTerm t where
     termSubX :: Int -> t -> t -> t

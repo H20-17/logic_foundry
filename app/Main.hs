@@ -81,136 +81,10 @@ testTheoremMSchema = TheoremSchemaMT  [("N",())] [z1,z2] theoremProg
     z2 = aX 0 ((X 0 `In` Constant "N") :&&: (X 0 :<=: Integ 0) :->: (X 0 :==: Integ 0))
 
 
--- | Constructs the PropDeBr term for the theorem stating that for any set x,
--- | the union of x with the empty set is x itself.
--- |
--- | Theorem: ∀x (isSet x → (x ∪ ∅ = x))
-unionWithEmptySetTheorem :: PropDeBr
-unionWithEmptySetTheorem =
-    let
-        x_idx = 0
-        setX = X x_idx
-        
-        -- The equality: x U emptySet == x
-        equality = (setX .\/. EmptySet) .==. setX
-        
-        -- The antecedent: isSet x
-        antecedent = isSet setX
-        
-        -- The implication
-        implication = antecedent .->. equality
-    in
-        -- Universally quantify over x
-        aX x_idx implication
 
 
 
--- | Proves the theorem defined by 'unionWithEmptySetTheorem'.
--- |
--- | This proof relies on the Axiom of Extensionality and the
--- | 'binaryUnionExists' theorem. To prove A = B, we must show:
--- |   isSet(A) ∧ isSet(B) ∧ ∀y(y ∈ A ↔ y ∈ B)
-proveUnionWithEmptySetM :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) =>
-    ProofGenTStd () [ZFC.LogicRule PropDeBr DeBrSe ObjDeBr] PropDeBr Text m ()
-proveUnionWithEmptySetM = do
-    -- Prove the theorem: ∀x (isSet x → x ∪ ∅ = x)
-    multiUGM [()] do
-        -- Inside UG, a free variable 'v' is introduced for 'x'.
-        v <- getTopFreeVar
-        
-        -- Prove the implication by assuming the antecedent.
-        runProofByAsmM (isSet v) do
-            -- Now, `isSet v` is a proven assumption.
 
-            -- Step 1: Define the objects we are working with.
-            let unionObj = v .\/. EmptySet
-
-            -- Step 2: Prove the necessary `isSet` properties for Extensionality.
-            -- We already have `isSet v` by assumption.
-            -- We need to prove `isSet (v ∪ ∅)`.
-
-            -- (isSet_EmptySet_axiom, _) <- ZFC.emptySetAxiomM
-
-            (forall_not_in_empty, _) <- emptySetAxiomM
-
-            -- (isSet_EmptySet_proven, _) <- simpLM isSet_EmptySet_axiom
-            
-            (isSet_EmptySet_proven, _) <- emptySetNotIntM
-
-            -- proveUnionIsSetM requires isSet v and isSet ∅ to be proven.
-            (isSet_unionObj_proven, _) <- proveUnionIsSetM v EmptySet
-
-            -- Step 3: Prove ∀y (y ∈ v ↔ y ∈ (v ∪ ∅))
-            (forall_bicond, _) <- runProofByUGM () do
-                y <- getTopFreeVar
-
-               -- Direction 1: y ∈ v → y ∈ (v ∪ ∅)
-                (dir1, _) <- runProofByAsmM (y `In` v) do
-                    -- This is a simple Disjunction Introduction.
-                    disjIntroLM (y `In` v) (y `In` EmptySet)
-
-                    -- Now, use the definition of union to get back to y ∈ (v ∪ ∅)
-                    (def_prop_union, _, _) <- binaryUnionInstantiateM v EmptySet
-                    (forall_union_bicond, _) <- simpRM def_prop_union
-                    (inst_union_bicond, _) <- uiM y forall_union_bicond
-                    (imp_to_union, _) <- bicondElimRM inst_union_bicond
-                    
-                    -- Apply Modus Ponens to get the final conclusion of this subproof.
-                    mpM imp_to_union
-                    return ()
-
-                -- To prove the biconditional, we prove each direction.
-                -- Direction 2: y ∈ (v ∪ ∅) → y ∈ v
-                (dir2, _) <- runProofByAsmM (y `In` unionObj) do
-                    -- Get the defining property of the union.
-                    (def_prop_union, _, _) <- binaryUnionInstantiateM v EmptySet
-                    (forall_union_bicond, _) <- simpRM def_prop_union
-                    (inst_union_bicond, _) <- uiM y forall_union_bicond
-                    (imp_from_union, _) <- bicondElimLM inst_union_bicond
-                    -- We have now proven: y ∈ (v ∪ ∅) → (y ∈ v ∨ y ∈ ∅)
-                    (y_in_v_or_empty, _) <- mpM imp_from_union
-
-                    -- We need a proof of ¬(y ∈ ∅) to use Disjunctive Syllogism.
-
-                    (not_y_in_empty, _) <- uiM y forall_not_in_empty
-
-                    -- Use the Disjunctive Syllogism argument to prove y_in_v.
-
-                    disjunctiveSyllogismM y_in_v_or_empty
-
-                    -- y_in_v should now be proved
-   
-
-                -- Combine the two directions.
-                bicondIntroM dir1 dir2
-
-            -- Step 4: Apply the Axiom of Extensionality.
-            (ext_axiom, _) <- extensionalityAxiomM
-            (ext_inst, _) <- multiUIM ext_axiom [v, unionObj]
-            (adj1,_) <- adjM isSet_unionObj_proven forall_bicond
-            (full_antecedent,_) <- adjM (isSet v) adj1
-
-            mpM ext_inst
-
-    return ()
-
-
--- | The schema that houses the proof for 'unionWithEmptySetTheorem'.
--- | It declares its dependencies on other theorems.
-unionWithEmptySetSchema :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) =>
-     TheoremSchemaMT () [ZFC.LogicRule PropDeBr DeBrSe ObjDeBr] PropDeBr Text m ()
-unionWithEmptySetSchema =
-    let
-        -- The lemmas required for this proof.
-        lemmas_needed = [
-            binaryUnionExistsTheorem -- Needed by proveUnionIsSetM and binaryUnionInstantiateM
-          ]
-    in
-        TheoremSchemaMT {
-            lemmasM = lemmas_needed,
-            proofM = proveUnionWithEmptySetM,
-            constDictM = [] -- No specific object constants needed
-        }
 
 -- | Constructs the PropDeBr term for the theorem stating that for any set S and predicate P,
 -- | an element x is in S if and only if it's in the part of S satisfying P or the part not satisfying P.
@@ -452,7 +326,7 @@ specRedundancySchema outerTemplateIdxs spec_var_idx source_set_template p_templa
 
 
 disjointSubsetIsEmptyTheorem :: PropDeBr
-disjointSubsetIsEmptyTheorem = aX 0 (aX 1 (isSet (X 0) :&&: (X 0 ./\. X 1) :==: EmptySet :&&: (X 1 `subset` X 0) :->: X 1 :==: EmptySet))
+disjointSubsetIsEmptyTheorem = aX 0 (aX 1 (isSet (X 0) :&&: (X 0 ./\. X 1) :==: emptySet :&&: (X 1 `subset` X 0) :->: X 1 :==: emptySet))
 
 
 -- | Proves the theorem defined by 'disjointSubsetIsEmptyTheorem'.
@@ -480,7 +354,7 @@ proveDisjointSubsetIsEmptyM = do
         let v_a = V v_a_idx
 
         -- Prove the main implication by assuming the antecedent.
-        let antecedent = isSet v_a :&&: ((v_a ./\. v_b) :==: EmptySet) :&&: (v_b `subset` v_a)
+        let antecedent = isSet v_a :&&: ((v_a ./\. v_b) :==: emptySet) :&&: (v_b `subset` v_a)
         runProofByAsmM antecedent do
             -- Step 1: Deconstruct the antecedent assumption.
             (isSet_a_proven, _) <- simpLM antecedent
@@ -533,7 +407,7 @@ proveDisjointSubsetIsEmptyM = do
                 (dir1, _) <- runProofByAsmM (neg (x `In` v_b)) 
                                             (repM not_in_empty)
 
-                (dir2, _) <- runProofByAsmM (neg (x `In` EmptySet)) 
+                (dir2, _) <- runProofByAsmM (neg (x `In` emptySet)) 
                                    (repM not_in_b)
                 (bicond_of_negs,_) <- bicondIntroM dir1 dir2
 
@@ -544,7 +418,7 @@ proveDisjointSubsetIsEmptyM = do
             (isSet_b, _) <- simpLM subset_b_a
             (isSet_empty, _) <- emptySetNotIntM
             (ext_axiom, _) <- extensionalityAxiomM
-            (ext_inst, _) <- multiUIM ext_axiom [v_b, EmptySet]
+            (ext_inst, _) <- multiUIM ext_axiom [v_b, emptySet]
             
             (adj1, _) <- adjM isSet_empty forall_bicond
             (full_antecedent, _) <- adjM isSet_b adj1
@@ -583,7 +457,7 @@ specAntiRedundancyTheorem outerTemplateIdxs spec_var_idx source_set_template p_t
     let
         -- Part 1: The LHS of the biconditional: {x ∈ S | ¬P(x)} = ∅
         builderSet = builderX spec_var_idx source_set_template (neg p_template)
-        lhs_equality = builderSet :==: EmptySet
+        lhs_equality = builderSet :==: emptySet
 
         -- Part 2: The RHS of the biconditional: ∀x(x ∈ S → P(x))
         -- Note that p_template already uses X spec_var_idx for the variable x.
@@ -659,7 +533,7 @@ proveSpecAntiRedundancyMFree spec_var_idx sourceSet p_tmplt
         -- The proof is a biconditional, so we prove each direction separately.
 
         -- == Direction 1: ({x ∈ S | ¬P(x)} = ∅) → (∀x(x ∈ S → P(x))) ==
-        let cond_ls = negBuilderSet :==: EmptySet
+        let cond_ls = negBuilderSet :==: emptySet
         (dir1_implication, _) <- runProofByAsmM cond_ls do
             -- Assume {x ∈ S | ¬P(x)} = ∅. Goal: ∀x(x ∈ S → P(x)).
             simpLM builderSrcPartitionTmInstMain
@@ -694,7 +568,7 @@ proveSpecAntiRedundancyMFree spec_var_idx sourceSet p_tmplt
             
             (partDisjoint,_) <- simpRM builderSrcPartitionTmInstMain
             -- We have now proven: ({𝑥₀ ∈ S | P(𝑥₀)} ∩ {𝑥₀ ∈ S | ~P(𝑥₀)}) = ∅
-            let eqSubstTemplate = (X 0 ./\. negBuilderSet) :==: EmptySet
+            let eqSubstTemplate = (X 0 ./\. negBuilderSet) :==: emptySet
             (sourceNegBuilderDisjoint,_) <- eqSubstM 0 eqSubstTemplate builderSetEqSrcSet
             -- We have now proven: S ∩ {𝑥₀ ∈ S | ~P(𝑥₀)} = ∅
             
@@ -1016,7 +890,7 @@ proveBuilderSrcPartitionIntersectionEmptyMFree spec_var_idx sourceSet p_tmplt --
             negBicondToPosBicondM bicond_of_negs
             -- This gives us the biconditional: y ∈ intersection ↔ y ∈ ∅
         (ext_axiom, _) <- extensionalityAxiomM
-        (ext_inst, _) <- multiUIM ext_axiom [intersection_of_builders, EmptySet]
+        (ext_inst, _) <- multiUIM ext_axiom [intersection_of_builders, emptySet]
         (isSetEmptySet,_) <- emptySetNotIntM
         (adj1, _) <- adjM isSetEmptySet forall_bicond
         (full_antecedent_for_ext, _) <- adjM isSet_intersection adj1
@@ -1044,7 +918,7 @@ builderSrcPartitionTheorem outerTemplateIdxs spec_var_idx source_set_template p_
 
         -- Part 2: The intersection equality: {x|P(x)} ∩ {x|¬P(x)} = ∅
         intersection_of_builders = builderSet_P ./\. builderSet_NotP
-        intersection_equality = intersection_of_builders :==: EmptySet
+        intersection_equality = intersection_of_builders :==: emptySet
 
         -- Combine the two equalities into a single conjunction
         partition_conjunction = union_equality :&&: intersection_equality
@@ -1189,7 +1063,7 @@ isRelWellFoundedOn dom rel =
 
         -- Antecedent for the main implication: S is a non-empty subset of 'dom'
         s_is_subset_dom = subset (X idx_S) (X dom_idx)  -- S subset dom
-        s_is_not_empty  = Neg ( X idx_S :==: EmptySet ) -- S /= EmptySet
+        s_is_not_empty  = Neg ( X idx_S :==: emptySet ) -- S /= EmptySet
         antecedent_S    = s_is_subset_dom :&&: s_is_not_empty
 
         -- Consequent: Exists an R-minimal element x in S
@@ -1587,22 +1461,6 @@ binaryIntersectionInstantiateM setA setB = do
 
 
 
-
--- | Helper to prove that if A and B are sets,
--- | then their union (A ∪ B) is also a set.
--- | This version takes advantage of the `binaryUnionInstantiateM` helper.
--- |
--- | Note: This helper requires that `isSet setA` and `isSet setB` have already been
--- | proven in the current proof context.
--- | It also relies on the theorem `binaryUnionExistsTheorem` being proven beforehand.
-proveUnionIsSetM :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) =>
-    ObjDeBr -> ObjDeBr -> ProofGenTStd () [ZFC.LogicRule PropDeBr DeBrSe ObjDeBr] PropDeBr Text m (PropDeBr, [Int])
-proveUnionIsSetM setA setB = do
-    (resultProp,idx,_) <- runProofBySubArgM do
-        (prop_of_union, _, unionObj) <- binaryUnionInstantiateM setA setB
-        (isSet_union_proven, _) <- simpLM prop_of_union
-        return ()
-    return (resultProp,idx)
 
 -- | This function composes the "pair substitution theorem":
 -- |  
@@ -2043,7 +1901,7 @@ applyWellFoundednessM :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) =>
     ProofGenTStd () [ZFC.LogicRule PropDeBr DeBrSe ObjDeBr] PropDeBr Text m ((PropDeBr, [Int]), (PropDeBr, [Int]), ObjDeBr)
 applyWellFoundednessM subsetS domainD relationR = do
     let builderSubsetTmFree = subsetS `subset` domainD
-    let absurd_asm = subsetS ./=. EmptySet
+    let absurd_asm = subsetS ./=. emptySet
     (has_minimal_proven,_,_) <- runProofBySubArgM do
         adjM builderSubsetTmFree absurd_asm
         -- We have proven {𝑥₀ ∈ S | ¬P(𝑥₀)} ⊆ S ∧ {𝑥₀ ∈ S | ¬P(𝑥₀)} ≠ ∅ 
@@ -2052,7 +1910,7 @@ applyWellFoundednessM subsetS domainD relationR = do
         let wellFoundedProp = isRelWellFoundedOn domainD relationR
         (isRelWellFounded_proven, _) <- repM wellFoundedProp
         -- This is the assertion ∀𝑥₂(𝑥₂ ⊆ S ∧ 𝑥₂ ≠ ∅ → ∃𝑥₁(𝑥₁ ∈ 𝑥₂ ∧ ∀𝑥₀(𝑥₀ ∈ 𝑥₂ → 𝑥₀ ≮ 𝑥₁))) 
-        let subset_and_nonempty_prop = (subsetS `subset` domainD) :&&: (subsetS ./=. EmptySet)
+        let subset_and_nonempty_prop = (subsetS `subset` domainD) :&&: (subsetS ./=. emptySet)
         (subset_and_nonempty_proven, _) <- repM subset_and_nonempty_prop
         -- This is the assertion {𝑥₀ ∈ S | ¬P(𝑥₀)} ⊆ S ∧ {𝑥₀ ∈ S | ¬P(𝑥₀)} ≠ ∅ 
 
@@ -2100,8 +1958,7 @@ deriveInductiveContradictionM :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text (
 deriveInductiveContradictionM counterexamples dom rel_obj induction_premise spec_prop 
            =
     runProofBySubArgM do
-        let builderSubsetTmFree = counterexamples `subset` dom
-        let absurd_asm = counterexamples./=. EmptySet
+        let absurd_asm = counterexamples./=. emptySet
         let rel_is_relation = rel_obj `subset` (dom `crossProd` dom)
         (proves_false,_) <- runProofByAsmM absurd_asm do
             -- The assumption is that {𝑥₀ ∈ S | ¬P(𝑥₀)} ≠ ∅
@@ -3720,9 +3577,9 @@ main = do
     (a,b,c,d) <- checkTheoremM $ strongInductionTheoremMSchema [] 0 source_set_template p_template
     (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
 
-    -- print "TEST UNION WITH EMPTY SET THEOREM-------------------------------------"
-    -- (a,b,c,d) <- checkTheoremM unionWithEmptySetSchema
-    -- (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
+    print "TEST UNION WITH EMPTY SET THEOREM-------------------------------------"
+    (a,b,c,d) <- checkTheoremM (unionWithEmptySetSchema::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text IO ()))
+    (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
 
     -- print "DISJOINT SUBSET IS EMPTY THEOREM-------------------------------------"
     -- (a,b,c,d) <- checkTheoremM disjointSubsetIsEmptySchema

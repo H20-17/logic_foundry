@@ -166,7 +166,7 @@ integersAreUrelementsM, emptySetAxiomM, extensionalityAxiomM,emptySetNotIntM,reg
        :: HelperConstraints sE s eL m r t
        => ProofGenTStd () r s Text m (s,[Int])
 integersAreUrelementsM = standardRuleM integersAreUrelements
-emptySetAxiomM = standardRuleM emptySet
+emptySetAxiomM = standardRuleM emptySetStatement
 extensionalityAxiomM = standardRuleM extensionality
 emptySetNotIntM = standardRuleM emptySetNotInt
 regularityAxiomM = standardRuleM regularity

@@ -94,7 +94,22 @@ class LogicTerm t where
    intNeg :: t -> t
    intSet :: t
    roster :: [t] -> t
+   (.\/.) :: t -> t -> t
+   (./\.) :: t -> t -> t
+   emptySet :: t
+   (.\.) :: t -> t -> t
+   crossProd :: t -> t -> t
+   (.@.) :: t -> t -> t
+   (.:.) :: t -> t -> t
 
+infixr 2 .\/.
+infixr 3 ./\.
+infixl 5 .\.
+infixl 5 .+.
+infixl 6 .*.
+infixl 6 `crossProd`
+infixl 9 .@.
+infixr 8 .:.
 
 class (PREDL.LogicSent s t () Text) => LogicSent s t | s ->t where
    specAxiom :: [Int] -> Int -> t -> s -> s
@@ -139,12 +154,17 @@ class (PREDL.LogicSent s t () Text) => LogicSent s t | s ->t where
    natWellOrderingAxiom :: s
 
    isSet :: t -> s
+   nMemberOf :: t -> t -> s
+   subset :: t -> t -> s
+   strictSubset :: t -> t -> s
+   notSubset :: t -> t -> s
 
 
-   
-
-
-
+infix 4 `memberOf`
+infix 4 `nMemberOf`
+infix 4 .<=.
+infix 4 `subset`
+infix 4 `strictSubset`
 
 data LogicError s sE t where
     LogicErrPrfByAsm :: PL.SubproofError s sE (LogicError s sE t) -> LogicError s sE t
@@ -332,7 +352,7 @@ class LogicRuleClass r s sE t | r->s, r->sE, r->t where
      integerCompare :: Int -> Int -> r
      integersAreUrelements :: r
      integerInequality    :: Int -> Int -> r
-     emptySet             :: r
+     emptySetStatement             :: r
      extensionality       :: r
      emptySetNotInt       :: r
      regularity :: r
@@ -379,8 +399,8 @@ instance LogicRuleClass [LogicRule s sE t] s sE t where
      integersAreUrelements = [IntegersAreUrelements]
      integerInequality    :: Int -> Int -> [LogicRule s sE t]
      integerInequality i1 i2 = [IntegerInequality i1 i2]
-     emptySet :: [LogicRule s sE t]
-     emptySet = [EmptySetAxiom]
+     emptySetStatement :: [LogicRule s sE t]
+     emptySetStatement = [EmptySetAxiom]
      extensionality :: [LogicRule s sE t]
      extensionality       = [ExtensionalityAxiom]
      emptySetNotInt :: [LogicRule s sE t]

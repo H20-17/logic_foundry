@@ -168,6 +168,8 @@ instance PREDL.LogicSent PropDeBr ObjDeBr () Text where
     hX = hX
     multiAx :: [Int] -> PropDeBr -> PropDeBr
     multiAx = multiAx
+    (./=.) :: ObjDeBr -> ObjDeBr -> PropDeBr
+    (./=.) = (./=.)
 
 instance PREDL.LogicTerm ObjDeBr where
     termSubX :: Int -> ObjDeBr -> ObjDeBr -> ObjDeBr
@@ -230,7 +232,20 @@ instance ZFC.LogicTerm ObjDeBr where
     intSet = IntSet
     roster :: [ObjDeBr] -> ObjDeBr
     roster = roster
-
+    (.\/.) :: ObjDeBr -> ObjDeBr -> ObjDeBr
+    (.\/.) = (.\/.)
+    (./\.) :: ObjDeBr -> ObjDeBr -> ObjDeBr
+    (./\.) = (./\.)
+    emptySet :: ObjDeBr
+    emptySet = EmptySet
+    (.\.) :: ObjDeBr -> ObjDeBr -> ObjDeBr
+    (.\.) = (.\.)
+    crossProd :: ObjDeBr -> ObjDeBr -> ObjDeBr
+    crossProd = crossProd
+    (.@.) :: ObjDeBr -> ObjDeBr -> ObjDeBr
+    (.@.) = (.@.)
+    (.:.) :: ObjDeBr -> ObjDeBr -> ObjDeBr
+    (.:.) = (.:.)
 
 instance ZFC.LogicSent PropDeBr ObjDeBr where
 
@@ -771,4 +786,14 @@ instance ZFC.LogicSent PropDeBr ObjDeBr where
     isSet :: ObjDeBr -> PropDeBr
     isSet = isSet
 
+    nMemberOf :: ObjDeBr -> ObjDeBr -> PropDeBr
+    nMemberOf = nIn
 
+    subset :: ObjDeBr -> ObjDeBr -> PropDeBr
+    subset = subset
+
+    strictSubset :: ObjDeBr -> ObjDeBr -> PropDeBr
+    strictSubset = strictSubset
+
+    notSubset :: ObjDeBr -> ObjDeBr -> PropDeBr
+    notSubset = notSubset

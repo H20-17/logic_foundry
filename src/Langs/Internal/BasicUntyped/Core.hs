@@ -113,8 +113,8 @@ data ObjDeBr where
     EmptySet :: ObjDeBr
     deriving (Ord, Show, Eq)
 
-infixl 6 :+:
-infixl 7 :*:
+infixl 5 :+:
+infixl 6 :*:
 
 
 
