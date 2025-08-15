@@ -20,7 +20,7 @@ module Langs.BasicUntyped (
     showObjM,
     -- eXBang,
     -- (./=.),
-    builderX,
+    -- builderX,
     nIn,
     -- subset,
     -- strictSubset,

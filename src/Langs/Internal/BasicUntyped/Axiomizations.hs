@@ -807,3 +807,6 @@ instance ZFC.LogicSent PropDeBr ObjDeBr where
 
     notSubset :: ObjDeBr -> ObjDeBr -> PropDeBr
     notSubset = notSubset
+
+    builderX :: Int -> ObjDeBr -> PropDeBr -> ObjDeBr
+    builderX = builderX

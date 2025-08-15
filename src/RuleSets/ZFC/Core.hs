@@ -161,7 +161,7 @@ class (PREDL.LogicSent s t () Text) => LogicSent s t | s ->t where
    subset :: t -> t -> s
    strictSubset :: t -> t -> s
    notSubset :: t -> t -> s
-
+   builderX :: Int -> t -> s -> t
 
 
 
