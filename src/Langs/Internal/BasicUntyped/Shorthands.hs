@@ -46,7 +46,7 @@ module Langs.Internal.BasicUntyped.Shorthands (
     parseTupleMax,
     buildPair,
     parsePair,
-    buildTuple,
+    tuple,
     parseIsFunc,
     isFunc,
     natSetObj,      -- Exporting the NatSet object
@@ -169,12 +169,12 @@ parsePair obj = do
 
 
 
-buildTuple :: [ObjDeBr] -> ObjDeBr
-buildTuple objs =
+tuple :: [ObjDeBr] -> ObjDeBr
+tuple objs =
     case objs of
         [] -> EmptySet
         [x] -> x
-        (x:xs) -> buildPair x (buildTuple xs)
+        (x:xs) -> buildPair x (tuple xs)
 
 
 
@@ -686,11 +686,11 @@ parseFuncsSet obj = do
 -- in that specific order.
 isTupleWhere :: ObjDeBr -> [ObjDeBr] -> PropDeBr
 isTupleWhere x elements =
-    x :==: buildTuple elements
+    x :==: tuple elements
 
 -- Parser for isTupleWhere
 -- Takes an expected tuple length and a proposition.
--- If the proposition is 'x :==: buildTuple elements_candidate' and
+-- If the proposition is 'x :==: tuple elements_candidate' and
 -- 'elements_candidate' has the expected length,
 -- it returns Just (x, elements_candidate). Otherwise, Nothing.
 parseIsTupleWhere :: Int -> PropDeBr -> Maybe (ObjDeBr, [ObjDeBr])
@@ -700,7 +700,7 @@ parseIsTupleWhere expectedLength prop = do
 
     -- Step 2: Try to parse potentialTupleTerm as a tuple of the expectedLength.
     -- parseTupleFixed will return Nothing if potentialTupleTerm is not a tuple
-    -- of the precisely 'expectedLength' that matches the structure of buildTuple.
+    -- of the precisely 'expectedLength' that matches the structure of tuple.
     elements_candidate <- parseTupleFixed potentialTupleTerm expectedLength
 
     -- If both steps succeeded, return the left-hand side of the equality (x)
@@ -1153,7 +1153,7 @@ infix 4 `notSubset`
 -- | Generates an ObjDeBr term representing the projection of the m-th element
 -- | from an n-tuple t. Uses a Hilbert expression internally.
 -- | project n m t = "the element r such that there exist y0..y(m-1),y(m+1)..y(n-1)
--- |                where t = buildTuple [y0, ..., y(m-1), r, y(m+1), ..., y(n-1)]"
+-- |                where t = tuple [y0, ..., y(m-1), r, y(m+1), ..., y(n-1)]"
 project :: Int -> Int -> ObjDeBr -> ObjDeBr
 project n m t =
     -- n: the length of the tuple (integer)
@@ -1184,7 +1184,7 @@ project n m t =
             -- This compares the placeholder for the input tuple 't' (X tupleIdx)
             -- with the tuple constructed from the template variables.
             equalityBody :: PropDeBr
-            equalityBody = X tupleIdx :==: buildTuple tuplArgs -- Assumes Tupl constructor exists
+            equalityBody = X tupleIdx :==: tuple tuplArgs -- Assumes Tupl constructor exists
 
             -- Construct the existentially quantified body using the multiEx helper:
             -- Exists X0 ... Exists X(m-1) Exists X(m+1) ... Exists X(n-1) ( equalityBody )
@@ -1360,7 +1360,7 @@ parseCrossProduct obj = do
 
 isTuple :: Int -> ObjDeBr -> PropDeBr
 isTuple i obj = propDeBrSubX i obj $ multiEx idxs 
-      (X i :==: buildTuple [X j | j <- idxs ])
+      (X i :==: tuple [X j | j <- idxs ])
       where idxs = [0 .. i-1]
 
 

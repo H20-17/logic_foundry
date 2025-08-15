@@ -44,7 +44,7 @@ module Langs.BasicUntyped (
     (.<.),
     parseIntSet,
     buildPair,
-    buildTuple,
+    tuple,
     parseNatSet,
     propDeBrSubX,
     propDeBrSubXs,

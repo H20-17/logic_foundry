@@ -222,8 +222,8 @@ propDeBrApplyUG prop freevarIdx boundvarIdx =
 instance ZFC.LogicTerm ObjDeBr where
     --parseTuple :: ObjDeBr -> Maybe [ObjDeBr]
     --parseTuple = parseTupl
-    --buildTuple :: [ObjDeBr] -> ObjDeBr
-    --buildTuple = Tupl
+    --tuple :: [ObjDeBr] -> ObjDeBr
+    --tuple = Tupl
     (.+.) :: ObjDeBr -> ObjDeBr -> ObjDeBr
     (.+.) = (:+:)
     (.*.) :: ObjDeBr -> ObjDeBr -> ObjDeBr

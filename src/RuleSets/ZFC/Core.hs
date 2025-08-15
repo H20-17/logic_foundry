@@ -87,7 +87,7 @@ import GHC.Num (integerMul)
 class LogicTerm t where
    integer :: Int -> t
    --parseTuple :: t -> Maybe [t]
-   --buildTuple :: [t] -> t
+   --tuple :: [t] -> t
    project :: Int -> Int -> t -> t
    (.+.) :: t -> t -> t
    (.*.) :: t -> t -> t

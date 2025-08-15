@@ -3226,11 +3226,11 @@ testPairAndTupleRendering = do
         remarkM "  Check: FAILED."
 
     -- Test 3: Simple Tuple (A, B, C) - built as Pair A (Pair B C)
-    remarkM "Test 3: Rendering buildTuple [A, B, C]"
-    let tupleABC = buildTuple [constA, constB, constC]
+    remarkM "Test 3: Rendering tuple [A, B, C]"
+    let tupleABC = tuple [constA, constB, constC]
     actualOutput3 <- showObjM tupleABC
     let expectedOutput3 = "(A,B,C)"
-    remarkM "  Input Term: buildTuple [A, B, C]"
+    remarkM "  Input Term: tuple [A, B, C]"
     remarkM $ "  Actual Rendered Output:   " <> actualOutput3
     remarkM $ "  Expected Rendered Output: " <> expectedOutput3
     if actualOutput3 == expectedOutput3 then
@@ -3239,11 +3239,11 @@ testPairAndTupleRendering = do
         remarkM "  Check: FAILED. (Verify parseTupleMax/parseTupleFixed and Tuple rendering)"
 
     -- Test 4: Tuple with mixed types (A, 1, B, 2)
-    remarkM "Test 4: Rendering buildTuple [A, (Integ 1), B, (Integ 2)]"
-    let tupleA1B2 = buildTuple [constA, int1, constB, int2]
+    remarkM "Test 4: Rendering tuple [A, (Integ 1), B, (Integ 2)]"
+    let tupleA1B2 = tuple [constA, int1, constB, int2]
     actualOutput4 <- showObjM tupleA1B2
     let expectedOutput4 = "(A,1,B,2)"
-    remarkM "  Input Term: buildTuple [A, (Integ 1), B, (Integ 2)]"
+    remarkM "  Input Term: tuple [A, (Integ 1), B, (Integ 2)]"
     remarkM $ "  Actual Rendered Output:   " <> actualOutput4
     remarkM $ "  Expected Rendered Output: " <> expectedOutput4
     if actualOutput4 == expectedOutput4 then
@@ -3251,12 +3251,12 @@ testPairAndTupleRendering = do
     else
         remarkM "  Check: FAILED."
 
-    -- Test 5: Single element tuple (A) - buildTuple [A] should just be A
-    remarkM "Test 5: Rendering buildTuple [A]"
-    let tupleA_single = buildTuple [constA]
+    -- Test 5: Single element tuple (A) - tuple [A] should just be A
+    remarkM "Test 5: Rendering tuple [A]"
+    let tupleA_single = tuple [constA]
     actualOutput5 <- showObjM tupleA_single
-    let expectedOutput5 = "A" -- As per buildTuple [x] -> x
-    remarkM "  Input Term: buildTuple [A]"
+    let expectedOutput5 = "A" -- As per tuple [x] -> x
+    remarkM "  Input Term: tuple [A]"
     remarkM $ "  Actual Rendered Output:   " <> actualOutput5
     remarkM $ "  Expected Rendered Output: " <> expectedOutput5
     if actualOutput5 == expectedOutput5 then
@@ -3264,18 +3264,18 @@ testPairAndTupleRendering = do
     else
         remarkM "  Check: FAILED."
 
-    -- Test 6: Empty tuple - buildTuple [] should be EmptySet, rendered as ∅
-    remarkM "Test 6: Rendering buildTuple []"
-    let tupleEmpty = buildTuple []
+    -- Test 6: Empty tuple - tuple [] should be EmptySet, rendered as ∅
+    remarkM "Test 6: Rendering tuple []"
+    let tupleEmpty = tuple []
     actualOutput6 <- showObjM tupleEmpty
     let expectedOutput6 = "∅" -- Assuming EmptySet renders as ∅
-    remarkM "  Input Term: buildTuple [] (which is EmptySet)"
+    remarkM "  Input Term: tuple [] (which is EmptySet)"
     remarkM $ "  Actual Rendered Output:   " <> actualOutput6
     remarkM $ "  Expected Rendered Output: " <> expectedOutput6
     if actualOutput6 == expectedOutput6 then
         remarkM "  Check: PASSED."
     else
-        remarkM "  Check: FAILED. (Verify EmptySet rendering or buildTuple [] behavior)"
+        remarkM "  Check: FAILED. (Verify EmptySet rendering or tuple [] behavior)"
 
     -- Test 7: Nested Pairs/Tuples - Pair (Pair A B) C -> ((A,B),C)
     remarkM "Test 7: Rendering buildPair (buildPair A B) C"
