@@ -1070,7 +1070,7 @@ isRelWellFoundedOn dom rel =
         -- x In S
         x_is_in_S       = X idx_x `In` X idx_S
         -- y Rel x  (pair <y,x> In rel)
-        y_rel_x         = buildPair (X idx_y) (X idx_x) `In` X rel_idx
+        y_rel_x         = pair (X idx_y) (X idx_x) `In` X rel_idx
         -- Forall y (y In S -> not (y Rel x))
         x_is_minimal_in_S = aX idx_y ( (X idx_y `In` X idx_S) :->: Neg y_rel_x )
         -- Exists x (x In S /\ x_is_minimal_in_S)
@@ -1108,7 +1108,7 @@ strongInductionPremiseOnRel p_template idx dom rel =
 
         -- Inner hypothesis: k Rel n -> P(k)
         -- Here, n is X n_idx and k is X k_idx
-        k_rel_n     = buildPair (X k_idx) (X n_idx) `In` X rel_idx -- k Rel n
+        k_rel_n     = pair (X k_idx) (X n_idx) `In` X rel_idx -- k Rel n
         hyp_antecedent = k_rel_n
         hyp_body    = hyp_antecedent :->: p_k
 
@@ -1471,7 +1471,7 @@ pairSubstTheorem :: PropDeBr
 pairSubstTheorem = 
     let
         thm_A=0; thm_B=1; thm_x=2; thm_y=3; thm_a=4; thm_b=5
-        thm_antecedent = (buildPair (X thm_x) (X thm_y) :==: buildPair (X thm_a) (X thm_b))
+        thm_antecedent = (pair (X thm_x) (X thm_y) :==: pair (X thm_a) (X thm_b))
                             :&&: (X thm_a `In` X thm_A) :&&: (X thm_b `In` X thm_B)
         thm_consequent = (X thm_x `In` X thm_A) :&&: (X thm_y `In` X thm_B)
         pair_subst_theorem_closed = multiAx [thm_A, thm_B, thm_x, thm_y, thm_a, thm_b] (thm_antecedent :->: thm_consequent)
@@ -1488,7 +1488,7 @@ pairInUniverseTheorem =
     let thm_A=0; thm_B=1; thm_x=2; thm_y=3
         thm_univ = powerSet (powerSet (X thm_A .\/. X thm_B))
         thm_pair_univ_antecedent = isSet (X thm_A) :&&: isSet (X thm_B) :&&: (X thm_x `In` X thm_A) :&&: (X thm_y `In` X thm_B)
-        thm_pair_univ_consequent = buildPair (X thm_x) (X thm_y) `In` thm_univ
+        thm_pair_univ_consequent = pair (X thm_x) (X thm_y) `In` thm_univ
         pair_in_universe_theorem_closed = multiAx [thm_A, thm_B, thm_x, thm_y] (thm_pair_univ_antecedent :->: thm_pair_univ_consequent)
     in
         pair_in_universe_theorem_closed
@@ -1514,7 +1514,7 @@ crossProductDefEquivTheorem =
         -- P(z) := ∃x∃y (z = <x,y> ∧ x ∈ A ∧ y ∈ B)
         spec_z_idx = 2; spec_x_idx = 3; spec_y_idx = 4
         predicate_P = eX spec_x_idx (eX spec_y_idx (
-                          (X spec_z_idx :==: buildPair (X spec_x_idx) (X spec_y_idx))
+                          (X spec_z_idx :==: pair (X spec_x_idx) (X spec_y_idx))
                           :&&: (X spec_x_idx `In` setA)
                           :&&: (X spec_y_idx `In` setB)
                       ))
@@ -1541,7 +1541,7 @@ crossProductDefEquivTheorem =
         --    isSet(B) ∧ ∀x∀y(<x,y>∈B ↔ (x∈A ∧ y∈B))
         canon_x_idx = 2; canon_y_idx = 3
         canon_element_prop = (X canon_x_idx `In` setA) :&&: (X canon_y_idx `In` setB)
-        canon_pair_in_b = buildPair (X canon_x_idx) (X canon_y_idx) `In` crossProdObj
+        canon_pair_in_b = pair (X canon_x_idx) (X canon_y_idx) `In` crossProdObj
         canon_quantified_bicond = aX canon_x_idx (aX canon_y_idx (canon_element_prop :<->: canon_pair_in_b))
         canonical_prop = isSet crossProdObj :&&: canon_quantified_bicond
 
@@ -1584,12 +1584,12 @@ proveCrossProductDefEquivM = do
             let z_idx = 0; x_idx = 1; y_idx = 2; setA_idx = 3; setB_idx = 4
             let universeSet_tmplt = powerSet (powerSet (X setA_idx .\/. X setB_idx))
             let predicate_P = eX x_idx (eX y_idx (
-                                  (X z_idx :==: buildPair (X x_idx) (X y_idx))
+                                  (X z_idx :==: pair (X x_idx) (X y_idx))
                                   :&&: (X x_idx `In` setA)
                                   :&&: (X y_idx `In` setB)
                               ))
             let predicate_P_tmplt = eX x_idx (eX y_idx (
-                                  (X z_idx :==: buildPair (X x_idx) (X y_idx))
+                                  (X z_idx :==: pair (X x_idx) (X y_idx))
                                   :&&: (X x_idx `In` X setA_idx)
                                   :&&: (X y_idx `In` X setB_idx)
                               ))
@@ -1613,7 +1613,7 @@ proveCrossProductDefEquivM = do
             -- Construct the canonical target property for the cross product B
             let s_idx_final = 0; x_idx_final = 1; y_idx_final = 2
             let element_prop_final = (X x_idx_final `In` setA) :&&: (X y_idx_final `In` setB)
-            let pair_in_s_final = buildPair (X x_idx_final) (X y_idx_final) `In` (X s_idx_final)
+            let pair_in_s_final = pair (X x_idx_final) (X y_idx_final) `In` (X s_idx_final)
             let quantified_bicond_final = aX x_idx_final (aX y_idx_final (pair_in_s_final :<->: element_prop_final))
             let canonical_prop_of_B = isSet crossProdObj :&&: quantified_bicond_final
 
@@ -1627,8 +1627,8 @@ proveCrossProductDefEquivM = do
                     context_inner <- ask
                     let v_x_inner_idx = (length . freeVarTypeStack) context_inner - 2
                     let v_x_inner = V v_x_inner_idx
-                    (dir1,_) <- runProofByAsmM (buildPair v_x_inner v_y_inner `In` crossProdObj) do
-                        (spec_inst,_) <- uiM (buildPair v_x_inner v_y_inner) spec_forall_bicond
+                    (dir1,_) <- runProofByAsmM (pair v_x_inner v_y_inner `In` crossProdObj) do
+                        (spec_inst,_) <- uiM (pair v_x_inner v_y_inner) spec_forall_bicond
                         (imp,_) <- bicondElimLM spec_inst
                         (inU_and_P,_) <- mpM imp
                         (p_of_pair,_) <- simpLM inU_and_P
@@ -1656,13 +1656,13 @@ proveCrossProductDefEquivM = do
                         -- We prove this by witnessing with a=v_x and b=v_y.
                         (vx_in_A_p, _) <- simpLM ((v_x_inner `In` setA) :&&: (v_y_inner `In` setB))
                         (vy_in_B_p, _) <- simpRM ((v_x_inner `In` setA) :&&: (v_y_inner `In` setB))
-                        (refl_pair, _) <- eqReflM (buildPair v_x_inner v_y_inner)
+                        (refl_pair, _) <- eqReflM (pair v_x_inner v_y_inner)
 
                         (in_A_and_in_B, _) <- adjM vx_in_A_p vy_in_B_p
                         (p_vx_vy_instantiated_body, _) <- adjM refl_pair in_A_and_in_B
 
 
-                        let p_ab_template = (buildPair v_x_inner v_y_inner :==: buildPair (X 0) (X 1)) :&&: ((X 0 `In` setA) :&&: (X 1 `In` setB))
+                        let p_ab_template = (pair v_x_inner v_y_inner :==: pair (X 0) (X 1)) :&&: ((X 0 `In` setA) :&&: (X 1 `In` setB))
                         let p_vx_y_template = propDeBrSubX 0 v_x_inner p_ab_template
                         let eg_target_y = eX 1 p_vx_y_template
                         (exists_y_prop, _) <- egM v_y_inner eg_target_y
@@ -1685,7 +1685,7 @@ proveCrossProductDefEquivM = do
                         (in_U_and_P, _) <- adjM p_of_pair_proven pair_in_U_proven
                         
                         -- Part 4: Use the spec property to conclude <x,y> ∈ B
-                        (spec_bicond_inst, _) <- uiM (buildPair v_x_inner v_y_inner) spec_forall_bicond
+                        (spec_bicond_inst, _) <- uiM (pair v_x_inner v_y_inner) spec_forall_bicond
                         (spec_imp_backward, _) <- bicondElimRM spec_bicond_inst
                         mpM spec_imp_backward
                         return ()
@@ -1722,7 +1722,7 @@ crossProductExistsTheorem =
         y_idx = 4 -- Represents an element y from B
 
         -- Construct the inner part of the formula: <x,y> ∈ S ↔ (x ∈ A ∧ y ∈ B)
-        pair_xy = buildPair (X x_idx) (X y_idx)
+        pair_xy = pair (X x_idx) (X y_idx)
         pair_in_S = pair_xy `In` (X s_idx)
         
         x_in_A = X x_idx `In` (X a_idx)
@@ -1799,12 +1799,12 @@ proveCrossProductExistsM = do
             let universeSet_tmplt = powerSet (powerSet (X setA_idx .\/. X setB_idx))
             -- Define the predicate P(z) as ∃x
             let predicate_P = eX x_idx (eX y_idx (
-                                  (X z_idx :==: buildPair (X x_idx) (X y_idx))
+                                  (X z_idx :==: pair (X x_idx) (X y_idx))
                                   :&&: (X x_idx `In` setA)
                                   :&&: (X y_idx `In` setB)
                               ))
             let predicate_P_tmplt = eX x_idx (eX y_idx (
-                                  (X z_idx :==: buildPair (X x_idx) (X y_idx))
+                                  (X z_idx :==: pair (X x_idx) (X y_idx))
                                   :&&: (X x_idx `In` X setA_idx)
                                   :&&: (X y_idx `In` X setB_idx)
                               ))
@@ -1824,7 +1824,7 @@ proveCrossProductExistsM = do
             -- Step 4: Construct the target existential statement using the explicit template method.
             let s_idx_final = 0; x_idx_final = 1; y_idx_final = 2
             let element_prop_final = (X x_idx_final `In` setA) :&&: (X y_idx_final `In` setB)
-            let pair_in_s_final = buildPair (X x_idx_final) (X y_idx_final) `In` (X s_idx_final)
+            let pair_in_s_final = pair (X x_idx_final) (X y_idx_final) `In` (X s_idx_final)
             let quantified_bicond_final = aX x_idx_final (aX y_idx_final (element_prop_final :<->: pair_in_s_final))
             let target_property_for_S = isSet (X s_idx_final) :&&: quantified_bicond_final
             let target_existential = eX s_idx_final target_property_for_S
@@ -2004,7 +2004,7 @@ deriveInductiveContradictionM counterexamples dom rel_obj induction_premise spec
             let submin_element_in_n = submin_element `In` natSetObj
             (rel_prop,_) <- simpRM rel_is_relation
             -- We have proven: ∀𝑥₀(𝑥₀ ∈ (<) → 𝑥₀ ∈ S ⨯ S)
-            let xobj = buildPair submin_element min_element
+            let xobj = pair submin_element min_element
             (relprop_instance,_) <- uiM xobj rel_prop
             -- We have proven that: submin < min → (submin,min) ∈ S ⨯ S)
             mpM relprop_instance
@@ -2502,7 +2502,7 @@ testBuilderXSuite = do
     remarkM "Test 5: Complex Predicate { x ∈ N | ∃y (y ∈ M ∧ x = <y, C>) }"
     -- Predicate: eX 1 ( (X 1 `In` setM) :&&: (X 0 :==: Pair (X 1) constC) )
     -- Here, x is X 0 (bound by builderX), y is X 1 (bound by eX)
-    let prop5 = eX 1 ( (X 1 `In` setM) :&&: (X 0 :==: buildPair (X 1) constC) )
+    let prop5 = eX 1 ( (X 1 `In` setM) :&&: (X 0 :==: pair (X 1) constC) )
     let builtSet5 = builderX 0 setN prop5 -- Using index 0 for x
     builtSet5Show <- showObjM builtSet5
     remarkM $ "Constructed (idx=0): " <> builtSet5Show
@@ -2813,7 +2813,7 @@ testProjectShorthandParsing = do
 
     -- Test 7 (Negative Case - Body Not Equality)
     remarkM "Test 7: Hilbert term where body inside Exists is not an Equality"
-    let nonEqBody = hX 1 ( eX 0 ( Neg ( Constant "A" :==: buildPair (X 1) (X 0) ) ) )
+    let nonEqBody = hX 1 ( eX 0 ( Neg ( Constant "A" :==: pair (X 1) (X 0) ) ) )
     nonEqBody_show <- showObjM nonEqBody
     remarkM "  Input:    hX 1 ( eX 0 ( Neg ( Constant \"A\" :==: Tupl [X 1, X 0] ) ) )"
     remarkM $ "  Actual:   " <> nonEqBody_show
@@ -2861,7 +2861,7 @@ testCrossProductRendering = do
 
     -- == Negative Case (Optional): Ensure unrelated terms don't render as cross product ==
     remarkM "Test 2: Rendering a simple Tuple (A, B)"
-    let tupleTerm = buildPair setA setB
+    let tupleTerm = pair setA setB
     tupleOutput <- showObjM tupleTerm
     let expectedTupleOutput = "(A,B)" -- Or similar based on your tuple rendering
     remarkM "  Input Term: Tupl [A, B]"
@@ -3200,11 +3200,11 @@ testPairAndTupleRendering = do
     fakeConstM "D" ()
 
     -- Test 1: Simple Pair (A, B)
-    remarkM "Test 1: Rendering buildPair A B"
-    let pairAB = buildPair constA constB
+    remarkM "Test 1: Rendering pair A B"
+    let pairAB = pair constA constB
     actualOutput1 <- showObjM pairAB
     let expectedOutput1 = "(A,B)"
-    remarkM "  Input Term: buildPair A B"
+    remarkM "  Input Term: pair A B"
     remarkM $ "  Actual Rendered Output:   " <> actualOutput1
     remarkM $ "  Expected Rendered Output: " <> expectedOutput1
     if actualOutput1 == expectedOutput1 then
@@ -3213,11 +3213,11 @@ testPairAndTupleRendering = do
         remarkM "  Check: FAILED. (Verify parsePair and Tuple rendering in Rendering.hs)"
 
     -- Test 2: Pair with an integer (1, C)
-    remarkM "Test 2: Rendering buildPair (Integ 1) C"
-    let pair1C = buildPair int1 constC
+    remarkM "Test 2: Rendering pair (Integ 1) C"
+    let pair1C = pair int1 constC
     actualOutput2 <- showObjM pair1C
     let expectedOutput2 = "(1,C)"
-    remarkM "  Input Term: buildPair (Integ 1) C"
+    remarkM "  Input Term: pair (Integ 1) C"
     remarkM $ "  Actual Rendered Output:   " <> actualOutput2
     remarkM $ "  Expected Rendered Output: " <> expectedOutput2
     if actualOutput2 == expectedOutput2 then
@@ -3278,11 +3278,11 @@ testPairAndTupleRendering = do
         remarkM "  Check: FAILED. (Verify EmptySet rendering or tuple [] behavior)"
 
     -- Test 7: Nested Pairs/Tuples - Pair (Pair A B) C -> ((A,B),C)
-    remarkM "Test 7: Rendering buildPair (buildPair A B) C"
-    let nestedPair = buildPair (buildPair constA constB) constC
+    remarkM "Test 7: Rendering pair (pair A B) C"
+    let nestedPair = pair (pair constA constB) constC
     actualOutput7 <- showObjM nestedPair
     let expectedOutput7 = "((A,B),C)"
-    remarkM "  Input Term: buildPair (buildPair A B) C"
+    remarkM "  Input Term: pair (pair A B) C"
     remarkM $ "  Actual Rendered Output:   " <> actualOutput7
     remarkM $ "  Expected Rendered Output: " <> expectedOutput7
     if actualOutput7 == expectedOutput7 then
@@ -3290,7 +3290,7 @@ testPairAndTupleRendering = do
     else
         remarkM "  Check: FAILED."
 
-    -- Test 8: A Kuratowski pair that is NOT created by buildPair, but by roster directly
+    -- Test 8: A Kuratowski pair that is NOT created by pair, but by roster directly
     -- This tests if parsePair can still recognize it for tuple rendering.
     remarkM "Test 8: Rendering a direct Kuratowski pair roster [roster[A], roster[A,B]]"
     let directKuratowski = roster [roster[constA], roster[constA, constB]]
@@ -3659,7 +3659,7 @@ testprog = do
 testprog2::ProofGenTStd () [PredRuleDeBr] PropDeBr Text IO ()
 testprog2 = do
     let p = eX 0 (X 0 `In` Constant "N")
-    let q = eX 0 (X 0 :<=: Integ 10)
+    let q = eX 0 (X 0 .<=. Integ 10)
     let pImpQ = p :->: q
     fakeConstM "N" ()
     fakePropM [] pImpQ

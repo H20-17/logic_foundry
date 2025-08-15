@@ -44,7 +44,7 @@ module Langs.Internal.BasicUntyped.Shorthands (
     parseLessThan,
     parseTupleFixed,
     parseTupleMax,
-    buildPair,
+    pair,
     parsePair,
     tuple,
     parseIsFunc,
@@ -127,8 +127,8 @@ parseTupleFixed obj n
 
 
 
-buildPair :: ObjDeBr -> ObjDeBr -> ObjDeBr
-buildPair o1 o2 = roster [roster[o1], roster[o1,o2]]
+pair :: ObjDeBr -> ObjDeBr -> ObjDeBr
+pair o1 o2 = roster [roster[o1], roster[o1,o2]]
 
 parsePair :: ObjDeBr -> Maybe (ObjDeBr, ObjDeBr)
 parsePair obj = do
@@ -174,7 +174,7 @@ tuple objs =
     case objs of
         [] -> EmptySet
         [x] -> x
-        (x:xs) -> buildPair x (tuple xs)
+        (x:xs) -> pair x (tuple xs)
 
 
 
@@ -742,7 +742,7 @@ isFunc f setA setB =
             aX x_fun_idx (
                 (X x_fun_idx `In` X setA_idx)
                 :->:
-                eXBang y_fun_idx (buildPair (X x_fun_idx) (X y_fun_idx) `In` gr)
+                eXBang y_fun_idx (pair (X x_fun_idx) (X y_fun_idx) `In` gr)
             )
 
         -- The body of the existential quantifier:
@@ -1215,7 +1215,7 @@ project n m t =
 relDomain :: ObjDeBr -> ObjDeBr
 relDomain s = objDeBrSubX 0 s (hX 1(aX 2 (X 2 `In` X 1)  -- x ∈ D
                        :<->:                             -- iff
-                            eX 3 (buildPair (X 2) (X 3) `In` X 0)))
+                            eX 3 (pair (X 2) (X 3) `In` X 0)))
 
 
 -- let us assume that f is a pair
@@ -1233,7 +1233,7 @@ tripletLast = project 3 2
 
 
 (.@.) :: ObjDeBr -> ObjDeBr -> ObjDeBr
-f .@. x = objDeBrSubXs [(0,f),(1,x)] (hX 2 ( buildPair (X 1) (X 2) `In` tripletLast (X 0) ))
+f .@. x = objDeBrSubXs [(0,f),(1,x)] (hX 2 ( pair (X 1) (X 2) `In` tripletLast (X 0) ))
 
 infixl 9 .@.
 
@@ -1278,7 +1278,7 @@ crossProd setA setB =
         -- Using X x_idx for x, X y_idx for y, X a_idx for A, X b_idx for B, X s_idx for S
         membership_prop = ((X x_idx `In` X a_idx) :&&: (X y_idx `In` X b_idx))
                           :<->:
-                          (buildPair (X x_idx) (X y_idx) `In` X s_idx)
+                          (pair (X x_idx) (X y_idx) `In` X s_idx)
 
         -- Universally quantify over x and y: ∀x ∀y (...)
         quantified_membership_prop = aX x_idx (aX y_idx membership_prop)
@@ -1343,8 +1343,8 @@ parseCrossProduct obj = do
     parsed_idx_S_from_rhs <- parseBound bound_S_from_rhs
     guard (parsed_idx_S_from_rhs == idx_S) -- S matches hX-bound variable
 
-    -- 11. Match pair_term: buildPair (Bound idx_x) (Bound idx_y)
-    (pair_arg1, pair_arg2) <- parsePair pair_term -- Assuming parsePair extracts from buildPair
+    -- 11. Match pair_term: pair (Bound idx_x) (Bound idx_y)
+    (pair_arg1, pair_arg2) <- parsePair pair_term -- Assuming parsePair extracts from pair
     parsed_idx_x_from_pair <- parseBound pair_arg1
     parsed_idx_y_from_pair <- parseBound pair_arg2
     guard (parsed_idx_x_from_pair == idx_x)

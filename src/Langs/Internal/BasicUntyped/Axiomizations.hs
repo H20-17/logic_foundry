@@ -252,6 +252,10 @@ instance ZFC.LogicTerm ObjDeBr where
     powerSet = powerSet
     project :: Int -> Int -> ObjDeBr -> ObjDeBr
     project = project
+    pair :: ObjDeBr -> ObjDeBr -> ObjDeBr
+    pair = pair
+    tuple :: [ObjDeBr] -> ObjDeBr
+    tuple = tuple
 
 instance ZFC.LogicSent PropDeBr ObjDeBr where
 

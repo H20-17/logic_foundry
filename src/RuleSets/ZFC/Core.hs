@@ -102,6 +102,8 @@ class LogicTerm t where
    (.@.) :: t -> t -> t
    (.:.) :: t -> t -> t
    powerSet :: t -> t
+   pair :: t -> t -> t
+   tuple :: [t] -> t
 
 infixr 2 .\/.
 infixr 3 ./\.
