@@ -250,6 +250,8 @@ instance ZFC.LogicTerm ObjDeBr where
     (.:.) = (.:.)
     powerSet :: ObjDeBr -> ObjDeBr
     powerSet = powerSet
+    project :: Int -> Int -> ObjDeBr -> ObjDeBr
+    project = project
 
 instance ZFC.LogicSent PropDeBr ObjDeBr where
 

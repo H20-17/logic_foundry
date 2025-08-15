@@ -88,7 +88,7 @@ class LogicTerm t where
    integer :: Int -> t
    --parseTuple :: t -> Maybe [t]
    --buildTuple :: [t] -> t
-   buildProject :: Int -> t -> t
+   project :: Int -> Int -> t -> t
    (.+.) :: t -> t -> t
    (.*.) :: t -> t -> t
    intNeg :: t -> t

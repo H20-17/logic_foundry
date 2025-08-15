@@ -29,7 +29,7 @@ module Langs.BasicUntyped (
     -- notSubset,
     -- (.@.),
     -- (.:.),
-    project,
+    -- project,
     objDeBrSubX,
     -- crossProd,
     funcsSet,
