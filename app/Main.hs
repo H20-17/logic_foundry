@@ -126,37 +126,6 @@ eqSubstTheorem =
        eq_subst_thm
 
 
--- | Constructs the PropDeBr term for the theorem stating that a specification
--- | over a set S with predicate P is redundant (i.e., results in S) if and only if
--- | all elements of S already satisfy P.
--- |
--- | Theorem: ∀(params...) (isSet(S(params)) → ({x ∈ S(params) | P(x,params)} = S(params) ↔ ∀x(x ∈ S(params) → P(x,params))))
-specRedundancyTheorem :: [Int] -> Int -> ObjDeBr -> PropDeBr -> PropDeBr
-specRedundancyTheorem outerTemplateIdxs spec_var_idx source_set_template p_template =
-    let
-        -- Part 1: The LHS of the biconditional: {x ∈ S | P(x)} = S
-        builderSet = builderX spec_var_idx source_set_template p_template
-        lhs_equality = builderSet :==: source_set_template
-
-        -- Part 2: The RHS of the biconditional: ∀x(x ∈ S → P(x))
-        -- Note that p_template already uses X spec_var_idx for the variable x.
-        x_in_S = X spec_var_idx `In` source_set_template
-        implication_body = x_in_S :->: p_template
-        rhs_forall = aX spec_var_idx implication_body
-
-        -- Combine the two sides into the core biconditional
-        biconditional = lhs_equality :<->: rhs_forall
-
-        -- Construct the antecedent for the main implication: isSet(S)
-        antecedent = isSet source_set_template
-
-        -- Form the main implication for the body of the theorem
-        implication = antecedent :->: biconditional
-
-    in
-        -- Universally quantify over all parameters to create the final closed theorem.
-        multiAx outerTemplateIdxs implication
-
 
 
 -- | Given an instantiated source set, predicate, and the proven defining property of a builder set,
@@ -3588,18 +3557,18 @@ main = do
     -- (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
 
 
-    -- print "SPEC REDUNDANCY THEOREM-------------------------------------"
-    -- let p_template = Constant "C" :+: X 0 :==: (X 1 :+: X 2)
-    -- let source_set_template = X 1 .\/. X 2
-    -- (a,b,c,d) <- checkTheoremM $ specRedundancySchema [1,2] 0 source_set_template p_template
-    -- (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
+    print "SPEC REDUNDANCY THEOREM-------------------------------------"
+    let p_template = Constant "C" :+: X 0 :==: (X 1 :+: X 2)
+    let source_set_template = X 1 .\/. X 2
+    (a,b,c,d) <- checkTheoremM $ specRedundancySchema [1,2] 0 source_set_template p_template
+    (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
 
 
-    -- print "SPEC REDUNDANCY THEOREM TEST 2-------------------------------------"
-    -- let p_template = X 0 .==. X 0
-    -- let source_set_template = Constant "SourceSet"
-    -- (a,b,c,d) <- checkTheoremM $ specRedundancySchema [] 0 source_set_template p_template
-    -- (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
+    print "SPEC REDUNDANCY THEOREM TEST 2-------------------------------------"
+    let p_template = X 0 .==. X 0
+    let source_set_template = Constant "SourceSet"
+    (a,b,c,d) <- checkTheoremM $ specRedundancySchema [] 0 source_set_template p_template
+    (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
 
 
 
