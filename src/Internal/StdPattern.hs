@@ -7,6 +7,7 @@ module Internal.StdPattern(
     ProofStd,
     TypeableTerm(..), TypedSent(..), StdPrfPrintMonadFrame(..), StdPrfPrintMonad(..),
     getTopFreeVar,
+    getTopFreeVars,
     testSubproof, monadifyProofStd,
     runSubproofM,
     ProofGenTStd,
@@ -204,7 +205,7 @@ data TestSubproofMException s sE where
    BigExceptResultSanity :: s -> sE -> TestSubproofMException s sE
    BigExceptNothingProved :: TestSubproofMException s sE
    BigExceptEmptyVarStack :: TestSubproofMException s sE
-
+   BigExceptNotNFreeVars :: Int -> TestSubproofMException s sE
 
    deriving(Show)
 
@@ -286,6 +287,24 @@ getTopFreeVar =  do
         let frVarTypeStack = freeVarTypeStack context
         if null frVarTypeStack then throwM BigExceptEmptyVarStack
             else return (free2Term $ length frVarTypeStack - 1)
+
+
+getTopFreeVars :: (Monoid r1, ProofStd s eL1 r1 o tType, Monad m,
+                       Show eL1, Typeable eL1,
+                    Show s, Typeable s,
+                       MonadThrow m, TypedSent o tType sE s, Show sE, Typeable sE,
+                       StdPrfPrintMonad s o tType m, TypeableTerm t Text tType sE)
+                 =>  Int -> ProofGenTStd tType r1 s o m [t]
+getTopFreeVars n =  do
+        context <- ask
+        let frVarTypeStack = freeVarTypeStack context
+        unless (length frVarTypeStack <= n) (throwM (BigExceptNotNFreeVars n))
+        let topIdx = length frVarTypeStack - 1
+        let topVars = [topIdx - i | i <- [0..n-1]]
+        return (fmap free2Term topVars)
+
+
+
 
 
 getFreeVarCount :: (Monoid r1, ProofStd s eL1 r1 o tType, Monad m,

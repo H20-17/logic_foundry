@@ -173,50 +173,52 @@ proveBinaryUnionExistsM :: HelperConstraints sE s eL m r t =>
     ProofGenTStd () r s Text m ()
 proveBinaryUnionExistsM = do
     -- Universally generalize over A and B.
-    runProofByUGM () $ do
-        v_B <- getTopFreeVar
-        runProofByUGM () $ do
-            v_A <- getTopFreeVar
-            let setA = v_A
-            let setB = v_B
-            -- Prove the implication by assuming the antecedent.
-            runProofByAsmM (isSet setA .&&. isSet setB) $ do
-                -- Now, isSet(A) and isSet(B) are proven assumptions in this context.
+    multiUGM (replicate 2 ()) $ do
+        -- Inside the UG, we have free variables (V_i) corresponding to A and B.
+        -- We will use these variables to represent the sets A and B.
+        
+        -- Get the top free variables for A and B.
+        v_Av_B <- getTopFreeVars 2
+        let setA = head v_Av_B
+        let setB = v_Av_B!!1
+        -- Prove the implication by assuming the antecedent.
+        runProofByAsmM (isSet setA .&&. isSet setB) $ do
+            -- Now, isSet(A) and isSet(B) are proven assumptions in this context.
 
-                -- Step 1: Use the Axiom of Pairing to prove ∃P. isSet(P) ∧ P = {A,B}.
-                (pairAxiom,_) <- pairingAxiomM
-                (pairAxiom_inst1, _) <- uiM setA pairAxiom
-                (pairAxiom_inst2, _) <- uiM setB pairAxiom_inst1
+            -- Step 1: Use the Axiom of Pairing to prove ∃P. isSet(P) ∧ P = {A,B}.
+            (pairAxiom,_) <- pairingAxiomM
+            (pairAxiom_inst1, _) <- uiM setA pairAxiom
+            (pairAxiom_inst2, _) <- uiM setB pairAxiom_inst1
 
-                -- Step 2: Instantiate this pair set with a Hilbert term `pairSetAB`.
-                -- `pair_prop` is isSet({A,B}) ∧ ∀z(z∈{A,B} ↔ z=A ∨ z=B).
-                (pair_prop, _, pairSetAB) <- eiHilbertM pairAxiom_inst2
-                (isSet_pair_proven, _) <- simpLM pair_prop
+            -- Step 2: Instantiate this pair set with a Hilbert term `pairSetAB`.
+            -- `pair_prop` is isSet({A,B}) ∧ ∀z(z∈{A,B} ↔ z=A ∨ z=B).
+            (pair_prop, _, pairSetAB) <- eiHilbertM pairAxiom_inst2
+            (isSet_pair_proven, _) <- simpLM pair_prop
 
-                -- Step 3: Use the Axiom of Union on the proven set `pairSetAB`.
-                (unionAxiom,_) <- unionAxiomM
-                (unionAxiom_inst, _) <- uiM pairSetAB unionAxiom
+            -- Step 3: Use the Axiom of Union on the proven set `pairSetAB`.
+            (unionAxiom,_) <- unionAxiomM
+            (unionAxiom_inst, _) <- uiM pairSetAB unionAxiom
 
-                -- Step 4: Use Modus Ponens with `isSet(pairSetAB)` to derive the existence of the union.
-                -- `exists_U` is ∃U(isSet U ∧ ∀x(x∈U ↔ ∃Y(Y∈{A,B} ∧ x∈Y))).
-                (exists_U, _) <- mpM unionAxiom_inst
-                -- Step 5: Assert a general, CLOSED theorem about the equivalence of the two forms of union.
-                -- Thm: ∀A,B. (isSet A ∧ isSet B) → ( (∃U. from Axiom of Union on {A,B}) ↔ (∃S. with canonical binary union prop) )
-                -- We build the two existential statements as templates first.
+            -- Step 4: Use Modus Ponens with `isSet(pairSetAB)` to derive the existence of the union.
+            -- `exists_U` is ∃U(isSet U ∧ ∀x(x∈U ↔ ∃Y(Y∈{A,B} ∧ x∈Y))).
+            (exists_U, _) <- mpM unionAxiom_inst
+            -- Step 5: Assert a general, CLOSED theorem about the equivalence of the two forms of union.
+            -- Thm: ∀A,B. (isSet A ∧ isSet B) → ( (∃U. from Axiom of Union on {A,B}) ↔ (∃S. with canonical binary union prop) )
+            -- We build the two existential statements as templates first.
 
-                let tmpl_A_idx = 0; tmpl_B_idx = 1; tmpl_S_idx = 2; tmpl_U_idx = 2; tmpl_Y_idx = 3; tmpl_x_idx = 4
+            let tmpl_A_idx = 0; tmpl_B_idx = 1; tmpl_S_idx = 2; tmpl_U_idx = 2; tmpl_Y_idx = 3; tmpl_x_idx = 4
                       
 
-                -- Step 6: Instantiate the theorem with our specific sets A and B.
-                (instantiated_thm, _) <- multiUIM unionEquivTheorem [setA, setB]
+            -- Step 6: Instantiate the theorem with our specific sets A and B.
+            (instantiated_thm, _) <- multiUIM unionEquivTheorem [setA, setB]
 
-                -- Step 7: Use Modus Ponens with our assumption `isSet A ∧ isSet B`.
-                (proven_biconditional, _) <- mpM instantiated_thm
+            -- Step 7: Use Modus Ponens with our assumption `isSet A ∧ isSet B`.
+            (proven_biconditional, _) <- mpM instantiated_thm
 
-                -- Step 8: From the equivalence and the proven `exists_U`, derive the target existential.
-                (forward_imp, _) <- bicondElimLM proven_biconditional
+            -- Step 8: From the equivalence and the proven `exists_U`, derive the target existential.
+            (forward_imp, _) <- bicondElimLM proven_biconditional
 
-                mpM forward_imp -- This proves the target_existential
+            mpM forward_imp -- This proves the target_existential
 
     return ()
 

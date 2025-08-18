@@ -2112,8 +2112,10 @@ strongInductionTheoremProg outerTemplateIdxs idx dom_template p_template = do
 
     multiUGM (replicate (length outerTemplateIdxs) ()) do
         -- Inside the UG, we have free variables (V_i) corresponding to the X_k parameters.
-        freeVarCount <- getFreeVarCount
-        let instantiationTerms = Prelude.map V [0 .. freeVarCount - 1]
+        instantiationTerms <- getTopFreeVars (length outerTemplateIdxs)
+
+
+
 
         (_,_,(_,dom,_)) <- builderInstantiateM instantiationTerms outerTemplateIdxs idx 
                           dom_template (neg p_template)
@@ -3565,11 +3567,11 @@ main = do
 
 
 
-    -- print "TEST STRONG INDUCTION THEOREM-------------------------------------"
-    -- let p_template = Constant "C" :+: X 0 :==: (X 1 :+: X 2)
-    -- let source_set_template = X 1 .\/. X 2
-    -- (a,b,c,d) <- checkTheoremM $ strongInductionTheoremMSchema [1,2] 0 source_set_template p_template
-    -- (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
+    print "TEST STRONG INDUCTION THEOREM-------------------------------------"
+    let p_template = Constant "C" :+: X 0 :==: (X 1 :+: X 2)
+    let source_set_template = X 1 .\/. X 2
+    (a,b,c,d) <- checkTheoremM $ strongInductionTheoremMSchema [1,2] 0 source_set_template p_template
+    (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
 
     print "TEST STRONG INDUCTION THEOREM 2-------------------------------------"
     let p_template = Constant "C" :==: X 0
