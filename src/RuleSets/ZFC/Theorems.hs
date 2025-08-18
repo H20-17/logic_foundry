@@ -187,12 +187,12 @@ proveBinaryUnionExistsM = do
 
             -- Step 1: Use the Axiom of Pairing to prove ∃P. isSet(P) ∧ P = {A,B}.
             (pairAxiom,_) <- pairingAxiomM
-            (pairAxiom_inst1, _) <- uiM setA pairAxiom
-            (pairAxiom_inst2, _) <- uiM setB pairAxiom_inst1
+            (pairAxiom_inst,_) <- multiUIM pairAxiom [setA, setB]
+
 
             -- Step 2: Instantiate this pair set with a Hilbert term `pairSetAB`.
             -- `pair_prop` is isSet({A,B}) ∧ ∀z(z∈{A,B} ↔ z=A ∨ z=B).
-            (pair_prop, _, pairSetAB) <- eiHilbertM pairAxiom_inst2
+            (pair_prop, _, pairSetAB) <- eiHilbertM pairAxiom_inst
             (isSet_pair_proven, _) <- simpLM pair_prop
 
             -- Step 3: Use the Axiom of Union on the proven set `pairSetAB`.
