@@ -104,6 +104,9 @@ class LogicTerm t where
    powerSet :: t -> t
    pair :: t -> t -> t
    tuple :: [t] -> t
+   funcsSet :: t -> t -> t
+   bigUnion :: t -> t
+   bigIntersection :: t -> t
 
 infixr 2 .\/.
 infixr 3 ./\.

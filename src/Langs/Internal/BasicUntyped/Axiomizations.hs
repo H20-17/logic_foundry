@@ -256,6 +256,12 @@ instance ZFC.LogicTerm ObjDeBr where
     pair = pair
     tuple :: [ObjDeBr] -> ObjDeBr
     tuple = tuple
+    funcsSet :: ObjDeBr -> ObjDeBr -> ObjDeBr
+    funcsSet = funcsSet
+    bigUnion :: ObjDeBr -> ObjDeBr
+    bigUnion = bigUnion
+    bigIntersection :: ObjDeBr -> ObjDeBr
+    bigIntersection = bigIntersection
 
 instance ZFC.LogicSent PropDeBr ObjDeBr where
 
