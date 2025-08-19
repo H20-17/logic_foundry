@@ -1150,34 +1150,6 @@ proveBuilderIsSubsetOfDomMFree spec_var_idx sourceSet p_tmplt =
         return ()
 
 
--- | Constructs the PropDeBr term for the general theorem that any set constructed
--- | via specification is a subset of its domain, universally quantified over any parameters.
--- |
--- | The constructed theorem has the form:
--- |   ∀(params...) ( {x ∈ D(params) | P(x,params)} ⊆ D(params) )
--- |
--- | @param outerTemplateIdxs  The list of `Int` indices for the `X` variables in the templates
--- |                           that act as parameters to be universally quantified.
--- | @param spec_var_X_idx     The `Int` index for the `X` variable that is the variable of specification
--- |                           (the 'x' in {x ∈ T | P(x)}).
--- | @param source_set_template The source set `T`, which may contain `X k` parameters from `outerTemplateIdxs`.
--- | @param p_template         The predicate `P`, which uses `X spec_var_X_idx` for the specification
--- |                           variable and may contain `X k` parameters from `outerTemplateIdxs`.
-builderSubsetTheorem :: [Int] -> Int -> ObjDeBr -> PropDeBr -> PropDeBr
-builderSubsetTheorem outerTemplateIdxs spec_var_X_idx source_set_template p_template =
-    -- Step 1: Construct the builder object term from the templates.
-    -- This represents {x ∈ D(params) | P(x,params)}.
-    let builtObj = builderX spec_var_X_idx source_set_template p_template
-    in
-    -- Step 2: Construct the core proposition, which is the subset relation.
-    -- This asserts that the built object is a subset of its source set template.
-    let subset_prop = builtObj `subset` source_set_template
-    in
-    -- Step 3: Universally quantify over all parameters to create the final closed theorem.
-    -- This binds all the X k variables from outerTemplateIdxs that appear in the templates.
-    multiAx outerTemplateIdxs subset_prop
-
-
 
 
 -- | Proves the general theorem that any set constructed via specification is a subset of its domain,
