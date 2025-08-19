@@ -115,19 +115,6 @@ partitionEquivTheorem outerTemplateIdxs spec_var_idx source_set_template p_templ
 
 
 
--- | This function composes the following sentence:
--- | ∀𝑥₂(∀𝑥₁(∀𝑥₀(𝑥₁ = 𝑥₀ → 𝑥₂ ∈ 𝑥₁ → 𝑥₂ ∈ 𝑥₀)))
-eqSubstTheorem :: PropDeBr
-eqSubstTheorem = 
-    let
-       eq_subst_thm_tmplt = (X 0 :==: X 1) :->: ((X 2 `In` X 0) :->: (X 2 `In` X 1))
-       eq_subst_thm = multiAx [2,0,1] eq_subst_thm_tmplt
-    in
-       eq_subst_thm
-
-
-
-
 -- | Given an instantiated source set, predicate, and the proven defining property of a builder set,
 -- | this function proves the biconditional: {x ∈ S | P(x)} = S ↔ ∀x(x ∈ S → P(x)).
 -- | It encapsulates the core logical derivation for the spec redundancy theorem.
@@ -151,7 +138,6 @@ proveSpecRedundancyMFree spec_var_idx sourceSet p_tmplt
     (resultProp,idx,_) <- runProofBySubArgM $ do
         repM (isSet sourceSet) -- We assert this here to emphasize that it should already be proven in the context.
         repM def_prop_B -- We assert this here to emphasize that {x ∈ S | P(x)} has already been instantiated with builderInstantiateM.
-        repM eqSubstTheorem -- We assert this here to emphasize that eqSubstTheorem has already been asserted as a lemma.
         repM builderSubsetTmInst -- We assert this here to emphasize that the instantiated builder subset theorem should
                                  -- already be proven in the context.
 
@@ -164,19 +150,11 @@ proveSpecRedundancyMFree spec_var_idx sourceSet p_tmplt
                 v <- getTopFreeVar
                 -- Goal: v ∈ S → P(v)
                 runProofByAsmM (v `In` sourceSet) do
-                    -- The property of equality substitution states: S=B → (v∈S → v∈B)
-                
-                    -- Instantiate with v, S, and B in the correct order.
-                    (inst_thm, _) <- multiUIM eqSubstTheorem [v, sourceSet, builderSet]
-
-                    -- We need to prove S=B from B=S. This requires symmetry of equality.
+                    let substTmplt = v `memberOf` x 0 :: PropDeBr
                     (s_eq_b, _) <- eqSymM (builderSet .==. sourceSet)
-                    --(symm_inst, _) <- multiUIM symm_thm [builderSet, sourceSet]
-                    -- (s_eq_b, _) <- mpM symm_inst
-
-                    -- Now apply MP twice to get v ∈ B
-                    (imp_from_eq, _) <- mpM inst_thm
-                    (v_in_B, _) <- mpM imp_from_eq
+                    -- This proves S=B from B=S.
+                    (v_in_B,_) <- eqSubstM 0 substTmplt s_eq_b
+                    -- This proves v ∈ B from v ∈ S.
 
                     -- Now that we have `v ∈ B`, we can use the defining property of B to get P(v).
                     (forall_bicond_B, _) <- simpRM def_prop_B
@@ -286,7 +264,7 @@ specRedundancySchema outerTemplateIdxs spec_var_idx source_set_template p_templa
         typed_consts = zip (Data.Set.toList all_consts) (repeat ())
     in
         TheoremSchemaMT {
-            lemmasM = [eqSubstTheorem, 
+            lemmasM = [ 
                        builderSubsetTheorem outerTemplateIdxs spec_var_idx source_set_template p_template],
             proofM = proof_program,
             constDictM = typed_consts

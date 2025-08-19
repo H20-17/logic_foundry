@@ -452,6 +452,9 @@ specRedundancyTheorem outerTemplateIdxs spec_var_idx source_set_template p_templ
     in
         -- Universally quantify over all parameters to create the final closed theorem.
         multiAx outerTemplateIdxs implication
+        
+--NEED MORE STUFF HERE
+--END SPEC REDUNDANCY
 
 
 --data MetaRuleError s where
