@@ -1,6 +1,7 @@
 {-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE DoAndIfThenElse #-}
+{-# LANGUAGE TupleSections #-}
 
 
 module Main where
@@ -113,162 +114,6 @@ partitionEquivTheorem outerTemplateIdxs spec_var_idx source_set_template p_templ
         multiAx outerTemplateIdxs forall_x_bicond
 
 
-
-
--- | Given an instantiated source set, predicate, and the proven defining property of a builder set,
--- | this function proves the biconditional: {x ∈ S | P(x)} = S ↔ ∀x(x ∈ S → P(x)).
--- | It encapsulates the core logical derivation for the spec redundancy theorem.
--- | This function requires that
--- |   1. `isSet sourceSet` is already proven in the context.
--- |   2. The set {x ∈ S | P(x)} has already been instantiated with builderInstantiateM.
--- |   3. The instantiated builder subset theorem (i.e. {x ∈ S | P(x)} ⊆ S) is already proven in the context.
--- |   4. The theorem ∀𝑥₂(∀𝑥₁(∀𝑥₀(𝑥₁ = 𝑥₀ → 𝑥₂ ∈ 𝑥₁ → 𝑥₂ ∈ 𝑥₀))) is already asserted, probably as a theorem lemma.
--- |      This function is defined by the function, eqSubstTheorem.
-proveSpecRedundancyMFree :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) =>
-    Int ->      -- spec_var_idx: The 'x' in {x ∈ S | P(x)}
-    ObjDeBr ->  -- sourceSet: The instantiated source set S
-    PropDeBr -> -- p_tmplt: The instantiated predicate P(x)
-    -- PropDeBr -> -- def_prop_B: The proven defining property of the builder set
-    ProofGenTStd () [ZFC.LogicRule PropDeBr DeBrSe ObjDeBr] PropDeBr Text m (PropDeBr,[Int])
-proveSpecRedundancyMFree spec_var_idx sourceSet p_tmplt 
-         -- def_prop_B 
-         = do
-    let (def_prop_B, builderSet) = builderPropsFree spec_var_idx sourceSet p_tmplt
-    let builderSubsetTmInst = builderSubsetTheorem [] spec_var_idx sourceSet p_tmplt
-    (resultProp,idx,_) <- runProofBySubArgM $ do
-        repM (isSet sourceSet) -- We assert this here to emphasize that it should already be proven in the context.
-        repM def_prop_B -- We assert this here to emphasize that {x ∈ S | P(x)} has already been instantiated with builderInstantiateM.
-        repM builderSubsetTmInst -- We assert this here to emphasize that the instantiated builder subset theorem should
-                                 -- already be proven in the context.
-
-        -- The proof is a biconditional, so we prove each direction separately.
-
-        -- == Direction 1: ({x ∈ S | P(x)} = S) → (∀x(x ∈ S → P(x))) ==
-        (dir1_implication, _) <- runProofByAsmM (builderSet :==: sourceSet) do
-            -- Assume B = S. Goal: ∀x(x ∈ S → P(x))
-            runProofByUGM () do
-                v <- getTopFreeVar
-                -- Goal: v ∈ S → P(v)
-                runProofByAsmM (v `In` sourceSet) do
-                    let substTmplt = v `memberOf` x 0 :: PropDeBr
-                    (s_eq_b, _) <- eqSymM (builderSet .==. sourceSet)
-                    -- This proves S=B from B=S.
-                    (v_in_B,_) <- eqSubstM 0 substTmplt s_eq_b
-                    -- This proves v ∈ B from v ∈ S.
-
-                    -- Now that we have `v ∈ B`, we can use the defining property of B to get P(v).
-                    (forall_bicond_B, _) <- simpRM def_prop_B
-                    (inst_bicond_B, _) <- uiM v forall_bicond_B
-                    (imp_B_to_P, _) <- bicondElimLM inst_bicond_B
-                    (p_and_v_in_s, _) <- mpM imp_B_to_P
-                    (p_of_v, _) <- simpLM p_and_v_in_s
-                    return ()
-
-        -- == Direction 2: (∀x(x ∈ S → P(x))) → ({x ∈ S | P(x)} = S) ==
-        (dir2_implication, _) <- runProofByAsmM (aX spec_var_idx ((X spec_var_idx `In` sourceSet) :->: p_tmplt)) do
-            -- Assume ∀x(x ∈ S → P(x)). Goal: B = S.
-            (isSet_B, _) <- simpLM builderSubsetTmInst
-
-            (forall_bicond_sets, _) <- runProofByUGM () do
-                v <- getTopFreeVar
-                (forall_subset_imp, _) <- simpRM builderSubsetTmInst
-
-                (imp_B_to_S, _) <- uiM v forall_subset_imp
-                (imp_S_to_B, _) <- runProofByAsmM (v `In` sourceSet) do
-                    let forall_S_implies_P = aX spec_var_idx ((X spec_var_idx `In` sourceSet) :->: p_tmplt)
-                    (instantiated_imp, _) <- uiM v forall_S_implies_P
-                    (p_of_v, _) <- mpM instantiated_imp
-                    (v_in_S_and_P, _) <- adjM (v `In` sourceSet) p_of_v
-                    (forall_bicond_B, _) <- simpRM def_prop_B
-                    (inst_bicond_B, _) <- uiM v forall_bicond_B
-                    (imp_to_B, _) <- bicondElimRM inst_bicond_B
-                    adjM p_of_v (v `In` sourceSet)
-                    mpM imp_to_B
-                    return ()
-                bicondIntroM imp_B_to_S imp_S_to_B
-            (ext_axiom, _) <- extensionalityAxiomM
-            (ext_inst, _) <- multiUIM ext_axiom [builderSet, sourceSet]
-            (ante1, _) <- adjM (isSet sourceSet) forall_bicond_sets
-            (full_antecedent, _) <- adjM isSet_B ante1
-            (imp1, _) <- mpM ext_inst
-            return ()
-
-        -- Final Step: Combine the two main implications into the final biconditional.
-        bicondIntroM dir1_implication dir2_implication
-        return ()
-    return (resultProp,idx)
-
--- | Proves the theorem defined by 'specRedundancyTheorem'.
--- | This version correctly composes the `proveSpecRedundancyMFree` helper.
-proveSpecRedundancyTheoremM :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) =>
-    [Int] ->    -- outerTemplateIdxs
-    Int ->      -- spec_var_X_idx
-    ObjDeBr ->  -- source_set_template
-    PropDeBr -> -- p_template
-    ProofGenTStd () [ZFC.LogicRule PropDeBr DeBrSe ObjDeBr] PropDeBr Text m ()
-proveSpecRedundancyTheoremM outerTemplateIdxs spec_var_idx source_set_template p_template = do
-    -- Step 1: Universally generalize over all parameters specified in outerTemplateIdxs.
-    multiUGM (replicate (length outerTemplateIdxs) ()) do
-        -- Inside the UG, we have free variables (V_i) corresponding to the X_k parameters.
-        freeVarCount <- getFreeVarCount
-        let instantiationTerms = Prelude.map V [0 .. freeVarCount - 1]
-
-        -- Establish the properties of the builderSet here
-        -- and acquire the instantiated templates with the free variables for this specific proof context.
-        (_,_,(_,sourceSet,p_tmplt)) <- builderInstantiateM instantiationTerms outerTemplateIdxs spec_var_idx source_set_template p_template
-        builderInstantiateM instantiationTerms outerTemplateIdxs spec_var_idx source_set_template (neg p_template)
-        let lemma2 = builderSubsetTheorem outerTemplateIdxs spec_var_idx source_set_template p_template
-        multiUIM lemma2 instantiationTerms
-        
-
-        -- Step 2: Prove the main implication by assuming its antecedent, `isSet sourceSet`.
-        runProofByAsmM (isSet sourceSet) do
-            
-
-
-
-            -- Now that `isSet sourceSet` is a proven assumption in this context,
-            -- we can call the specific proof helper `proveSpecRedundancyMFree`.
-            -- That helper will create its own sub-argument and prove the biconditional.
-            
-            (bicond_proven, _) <- proveSpecRedundancyMFree spec_var_idx sourceSet p_tmplt
-            
-            -- The last proven statement is the desired biconditional.
-            -- `runProofByAsmM` will use this to conclude the implication.
-            return ()
-
-    -- The outer `do` block implicitly returns (), as multiUGM does.
-    -- The final universally quantified theorem is now the last proven statement.
-    return ()
-
-
--- | The schema that houses the proof for 'specRedundancyTheorem'.
--- | This theorem is proven from axioms and does not depend on other high-level theorems.
-specRedundancySchema :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) =>
-    [Int] ->    -- outerTemplateIdxs
-    Int ->      -- spec_var_X_idx
-    ObjDeBr ->  -- source_set_template
-    PropDeBr -> -- p_template
-    TheoremSchemaMT () [ZFC.LogicRule PropDeBr DeBrSe ObjDeBr] PropDeBr Text m ()
-specRedundancySchema outerTemplateIdxs spec_var_idx source_set_template p_template =
-    let
-        -- The main theorem being proven by this schema.
-        main_theorem = specRedundancyTheorem outerTemplateIdxs spec_var_idx source_set_template p_template
-        -- The proof program for the main theorem.
-        proof_program = proveSpecRedundancyTheoremM outerTemplateIdxs spec_var_idx source_set_template p_template
-
-        -- Extract constants for the schema from the templates.
-        source_set_tmplt_consts = extractConstsTerm source_set_template
-        p_tmplt_consts = extractConstsSent p_template
-        all_consts = source_set_tmplt_consts `Set.union` p_tmplt_consts
-        typed_consts = zip (Data.Set.toList all_consts) (repeat ())
-    in
-        TheoremSchemaMT {
-            lemmasM = [ 
-                       builderSubsetTheorem outerTemplateIdxs spec_var_idx source_set_template p_template],
-            proofM = proof_program,
-            constDictM = typed_consts
-        }
 
 
 
@@ -3365,14 +3210,16 @@ main = do
     print "SPEC REDUNDANCY THEOREM-------------------------------------"
     let p_template = Constant "C" :+: X 0 :==: (X 1 :+: X 2)
     let source_set_template = X 1 .\/. X 2
-    (a,b,c,d) <- checkTheoremM $ specRedundancySchema [1,2] 0 source_set_template p_template
+    (a,b,c,d) <- checkTheoremM (specRedundancySchema [1,2] 0 source_set_template p_template
+                       ::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text IO ()))
     (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
 
 
     print "SPEC REDUNDANCY THEOREM TEST 2-------------------------------------"
     let p_template = X 0 .==. X 0
     let source_set_template = Constant "SourceSet"
-    (a,b,c,d) <- checkTheoremM $ specRedundancySchema [] 0 source_set_template p_template
+    (a,b,c,d) <- checkTheoremM (specRedundancySchema [] 0 source_set_template p_template
+                                   ::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text IO ()))
     (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
 
 
