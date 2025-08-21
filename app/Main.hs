@@ -945,136 +945,6 @@ provePowerSetIsSetM x = do
     return (result_prop,idx)
 
 
--- | Constructs the PropDeBr term for the closed theorem of binary intersection existence.
--- | The theorem is: ∀A ∀B ((isSet A ∧ isSet B) → ∃S (isSet S ∧ ∀x(x ∈ S ↔ (x ∈ A ∧ x ∈ B))))
-binaryIntersectionExistsTheorem :: PropDeBr
-binaryIntersectionExistsTheorem =
-    let
-        -- Define integer indices for the template variables (X k).
-        a_idx = 0 -- Represents set A
-        b_idx = 1 -- Represents set B
-        s_idx = 2 -- Represents the intersection set S
-        x_idx = 3 -- Represents an element x
-
-        -- Construct the inner part of the formula: x ∈ S ↔ (x ∈ A ∧ x ∈ B)
-        x_in_S = X x_idx `In` X s_idx
-        x_in_A = X x_idx `In` X a_idx
-        x_in_B = X x_idx `In` X b_idx
-        x_in_A_and_B = x_in_A :&&: x_in_B
-        biconditional = x_in_S :<->: x_in_A_and_B
-
-        -- Quantify over x: ∀x(x ∈ S ↔ (x ∈ A ∧ x ∈ B))
-        forall_x_bicond = aX x_idx biconditional
-
-        -- Construct the property of the set S: isSet(S) ∧ ∀x(...)
-        isSet_S = isSet (X s_idx)
-        property_of_S = isSet_S :&&: forall_x_bicond
-
-        -- Quantify over S: ∃S (isSet(S) ∧ ∀x(...))
-        exists_S = eX s_idx property_of_S
-
-        -- Construct the antecedent of the main implication: isSet(A) ∧ isSet(B)
-        isSet_A = isSet (X a_idx)
-        isSet_B = isSet (X b_idx)
-        antecedent = isSet_A :&&: isSet_B
-
-        -- Construct the main implication
-        implication = antecedent :->: exists_S
-
-    in
-        -- Universally quantify over A and B to create the final closed theorem.
-        multiAx [a_idx, b_idx] implication
-
-
--- | Proves the theorem defined in 'binaryIntersectionExistsTheorem'.
--- |
--- | The proof strategy is to use the Axiom of Specification. For any two sets A and B,
--- | we can specify a new set S from the source set A using the predicate "is an element of B".
--- | The resulting set S = {x ∈ A | x ∈ B} is precisely the intersection A ∩ B.
--- | The `builderInstantiateM` helper encapsulates this application of the axiom.
-proveBinaryIntersectionExistsM :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) =>
-    ProofGenTStd () [ZFC.LogicRule PropDeBr DeBrSe ObjDeBr] PropDeBr Text m ()
-proveBinaryIntersectionExistsM = do
-    -- The theorem is universally quantified over two sets, A and B.
-    multiUGM [(), ()] do
-        -- Inside the UG, free variables v_A and v_B are introduced.
-        v_B <- getTopFreeVar
-        context <- ask
-        let v_A_idx = (length . freeVarTypeStack) context - 2
-        let v_A = V v_A_idx
-        let setA = v_A
-        let setB = v_B
-
-        -- Prove the main implication by assuming the antecedent: isSet(A) ∧ isSet(B).
-        runProofByAsmM (isSet setA :&&: isSet setB) do
-            -- Within this subproof, isSet(A) and isSet(B) are proven assumptions.
-
-            -- Step 1: Define the templates for the Axiom of Specification.
-            -- The source set T will be A. The predicate P(x) will be (x ∈ B).
-            -- The parameters to our templates are A and B.
-            let a_param_idx = 0
-            let b_param_idx = 1
-            let spec_var_idx = 2 -- The 'x' in {x ∈ T | P(x)}
-
-            let source_set_template = X a_param_idx
-            let p_template = X spec_var_idx `In` X b_param_idx
-
-            -- Step 2: Use builderInstantiateM to apply the Axiom of Specification.
-            -- It will construct the set {x ∈ A | x ∈ B} and prove its defining property.
-            -- The instantiation terms [setA, setB] correspond to the template params [X 0, X 1].
-            (defining_prop, _, (intersectionObj,_,_)) <- builderInstantiateM
-                [setA, setB]                         -- instantiationTerms
-                [a_param_idx, b_param_idx]           -- outerTemplateIdxs
-                spec_var_idx                         -- spec_var_X_idx
-                source_set_template                  -- source_set_template (A)
-                p_template                           -- p_template (x ∈ B)
-
-            -- 'defining_prop' is: isSet(B) ∧ ∀x(x∈B ↔ (x∈A ∧ x∈B)), where B is the new intersectionObj.
-            -- This is exactly the property required for the existential statement.
-
-            -- Step 3: Construct the target existential statement from the theorem definition.
-            let target_existential = propDeBrSubXs [(0, setA), (1, setB)] binaryIntersectionExistsTheorem
-
-            -- Step 4: Apply Existential Generalization.
-            -- This works because 'defining_prop' is the instantiated version of the
-            -- property inside the target existential statement.
-            egM intersectionObj target_existential
-
-    return ()
-
--- | The schema that houses 'proveBinaryIntersectionExistsM'.
--- | This theorem has no other high-level theorems as lemmas; it is proven
--- | directly from the Axiom of Specification (via the builderInstantiateM helper).
-binaryIntersectionExistsSchema :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) =>
-     TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text m ()
-binaryIntersectionExistsSchema =
-    TheoremSchemaMT [] [] proveBinaryIntersectionExistsM
-
--- | Helper to instantiate the binary intersection theorem and return the intersection set object.
--- | For this helper to work, the theorem defined by 'binaryIntersectionExistsTheorem' must be proven
--- | beforehand (e.g., in the global context by running its schema).
-binaryIntersectionInstantiateM ::  (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) =>
-    ObjDeBr -> ObjDeBr -> ProofGenTStd () [ZFC.LogicRule PropDeBr DeBrSe ObjDeBr] PropDeBr Text m (PropDeBr, [Int], ObjDeBr)
-binaryIntersectionInstantiateM setA setB = do
-    runProofBySubArgM do
-        -- This helper relies on isSet(setA) and isSet(setB) being proven in the outer context.
-
-        -- Step 1: Instantiate the 'binaryIntersectionExistsTheorem' with the specific sets A and B.
-        (instantiated_thm, _) <- multiUIM binaryIntersectionExistsTheorem [setA, setB]
-
-        -- Step 2: Prove the antecedent of the instantiated theorem.
-        (isSet_A_proven, _) <- repM (isSet setA)
-        (isSet_B_proven, _) <- repM (isSet setB)
-        (antecedent_proven, _) <- adjM isSet_A_proven isSet_B_proven
-
-        -- Step 3: Use Modus Ponens to derive the existential statement.
-        (exists_S_proven, _) <- mpM instantiated_thm
-
-        -- Step 4: Use Existential Instantiation (eiHilbertM) to get the property of the intersection set.
-        -- The Hilbert term created here, `intersectionObj`, is definitionally A ∩ B.
-        (prop_of_intersection, _, intersectionObj) <- eiHilbertM exists_S_proven
-
-        return intersectionObj
 
 
 
@@ -3159,6 +3029,11 @@ main = do
 
     print "TEST BINARY UNION EXISTS SCHEMA-------------------------------------"
     (a,b,c,d) <- checkTheoremM (binaryUnionExistsSchema::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text IO ()))
+    (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
+
+
+    print "TEST BINARY INTERSECTION EXISTS SCHEMA-------------------------------------"
+    (a,b,c,d) <- checkTheoremM (binaryIntersectionExistsSchema::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text IO ()))
     (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
 
     -- print "TEST BINARY CROSSPRODDEFEQUIV SCHEMA-------------------------------------"
