@@ -15,7 +15,9 @@ module RuleSets.ZFC.Theorems
     builderSubsetTheoremSchema,
     specRedundancySchema,
     binaryIntersectionExistsSchema,
-    binaryIntersectionInstantiateM
+    binaryIntersectionInstantiateM,
+    disjointSubsetIsEmptyTheorem,
+    disjointSubsetIsEmptySchema
 ) where
 
 
@@ -568,6 +570,131 @@ unionWithEmptySetSchema =
         }
 
 --------END UNION WITH EMPTY SET
+
+--------DISJOINT SUBSETISEMPTY THEOREM
+
+disjointSubsetIsEmptyTheorem :: SentConstraints s t => s
+disjointSubsetIsEmptyTheorem = aX 0 (aX 1 (isSet (x 0) .&&. (x 0 ./\. x 1) .==. emptySet .&&. (x 1 `memberOf` x 0) .->. x 1 .==. emptySet))
+
+
+
+-- | Proves the theorem defined by 'disjointSubsetIsEmptyTheorem'.
+-- |
+-- | The proof strategy is as follows:
+-- | 1. Assume the antecedent: isSet(a), a ∩ b = ∅, and b ⊆ a.
+-- | 2. To prove b = ∅, we must show they are extensionally equal: ∀x(x ∈ b ↔ x ∈ ∅).
+-- | 3. This is equivalent to showing ∀x(¬(x ∈ b)), since nothing is in ∅.
+-- | 4. We prove ∀x(¬(x ∈ b)) by contradiction. Assume ∃x(x ∈ b).
+-- | 5. Let 'y' be such an element in 'b'.
+-- | 6. Since b ⊆ a, it follows that y ∈ a.
+-- | 7. Since y ∈ a and y ∈ b, it follows that y ∈ (a ∩ b).
+-- | 8. But this contradicts the premise that a ∩ b = ∅.
+-- | 9. Therefore, our assumption must be false, so ¬∃x(x ∈ b), which is ∀x(¬(x ∈ b)).
+-- | 10. With ∀x(x ∈ b ↔ x ∈ ∅) proven, the Axiom of Extensionality gives b = ∅.
+proveDisjointSubsetIsEmptyM :: HelperConstraints sE s eL m r t =>
+    ProofGenTStd () r s Text m ()
+proveDisjointSubsetIsEmptyM = do
+    -- Prove: ∀a ∀b (isSet(a) ∧ a ∩ b = ∅ ∧ b ⊆ a → b=∅)
+    multiUGM [(), ()] $ do
+        -- Inside UG, free variables for a and b are introduced (v_a, v_b).
+        v_Av_B <- getTopFreeVars 2
+        let v_a = head v_Av_B
+        let v_b = v_Av_B!!1
+
+
+        -- Prove the main implication by assuming the antecedent.
+        let antecedent = isSet v_a .&&. ((v_a ./\. v_b) .==. emptySet) .&&. (v_b `subset` v_a)
+        runProofByAsmM antecedent $ do
+            -- Step 1: Deconstruct the antecedent assumption.
+            (isSet_a_proven, _) <- simpLM antecedent
+            (rest1,_) <- simpRM antecedent
+            (intersection_is_empty, subset_b_a) <- simpLM rest1
+            (subset_b_a,_) <- simpRM rest1 
+
+            -- Step 2: Prove ∀x(¬(x ∈ v_b)) by contradiction.
+            (forall_not_in_b, _) <- runProofByUGM () $ do
+                x_var <- getTopFreeVar
+                (x_in_b_implies_false, _) <- runProofByAsmM (x_var `memberOf` v_b) $ do
+                    -- From b ⊆ a and x ∈ b, we get x ∈ a.
+                    (isSet_b, _) <- simpLM subset_b_a
+                    (forall_imp, _) <- simpRM subset_b_a
+                    (x_in_b_implies_x_in_a, _) <- uiM x_var forall_imp
+                    (x_in_a, _) <- mpM x_in_b_implies_x_in_a
+
+                    -- From x ∈ a and x ∈ b, we get x ∈ (a ∩ b).
+                    (def_prop_inter, _, _) <- binaryIntersectionInstantiateM v_a v_b
+                    (forall_inter_bicond, _) <- simpRM def_prop_inter
+                    (inst_inter_bicond, _) <- uiM x_var forall_inter_bicond
+                    (imp_to_inter, _) <- bicondElimRM inst_inter_bicond
+                    (x_in_a_and_b, _) <- adjM x_in_a (x_var `memberOf` v_b)
+                    (x_in_intersection, _) <- mpM imp_to_inter
+
+                    -- From a ∩ b = ∅ and x ∈ (a ∩ b), we get x ∈ ∅.
+                    let eqSubstTmplt = x_var `memberOf` x 0
+                    --(x_in_empty, _) <- eqSubstM 1 (X 0 :==: X 1 :->: ((x `In` X 0) :->: (x `In` X 1)))
+                    --                         [v_a ./\. v_b, EmptySet]
+                    (x_in_empty, _) <- eqSubstM 0 eqSubstTmplt intersection_is_empty
+
+
+                    -- But we know from the empty set axiom that ¬(x ∈ ∅).
+                    (forall_not_in_empty, _) <- emptySetAxiomM
+                    (not_x_in_empty, _) <- uiM x_var forall_not_in_empty
+
+                    -- This is a contradiction.
+                    contraFM x_in_empty
+                
+                -- From (x ∈ b → False), we derive ¬(x ∈ b).
+                absurdM x_in_b_implies_false
+
+            -- Step 3: Use the result from Step 2 to prove ∀x(x ∈ b ↔ x ∈ ∅).
+            (forall_bicond, _) <- runProofByUGM () $ do
+                x <- getTopFreeVar
+                (not_in_b, _) <- uiM x forall_not_in_b
+                (forall_not_in_empty, _) <- emptySetAxiomM
+                (not_in_empty, _) <- uiM x forall_not_in_empty
+
+                (dir1, _) <- runProofByAsmM (neg (x `memberOf` v_b))
+                                            (repM not_in_empty)
+
+                (dir2, _) <- runProofByAsmM (neg (x `memberOf` emptySet))
+                                   (repM not_in_b)
+                (bicond_of_negs,_) <- bicondIntroM dir1 dir2
+
+                -- Use our tautology helper to get the positive biconditional.
+                negBicondToPosBicondM bicond_of_negs
+
+            -- Step 4: Apply the Axiom of Extensionality to prove b = ∅.
+            (isSet_b, _) <- simpLM subset_b_a
+            (isSet_empty, _) <- emptySetNotIntM
+            (ext_axiom, _) <- extensionalityAxiomM
+            (ext_inst, _) <- multiUIM ext_axiom [v_b, emptySet]
+            
+            (adj1, _) <- adjM isSet_empty forall_bicond
+            (full_antecedent, _) <- adjM isSet_b adj1
+            
+            mpM ext_inst
+            return ()
+    return ()
+
+
+-- | The schema that houses the proof for 'disjointSubsetIsEmptyTheorem'.
+-- | It declares its dependencies on other theorems.
+disjointSubsetIsEmptySchema :: HelperConstraints sE s eL m r t =>
+     TheoremSchemaMT () r s Text m ()
+disjointSubsetIsEmptySchema =
+    let
+        -- The lemmas required for this proof.
+        lemmas_needed = [
+            binaryIntersectionExistsTheorem
+          ]
+    in
+        TheoremSchemaMT {
+            lemmasM = lemmas_needed,
+            proofM = proveDisjointSubsetIsEmptyM,
+            constDictM = [] -- No specific object constants needed
+        }
+
+--------END DISJOINT SUBSET IS EMPTY THEOREM
 
 ---- BEGIN BUILDER SUBSET THEOREM ---
 -- | Constructs the PropDeBr term for the general theorem that any set constructed
