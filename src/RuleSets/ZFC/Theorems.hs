@@ -22,7 +22,8 @@ module RuleSets.ZFC.Theorems
     specAntiRedundancySchema,
     partitionEquivTheorem,
     builderSrcPartitionTheorem,
-    builderSrcPartitionSchema
+    builderSrcPartitionSchema,
+    pairSubstTheorem
 
 ) where
 
@@ -1694,6 +1695,35 @@ specAntiRedundancySchema outerTemplateIdxs spec_var_idx source_set_template p_te
 
 
 -- END SPEC ANTIREDUNDANCY THEOREM
+
+
+-- CROSS PROD EXISTS THEOREM
+
+-- crossProductDefEquiv theorem won't have it's own section.
+-- It is a theorem probably used exclusively by crossProductExists
+
+
+-- | This function composes the "pair substitution theorem":
+-- |  
+-- |  ∀𝑥₅(∀𝑥₄(∀𝑥₃(∀𝑥₂(∀𝑥₁(∀𝑥₀((𝑥₃,𝑥₂) = 
+-- |      (𝑥₁,𝑥₀) ∧ 𝑥₁ ∈ 𝑥₅ ∧ 𝑥₀ ∈ 𝑥₄ → 𝑥₃ ∈ 𝑥₅ ∧ 𝑥₂ ∈ 𝑥₄))))))
+-- |  
+pairSubstTheorem :: SentConstraints s t => s
+pairSubstTheorem = 
+    let
+        thm_A=0; thm_B=1; thm_x=2; thm_y=3; thm_a=4; thm_b=5
+        thm_antecedent = (pair (x thm_x) (x thm_y) .==. pair (x thm_a) (x thm_b))
+                            .&&. (x thm_a `memberOf` x thm_A) .&&. (x thm_b `memberOf` x thm_B)
+        thm_consequent = (x thm_x `memberOf` x thm_A) .&&. (x thm_y `memberOf` x thm_B)
+        pair_subst_theorem_closed = multiAx [thm_A, thm_B, thm_x, thm_y, thm_a, thm_b] (thm_antecedent .->. thm_consequent)
+    in
+        pair_subst_theorem_closed
+
+
+
+-- END CROS PROD EXISTS THEOREM
+
+
 
 --data MetaRuleError s where
 --   MetaRuleErrNotClosed :: s -> MetaRuleError s

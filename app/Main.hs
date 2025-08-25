@@ -196,24 +196,6 @@ provePowerSetIsSetM x = do
 
 
 
-
-
--- | This function composes the "pair substitution theorem":
--- |  
--- |  ∀𝑥₅(∀𝑥₄(∀𝑥₃(∀𝑥₂(∀𝑥₁(∀𝑥₀((𝑥₃,𝑥₂) = 
--- |      (𝑥₁,𝑥₀) ∧ 𝑥₁ ∈ 𝑥₅ ∧ 𝑥₀ ∈ 𝑥₄ → 𝑥₃ ∈ 𝑥₅ ∧ 𝑥₂ ∈ 𝑥₄))))))
--- |  
-pairSubstTheorem :: PropDeBr
-pairSubstTheorem = 
-    let
-        thm_A=0; thm_B=1; thm_x=2; thm_y=3; thm_a=4; thm_b=5
-        thm_antecedent = (pair (X thm_x) (X thm_y) :==: pair (X thm_a) (X thm_b))
-                            :&&: (X thm_a `In` X thm_A) :&&: (X thm_b `In` X thm_B)
-        thm_consequent = (X thm_x `In` X thm_A) :&&: (X thm_y `In` X thm_B)
-        pair_subst_theorem_closed = multiAx [thm_A, thm_B, thm_x, thm_y, thm_a, thm_b] (thm_antecedent :->: thm_consequent)
-    in
-        pair_subst_theorem_closed
-
 -- | This function composes the "pair in universe theorem":
 -- |
 -- |  ∀𝑥₃(∀𝑥₂(∀𝑥₁(∀𝑥₀(isSet(𝑥₃) ∉ ℤ ∧ isSet(𝑥₂) ∧ 𝑥₁ ∈ 𝑥₃ ∧ 𝑥₀ ∈ 𝑥₂ 
@@ -222,10 +204,10 @@ pairSubstTheorem =
 pairInUniverseTheorem :: PropDeBr
 pairInUniverseTheorem =
     let thm_A=0; thm_B=1; thm_x=2; thm_y=3
-        thm_univ = powerSet (powerSet (X thm_A .\/. X thm_B))
-        thm_pair_univ_antecedent = isSet (X thm_A) :&&: isSet (X thm_B) :&&: (X thm_x `In` X thm_A) :&&: (X thm_y `In` X thm_B)
-        thm_pair_univ_consequent = pair (X thm_x) (X thm_y) `In` thm_univ
-        pair_in_universe_theorem_closed = multiAx [thm_A, thm_B, thm_x, thm_y] (thm_pair_univ_antecedent :->: thm_pair_univ_consequent)
+        thm_univ = powerSet (powerSet (x thm_A .\/. x thm_B))
+        thm_pair_univ_antecedent = isSet (x thm_A) .&&. isSet (x thm_B) .&&. (x thm_x `memberOf` x thm_A) .&&. (x thm_y `memberOf` x thm_B)
+        thm_pair_univ_consequent = pair (x thm_x) (x thm_y) `In` thm_univ
+        pair_in_universe_theorem_closed = multiAx [thm_A, thm_B, thm_x, thm_y] (thm_pair_univ_antecedent .->. thm_pair_univ_consequent)
     in
         pair_in_universe_theorem_closed
 
@@ -2285,9 +2267,9 @@ main = do
     (a,b,c,d) <- checkTheoremM (binaryIntersectionExistsSchema::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text IO ()))
     (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
 
-    -- print "TEST BINARY CROSSPRODDEFEQUIV SCHEMA-------------------------------------"
-    -- (a,b,c,d) <- checkTheoremM $ crossProductDefEquivSchema
-    -- (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
+    print "TEST BINARY CROSSPRODDEFEQUIV SCHEMA-------------------------------------"
+    (a,b,c,d) <- checkTheoremM $ crossProductDefEquivSchema
+    (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
 
     -- print "TEST CROSSPROD EXISTS SCHEMA ---------------------------"
     -- (a,b,c,d) <- checkTheoremM $ crossProductExistsSchema
