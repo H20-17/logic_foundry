@@ -1506,6 +1506,7 @@ specAntiRedundancyTheorem outerTemplateIdxs spec_var_idx source_set_template p_t
         multiAx outerTemplateIdxs implication
 
 
+
 -- | Given an instantiated source set, predicate, and the proven defining property of a builder set,
 -- | this function proves the biconditional: {x ∈ S | ¬P(x)} = ∅ ↔ ∀x(x ∈ S → P(x)).
 -- | It encapsulates the core logical derivation for the spec redundancy theorem.
