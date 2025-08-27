@@ -23,7 +23,10 @@ module RuleSets.ZFC.Theorems
     partitionEquivTheorem,
     builderSrcPartitionTheorem,
     builderSrcPartitionSchema,
-    pairSubstTheorem
+    pairSubstTheorem,
+    pairInUniverseTheorem,
+    crossProductDefEquivTheorem,
+    crossProductDefEquivSchema
 
 ) where
 
@@ -1720,7 +1723,230 @@ pairSubstTheorem =
     in
         pair_subst_theorem_closed
 
+-- | This function composes the "pair in universe theorem":
+-- |
+-- |  ∀𝑥₃(∀𝑥₂(∀𝑥₁(∀𝑥₀(isSet(𝑥₃) ∉ ℤ ∧ isSet(𝑥₂) ∧ 𝑥₁ ∈ 𝑥₃ ∧ 𝑥₀ ∈ 𝑥₂ 
+-- |         → (𝑥₁,𝑥₀) ∈ 𝒫(𝒫(𝑥₃ ∪ 𝑥₂))))))
+-- |
+pairInUniverseTheorem :: SentConstraints s t => s
+pairInUniverseTheorem =
+    let thm_A=0; thm_B=1; thm_x=2; thm_y=3
+        thm_univ = powerSet (powerSet (x thm_A .\/. x thm_B))
+        thm_pair_univ_antecedent = isSet (x thm_A) .&&. isSet (x thm_B) .&&. (x thm_x `memberOf` x thm_A) .&&. (x thm_y `memberOf` x thm_B)
+        thm_pair_univ_consequent = pair (x thm_x) (x thm_y) `memberOf` thm_univ
+        pair_in_universe_theorem_closed = multiAx [thm_A, thm_B, thm_x, thm_y] (thm_pair_univ_antecedent .->. thm_pair_univ_consequent)
+    in
+        pair_in_universe_theorem_closed
 
+
+-- | Constructs the PropDeBr term for the closed theorem stating that the property
+-- | of a cross product derived via the Axiom of Specification implies the
+-- | canonical property of a cross product.
+-- |
+-- | 'binaryUnionExistsTheorem' is a required lemma for this theorem.
+-- | Theorem: ∀A∀B((isSet A ∧ isSet B) → (SpecProp(A,B) → CanonicalProp(A,B)))
+crossProductDefEquivTheorem :: SentConstraints s t => s
+crossProductDefEquivTheorem =
+    let
+        -- Define integer indices for the template variables (X k).
+        -- These will be bound by the outermost quantifiers for A and B.
+        a_idx = 0 -- Represents set A
+        b_idx = 1 -- Represents set B
+
+        setA = x a_idx
+        setB = x b_idx
+
+        -- Define the inner predicate P(z) used in the specification.
+        -- P(z) := ∃x∃y (z = <x,y> ∧ x ∈ A ∧ y ∈ B)
+        spec_z_idx = 2; spec_x_idx = 3; spec_y_idx = 4
+        predicate_P = eX spec_x_idx (eX spec_y_idx (
+                          (x spec_z_idx .==. pair (x spec_x_idx) (x spec_y_idx))
+                          .&&. (x spec_x_idx `memberOf` setA)
+                          .&&. (x spec_y_idx `memberOf` setB)
+                      ))
+
+        -- Define the universe set U = P(P(A U B))
+        universeSet = powerSet (powerSet (setA .\/. setB))
+
+        -- Define the cross product object B via the builder shorthand, which
+        -- is equivalent to the Hilbert term from specification.
+        -- B := {z ∈ U | P(z)}
+        crossProdObj = builderX spec_z_idx universeSet predicate_P
+
+        -- Now, construct the two main properties that form the implication.
+
+        -- 1. SpecProp(A,B): The defining property of B as derived from specification.
+        --    isSet(B) ∧ ∀z(z∈B ↔ (P(z) ∧ z∈U))
+        spec_prop_z_idx = 2 -- A new z for this quantifier
+
+        spec_prop_body = (x spec_prop_z_idx `memberOf` crossProdObj) .<->.
+                         ((sentSubX spec_z_idx (x spec_prop_z_idx) predicate_P) .&&. (x spec_prop_z_idx `memberOf` universeSet))
+        spec_prop = isSet crossProdObj .&&. aX spec_prop_z_idx spec_prop_body
+
+        -- 2. CanonicalProp(A,B): The standard definition of the property of A × B.
+        --    isSet(B) ∧ ∀x∀y(<x,y>∈B ↔ (x∈A ∧ y∈B))
+        canon_x_idx = 2; canon_y_idx = 3
+        canon_element_prop = (x canon_x_idx `memberOf` setA) .&&. (x canon_y_idx `memberOf` setB)
+        canon_pair_in_b = pair (x canon_x_idx) (x canon_y_idx) `memberOf` crossProdObj
+        canon_quantified_bicond = aX canon_x_idx (aX canon_y_idx (canon_element_prop .<->. canon_pair_in_b))
+        canonical_prop = isSet crossProdObj .&&. canon_quantified_bicond
+
+        -- Construct the main implication of the theorem: SpecProp(A,B) → CanonicalProp(A,B)
+        spec_implies_canonical = spec_prop .->. canonical_prop
+
+        -- Construct the antecedent for the entire theorem: isSet(A) ∧ isSet(B)
+        isSet_A = isSet setA
+        isSet_B = isSet setB
+        theorem_antecedent = isSet_A .&&. isSet_B
+
+        -- Form the implication for the body of the theorem
+        theorem_body = theorem_antecedent .->. spec_implies_canonical
+
+    in
+        -- Universally quantify over A and B to create the final closed theorem.
+        multiAx [a_idx, b_idx] theorem_body
+    
+
+-- | Proves "crossProductDefEquivTheorem".
+proveCrossProductDefEquivM :: (HelperConstraints sE s eL m r t, ShowableTerm s t)  =>
+    ProofGenTStd () r s Text m ()
+proveCrossProductDefEquivM = do
+    -- Universally generalize over A and B
+    multiUGM [(), ()] $ do
+        -- Inside UG, free variables v_A and v_B are introduced
+        v_Av_B <- getTopFreeVars 2
+        let setB = head v_Av_B
+        let setA = v_Av_B!!1
+
+        -- Prove the main implication by assuming the antecedent
+        runProofByAsmM (isSet setA .&&. isSet setB) $ do
+            -- Within this subproof, isSet A and isSet B are proven assumptions.
+            -- Construct all necessary terms and properties internally.
+            let universeSet = powerSet (powerSet (setA .\/. setB))
+            let z_idx = 0; x_idx = 1; y_idx = 2; setA_idx = 3; setB_idx = 4
+            let universeSet_tmplt = powerSet (powerSet (x setA_idx .\/. x setB_idx))
+            -- let predicate_P = eX x_idx (eX y_idx (
+            --                      (x z_idx .==. pair (x x_idx) (x y_idx))
+            --                      .&&. (x x_idx `memberOf` setA)
+            --                      .&&. (x y_idx `memberOf` setB)
+            --                  ))
+            let predicate_P_tmplt = eX x_idx (eX y_idx (
+                                  (x z_idx .==. pair (x x_idx) (x y_idx))
+                                  .&&. (x x_idx `memberOf` x setA_idx)
+                                  .&&. (x y_idx `memberOf` x setB_idx)
+                              ))
+            -- The object for the cross product, B = A×B
+            -- let crossProdObj = builderX z_idx universeSet predicate_P
+            -- crossProdObj_txt <- showTermM crossProdObj
+            -- remarkM $ "Cross Product Object: " <> crossProdObj_txt
+            -- Get the defining property of B from the Axiom of Specification
+            --(specAxiom, _) <- specificationM [] z_idx universeSet predicate_P -- No outer free vars in this sub-context
+            --(definingProp_of_B, _, _) <- eiHilbertM specAxiom
+ 
+            -- Correctly use specificationFreeMBuilder, which is designed to handle
+            -- the free variables v_A and v_B present in 'setA', 'setB', and thus in 'predicate_P'.
+            (definingProp_of_B, _, (crossProdObj,_,_)) <- 
+                 builderInstantiateM [setA, setB] [setA_idx, setB_idx] z_idx universeSet_tmplt predicate_P_tmplt
+
+            crossProdObj_txt <- showTermM crossProdObj
+            remarkM $ "Cross Product Object from Builder: " <> crossProdObj_txt
+            --error "stop this shit"
+
+            -- Construct the canonical target property for the cross product B
+            let s_idx_final = 0; x_idx_final = 1; y_idx_final = 2
+            -- let element_prop_final = (x x_idx_final `memberOf` setA) .&&. (x y_idx_final `memberOf` setB)
+            -- let pair_in_s_final = pair (x x_idx_final) (x y_idx_final) `memberOf` (x s_idx_final)
+            -- let quantified_bicond_final = aX x_idx_final (aX y_idx_final (pair_in_s_final .<->. element_prop_final))
+            -- let canonical_prop_of_B = isSet crossProdObj .&&. quantified_bicond_final
+
+            -- Now, prove the implication: definingProp_of_B → canonical_prop_of_B
+            runProofByAsmM definingProp_of_B $ do
+                -- This inner proof derives the canonical property from the specification property.
+                (isSet_B_proven, _) <- simpLM definingProp_of_B
+                (spec_forall_bicond, _) <- simpRM definingProp_of_B
+                (quantified_bicond_derived, _) <- multiUGM [(), ()] $ do
+                    v_x_innerV_y_inner <- getTopFreeVars 2
+                    let v_x_inner = head v_x_innerV_y_inner
+                    let v_y_inner = v_x_innerV_y_inner !! 1
+                    (dir1,_) <- runProofByAsmM (pair v_x_inner v_y_inner `memberOf` crossProdObj) $ do
+                        (spec_inst,_) <- uiM (pair v_x_inner v_y_inner) spec_forall_bicond
+                        (imp,_) <- bicondElimLM spec_inst
+                        (inU_and_P,_) <- mpM imp
+                        (p_of_pair,_) <- simpLM inU_and_P
+
+                        -- CORRECTED: Perform existential instantiation twice for the nested quantifiers.
+                        -- First, instantiate the outer ∃a from ∃a(∃b.P(a,b)).
+                        (p_inst_for_b, _, v_a_h) <- eiHilbertM p_of_pair
+
+                        -- Second, instantiate the inner ∃b from the resulting proposition.
+                        (p_inst_final, _, v_b_h) <- eiHilbertM p_inst_for_b
+
+                        -- 'p_inst_final' is now the fully instantiated body:
+                        -- (<v_x,v_y> = <v_a_h,v_b_h>) ∧ v_a_h∈A ∧ v_b_h∈B
+                                               
+                        -- Instantiate the pair substitution theorem with our specific free variables and Hilbert terms.
+                        let instantiation_terms_for_thm = [setA, setB, v_x_inner, v_y_inner, v_a_h, v_b_h]
+                        (instantiated_theorem, _) <- multiUIM pairSubstTheorem instantiation_terms_for_thm
+
+                        -- Use Modus Ponens with the fully instantiated body 'p_inst_final' to get the consequent.
+                        mpM instantiated_theorem
+                    (dir2,_) <- runProofByAsmM ((v_x_inner `memberOf` setA) .&&. (v_y_inner `memberOf` setB)) $ do
+                        -- Goal: Prove <x,y> ∈ B. This means proving P(<x,y>) ∧ <x,y>∈U.
+
+                        -- Part 1: Prove P(<x,y>), which is ∃a∃b(<x,y>=<a,b> ∧ a∈A ∧ b∈B).
+                        -- We prove this by witnessing with a=v_x and b=v_y.
+                        (vx_in_A_p, _) <- simpLM ((v_x_inner `memberOf` setA) .&&. (v_y_inner `memberOf` setB))
+                        (vy_in_B_p, _) <- simpRM ((v_x_inner `memberOf` setA) .&&. (v_y_inner `memberOf` setB))
+                        (refl_pair, _) <- eqReflM (pair v_x_inner v_y_inner)
+
+                        (in_A_and_in_B, _) <- adjM vx_in_A_p vy_in_B_p
+                        (p_vx_vy_instantiated_body, _) <- adjM refl_pair in_A_and_in_B
+
+
+                        let p_ab_template = (pair v_x_inner v_y_inner .==. pair (x 0) (x 1)) .&&. ((x 0 `memberOf` setA) .&&. (x 1 `memberOf` setB))
+                        let p_vx_y_template = sentSubX 0 v_x_inner p_ab_template
+                        let eg_target_y = eX 1 p_vx_y_template
+                        (exists_y_prop, _) <- egM v_y_inner eg_target_y
+
+                        let p_x_b_template = eX 1 (sentSubX 0 (x 0) p_ab_template)
+                        let eg_target_x = eX 0 p_x_b_template
+                        (p_of_pair_proven, _) <- egM v_x_inner eg_target_x
+
+                        -- Instantiate the pair in universe theorem and use it.
+                        (instantiated_thm, _) <- multiUIM pairInUniverseTheorem [setA, setB, v_x_inner, v_y_inner]
+
+
+                        (conj3_4, _) <- adjM vx_in_A_p vy_in_B_p
+                        (isSetB_p, _) <- simpRM (isSet setA .&&. isSet setB)
+                        (conj2_3_4, _) <- adjM isSetB_p conj3_4
+                        (isSetA_p, _) <- simpLM (isSet setA .&&. isSet setB)
+                        (full_antecedent, _) <- adjM isSetA_p conj2_3_4
+                        (pair_in_U_proven, _) <- mpM instantiated_thm
+                        -- Part 3: Combine proofs for P(<x,y>) and <x,y>∈U to match the spec property.
+                        (in_U_and_P, _) <- adjM p_of_pair_proven pair_in_U_proven
+                        
+                        -- Part 4: Use the spec property to conclude <x,y> ∈ B
+                        (spec_bicond_inst, _) <- uiM (pair v_x_inner v_y_inner) spec_forall_bicond
+                        (spec_imp_backward, _) <- bicondElimRM spec_bicond_inst
+                        mpM spec_imp_backward
+                        return ()
+                    bicondIntroM dir1 dir2
+                -- Adjoin isSet(B) to complete the canonical property
+                adjM isSet_B_proven quantified_bicond_derived
+    return ()
+
+
+-- | The schema that houses 'proveCrossProductDefEquivM'.
+-- | The schema stipulates that:
+-- | "binaryUnionExistsTheorem" is a required lemma.
+crossProductDefEquivSchema :: (HelperConstraints sE s eL m r t, ShowableTerm s t) => 
+     TheoremSchemaMT () r s Text m ()
+crossProductDefEquivSchema = 
+    TheoremSchemaMT [] 
+                    [binaryUnionExistsTheorem
+                    , pairSubstTheorem
+                    , pairInUniverseTheorem] 
+                    proveCrossProductDefEquivM
 
 -- END CROS PROD EXISTS THEOREM
 

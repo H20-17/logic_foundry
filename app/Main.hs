@@ -196,120 +196,34 @@ provePowerSetIsSetM x = do
 
 
 
--- | This function composes the "pair in universe theorem":
--- |
--- |  ∀𝑥₃(∀𝑥₂(∀𝑥₁(∀𝑥₀(isSet(𝑥₃) ∉ ℤ ∧ isSet(𝑥₂) ∧ 𝑥₁ ∈ 𝑥₃ ∧ 𝑥₀ ∈ 𝑥₂ 
--- |         → (𝑥₁,𝑥₀) ∈ 𝒫(𝒫(𝑥₃ ∪ 𝑥₂))))))
--- |
-pairInUniverseTheorem :: PropDeBr
-pairInUniverseTheorem =
-    let thm_A=0; thm_B=1; thm_x=2; thm_y=3
-        thm_univ = powerSet (powerSet (x thm_A .\/. x thm_B))
-        thm_pair_univ_antecedent = isSet (x thm_A) .&&. isSet (x thm_B) .&&. (x thm_x `memberOf` x thm_A) .&&. (x thm_y `memberOf` x thm_B)
-        thm_pair_univ_consequent = pair (x thm_x) (x thm_y) `In` thm_univ
-        pair_in_universe_theorem_closed = multiAx [thm_A, thm_B, thm_x, thm_y] (thm_pair_univ_antecedent .->. thm_pair_univ_consequent)
-    in
-        pair_in_universe_theorem_closed
-
--- | Constructs the PropDeBr term for the closed theorem stating that the property
--- | of a cross product derived via the Axiom of Specification implies the
--- | canonical property of a cross product.
--- |
--- | 'binaryUnionExistsTheorem' is a required lemma for this theorem.
--- | Theorem: ∀A∀B((isSet A ∧ isSet B) → (SpecProp(A,B) → CanonicalProp(A,B)))
-crossProductDefEquivTheorem :: PropDeBr
-crossProductDefEquivTheorem =
-    let
-        -- Define integer indices for the template variables (X k).
-        -- These will be bound by the outermost quantifiers for A and B.
-        a_idx = 0 -- Represents set A
-        b_idx = 1 -- Represents set B
-
-        setA = X a_idx
-        setB = X b_idx
-
-        -- Define the inner predicate P(z) used in the specification.
-        -- P(z) := ∃x∃y (z = <x,y> ∧ x ∈ A ∧ y ∈ B)
-        spec_z_idx = 2; spec_x_idx = 3; spec_y_idx = 4
-        predicate_P = eX spec_x_idx (eX spec_y_idx (
-                          (X spec_z_idx :==: pair (X spec_x_idx) (X spec_y_idx))
-                          :&&: (X spec_x_idx `In` setA)
-                          :&&: (X spec_y_idx `In` setB)
-                      ))
-
-        -- Define the universe set U = P(P(A U B))
-        universeSet = powerSet (powerSet (setA .\/. setB))
-
-        -- Define the cross product object B via the builder shorthand, which
-        -- is equivalent to the Hilbert term from specification.
-        -- B := {z ∈ U | P(z)}
-        crossProdObj = builderX spec_z_idx universeSet predicate_P
-
-        -- Now, construct the two main properties that form the implication.
-
-        -- 1. SpecProp(A,B): The defining property of B as derived from specification.
-        --    isSet(B) ∧ ∀z(z∈B ↔ (P(z) ∧ z∈U))
-        spec_prop_z_idx = 2 -- A new z for this quantifier
-
-        spec_prop_body = (X spec_prop_z_idx `In` crossProdObj) :<->:
-                         ((propDeBrSubX spec_z_idx (X spec_prop_z_idx) predicate_P) :&&: (X spec_prop_z_idx `In` universeSet))
-        spec_prop = isSet crossProdObj :&&: aX spec_prop_z_idx spec_prop_body
-
-        -- 2. CanonicalProp(A,B): The standard definition of the property of A × B.
-        --    isSet(B) ∧ ∀x∀y(<x,y>∈B ↔ (x∈A ∧ y∈B))
-        canon_x_idx = 2; canon_y_idx = 3
-        canon_element_prop = (X canon_x_idx `In` setA) :&&: (X canon_y_idx `In` setB)
-        canon_pair_in_b = pair (X canon_x_idx) (X canon_y_idx) `In` crossProdObj
-        canon_quantified_bicond = aX canon_x_idx (aX canon_y_idx (canon_element_prop :<->: canon_pair_in_b))
-        canonical_prop = isSet crossProdObj :&&: canon_quantified_bicond
-
-        -- Construct the main implication of the theorem: SpecProp(A,B) → CanonicalProp(A,B)
-        spec_implies_canonical = spec_prop :->: canonical_prop
-
-        -- Construct the antecedent for the entire theorem: isSet(A) ∧ isSet(B)
-        isSet_A = isSet setA
-        isSet_B = isSet setB
-        theorem_antecedent = isSet_A :&&: isSet_B
-
-        -- Form the implication for the body of the theorem
-        theorem_body = theorem_antecedent :->: spec_implies_canonical
-
-    in
-        -- Universally quantify over A and B to create the final closed theorem.
-        multiAx [a_idx, b_idx] theorem_body
-    
-
 
 -- | Proves "crossProductDefEquivTheorem".
-proveCrossProductDefEquivM :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) =>
+proveCrossProductDefEquivMOld :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) =>
     ProofGenTStd () [ZFC.LogicRule PropDeBr DeBrSe ObjDeBr] PropDeBr Text m ()
-proveCrossProductDefEquivM = do
+proveCrossProductDefEquivMOld = do
     -- Universally generalize over A and B
     multiUGM [(), ()] do
         -- Inside UG, free variables v_A and v_B are introduced
-        v_B <- getTopFreeVar
-        context <- ask
-        let v_A_idx = (length . freeVarTypeStack) context - 2
-        let v_A = V v_A_idx
-        let setA = v_A
-        let setB = v_B
+        v_Av_B <- getTopFreeVars 2
+        let setB = head v_Av_B
+        let setA = v_Av_B!!1
 
         -- Prove the main implication by assuming the antecedent
-        runProofByAsmM (isSet setA :&&: isSet setB) do
+        runProofByAsmM (isSet setA .&&. isSet setB) do
             -- Within this subproof, isSet A and isSet B are proven assumptions.
             -- Construct all necessary terms and properties internally.
             let universeSet = powerSet (powerSet (setA .\/. setB))
             let z_idx = 0; x_idx = 1; y_idx = 2; setA_idx = 3; setB_idx = 4
             let universeSet_tmplt = powerSet (powerSet (X setA_idx .\/. X setB_idx))
             let predicate_P = eX x_idx (eX y_idx (
-                                  (X z_idx :==: pair (X x_idx) (X y_idx))
-                                  :&&: (X x_idx `In` setA)
-                                  :&&: (X y_idx `In` setB)
+                                  (x z_idx :==: pair (x x_idx) (x y_idx))
+                                  .&&. (x x_idx `memberOf` setA)
+                                  .&&. (x y_idx `memberOf` setB)
                               ))
             let predicate_P_tmplt = eX x_idx (eX y_idx (
-                                  (X z_idx :==: pair (X x_idx) (X y_idx))
-                                  :&&: (X x_idx `In` X setA_idx)
-                                  :&&: (X y_idx `In` X setB_idx)
+                                  (x z_idx :==: pair (x x_idx) (x y_idx))
+                                  .&&. (x x_idx `memberOf` x setA_idx)
+                                  .&&. (x y_idx `memberOf` x setB_idx)
                               ))
             -- The object for the cross product, B = A×B
             let crossProdObj = builderX z_idx universeSet predicate_P
@@ -330,10 +244,10 @@ proveCrossProductDefEquivM = do
 
             -- Construct the canonical target property for the cross product B
             let s_idx_final = 0; x_idx_final = 1; y_idx_final = 2
-            let element_prop_final = (X x_idx_final `In` setA) :&&: (X y_idx_final `In` setB)
-            let pair_in_s_final = pair (X x_idx_final) (X y_idx_final) `In` (X s_idx_final)
+            let element_prop_final = (x x_idx_final `memberOf` setA) .&&. (x y_idx_final `memberOf` setB)
+            let pair_in_s_final = pair (x x_idx_final) (x y_idx_final) `memberOf` (x s_idx_final)
             let quantified_bicond_final = aX x_idx_final (aX y_idx_final (pair_in_s_final :<->: element_prop_final))
-            let canonical_prop_of_B = isSet crossProdObj :&&: quantified_bicond_final
+            let canonical_prop_of_B = isSet crossProdObj .&&. quantified_bicond_final
 
             -- Now, prove the implication: definingProp_of_B → canonical_prop_of_B
             runProofByAsmM definingProp_of_B do
@@ -345,7 +259,7 @@ proveCrossProductDefEquivM = do
                     context_inner <- ask
                     let v_x_inner_idx = (length . freeVarTypeStack) context_inner - 2
                     let v_x_inner = V v_x_inner_idx
-                    (dir1,_) <- runProofByAsmM (pair v_x_inner v_y_inner `In` crossProdObj) do
+                    (dir1,_) <- runProofByAsmM (pair v_x_inner v_y_inner `memberOf` crossProdObj) do
                         (spec_inst,_) <- uiM (pair v_x_inner v_y_inner) spec_forall_bicond
                         (imp,_) <- bicondElimLM spec_inst
                         (inU_and_P,_) <- mpM imp
@@ -367,25 +281,25 @@ proveCrossProductDefEquivM = do
 
                         -- Use Modus Ponens with the fully instantiated body 'p_inst_final' to get the consequent.
                         mpM instantiated_theorem
-                    (dir2,_) <- runProofByAsmM ((v_x_inner `In` setA) :&&: (v_y_inner `In` setB)) do
+                    (dir2,_) <- runProofByAsmM ((v_x_inner `memberOf` setA) .&&. (v_y_inner `memberOf` setB)) do
                         -- Goal: Prove <x,y> ∈ B. This means proving P(<x,y>) ∧ <x,y>∈U.
 
                         -- Part 1: Prove P(<x,y>), which is ∃a∃b(<x,y>=<a,b> ∧ a∈A ∧ b∈B).
                         -- We prove this by witnessing with a=v_x and b=v_y.
-                        (vx_in_A_p, _) <- simpLM ((v_x_inner `In` setA) :&&: (v_y_inner `In` setB))
-                        (vy_in_B_p, _) <- simpRM ((v_x_inner `In` setA) :&&: (v_y_inner `In` setB))
+                        (vx_in_A_p, _) <- simpLM ((v_x_inner `memberOf` setA) .&&. (v_y_inner `memberOf` setB))
+                        (vy_in_B_p, _) <- simpRM ((v_x_inner `memberOf` setA) .&&. (v_y_inner `memberOf` setB))
                         (refl_pair, _) <- eqReflM (pair v_x_inner v_y_inner)
 
                         (in_A_and_in_B, _) <- adjM vx_in_A_p vy_in_B_p
                         (p_vx_vy_instantiated_body, _) <- adjM refl_pair in_A_and_in_B
 
 
-                        let p_ab_template = (pair v_x_inner v_y_inner :==: pair (X 0) (X 1)) :&&: ((X 0 `In` setA) :&&: (X 1 `In` setB))
-                        let p_vx_y_template = propDeBrSubX 0 v_x_inner p_ab_template
+                        let p_ab_template = (pair v_x_inner v_y_inner .==. pair (x 0) (x 1)) :&&: ((X 0 `memberOf` setA) .&&. (x 1 `memberOf` setB))
+                        let p_vx_y_template = sentSubX 0 v_x_inner p_ab_template
                         let eg_target_y = eX 1 p_vx_y_template
                         (exists_y_prop, _) <- egM v_y_inner eg_target_y
 
-                        let p_x_b_template = eX 1 (propDeBrSubX 0 (X 0) p_ab_template)
+                        let p_x_b_template = eX 1 (sentSubX 0 (x 0) p_ab_template)
                         let eg_target_x = eX 0 p_x_b_template
                         (p_of_pair_proven, _) <- egM v_x_inner eg_target_x
 
@@ -394,9 +308,9 @@ proveCrossProductDefEquivM = do
 
 
                         (conj3_4, _) <- adjM vx_in_A_p vy_in_B_p
-                        (isSetB_p, _) <- simpRM (isSet setA :&&: isSet setB)
+                        (isSetB_p, _) <- simpRM (isSet setA .&&. isSet setB)
                         (conj2_3_4, _) <- adjM isSetB_p conj3_4
-                        (isSetA_p, _) <- simpLM (isSet setA :&&: isSet setB)
+                        (isSetA_p, _) <- simpLM (isSet setA .&&. isSet setB)
                         (full_antecedent, _) <- adjM isSetA_p conj2_3_4
                         (pair_in_U_proven, _) <- mpM instantiated_thm
                         -- Part 3: Combine proofs for P(<x,y>) and <x,y>∈U to match the spec property.
@@ -412,17 +326,7 @@ proveCrossProductDefEquivM = do
                 adjM isSet_B_proven quantified_bicond_derived
     return ()
 
--- | The schema that houses 'proveCrossProductDefEquivM'.
--- | The schema stipulates that:
--- | "binaryUnionExistsTheorem" is a required lemma.
-crossProductDefEquivSchema :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) => 
-     TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text m ()
-crossProductDefEquivSchema = 
-    TheoremSchemaMT [] 
-                    [binaryUnionExistsTheorem
-                    , pairSubstTheorem
-                    , pairInUniverseTheorem] 
-                    proveCrossProductDefEquivM
+
 
 
 
@@ -2268,7 +2172,7 @@ main = do
     (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
 
     print "TEST BINARY CROSSPRODDEFEQUIV SCHEMA-------------------------------------"
-    (a,b,c,d) <- checkTheoremM $ crossProductDefEquivSchema
+    (a,b,c,d) <- checkTheoremM (crossProductDefEquivSchema::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text IO ()))
     (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
 
     -- print "TEST CROSSPROD EXISTS SCHEMA ---------------------------"

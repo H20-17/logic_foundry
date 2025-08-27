@@ -298,7 +298,7 @@ getTopFreeVars :: (Monoid r1, ProofStd s eL1 r1 o tType, Monad m,
 getTopFreeVars n =  do
         context <- ask
         let frVarTypeStack = freeVarTypeStack context
-        unless (length frVarTypeStack <= n) (throwM (BigExceptNotNFreeVars n))
+        unless (length frVarTypeStack >= n) (throwM (BigExceptNotNFreeVars n))
         let topIdx = length frVarTypeStack - 1
         let topVars = [topIdx - i | i <- [0..n-1]]
         return (fmap free2Term topVars)
