@@ -1808,7 +1808,7 @@ crossProductDefEquivTheorem =
     
 
 -- | Proves "crossProductDefEquivTheorem".
-proveCrossProductDefEquivM :: (HelperConstraints sE s eL m r t, ShowableTerm s t)  =>
+proveCrossProductDefEquivM :: (HelperConstraints sE s eL m r t)  =>
     ProofGenTStd () r s Text m ()
 proveCrossProductDefEquivM = do
     -- Universally generalize over A and B
@@ -1835,13 +1835,6 @@ proveCrossProductDefEquivM = do
                                   .&&. (x x_idx `memberOf` x setA_idx)
                                   .&&. (x y_idx `memberOf` x setB_idx)
                               ))
-            -- The object for the cross product, B = A×B
-            -- let crossProdObj = builderX z_idx universeSet predicate_P
-            -- crossProdObj_txt <- showTermM crossProdObj
-            -- remarkM $ "Cross Product Object: " <> crossProdObj_txt
-            -- Get the defining property of B from the Axiom of Specification
-            --(specAxiom, _) <- specificationM [] z_idx universeSet predicate_P -- No outer free vars in this sub-context
-            --(definingProp_of_B, _, _) <- eiHilbertM specAxiom
  
             -- Correctly use specificationFreeMBuilder, which is designed to handle
             -- the free variables v_A and v_B present in 'setA', 'setB', and thus in 'predicate_P'.
@@ -1850,15 +1843,7 @@ proveCrossProductDefEquivM = do
 
             crossProdObj_txt <- showTermM crossProdObj
             remarkM $ "Cross Product Object from Builder: " <> crossProdObj_txt
-            --error "stop this shit"
-
-            -- Construct the canonical target property for the cross product B
-            let s_idx_final = 0; x_idx_final = 1; y_idx_final = 2
-            -- let element_prop_final = (x x_idx_final `memberOf` setA) .&&. (x y_idx_final `memberOf` setB)
-            -- let pair_in_s_final = pair (x x_idx_final) (x y_idx_final) `memberOf` (x s_idx_final)
-            -- let quantified_bicond_final = aX x_idx_final (aX y_idx_final (pair_in_s_final .<->. element_prop_final))
-            -- let canonical_prop_of_B = isSet crossProdObj .&&. quantified_bicond_final
-
+            
             -- Now, prove the implication: definingProp_of_B → canonical_prop_of_B
             runProofByAsmM definingProp_of_B $ do
                 -- This inner proof derives the canonical property from the specification property.
@@ -1939,7 +1924,7 @@ proveCrossProductDefEquivM = do
 -- | The schema that houses 'proveCrossProductDefEquivM'.
 -- | The schema stipulates that:
 -- | "binaryUnionExistsTheorem" is a required lemma.
-crossProductDefEquivSchema :: (HelperConstraints sE s eL m r t, ShowableTerm s t) => 
+crossProductDefEquivSchema :: (HelperConstraints sE s eL m r t) => 
      TheoremSchemaMT () r s Text m ()
 crossProductDefEquivSchema = 
     TheoremSchemaMT [] 

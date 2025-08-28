@@ -859,5 +859,5 @@ type HelperConstraints m s tType o t sE eL r = (
             , SubproofRule r s o tType
             , TypeableTerm t o tType sE
             , LogicTerm t
-
+            , ShowableTerm s t
             )
