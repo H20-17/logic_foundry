@@ -1707,6 +1707,18 @@ specAntiRedundancySchema outerTemplateIdxs spec_var_idx source_set_template p_te
 -- It is a theorem probably used exclusively by crossProductExists
 
 
+
+-- | This function composes the "pair equality theorem":
+-- |  ∀𝑥₃(∀𝑥₂(∀𝑥₁(∀𝑥₀(
+-- |       (𝑥₃,𝑥₂) = (𝑥₁,𝑥₀) ↔ 𝑥₃ = 𝑥₁ ∧ 𝑥₂ = 𝑥₀))))
+-- |
+-- | 
+pairEqTheorem :: SentConstraints s t => s
+pairEqTheorem = multiAx [3,2,1,0] 
+     (pair (x 3) (x 2) .==. pair (x 1) (x 0) .<->. x 3 .==. x 1 .&&. x 2 .==. x 0)
+
+
+ 
 -- | This function composes the "pair substitution theorem":
 -- |  
 -- |  ∀𝑥₅(∀𝑥₄(∀𝑥₃(∀𝑥₂(∀𝑥₁(∀𝑥₀((𝑥₃,𝑥₂) = 
@@ -1868,10 +1880,27 @@ proveCrossProductDefEquivM = do
 
                         -- 'p_inst_final' is now the fully instantiated body:
                         -- (<v_x,v_y> = <v_a_h,v_b_h>) ∧ v_a_h∈A ∧ v_b_h∈B
-                                               
+
+
+                        -- Instantiate the pair equality theorem
+                        let instantiation_terms_for_thm = [v_x_inner, v_y_inner, v_a_h, v_b_h]
+                        (instantiated_theorem, _) <- multiUIM pairEqTheorem instantiation_terms_for_thm
+                        txt1 <- showSentM instantiated_theorem
+                        (inst_tm_oneWay,_) <- bicondElimLM instantiated_theorem
+                        (p_inst_finalL,_) <- simpLM p_inst_final
+                        mpM inst_tm_oneWay
+                        (p_inst_finalR,_) <- simpRM p_inst_final                       
                         -- Instantiate the pair substitution theorem with our specific free variables and Hilbert terms.
                         let instantiation_terms_for_thm = [setA, setB, v_x_inner, v_y_inner, v_a_h, v_b_h]
                         (instantiated_theorem, _) <- multiUIM pairSubstTheorem instantiation_terms_for_thm
+                        
+
+
+
+                        txt2 <- showSentM instantiated_theorem
+                        remarkM txt1
+                        remarkM txt2
+                        error "stop here"
 
                         -- Use Modus Ponens with the fully instantiated body 'p_inst_final' to get the consequent.
                         mpM instantiated_theorem
@@ -1930,6 +1959,7 @@ crossProductDefEquivSchema =
     TheoremSchemaMT [] 
                     [binaryUnionExistsTheorem
                     , pairSubstTheorem
+                    , pairEqTheorem
                     , pairInUniverseTheorem] 
                     proveCrossProductDefEquivM
 
