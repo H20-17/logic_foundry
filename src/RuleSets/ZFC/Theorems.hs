@@ -896,7 +896,7 @@ partitionEquivTheorem outerTemplateIdxs spec_var_idx source_set_template p_templ
         -- The right-hand side of the biconditional: (x∈S ∧ P(x)) ∨ (x∈S ∧ ¬P(x))
         -- Note that p_template already contains X spec_var_idx for the variable x.
         x_in_S_and_P = p_template .&&. (x spec_var_idx `memberOf` source_set_template) 
-        x_in_S_and_NotP = (neg p_template) .&&. (x spec_var_idx `memberOf` source_set_template) 
+        x_in_S_and_NotP = neg p_template .&&. (x spec_var_idx `memberOf` source_set_template) 
         rhs = x_in_S_and_P .||. x_in_S_and_NotP
 
         -- The core biconditional for a specific x and specific params
@@ -1016,7 +1016,7 @@ proveBuilderSrcPartitionUnionMFree spec_var_idx sourceSet p_tmplt =
                     (def_union_imp, _) <- bicondElimRM def_union_inst
                     mpM def_union_imp
                 
-                (case2_imp, _) <- runProofByAsmM ((neg p_of_v) .&&. (v `memberOf` sourceSet)) $ do
+                (case2_imp, _) <- runProofByAsmM (neg p_of_v .&&. (v `memberOf` sourceSet)) $ do
                     (forall_notp, _) <- simpRM def_prop_NotP
                     (def_notp_inst, _) <- uiM v forall_notp
                     (def_notp_imp, _) <- bicondElimRM def_notp_inst
@@ -1792,7 +1792,7 @@ crossProductDefEquivTheorem =
         spec_prop_z_idx = 2 -- A new z for this quantifier
 
         spec_prop_body = (x spec_prop_z_idx `memberOf` crossProdObj) .<->.
-                         ((sentSubX spec_z_idx (x spec_prop_z_idx) predicate_P) .&&. (x spec_prop_z_idx `memberOf` universeSet))
+                         (sentSubX spec_z_idx (x spec_prop_z_idx) predicate_P .&&. (x spec_prop_z_idx `memberOf` universeSet))
         spec_prop = isSet crossProdObj .&&. aX spec_prop_z_idx spec_prop_body
 
         -- 2. CanonicalProp(A,B): The standard definition of the property of A × B.

@@ -16,7 +16,7 @@ import Data.Monoid ( Last(..) )
 
 import Control.Monad ( foldM, unless )
 import Data.Set (Set, fromList)
-import Data.List (mapAccumL,intersperse)
+import Data.List (mapAccumL,intersperse,find)
 import qualified Data.Set as Set
 import Data.Text ( pack, Text, unpack,concat)
 import Data.Map
@@ -33,7 +33,7 @@ import Control.Monad.Trans ( MonadTrans(lift) )
 import Control.Monad.Reader ( MonadReader(ask) )
 import Control.Monad.State ( MonadState(get) )
 import Control.Monad.Writer ( MonadWriter(tell) )
-import Data.Maybe ( isNothing )
+import Data.Maybe ( isNothing, mapMaybe )
 
 import Kernel
 import Internal.StdPattern
@@ -123,6 +123,75 @@ eqTransM :: HelperConstraints m s tType o t sE eL r
            => s -> s -> ProofGenTStd tType r s o m (s,[Int])
 eqTransM eqSent1 eqSent2 = standardRuleM (eqTrans eqSent1 eqSent2)
 
+-- | Given a template sentence and a list of equalities, this function iteratively
+-- | applies equality substitution for each template variable. It assumes that the
+-- | template, when fully substituted with the LEFT-hand side of each equality,
+-- | is already a proven proposition in the context.
+-- |
+-- | The function works by folding over the list of substitutions. In each step,
+-- | it constructs a new template where variables before the current one are
+-- | substituted with their RIGHT-hand sides, and variables after are substituted
+-- | with their LEFT-hand sides. It then uses `eqSubstM` to perform the substitution
+-- | for the current variable.
+eqSubstMultiM :: HelperConstraints m s tType o t sE eL r
+              => [(Int, s)]  -- ^ List of (index, equality) pairs for substitution.
+              -> s           -- ^ The template sentence.
+              -> ProofGenTStd tType r s o m (s, [Int])
+eqSubstMultiM substitutions templateSent = do
+    -- This function requires parsers for the left and right sides of an equality.
+    -- We'll assume a `parseEq :: s -> Maybe (t, t)` function exists in the environment.
+    let parseEqLS s = fst <$> parseEq s
+    let parseEqRS s = snd <$> parseEq s
+
+    -- Helper to parse a list of sentences and throw a specific error on failure.
+    let parseAllOrThrow parser sentences =
+            let parsed_results = zip sentences (Prelude.map parser sentences)
+            in case find (isNothing . snd) parsed_results of
+                Just (failed_s, Nothing) -> throwM (EqSubstMultiNotEquality failed_s)
+                Nothing -> return $ mapMaybe snd parsed_results
+
+    -- Extract all the left-hand-side terms from the equalities.
+    lhs_terms <- parseAllOrThrow parseEqLS (Prelude.map snd substitutions)
+
+    -- The initial premise that must be proven is the template with all variables
+    -- substituted by the left-hand side of their respective equalities.
+    let initial_premise = sentSubXs (zip (Prelude.map fst substitutions) lhs_terms) templateSent
+
+    -- We use `repM` to assert that this initial premise is already proven in the context.
+    -- This is the starting point for our chain of substitutions.
+    initial_proof_data <- repM initial_premise
+
+    -- We will now iteratively substitute each variable. We use a fold, where the
+    -- accumulator is the proof data of the increasingly-substituted proposition.
+    let indexed_substitutions = zip [0..] substitutions
+    
+    foldM
+        (\proven_prop_acc (i, (idx_to_subst, eq_to_use)) -> do
+            -- For the i-th substitution, construct a new template where variables
+            -- before index `i` are substituted with their RIGHT-hand sides, and
+            -- variables after index `i` are substituted with their LEFT-hand sides.
+            let subs_before = take i substitutions
+            let subs_after = drop (i + 1) substitutions
+
+            rhs_before <- parseAllOrThrow parseEqRS (Prelude.map snd subs_before)
+            lhs_after  <- parseAllOrThrow parseEqLS (Prelude.map snd subs_after)
+            
+            -- Create the substitution list for building the partial template.
+            let partial_subs = zip (Prelude.map fst subs_before) rhs_before ++ zip (Prelude.map fst subs_after) lhs_after
+
+            -- Construct the partial template for this step.
+            let partial_template = sentSubXs partial_subs templateSent
+
+            -- Apply the core eqSubstM rule. The `proven_prop_acc` from the previous
+            -- step of the fold serves as the required premise for this rule.
+            eqSubstM idx_to_subst partial_template eq_to_use
+        )
+        initial_proof_data
+        indexed_substitutions
+
+
+
+
 eqSubstM :: HelperConstraints m s tType o t sE eL r
            => Int -> s -> s -> ProofGenTStd tType r s o m (s,[Int])
 eqSubstM idx templateSent eqSent = standardRuleM (eqSubst idx templateSent eqSent)
@@ -142,6 +211,7 @@ reverseANegIntroM, reverseENegIntroM :: HelperConstraints m s tType o t sE eL r
 data MetaRuleError s where
    ReverseANegIntroMNotExistsNot :: s -> MetaRuleError s
    ReverseENegIntroMNotForallNot :: s -> MetaRuleError s
+   EqSubstMultiNotEquality :: s -> MetaRuleError s
    deriving(Show,Typeable)
 
 

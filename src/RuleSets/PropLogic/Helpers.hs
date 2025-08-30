@@ -14,7 +14,7 @@ import qualified RuleSets.PropLogic.Core as PROPL
 
 import Data.Monoid ( Last(..) )
 
-import Control.Monad ( foldM, unless )
+import Control.Monad ( foldM, unless, when )
 import Data.Set (Set, fromList)
 import Data.List (mapAccumL,intersperse)
 import qualified Data.Set as Set
@@ -126,6 +126,7 @@ data MetaRuleError s sE where
     MetaRuleErrNotBicond :: s -> MetaRuleError s sE
     MetaRuleErrDisjSyllNotDisj :: s -> MetaRuleError s sE
     BigExceptAsmSanity :: s -> sE -> MetaRuleError s sE
+    MetaRuleErrDeconstructMultiAdjMNonNegSplits :: Int -> MetaRuleError s sE
     deriving (Show,Typeable)
 
 
@@ -634,7 +635,50 @@ deconstructAdjM s = do
     adjunct2_data <- simpRM s
     return (adjunct1_data, adjunct2_data)
 
+-- | From a nested conjunction P₁ ∧ P₂ ∧ ... ∧ Pₙ, and an integer `k`,
+-- | this function performs `k` splits and returns a list of proofs for all
+-- | `k+1` resulting propositions: [P₁, P₂, ..., Pₖ₊₁].
+-- |
+-- | For example, given a proof of `A ∧ (B ∧ C)` and `k=1`, it will return a
+-- | list containing proofs for `A` and `B ∧ C`. Given `k=2`, it will return
+-- | proofs for `A`, `B`, and `C`.
+-- |
+-- | Note: This helper assumes the input proposition `s` is already proven in the context.
+-- | It also assumes the conjunctions are right-associative, e.g., P₁ ∧ (P₂ ∧ P₃).
+deconstructMultiAdjM :: (HelperConstraints r1 s o tType sE eL m) =>
+    s -> -- ^ The nested conjunction P₁ ∧ P₂ ∧ ...
+    Int -> -- ^ The number of conjunctions ('∧') to parse/split.
+    ProofGenTStd tType r1 s o m [(s, [Int])]
+deconstructMultiAdjM s num_splits = do
+    when (num_splits < 0) $
+        throwM (MetaRuleErrDeconstructMultiAdjMNonNegSplits num_splits)
+    if num_splits == 0 then
+        (: []) <$> repM s
+      else
+          peelOff num_splits s
 
+
+
+
+-- A recursive helper to perform `k` splits.
+-- Returns a list of all resulting proven propositions.
+peelOff :: (HelperConstraints r1 s o tType sE eL m) =>
+    Int -> s -> ProofGenTStd tType r1 s o m [(s, [Int])]
+peelOff 0 current_s = do
+    -- Base case: we've performed enough splits. The remainder is the last element.
+    final_proof <- repM current_s
+    return [final_proof]
+peelOff k current_s = do
+    -- Recursive step: split the current proposition into its left and right parts.
+    -- This will fail if `current_s` is not a conjunction, which is the desired behavior
+    -- if `k` is greater than the number of conjunctions in the proposition.
+    (left_proof, (right_prop, _)) <- deconstructAdjM current_s
+    
+    -- Recursively peel off the remaining `k-1` conjuncts from the right side.
+    remaining_proofs <- peelOff (k - 1) right_prop
+
+    -- Prepend the current left-hand proof to the list and return.
+    return (left_proof : remaining_proofs)
 
 
 runProofByAsmM :: HelperConstraints r1 s o tType sE eL1 m
