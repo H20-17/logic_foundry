@@ -1714,9 +1714,17 @@ specAntiRedundancySchema outerTemplateIdxs spec_var_idx source_set_template p_te
 -- |
 -- | 
 tupleEqTheorem :: SentConstraints s t => Int -> s
-tupleEqTheorem tuple_len = multiAx [0..tuple_len*2 - 1] 
-     tuple (fmap x [0..tuple_len-1]) .==. tuple (fmap x [tuple_len..tuple_len*2 - 1]) 
-                .<->. fmap (\i -> x i .&&. x tuple_len + (2*i)) [0 .. tuple_len - 1]
+tupleEqTheorem tuple_len = 
+    let
+        subexps = fmap (\i -> x i .==. x (tuple_len + i)) [0 .. tuple_len - 1]
+        conjunction = if null subexps then
+                neg false
+            else    
+                foldr  (.&&.) (head subexps) (tail subexps)
+    in
+        multiAx [0..tuple_len*2 - 1] 
+            (tuple (fmap x [0..tuple_len-1]) .==. tuple (fmap x [tuple_len..tuple_len*2 - 1]) 
+                .<->. conjunction)
 
 
  
@@ -1884,7 +1892,11 @@ proveCrossProductDefEquivM = do
 
 
                         -- Instantiate the pair equality theorem
+                        let pairEqTheorem = tupleEqTheorem 2
                         let instantiation_terms_for_thm = [v_x_inner, v_y_inner, v_a_h, v_b_h]
+                        txt <- showSentM pairEqTheorem
+                        remarkM txt
+                        error "stop here"
                         (instantiated_theorem, _) <- multiUIM pairEqTheorem instantiation_terms_for_thm
                         txt1 <- showSentM instantiated_theorem
                         (inst_tm_oneWay,_) <- bicondElimLM instantiated_theorem
@@ -1960,7 +1972,7 @@ crossProductDefEquivSchema =
     TheoremSchemaMT [] 
                     [binaryUnionExistsTheorem
                     , pairSubstTheorem
-                    , pairEqTheorem
+                    , tupleEqTheorem 2
                     , pairInUniverseTheorem] 
                     proveCrossProductDefEquivM
 
