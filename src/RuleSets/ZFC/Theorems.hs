@@ -896,7 +896,7 @@ partitionEquivTheorem outerTemplateIdxs spec_var_idx source_set_template p_templ
         -- The right-hand side of the biconditional: (x∈S ∧ P(x)) ∨ (x∈S ∧ ¬P(x))
         -- Note that p_template already contains X spec_var_idx for the variable x.
         x_in_S_and_P = p_template .&&. (x spec_var_idx `memberOf` source_set_template) 
-        x_in_S_and_NotP = neg p_template .&&. (x spec_var_idx `memberOf` source_set_template) 
+        x_in_S_and_NotP = (neg p_template) .&&. (x spec_var_idx `memberOf` source_set_template) 
         rhs = x_in_S_and_P .||. x_in_S_and_NotP
 
         -- The core biconditional for a specific x and specific params
@@ -1016,7 +1016,7 @@ proveBuilderSrcPartitionUnionMFree spec_var_idx sourceSet p_tmplt =
                     (def_union_imp, _) <- bicondElimRM def_union_inst
                     mpM def_union_imp
                 
-                (case2_imp, _) <- runProofByAsmM (neg p_of_v .&&. (v `memberOf` sourceSet)) $ do
+                (case2_imp, _) <- runProofByAsmM ((neg p_of_v) .&&. (v `memberOf` sourceSet)) $ do
                     (forall_notp, _) <- simpRM def_prop_NotP
                     (def_notp_inst, _) <- uiM v forall_notp
                     (def_notp_imp, _) <- bicondElimRM def_notp_inst
@@ -1708,14 +1708,15 @@ specAntiRedundancySchema outerTemplateIdxs spec_var_idx source_set_template p_te
 
 
 
--- | This function composes the "pair equality theorem":
+-- | This function composes the "tuple equality theorem":
 -- |  ∀𝑥₃(∀𝑥₂(∀𝑥₁(∀𝑥₀(
 -- |       (𝑥₃,𝑥₂) = (𝑥₁,𝑥₀) ↔ 𝑥₃ = 𝑥₁ ∧ 𝑥₂ = 𝑥₀))))
 -- |
 -- | 
-pairEqTheorem :: SentConstraints s t => s
-pairEqTheorem = multiAx [3,2,1,0] 
-     (pair (x 3) (x 2) .==. pair (x 1) (x 0) .<->. x 3 .==. x 1 .&&. x 2 .==. x 0)
+tupleEqTheorem :: SentConstraints s t => Int -> s
+tupleEqTheorem tuple_len = multiAx [0..tuple_len*2 - 1] 
+     tuple (fmap x [0..tuple_len-1]) .==. tuple (fmap x [tuple_len..tuple_len*2 - 1]) 
+                .<->. fmap (\i -> x i .&&. x tuple_len + (2*i)) [0 .. tuple_len - 1]
 
 
  
@@ -1792,7 +1793,7 @@ crossProductDefEquivTheorem =
         spec_prop_z_idx = 2 -- A new z for this quantifier
 
         spec_prop_body = (x spec_prop_z_idx `memberOf` crossProdObj) .<->.
-                         (sentSubX spec_z_idx (x spec_prop_z_idx) predicate_P .&&. (x spec_prop_z_idx `memberOf` universeSet))
+                         ((sentSubX spec_z_idx (x spec_prop_z_idx) predicate_P) .&&. (x spec_prop_z_idx `memberOf` universeSet))
         spec_prop = isSet crossProdObj .&&. aX spec_prop_z_idx spec_prop_body
 
         -- 2. CanonicalProp(A,B): The standard definition of the property of A × B.
