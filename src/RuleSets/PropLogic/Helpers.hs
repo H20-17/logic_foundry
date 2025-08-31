@@ -653,7 +653,8 @@ deconstructMultiAdjM s num_splits = do
     when (num_splits < 0) $
         throwM (MetaRuleErrDeconstructMultiAdjMNonNegSplits num_splits)
     if num_splits == 0 then
-        (: []) <$> repM s
+        do 
+           (: []) <$> repM s
       else
           peelOff num_splits s
 
