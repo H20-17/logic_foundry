@@ -102,8 +102,10 @@ import RuleSets.PredLogic.Helpers hiding
      (MetaRuleError(..))
 import RuleSets.PropLogic.Helpers hiding
      (MetaRuleError(..))
-import RuleSets.ZFC.Helpers
+import RuleSets.ZFC.Helpers hiding
+     (MetaRuleError(..))
 import Text.XHtml (target)
+import Control.Exception (throw)
 
 ----begin binary union section------
 
@@ -896,7 +898,7 @@ partitionEquivTheorem outerTemplateIdxs spec_var_idx source_set_template p_templ
         -- The right-hand side of the biconditional: (x∈S ∧ P(x)) ∨ (x∈S ∧ ¬P(x))
         -- Note that p_template already contains X spec_var_idx for the variable x.
         x_in_S_and_P = p_template .&&. (x spec_var_idx `memberOf` source_set_template) 
-        x_in_S_and_NotP = (neg p_template) .&&. (x spec_var_idx `memberOf` source_set_template) 
+        x_in_S_and_NotP = neg p_template .&&. (x spec_var_idx `memberOf` source_set_template) 
         rhs = x_in_S_and_P .||. x_in_S_and_NotP
 
         -- The core biconditional for a specific x and specific params
@@ -1016,7 +1018,7 @@ proveBuilderSrcPartitionUnionMFree spec_var_idx sourceSet p_tmplt =
                     (def_union_imp, _) <- bicondElimRM def_union_inst
                     mpM def_union_imp
                 
-                (case2_imp, _) <- runProofByAsmM ((neg p_of_v) .&&. (v `memberOf` sourceSet)) $ do
+                (case2_imp, _) <- runProofByAsmM (neg p_of_v .&&. (v `memberOf` sourceSet)) $ do
                     (forall_notp, _) <- simpRM def_prop_NotP
                     (def_notp_inst, _) <- uiM v forall_notp
                     (def_notp_imp, _) <- bicondElimRM def_notp_inst
@@ -1708,26 +1710,77 @@ specAntiRedundancySchema outerTemplateIdxs spec_var_idx source_set_template p_te
 
 
 
--- | This function composes the "tuple equality theorem":
--- |  ∀𝑥₃(∀𝑥₂(∀𝑥₁(∀𝑥₀(
--- |       (𝑥₃,𝑥₂) = (𝑥₁,𝑥₀) ↔ 𝑥₃ = 𝑥₁ ∧ 𝑥₂ = 𝑥₀))))
+-- | This function composes the "tuple equality theorems":
+-- | If tuple_len = 0, the theorem composed is:
+-- |    ∅ = ∅
+-- | If tuple len = n > 0, the theorem composed is:
+-- |    ∀𝑥_<2n-1>(∀𝑥_<2n-2>...(∀𝑥_<1>(∀𝑥_<0>((𝑥_<2n-1>,...,𝑥_<n>) = (𝑥_<n-1>,...,𝑥_<0>) ↔ 𝑥_<n> = 𝑥_<0> ∧ .... ∧ 𝑥_<2n-1> = 𝑥_<n-1>))))
 -- |
--- | 
-tupleEqTheorem :: SentConstraints s t => Int -> s
-tupleEqTheorem tuple_len = 
-    let
-        subexps = fmap (\i -> x i .==. x (tuple_len + i)) [0 .. tuple_len - 1]
-        conjunction = if null subexps then
-                neg false
-            else    
-                foldr  (.&&.) (head subexps) (tail subexps)
-    in
-        multiAx [0..tuple_len*2 - 1] 
+-- | For instance:
+-- | tupleEqTheorem 0 is:
+-- |    ∅ = ∅
+-- | tupleEqTheorem 1 is:
+-- |    ∀𝑥₁(∀𝑥₀(𝑥₁ = 𝑥₀ ↔ 𝑥₁ = 𝑥₀))
+-- | tupleEqTheorem 2 is:
+-- |    ∀𝑥₃(∀𝑥₂(∀𝑥₁(∀𝑥₀((𝑥₃,𝑥₂) = (𝑥₁,𝑥₀) ↔ 𝑥₂ = 𝑥₀ ∧ 𝑥₃ = 𝑥₁))))
+-- | tupleEqTheorem 3 is:
+-- |    ∀𝑥₅(∀𝑥₄(∀𝑥₃(∀𝑥₂(∀𝑥₁(∀𝑥₀((𝑥₅,𝑥₄,𝑥₃) = (𝑥₂,𝑥₁,𝑥₀) ↔ 𝑥₄ = 𝑥₁ ∧ 𝑥₃ = 𝑥₀ ∧ 𝑥₅ = 𝑥₂))))))
+tupleEqTheoremOld :: SentConstraints s t => Int -> s
+tupleEqTheoremOld tuple_len = 
+    if tuple_len > 0 then
+        let
+            subexps = fmap (\i -> x i .==. x (tuple_len + i)) [0 .. tuple_len - 1]
+            conjunction = foldr1  (.&&.) (tail subexps)
+        in
+            multiAx [0..tuple_len*2 - 1] 
             (tuple (fmap x [0..tuple_len-1]) .==. tuple (fmap x [tuple_len..tuple_len*2 - 1]) 
                 .<->. conjunction)
+    else 
+        emptySet .==. emptySet
 
 
- 
+
+-- | This function composes the "tuple equality theorems":
+-- | If tuple_len = 0, the theorem composed is:
+-- |    ∅ = ∅
+-- | If tuple len = n > 0, the theorem composed is:
+-- |    ∀𝑥_<2n-1>(∀𝑥_<2n-2>...(∀𝑥_<1>(∀𝑥_<0>((𝑥_<2n-1>,...,𝑥_<n>) = (𝑥_<n-1>,...,𝑥_<0>) ↔ 𝑥_<2n-1> = 𝑥_<n-1> ∧ .... ∧ 𝑥_<n> = 𝑥_<0>))))
+-- |
+-- | For instance:
+-- | tupleEqTheorem 0 is:
+-- |    ∅ = ∅
+-- | tupleEqTheorem 1 is:
+-- |    ∀𝑥₁(∀𝑥₀(𝑥₁ = 𝑥₀ ↔ 𝑥₁ = 𝑥₀))
+-- | tupleEqTheorem 2 is:
+-- |    ∀𝑥₃(∀𝑥₂(∀𝑥₁(∀𝑥₀((𝑥₃,𝑥₂) = (𝑥₁,𝑥₀) ↔ 𝑥₃ = 𝑥₁ ∧ 𝑥₂ = 𝑥₀))))
+-- | tupleEqTheorem 3 is:
+-- |    ∀𝑥₅(∀𝑥₄(∀𝑥₃(∀𝑥₂(∀𝑥₁(∀𝑥₀((𝑥₅,𝑥₄,𝑥₃) = (𝑥₂,𝑥₁,𝑥₀) ↔ 𝑥₅ = 𝑥₂ ∧ 𝑥₄ = 𝑥₁ ∧ 𝑥₃ = 𝑥₀))))))
+tupleEqTheorem :: SentConstraints s t => Int -> s
+tupleEqTheorem tuple_len =
+    if tuple_len > 0 then
+        let
+            -- Create a list of component-wise equalities, e.g., [x₀=xₙ, x₁=xₙ₊₁, ...]
+            subexps = fmap (\i -> x i .==. x (tuple_len + i)) [0 .. tuple_len - 1]
+            -- Correctly join the list of equalities into a single conjunction.
+            conjunction = foldr1 (.&&.) subexps
+            
+            -- The right tuple uses variables from n to 2n-1.
+            right_tuple = tuple (fmap x [tuple_len .. tuple_len*2 - 1])
+            -- The left tuple uses variables from 0 to n-1.
+            left_tuple = tuple (fmap x [0 .. tuple_len - 1])
+        in
+            -- Universally quantify over all 2n variables.
+            multiAx [0..tuple_len*2 - 1]
+            (left_tuple .==. right_tuple .<->. conjunction)
+    else
+        -- The base case for a 0-length tuple is true by definition.
+        emptySet .==. emptySet
+
+
+
+
+
+
 -- | This function composes the "pair substitution theorem":
 -- |  
 -- |  ∀𝑥₅(∀𝑥₄(∀𝑥₃(∀𝑥₂(∀𝑥₁(∀𝑥₀((𝑥₃,𝑥₂) = 
@@ -1743,6 +1796,66 @@ pairSubstTheorem =
         pair_subst_theorem_closed = multiAx [thm_A, thm_B, thm_x, thm_y, thm_a, thm_b] (thm_antecedent .->. thm_consequent)
     in
         pair_subst_theorem_closed
+
+
+-- | A high-level tactic that performs substitution based on an equality between tuples.
+-- |
+-- | This function takes a list of template variable indices, a proven equality between
+-- | two tuples of the same length, and a template sentence.
+-- |
+-- | It requires that the template, when substituted with the components of the LEFT-hand
+-- | side of the tuple equality, is already a proven proposition in the context.
+-- |
+-- | It then formally proves that the template also holds when substituted with the
+-- | components of the RIGHT-hand side of the tuple equality.
+-- |
+-- | @param indices A list of the template variable indices used in the template.
+-- | @param tuple_eq_sent The proven proposition `(t₁,...,tₙ) = (u₁,...,uₙ)`.
+-- | @param template_sent The template sentence `P(xᵢ₁, xᵢ₂, ...)` where i_k ∈ indices.
+-- | @return The proven proposition `P(u₁,...,uₙ)`.
+tupleSubstM :: (HelperConstraints sE s eL m r1 t)  =>
+    [Int] -> s -> s -> ProofGenTStd () r1 s Text m (s, [Int])
+tupleSubstM indices tuple_eq_sent template_sent = do
+    (substituted,idx,_) <- runProofBySubArgM $ do
+        let n = length indices
+        
+        -- Step 1: Parse the tuple equality. This will throw an error if the input
+        -- is not a valid equality of two n-tuples.
+
+
+        (lhs_tuple_term, rhs_tuple_term) <- maybe (throwM (MetaRuleErrTupleSubstNotAnEquality tuple_eq_sent)) return (parseEq tuple_eq_sent)
+
+        lhs_components <- maybe (throwM (MetaRuleErrTupleSubstIncorrectLHS n lhs_tuple_term)) return (parseTupleFixed lhs_tuple_term n)
+        rhs_components <- maybe (throwM (MetaRuleErrTupleSubstIncorrectRHS n rhs_tuple_term)) return (parseTupleFixed rhs_tuple_term n)
+
+        -- Step 2: Acknowledge the required premises from the outer context.
+        repM tuple_eq_sent
+        let tuple_eq_thm = tupleEqTheorem n
+        repM tuple_eq_thm
+
+        -- Step 3: Instantiate the tuple equality theorem with the components of our tuples.
+        -- The instantiation terms must match the variable order in the theorem definition.
+        let instantiation_terms = lhs_components ++ rhs_components
+        (instantiated_thm, _) <- multiUIM tuple_eq_thm instantiation_terms
+        
+        -- We now have a proof of: (lhs_tuple = rhs_tuple) ↔ (lhs₁=rhs₁ ∧ ...)
+
+        -- Step 4: Use the instantiated theorem to prove the conjunction of component equalities.
+        (forward_imp, _) <- bicondElimLM instantiated_thm
+        (conjoined_equalities, _) <- mpM forward_imp
+
+        -- Step 5: Deconstruct the proven conjunction into a list of individual proven equalities.
+        -- A conjunction of n items has n-1 '∧' operators.
+        let num_splits = if n > 0 then n - 1 else 0
+        component_equalities_proofs <- deconstructMultiAdjM conjoined_equalities num_splits
+
+        -- Step 6: Use eqSubstMultiM to perform the final substitution.
+        -- The required premise for eqSubstMultiM (the template substituted with the LHS
+        -- components) is assumed to already be proven in the outer context.
+        let substitutions = zip indices (Prelude.map fst component_equalities_proofs)
+        eqSubstMultiM substitutions template_sent
+        return ()
+    return (substituted, idx)
 
 -- | This function composes the "pair in universe theorem":
 -- |
@@ -1801,7 +1914,7 @@ crossProductDefEquivTheorem =
         spec_prop_z_idx = 2 -- A new z for this quantifier
 
         spec_prop_body = (x spec_prop_z_idx `memberOf` crossProdObj) .<->.
-                         ((sentSubX spec_z_idx (x spec_prop_z_idx) predicate_P) .&&. (x spec_prop_z_idx `memberOf` universeSet))
+                         (sentSubX spec_z_idx (x spec_prop_z_idx) predicate_P .&&. (x spec_prop_z_idx `memberOf` universeSet))
         spec_prop = isSet crossProdObj .&&. aX spec_prop_z_idx spec_prop_body
 
         -- 2. CanonicalProp(A,B): The standard definition of the property of A × B.
@@ -1892,6 +2005,12 @@ proveCrossProductDefEquivM = do
 
 
                         -- Instantiate the pair equality theorem
+                        let pairEqTheorem = tupleEqTheorem 0
+                        let instantiation_terms_for_thm = [v_x_inner, v_y_inner, v_a_h, v_b_h]
+                        txt <- showSentM pairEqTheorem
+                        remarkM txt
+
+
                         let pairEqTheorem = tupleEqTheorem 2
                         let instantiation_terms_for_thm = [v_x_inner, v_y_inner, v_a_h, v_b_h]
                         txt <- showSentM pairEqTheorem
@@ -1980,13 +2099,14 @@ crossProductDefEquivSchema =
 
 
 
---data MetaRuleError s where
---   MetaRuleErrNotClosed :: s -> MetaRuleError s
---   MetaRuleErrFreeVarsQuantCountMismatch :: MetaRuleError s
+data MetaRuleError s where
+   MetaRuleErrTupleSubstNotAnEquality :: s -> MetaRuleError s
+   MetaRuleErrTupleSubstIncorrectLHS :: Int -> s-> MetaRuleError s
+   MetaRuleErrTupleSubstIncorrectRHS :: Int -> s -> MetaRuleError s
 
---   deriving(Show,Typeable)
+   deriving(Show,Typeable)
 
 
--- instance (Show s, Typeable s) => Exception (MetaRuleError s)
+instance (Show s, Typeable s) => Exception (MetaRuleError s)
 
 

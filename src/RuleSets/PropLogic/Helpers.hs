@@ -7,7 +7,7 @@ module RuleSets.PropLogic.Helpers
     contraFM, absurdM, MetaRuleError(..), disjIntroLM, disjIntroRM, disjElimM, doubleNegElimM,
     deMorganConjM, deMorganDisjM, bicondIntroM, bicondElimLM, bicondElimRM, absorpAndM, absorpOrM, distAndOverOrM, distOrOverAndM,
     peircesLawM, modusTollensM, imp2DisjM, negAndNotToOrM, negImpToConjViaEquivM, negBicondToPosBicondM,
-    disjunctiveSyllogismM, exFalsoM, deconstructAdjM
+    disjunctiveSyllogismM, exFalsoM, deconstructAdjM, deconstructMultiAdjM
 ) where
 
 import qualified RuleSets.PropLogic.Core as PROPL
@@ -46,7 +46,7 @@ import StdPattern
       monadifyProofStd,
       modifyPS,
       RuleInject(..),
-      getProofState
+      getProofState,
       )
 
 import Kernel

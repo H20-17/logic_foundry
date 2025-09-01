@@ -256,6 +256,8 @@ instance ZFC.LogicTerm ObjDeBr where
     pair = pair
     tuple :: [ObjDeBr] -> ObjDeBr
     tuple = tuple
+    parseTupleFixed :: ObjDeBr -> Int -> Maybe [ObjDeBr]
+    parseTupleFixed = parseTupleFixed
     funcsSet :: ObjDeBr -> ObjDeBr -> ObjDeBr
     funcsSet = funcsSet
     bigUnion :: ObjDeBr -> ObjDeBr

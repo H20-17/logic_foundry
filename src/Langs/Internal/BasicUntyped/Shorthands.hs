@@ -34,26 +34,13 @@ module Langs.Internal.BasicUntyped.Shorthands (
     parseIntersectionOp,
     bigUnion,
     bigIntersection,
-    parseBigUnion,
-    parseBigIntersection,
-    (.\.),
-    parseSetDifference,
-    powerSet,
-    parsePowerSet,
-    (.<.),
-    parseLessThan,
-    parseTupleFixed,
-    parseTupleMax,
-    pair,
-    parsePair,
-    tuple,
-    parseIsFunc,
-    isFunc,
+    parseBigUnion, 
     natSetObj,      -- Exporting the NatSet object
     parseNatSet,     -- Exporting the NatSet parser
     parseForallChain,
     parseImplication,
     isRelationOn
+
 
 ) where
 import Langs.Internal.BasicUntyped.Core

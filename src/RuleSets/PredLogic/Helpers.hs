@@ -8,7 +8,8 @@ module RuleSets.PredLogic.Helpers
     MetaRuleError(..),
     eqReflM, eqSymM, eqTransM, eqSubstM,
     extractConstsSentM,
-    multiUGM, runTheoremM, runTmSilentM,multiUIM
+    multiUGM, runTheoremM, runTmSilentM,multiUIM,
+    eqSubstMultiM
 ) where
 
 
@@ -157,38 +158,41 @@ eqSubstMultiM substitutions templateSent = do
     -- substituted by the left-hand side of their respective equalities.
     let initial_premise = sentSubXs (zip (Prelude.map fst substitutions) lhs_terms) templateSent
 
-    -- We use `repM` to assert that this initial premise is already proven in the context.
-    -- This is the starting point for our chain of substitutions.
-    initial_proof_data <- repM initial_premise
+    -- Wrap the argument in a subproof
 
-    -- We will now iteratively substitute each variable. We use a fold, where the
-    -- accumulator is the proof data of the increasingly-substituted proposition.
-    let indexed_substitutions = zip [0..] substitutions
-    
-    foldM
-        (\proven_prop_acc (i, (idx_to_subst, eq_to_use)) -> do
-            -- For the i-th substitution, construct a new template where variables
-            -- before index `i` are substituted with their RIGHT-hand sides, and
-            -- variables after index `i` are substituted with their LEFT-hand sides.
-            let subs_before = take i substitutions
-            let subs_after = drop (i + 1) substitutions
+    (substituted,idx,_) <- runProofBySubArgM $ do
+        -- We use `repM` to assert that this initial premise is already proven in the context.
+        -- This is the starting point for our chain of substitutions.
+        initial_proof_data <- repM initial_premise
 
-            rhs_before <- parseAllOrThrow parseEqRS (Prelude.map snd subs_before)
-            lhs_after  <- parseAllOrThrow parseEqLS (Prelude.map snd subs_after)
+        -- We will now iteratively substitute each variable. We use a fold, where the
+        -- accumulator is the proof data of the increasingly-substituted proposition.
+        let indexed_substitutions = zip [0..] substitutions
+
+        foldM
+            (\proven_prop_acc (i, (idx_to_subst, eq_to_use)) -> do
+                -- For the i-th substitution, construct a new template where variables
+                -- before index `i` are substituted with their RIGHT-hand sides, and
+                -- variables after index `i` are substituted with their LEFT-hand sides.
+                let subs_before = take i substitutions
+                let subs_after = drop (i + 1) substitutions
+
+                rhs_before <- parseAllOrThrow parseEqRS (Prelude.map snd subs_before)
+                lhs_after  <- parseAllOrThrow parseEqLS (Prelude.map snd subs_after)
             
-            -- Create the substitution list for building the partial template.
-            let partial_subs = zip (Prelude.map fst subs_before) rhs_before ++ zip (Prelude.map fst subs_after) lhs_after
+                -- Create the substitution list for building the partial template.
+                let partial_subs = zip (Prelude.map fst subs_before) rhs_before ++ zip (Prelude.map fst subs_after) lhs_after
 
-            -- Construct the partial template for this step.
-            let partial_template = sentSubXs partial_subs templateSent
+                -- Construct the partial template for this step.
+                let partial_template = sentSubXs partial_subs templateSent
 
-            -- Apply the core eqSubstM rule. The `proven_prop_acc` from the previous
-            -- step of the fold serves as the required premise for this rule.
-            eqSubstM idx_to_subst partial_template eq_to_use
-        )
-        initial_proof_data
-        indexed_substitutions
-
+                -- Apply the core eqSubstM rule. The `proven_prop_acc` from the previous
+                -- step of the fold serves as the required premise for this rule.
+                eqSubstM idx_to_subst partial_template eq_to_use
+            ) 
+            initial_proof_data
+            indexed_substitutions
+    return (substituted,idx)
 
 
 

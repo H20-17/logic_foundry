@@ -860,4 +860,6 @@ type HelperConstraints m s tType o t sE eL r = (
             , TypeableTerm t o tType sE
             , LogicTerm t
             , ShowableTerm s t
-            )
+            , Typeable t
+            , Show t
+            ) 
