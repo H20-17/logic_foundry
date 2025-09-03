@@ -25,7 +25,8 @@ module RuleSets.ZFC.Theorems
     builderSrcPartitionSchema,
     pairInUniverseTheorem,
     crossProductDefEquivTheorem,
-    crossProductDefEquivSchema
+    crossProductDefEquivSchema,
+    crossProductExistsTheorem
 
 ) where
 
@@ -2019,6 +2020,60 @@ crossProductDefEquivSchema =
                     , tupleEqTheorem 2
                     , pairInUniverseTheorem] 
                     proveCrossProductDefEquivM
+
+
+
+
+-- | Constructs the PropDeBr term for the closed theorem of Cartesian product existence.
+-- | The theorem is: ∀A ∀B ((isSet A ∧ isSet B) → ∃S (isSet S ∧ ∀x∀y(<x,y>∈S ↔ (x∈A ∧ y∈B))))
+crossProductExistsTheorem :: SentConstraints s t => s
+crossProductExistsTheorem =
+    let
+        -- Define integer indices for the template variables (X k).
+        -- These will be bound by the quantifiers in nested scopes.
+        a_idx = 0 -- Represents set A
+        b_idx = 1 -- Represents set B
+        s_idx = 2 -- Represents the cross product set S
+        x_idx = 3 -- Represents an element x from A
+        y_idx = 4 -- Represents an element y from B
+
+        -- Construct the inner part of the formula: <x,y> ∈ S ↔ (x ∈ A ∧ y ∈ B)
+        pair_xy = pair (x x_idx) (x y_idx)
+        pair_in_S = pair_xy `memberOf` (x s_idx)
+        
+        x_in_A = x x_idx `memberOf` (x a_idx)
+        y_in_B = x y_idx `memberOf` (x b_idx)
+        x_in_A_and_y_in_B = x_in_A .&&. y_in_B
+
+        biconditional = x_in_A_and_y_in_B .<->. pair_in_S
+
+        -- Quantify over x and y: ∀x∀y(<x,y> ∈ S ↔ (x ∈ A ∧ y ∈ B))
+        quantified_xy_bicond = aX x_idx (aX y_idx biconditional)
+
+        -- Construct the property of the set S: isSet(S) ∧ ∀x∀y(...)
+        isSet_S = isSet (x s_idx)
+        property_of_S = isSet_S .&&. quantified_xy_bicond
+
+        -- Quantify over S: ∃S (isSet(S) ∧ ∀x∀y(...))
+        exists_S = eX s_idx property_of_S
+
+        -- Construct the antecedent of the main implication: isSet(A) ∧ isSet(B)
+        isSet_A = isSet (x a_idx)
+        isSet_B = isSet (x b_idx)
+        antecedent = isSet_A .&&. isSet_B
+
+        -- Construct the main implication
+        implication = antecedent .->. exists_S
+
+    in
+        -- Universally quantify over A and B to create the final closed theorem.
+        -- multiAx [0, 1] is equivalent to aX 0 (aX 1 (...))
+        multiAx [a_idx, b_idx] implication
+
+
+
+
+
 
 -- END CROS PROD EXISTS THEOREM
 

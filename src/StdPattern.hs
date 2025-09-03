@@ -10,7 +10,8 @@ module StdPattern(
     TypedSent(..),
     ShowableSent(..),
     ShowableTerm(..),
-    showSentM
+    showSentM,
+    showTermM
     
 ) where
 import Kernel
@@ -40,4 +41,5 @@ import Internal.StdPattern
       getFreeVarCount,
       ShowableSent(..),
       ShowableTerm(..),
-      showSentM)
+      showSentM,
+      showTermM )

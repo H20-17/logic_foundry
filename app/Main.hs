@@ -173,83 +173,6 @@ strongInductionPremiseOnRel p_template idx dom rel =
 
 
 
-
-
-
--- | Given an object 'x', proves that its power set, PowerSet(x), is also a set.
--- |
--- | Note: This helper requires that 'isSet x' has already been proven
--- | in the current proof context.
--- |
--- | This helper relies on the `powerSetInstantiateM` helper to get the properties of the
--- | powerSet object.
-provePowerSetIsSetM :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) =>
-    ObjDeBr -> -- ^ The object 'x' for which to prove its power set is a set.
-    ProofGenTStd () [ZFC.LogicRule PropDeBr DeBrSe ObjDeBr] PropDeBr Text m (PropDeBr, [Int])
-provePowerSetIsSetM x = do
-    (result_prop,idx,_)<-runProofBySubArgM do
-        (prop_of_powSet, _, powSet_obj) <- powerSetInstantiateM x
-        simpLM prop_of_powSet
-        return ()
-    return (result_prop,idx)
-
-
-
-
-
-
-
-
-
-
--- | Constructs the PropDeBr term for the closed theorem of Cartesian product existence.
--- | The theorem is: ∀A ∀B ((isSet A ∧ isSet B) → ∃S (isSet S ∧ ∀x∀y(<x,y>∈S ↔ (x∈A ∧ y∈B))))
-crossProductExistsTheorem :: PropDeBr
-crossProductExistsTheorem =
-    let
-        -- Define integer indices for the template variables (X k).
-        -- These will be bound by the quantifiers in nested scopes.
-        a_idx = 0 -- Represents set A
-        b_idx = 1 -- Represents set B
-        s_idx = 2 -- Represents the cross product set S
-        x_idx = 3 -- Represents an element x from A
-        y_idx = 4 -- Represents an element y from B
-
-        -- Construct the inner part of the formula: <x,y> ∈ S ↔ (x ∈ A ∧ y ∈ B)
-        pair_xy = pair (X x_idx) (X y_idx)
-        pair_in_S = pair_xy `In` (X s_idx)
-        
-        x_in_A = X x_idx `In` (X a_idx)
-        y_in_B = X y_idx `In` (X b_idx)
-        x_in_A_and_y_in_B = x_in_A :&&: y_in_B
-
-        biconditional = x_in_A_and_y_in_B :<->: pair_in_S
-
-        -- Quantify over x and y: ∀x∀y(<x,y> ∈ S ↔ (x ∈ A ∧ y ∈ B))
-        quantified_xy_bicond = aX x_idx (aX y_idx biconditional)
-
-        -- Construct the property of the set S: isSet(S) ∧ ∀x∀y(...)
-        isSet_S = isSet (X s_idx)
-        property_of_S = isSet_S :&&: quantified_xy_bicond
-
-        -- Quantify over S: ∃S (isSet(S) ∧ ∀x∀y(...))
-        exists_S = eX s_idx property_of_S
-
-        -- Construct the antecedent of the main implication: isSet(A) ∧ isSet(B)
-        isSet_A = isSet (X a_idx)
-        isSet_B = isSet (X b_idx)
-        antecedent = isSet_A :&&: isSet_B
-
-        -- Construct the main implication
-        implication = antecedent :->: exists_S
-
-    in
-        -- Universally quantify over A and B to create the final closed theorem.
-        -- multiAx [0, 1] is equivalent to aX 0 (aX 1 (...))
-        multiAx [a_idx, b_idx] implication
-
-
-
 -- | Proves the theorem: 'crossProductExistsTheorem'.
 -- | 'crossProductDefEquivTheorem' is a required lemma for this proof.
 proveCrossProductExistsM :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) =>
@@ -259,75 +182,55 @@ proveCrossProductExistsM = do
     -- We use multiUGM to handle the two ∀ quantifiers.
     multiUGM [(), ()] do
         -- Inside the UG, free variables v_B (most recent) and v_A are introduced.
-        v_B <- getTopFreeVar
-        context <- ask
-        let v_A_idx = (length . freeVarTypeStack) context - 2
-        let v_A = V v_A_idx
-        let setA = v_A
-        let setB = v_B
+        v_Av_B <- getTopFreeVars 2
+        let setB = head v_Av_B
+        let setA = v_Av_B!!1
+ 
 
-        -- Prove the main implication by assuming the antecedent.
-        runProofByAsmM (isSet setA :&&: isSet setB) do
-            -- Now, inside this assumption, we have proven `isSet setA` and `isSet setB`.
-            (isSet_A_proven, _) <- simpLM (isSet setA :&&: isSet setB)
-            (isSet_B_proven, _) <- simpRM (isSet setA :&&: isSet setB)
-            
-            -- Step 1: Prove that the universe U = P(P(A U B)) is a set.
-            let universeSet = powerSet (powerSet (setA .\/. setB))
-            (_, _, _) <- runProofBySubArgM do
-                -- Step 1a: Get the theorem: ∀A'∀B'((isSet A' ∧ isSet B') → isSet(A'∪B'))
-                (isSet_union_proven, _) <- proveUnionIsSetM setA setB
-
-                (isSet_power_union, _) <- provePowerSetIsSetM (setA .\/. setB)
-
-                -- Step 1d: Use the theorem again to prove isSet(P(P(A U B))).
-                --(imp2, _) <- uiM (powerSet (setA .\/. setB)) thm_powerset_is_set
-                --(isSet_power_power_union, _) <- mpM imp2 -- Uses isSet_power_union
-                (isSet_power_power_union,_) <- provePowerSetIsSetM (powerSet (setA .\/. setB))
-
-                return ()
-
-            -- Step 2: Define the predicate P(z) for specification.
-            let z_idx = 0; x_idx = 1; y_idx = 2; 
+        -- Step 1: Define the predicate P(z) for specification.
+        let z_idx = 0; x_idx = 1; y_idx = 2; 
                 setA_idx = 3; setB_idx = 4
-            let universeSet_tmplt = powerSet (powerSet (X setA_idx .\/. X setB_idx))
-            -- Define the predicate P(z) as ∃x
-            let predicate_P = eX x_idx (eX y_idx (
-                                  (X z_idx :==: pair (X x_idx) (X y_idx))
-                                  :&&: (X x_idx `In` setA)
-                                  :&&: (X y_idx `In` setB)
+        let universeSet_tmplt = powerSet (powerSet (x setA_idx .\/. x setB_idx))
+        -- Define the predicate P(z) as ∃x
+
+        let predicate_P_tmplt = eX x_idx (eX y_idx (
+                                  (x z_idx .==. pair (x x_idx) (x y_idx))
+                                  .&&. (x x_idx `memberOf` x setA_idx)
+                                  .&&. (x y_idx `memberOf` x setB_idx)
                               ))
-            let predicate_P_tmplt = eX x_idx (eX y_idx (
-                                  (X z_idx :==: pair (X x_idx) (X y_idx))
-                                  :&&: (X x_idx `In` X setA_idx)
-                                  :&&: (X y_idx `In` X setB_idx)
-                              ))
-            predicate_P_txt <- showPropM predicate_P_tmplt
-            remarkM $ "Predicate P(z): " <> predicate_P_txt
-            (definingProp_of_B, _, (crossProdObj,_,_)) <- builderInstantiateM [V 0, V 1]
+        predicate_P_txt <- showSentM predicate_P_tmplt
+        remarkM $ "Predicate P(z): " <> predicate_P_txt
+        (definingProp_of_B, _, (crossProdObj,_,_)) <- builderInstantiateM [setA, setB]
                          [setA_idx, setB_idx] z_idx universeSet_tmplt predicate_P_tmplt
 
-            -- Step 3: Use the theorem about definition equivalence to get the canonical property.
+        -- Step 2: Use the theorem about definition equivalence to get the canonical property.
 
-            (thm_equiv_inst1, _) <- uiM setA crossProductDefEquivTheorem
-            (thm_equiv_inst2, _) <- uiM setB thm_equiv_inst1
-            
+        (thm_equiv_inst1, _) <- uiM setA crossProductDefEquivTheorem
+        (thm_equiv_inst2, _) <- uiM setB thm_equiv_inst1
+        let asm = isSet setA .&&. isSet setB
+        -- Step 3: Prove the main implication by assuming the antecedent.
+        runProofByAsmM asm do
+
             (imp_equiv, _) <- mpM thm_equiv_inst2
-            (proven_property_of_B, _) <- mpM imp_equiv
+            mpM imp_equiv
 
+        
             -- Step 4: Construct the target existential statement using the explicit template method.
             let s_idx_final = 0; x_idx_final = 1; y_idx_final = 2
-            let element_prop_final = (X x_idx_final `In` setA) :&&: (X y_idx_final `In` setB)
-            let pair_in_s_final = pair (X x_idx_final) (X y_idx_final) `In` (X s_idx_final)
-            let quantified_bicond_final = aX x_idx_final (aX y_idx_final (element_prop_final :<->: pair_in_s_final))
-            let target_property_for_S = isSet (X s_idx_final) :&&: quantified_bicond_final
+            let element_prop_final = (x x_idx_final `memberOf` setA) .&&. (x y_idx_final `memberOf` setB)
+            let pair_in_s_final = pair (x x_idx_final) (x y_idx_final) `memberOf` (x s_idx_final)
+            let quantified_bicond_final = aX x_idx_final (aX y_idx_final (element_prop_final .<->. pair_in_s_final))
+            let target_property_for_S = isSet (x s_idx_final) .&&. quantified_bicond_final
             let target_existential = eX s_idx_final target_property_for_S
 
             -- Step 5: Apply Existential Generalization.
-            crossProdObjTxt <- showObjM crossProdObj
+            crossProdObjTxt <- showTermM crossProdObj
             remarkM $ "CROSSPRODOBJ IS" <> crossProdObjTxt
             egM crossProdObj target_existential
     return ()
+
+
+
 
 
 
@@ -2047,9 +1950,9 @@ main = do
     (a,b,c,d) <- checkTheoremM (crossProductDefEquivSchema::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text IO ()))
     (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
 
-    -- print "TEST CROSSPROD EXISTS SCHEMA ---------------------------"
-    -- (a,b,c,d) <- checkTheoremM $ crossProductExistsSchema
-    -- (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
+    print "TEST CROSSPROD EXISTS SCHEMA ---------------------------"
+    (a,b,c,d) <- checkTheoremM $ crossProductExistsSchema
+    (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
 
     print "TEST BUILDER SUBSET THEOREM-------------------------------------"
     let p_template = Constant "C" :+: X 0 :==: (X 1 :+: X 2)
