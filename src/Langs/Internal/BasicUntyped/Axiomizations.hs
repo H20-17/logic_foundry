@@ -25,7 +25,7 @@ import qualified RuleSets.PropLogic.Core as PL
 import qualified RuleSets.PredLogic.Core as PREDL
 import qualified RuleSets.ZFC.Core as ZFC
 import RuleSets.PropLogic.Core (LogicSent(parseIff))
-import RuleSets.ZFC.Core (specification,parseMemberOf,memberOf)
+-- import RuleSets.ZFC.Core (specification,parseMemberOf,memberOf)
 
 
 

@@ -23,7 +23,6 @@ module RuleSets.ZFC.Theorems
     partitionEquivTheorem,
     builderSrcPartitionTheorem,
     builderSrcPartitionSchema,
-    pairSubstTheorem,
     pairInUniverseTheorem,
     crossProductDefEquivTheorem,
     crossProductDefEquivSchema
@@ -1780,24 +1779,6 @@ tupleEqTheorem tuple_len =
 
 
 
-
--- | This function composes the "pair substitution theorem":
--- |  
--- |  ∀𝑥₅(∀𝑥₄(∀𝑥₃(∀𝑥₂(∀𝑥₁(∀𝑥₀((𝑥₃,𝑥₂) = 
--- |      (𝑥₁,𝑥₀) ∧ 𝑥₁ ∈ 𝑥₅ ∧ 𝑥₀ ∈ 𝑥₄ → 𝑥₃ ∈ 𝑥₅ ∧ 𝑥₂ ∈ 𝑥₄))))))
--- |  
-pairSubstTheorem :: SentConstraints s t => s
-pairSubstTheorem = 
-    let
-        thm_A=0; thm_B=1; thm_x=2; thm_y=3; thm_a=4; thm_b=5
-        thm_antecedent = (pair (x thm_x) (x thm_y) .==. pair (x thm_a) (x thm_b))
-                            .&&. (x thm_a `memberOf` x thm_A) .&&. (x thm_b `memberOf` x thm_B)
-        thm_consequent = (x thm_x `memberOf` x thm_A) .&&. (x thm_y `memberOf` x thm_B)
-        pair_subst_theorem_closed = multiAx [thm_A, thm_B, thm_x, thm_y, thm_a, thm_b] (thm_antecedent .->. thm_consequent)
-    in
-        pair_subst_theorem_closed
-
-
 -- | A high-level tactic that performs substitution based on an equality between tuples.
 -- |
 -- | This function takes a list of template variable indices, a proven equality between
@@ -2003,39 +1984,12 @@ proveCrossProductDefEquivM = do
                         -- 'p_inst_final' is now the fully instantiated body:
                         -- (<v_x,v_y> = <v_a_h,v_b_h>) ∧ v_a_h∈A ∧ v_b_h∈B
 
+                        ((pairEqRev,_),(preSub,_)) <- deconstructAdjM p_inst_final
+                        (pairEq,_) <- eqSymM pairEqRev
+                        let substTmplt = x 0 `memberOf` setA .&&. x 1 `memberOf` setB
 
-                        -- Instantiate the pair equality theorem
-                        let pairEqTheorem = tupleEqTheorem 0
-                        let instantiation_terms_for_thm = [v_x_inner, v_y_inner, v_a_h, v_b_h]
-                        txt <- showSentM pairEqTheorem
-                        remarkM txt
+                        tupleSubstM [0,1] pairEq substTmplt
 
-
-                        let pairEqTheorem = tupleEqTheorem 2
-                        let instantiation_terms_for_thm = [v_x_inner, v_y_inner, v_a_h, v_b_h]
-                        txt <- showSentM pairEqTheorem
-                        remarkM txt
-                        error "stop here"
-                        (instantiated_theorem, _) <- multiUIM pairEqTheorem instantiation_terms_for_thm
-                        txt1 <- showSentM instantiated_theorem
-                        (inst_tm_oneWay,_) <- bicondElimLM instantiated_theorem
-                        (p_inst_finalL,_) <- simpLM p_inst_final
-                        mpM inst_tm_oneWay
-                        (p_inst_finalR,_) <- simpRM p_inst_final                       
-                        -- Instantiate the pair substitution theorem with our specific free variables and Hilbert terms.
-                        let instantiation_terms_for_thm = [setA, setB, v_x_inner, v_y_inner, v_a_h, v_b_h]
-                        (instantiated_theorem, _) <- multiUIM pairSubstTheorem instantiation_terms_for_thm
-                        
-
-
-
-                        txt2 <- showSentM instantiated_theorem
-                        remarkM txt1
-                        remarkM txt2
-                        error "stop here"
-
-                        -- Use Modus Ponens with the fully instantiated body 'p_inst_final' to get the consequent.
-                        mpM instantiated_theorem
                     (dir2,_) <- runProofByAsmM ((v_x_inner `memberOf` setA) .&&. (v_y_inner `memberOf` setB)) $ do
                         -- Goal: Prove <x,y> ∈ B. This means proving P(<x,y>) ∧ <x,y>∈U.
 
@@ -2090,7 +2044,6 @@ crossProductDefEquivSchema :: (HelperConstraints sE s eL m r t) =>
 crossProductDefEquivSchema = 
     TheoremSchemaMT [] 
                     [binaryUnionExistsTheorem
-                    , pairSubstTheorem
                     , tupleEqTheorem 2
                     , pairInUniverseTheorem] 
                     proveCrossProductDefEquivM
