@@ -1709,34 +1709,6 @@ specAntiRedundancySchema outerTemplateIdxs spec_var_idx source_set_template p_te
 
 
 
--- | This function composes the "tuple equality theorems":
--- | If tuple_len = 0, the theorem composed is:
--- |    ∅ = ∅
--- | If tuple len = n > 0, the theorem composed is:
--- |    ∀𝑥_<2n-1>(∀𝑥_<2n-2>...(∀𝑥_<1>(∀𝑥_<0>((𝑥_<2n-1>,...,𝑥_<n>) = (𝑥_<n-1>,...,𝑥_<0>) ↔ 𝑥_<n> = 𝑥_<0> ∧ .... ∧ 𝑥_<2n-1> = 𝑥_<n-1>))))
--- |
--- | For instance:
--- | tupleEqTheorem 0 is:
--- |    ∅ = ∅
--- | tupleEqTheorem 1 is:
--- |    ∀𝑥₁(∀𝑥₀(𝑥₁ = 𝑥₀ ↔ 𝑥₁ = 𝑥₀))
--- | tupleEqTheorem 2 is:
--- |    ∀𝑥₃(∀𝑥₂(∀𝑥₁(∀𝑥₀((𝑥₃,𝑥₂) = (𝑥₁,𝑥₀) ↔ 𝑥₂ = 𝑥₀ ∧ 𝑥₃ = 𝑥₁))))
--- | tupleEqTheorem 3 is:
--- |    ∀𝑥₅(∀𝑥₄(∀𝑥₃(∀𝑥₂(∀𝑥₁(∀𝑥₀((𝑥₅,𝑥₄,𝑥₃) = (𝑥₂,𝑥₁,𝑥₀) ↔ 𝑥₄ = 𝑥₁ ∧ 𝑥₃ = 𝑥₀ ∧ 𝑥₅ = 𝑥₂))))))
-tupleEqTheoremOld :: SentConstraints s t => Int -> s
-tupleEqTheoremOld tuple_len = 
-    if tuple_len > 0 then
-        let
-            subexps = fmap (\i -> x i .==. x (tuple_len + i)) [0 .. tuple_len - 1]
-            conjunction = foldr1  (.&&.) (tail subexps)
-        in
-            multiAx [0..tuple_len*2 - 1] 
-            (tuple (fmap x [0..tuple_len-1]) .==. tuple (fmap x [tuple_len..tuple_len*2 - 1]) 
-                .<->. conjunction)
-    else 
-        emptySet .==. emptySet
-
 
 
 -- | This function composes the "tuple equality theorems":
