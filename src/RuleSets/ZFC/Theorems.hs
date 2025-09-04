@@ -26,7 +26,9 @@ module RuleSets.ZFC.Theorems
     pairInUniverseTheorem,
     crossProductDefEquivTheorem,
     crossProductDefEquivSchema,
-    crossProductExistsTheorem
+    crossProductExistsTheorem,
+    crossProductExistsSchema,
+    crossProductInstantiateM
 
 ) where
 
@@ -2039,10 +2041,10 @@ crossProductExistsTheorem =
 
         -- Construct the inner part of the formula: <x,y> ∈ S ↔ (x ∈ A ∧ y ∈ B)
         pair_xy = pair (x x_idx) (x y_idx)
-        pair_in_S = pair_xy `memberOf` (x s_idx)
+        pair_in_S = pair_xy `memberOf` x s_idx
         
-        x_in_A = x x_idx `memberOf` (x a_idx)
-        y_in_B = x y_idx `memberOf` (x b_idx)
+        x_in_A = x x_idx `memberOf` x a_idx
+        y_in_B = x y_idx `memberOf` x b_idx
         x_in_A_and_y_in_B = x_in_A .&&. y_in_B
 
         biconditional = x_in_A_and_y_in_B .<->. pair_in_S
@@ -2069,6 +2071,105 @@ crossProductExistsTheorem =
         -- Universally quantify over A and B to create the final closed theorem.
         -- multiAx [0, 1] is equivalent to aX 0 (aX 1 (...))
         multiAx [a_idx, b_idx] implication
+
+
+
+-- | Proves the theorem: 'crossProductExistsTheorem'.
+-- | 'crossProductDefEquivTheorem' is a required lemma for this proof.
+proveCrossProductExistsM :: (HelperConstraints sE s eL m r t) =>
+    ProofGenTStd () r s Text m ()
+proveCrossProductExistsM = do
+    -- The theorem is universally quantified over two sets, A and B.
+    -- We use multiUGM to handle the two ∀ quantifiers.
+    multiUGM [(), ()] $ do
+        -- Inside the UG, free variables v_B (most recent) and v_A are introduced.
+        v_Av_B <- getTopFreeVars 2
+        let setB = head v_Av_B
+        let setA = v_Av_B!!1
+ 
+
+        -- Step 1: Define the predicate P(z) for specification.
+        let z_idx = 0; x_idx = 1; y_idx = 2; 
+                setA_idx = 3; setB_idx = 4
+        let universeSet_tmplt = powerSet (powerSet (x setA_idx .\/. x setB_idx))
+        -- Define the predicate P(z) as ∃x
+
+        let predicate_P_tmplt = eX x_idx (eX y_idx (
+                                  (x z_idx .==. pair (x x_idx) (x y_idx))
+                                  .&&. (x x_idx `memberOf` x setA_idx)
+                                  .&&. (x y_idx `memberOf` x setB_idx)
+                              ))
+        predicate_P_txt <- showSentM predicate_P_tmplt
+        remarkM $ "Predicate P(z): " <> predicate_P_txt
+        (definingProp_of_B, _, (crossProdObj,_,_)) <- builderInstantiateM [setA, setB]
+                         [setA_idx, setB_idx] z_idx universeSet_tmplt predicate_P_tmplt
+
+        -- Step 2: Use the theorem about definition equivalence to get the canonical property.
+
+        (thm_equiv_inst1, _) <- uiM setA crossProductDefEquivTheorem
+        (thm_equiv_inst2, _) <- uiM setB thm_equiv_inst1
+        let asm = isSet setA .&&. isSet setB
+        -- Step 3: Prove the main implication by assuming the antecedent.
+        runProofByAsmM asm $ do
+
+            (imp_equiv, _) <- mpM thm_equiv_inst2
+            mpM imp_equiv
+
+        
+            -- Step 4: Construct the target existential statement using the explicit template method.
+            let s_idx_final = 0; x_idx_final = 1; y_idx_final = 2
+            let element_prop_final = x x_idx_final `memberOf` setA .&&. x y_idx_final `memberOf` setB
+            let pair_in_s_final = pair (x x_idx_final) (x y_idx_final) `memberOf` x s_idx_final
+            let quantified_bicond_final = aX x_idx_final (aX y_idx_final (element_prop_final .<->. pair_in_s_final))
+            let target_property_for_S = isSet (x s_idx_final) .&&. quantified_bicond_final
+            let target_existential = eX s_idx_final target_property_for_S
+
+            -- Step 5: Apply Existential Generalization.
+            crossProdObjTxt <- showTermM crossProdObj
+            remarkM $ "CROSSPRODOBJ IS" <> crossProdObjTxt
+            egM crossProdObj target_existential
+    return ()
+
+
+-- | The schema that houses 'proveCrossProductExistsM'.
+-- | The schema stipulates that:
+-- | "crossProductDefEquivTheorem" is a required lemma.
+crossProductExistsSchema :: HelperConstraints sE s eL m r t => 
+     TheoremSchemaMT () r s Text m ()
+crossProductExistsSchema = 
+    TheoremSchemaMT [] [binaryUnionExistsTheorem,crossProductDefEquivTheorem] proveCrossProductExistsM
+
+
+-- | Helper to instantiate the cross product existence theorem and return the
+-- | resulting cartesian product set.
+-- | For this helper to work, the theorem defined by 'crossProductExistsTheorem' must be proven
+-- | beforehand, which will likely be done in the global context.
+crossProductInstantiateM ::  HelperConstraints sE s eL m r t =>
+    t -> t -> ProofGenTStd () r s Text m (s, [Int], t)
+crossProductInstantiateM setA setB = do
+    runProofBySubArgM $ do
+        -- This helper relies on isSet(setA) and isSet(setB) being proven in the outer context.
+
+        -- Step 1: Instantiate the 'crossProductExistsTheorem' theorem with the specific sets A and B.
+        (instantiated_thm, _) <- multiUIM crossProductExistsTheorem [setA, setB]
+        -- The result is the proven proposition: (isSet A ∧ isSet B) → ∃S(...)
+
+        -- Step 2: Prove the antecedent of the instantiated theorem.
+        (isSet_A_proven, _) <- repM (isSet setA)
+        (isSet_B_proven, _) <- repM (isSet setB)
+        (antecedent_proven, _) <- adjM isSet_A_proven isSet_B_proven
+
+        -- Step 3: Use Modus Ponens to derive the existential statement.
+        (exists_S_proven, _) <- mpM instantiated_thm
+
+        -- Step 4: Use Existential Instantiation (eiHilbertM) to get the property of the cross product set.
+        -- The Hilbert term created here, `crossProdObj`, is definitionally A × B.
+        (prop_of_crossProd, _, crossProdObj) <- eiHilbertM exists_S_proven
+        
+        -- The runProofBySubArgM wrapper will pick up 'prop_of_crossProd' as the 'consequent'
+        -- from the Last s writer state. The monadic return value of this 'do' block
+        -- will be returned as the 'extraData' component of runProofBySubArgM's result.
+        return crossProdObj
 
 
 
