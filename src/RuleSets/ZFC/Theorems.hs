@@ -28,7 +28,8 @@ module RuleSets.ZFC.Theorems
     crossProductDefEquivSchema,
     crossProductExistsTheorem,
     crossProductExistsSchema,
-    crossProductInstantiateM
+    crossProductInstantiateM,
+    strongInductionTheoremMSchema
 
 ) where
 
@@ -108,6 +109,8 @@ import RuleSets.ZFC.Helpers hiding
      (MetaRuleError(..))
 import Text.XHtml (target)
 import Control.Exception (throw)
+
+
 
 ----begin binary union section------
 
@@ -2178,6 +2181,371 @@ crossProductInstantiateM setA setB = do
 
 -- END CROS PROD EXISTS THEOREM
 
+-- BEGIN STRONG INDUCTION SECTION
+
+-- isRelWellFoundedOn Dom Rel
+-- Assumes Rel is a set of pairs, and Dom is the set it's well-founded on.
+-- Forall S ((S subset Dom /\ S /= EmptySet) ->
+--            Exists x (x In S /\ Forall y (y In S -> not (y Rel x))) )
+-- Example usage:
+-- let myDomain = Constant "MySet"
+-- let myRelation = Constant "MyRelation" -- Assume this is a set of pairs
+-- let wellFoundedStatement = isRelWellFoundedOn myDomain myRelation
+isRelWellFoundedOn :: SentConstraints s t => t -> t -> s
+isRelWellFoundedOn dom rel =
+    let
+        -- Template Variables for the quantifiers in the well-foundedness definition
+        idx_S = 0 -- Represents the subset S of 'dom'
+        idx_x = 1 -- Represents the minimal element x in S
+        idx_y = 2 -- Represents any element y in S for comparison
+
+        dom_idx = 3
+        rel_idx = 4
+
+        -- Antecedent for the main implication: S is a non-empty subset of 'dom'
+        s_is_subset_dom = subset (x idx_S) (x dom_idx)  -- S subset dom
+        s_is_not_empty  = neg ( x idx_S .==. emptySet ) -- S /= EmptySet
+        antecedent_S    = s_is_subset_dom .&&. s_is_not_empty
+
+        -- Consequent: Exists an R-minimal element x in S
+        -- x In S
+        x_is_in_S       = x idx_x `memberOf` x idx_S
+        -- y Rel x  (pair <y,x> In rel)
+        y_rel_x         = pair (x idx_y) (x idx_x) `memberOf` x rel_idx
+        -- Forall y (y In S -> not (y Rel x))
+        x_is_minimal_in_S = aX idx_y ( (x idx_y `memberOf` x idx_S) .->. neg y_rel_x )
+        -- Exists x (x In S /\ x_is_minimal_in_S)
+        consequent_exists_x = eX idx_x ( x_is_in_S .&&. x_is_minimal_in_S )
+    in
+        sentSubXs [(dom_idx,dom),(rel_idx,rel)] $ aX idx_S ( antecedent_S .->. consequent_exists_x )
+
+
+
+
+
+-- strongInductionPremiseOnRel P_template idx Dom Rel
+-- Forall n (n In Dom -> ( (Forall k (k In Dom /\ k Rel n -> P(k))) -> P(n) ) )
+-- Example usage:
+-- let myProperty = X idx :==: X idx -- P(x) is x=x
+-- let myDomain = natSetObj
+-- let lessThanRel = builderX 0 -- This needs to be defined, e.g. {<x,y> | x < y & x,y in natSetObj}
+--                  (crossProd natSetObj natSetObj) -- Source set for pairs
+--                  ( (project 2 0 (X 0)) .<. (project 2 1 (X 0)) ) -- Property X 0 is a pair <a,b> and a < b
+-- let premise = strongInductionPremiseOnRel myProperty myDomain lessThanRel
+
+strongInductionPremiseOnRel :: SentConstraints s t => s -> Int -> t -> t -> s
+strongInductionPremiseOnRel p_template idx dom rel =
+    let
+        -- Template variable indices for the quantifiers in this premise
+        n_idx = 0 -- The main induction variable 'n'
+        k_idx = 1 -- The universally quantified variable 'k' such that k Rel n
+
+        dom_idx = 2
+        rel_idx = 3
+
+        -- P(n) - using X n_idx for n.
+        -- Since P_template uses X idx, we substitute X idx in P_template with X n_idx.
+        p_n = sentSubX idx (x n_idx) p_template
+
+        -- P(k) - using X k_idx for k.
+        -- Substitute X idx in P_template with X k_idx.
+        p_k = sentSubX idx (x k_idx) p_template
+
+        -- Inner hypothesis: k Rel n -> P(k)
+        -- Here, n is X n_idx and k is X k_idx
+        k_rel_n     = pair (x k_idx) (x n_idx) `memberOf` x rel_idx -- k Rel n
+        hyp_antecedent = k_rel_n
+        hyp_body    = hyp_antecedent .->. p_k
+
+        -- Forall k (hyp_body)
+        -- This is the "for all predecessors k of n, P(k) holds" part.
+        forall_k_predecessors_hold_P = aX k_idx hyp_body
+
+        -- Inductive Step (IS) for a specific n: (Forall k predecessors...) -> P(n)
+        -- Here, n is X n_idx
+        inductive_step_for_n = forall_k_predecessors_hold_P .->. p_n
+
+        -- Body of the main Forall n: (IS_for_n)
+        main_forall_body = inductive_step_for_n
+    in
+        sentSubXs [(dom_idx, dom), (rel_idx, rel)] $ aX n_idx main_forall_body
+
+-- | A monadic helper that applies the definition of a well-founded relation.
+-- |
+-- | Given a domain D, a relation R, and a subset S, this function proves that
+-- | S has a minimal element.
+-- |
+-- | Note: This helper requires that the following premises have already been proven
+-- | in the current proof context:
+-- |   1. `isRelWellFoundedOn domainD relationR`
+-- |   2. `subsetS ⊆ domainD ∧ subsetS ≠ ∅`
+-- |
+-- | @param subsetS The specific non-empty subset of the domain.
+-- | @param domainD The domain over which the relation is well-founded.
+-- | @param relationR The well-founded relation.
+-- | @return The proven proposition `hasMinimalElement subsetS relationR`.
+applyWellFoundednessM :: HelperConstraints sE s eL m r t =>
+    t ->  -- subsetS
+    t ->  -- domainD
+    t ->  -- relationR
+    ProofGenTStd () r s Text m ((s, [Int]), (s, [Int]), t)
+applyWellFoundednessM subsetS domainD relationR = do
+    let builderSubsetTmFree = subsetS `subset` domainD
+    let absurd_asm = subsetS ./=. emptySet
+    (has_minimal_proven,_,_) <- runProofBySubArgM $ do
+        adjM builderSubsetTmFree absurd_asm
+        -- We have proven {𝑥₀ ∈ S | ¬P(𝑥₀)} ⊆ S ∧ {𝑥₀ ∈ S | ¬P(𝑥₀)} ≠ ∅ 
+        -- Step 1: Formally acknowledge the required premises from the outer context.
+        -- The proof will fail if these are not already proven.
+        let wellFoundedProp = isRelWellFoundedOn domainD relationR
+        (isRelWellFounded_proven, _) <- repM wellFoundedProp
+        -- This is the assertion ∀𝑥₂(𝑥₂ ⊆ S ∧ 𝑥₂ ≠ ∅ → ∃𝑥₁(𝑥₁ ∈ 𝑥₂ ∧ ∀𝑥₀(𝑥₀ ∈ 𝑥₂ → 𝑥₀ ≮ 𝑥₁))) 
+        let subset_and_nonempty_prop = (subsetS `subset` domainD) .&&. (subsetS ./=. emptySet)
+        (subset_and_nonempty_proven, _) <- repM subset_and_nonempty_prop
+        -- This is the assertion {𝑥₀ ∈ S | ¬P(𝑥₀)} ⊆ S ∧ {𝑥₀ ∈ S | ¬P(𝑥₀)} ≠ ∅ 
+
+        -- Step 2: The proposition `isRelWellFounded_proven` is definitionally
+        -- equivalent to ∀s((s⊆D ∧ s≠∅) → hasMinimalElement s R).
+        -- We instantiate this with our specific subset `subsetS`.
+        (instantiated_imp, _) <- uiM subsetS isRelWellFounded_proven
+        -- `instantiated_imp` is now the proven proposition:
+        -- (subsetS ⊆ domainD ∧ subsetS ≠ ∅) → hasMinimalElement subsetS relationR
+        -- This is the assertion 
+        --      {𝑥₀ ∈ S | ¬P(𝑥₀)} ⊆ S ∧ {𝑥₀ ∈ S | ¬P(𝑥₀)} ≠ ∅  
+        --               → ∃𝑥₁(𝑥₁ ∈ {𝑥₀ ∈ S | ¬P(𝑥₀)} ∧ ∀𝑥₀(𝑥₀ ∈ {𝑥₀ ∈ S | ¬P(𝑥₀)} → 𝑥₀ ≮ 𝑥₁))
+
+        -- Step 3: Apply Modus Ponens. The antecedent for this implication is
+        -- `subset_and_nonempty_proven`, which we acknowledged in Step 1.
+        (has_minimal_proven, _) <- mpM instantiated_imp
+        
+        -- The last proven statement is now `hasMinimalElement subsetS relationR`, which is our goal.
+        -- This is the assertion 
+        --   ∃𝑥₁(𝑥₁ ∈ {𝑥₀ ∈ S | ¬P(𝑥₀)} ∧ ∀𝑥₀(𝑥₀ ∈ {𝑥₀ ∈ S | ¬P(𝑥₀)} → 𝑥₀ ≮ 𝑥₁))
+
+        
+
+        -- The () is the 'extraData' returned by the sub-argument.
+        return ()
+    (min_assertion, _, min_element) <- eiHilbertM has_minimal_proven
+    -- This is the assertion
+    --  (min ∈ {𝑥₀ ∈ S | ¬P(𝑥₀)} ∧ ∀𝑥₀(𝑥₀ ∈ {𝑥₀ ∈ S | ¬P(𝑥₀)} → 𝑥₀ ≮ min))
+    (a,b) <- deconstructAdjM min_assertion
+    return (a,b, min_element)
+
+
+-- | A monadic helper that is employed by strongInductionTheoremProgFree.
+-- |
+-- |
+deriveInductiveContradictionM :: HelperConstraints sE s eL m r t =>
+    t ->  -- counterexamples
+    t ->  -- dom
+    t ->  -- rel_obj
+    s -> -- induction_premise
+    s -> -- spec_prop
+    ProofGenTStd () r s Text m (s, [Int], ())
+deriveInductiveContradictionM counterexamples dom rel_obj induction_premise spec_prop 
+           =
+    runProofBySubArgM $ do
+        let absurd_asm = counterexamples./=. emptySet
+        let rel_is_relation = rel_obj `subset` (dom `crossProd` dom)
+        (proves_false,_) <- runProofByAsmM absurd_asm $ do
+            -- The assumption is that {𝑥₀ ∈ S | ¬P(𝑥₀)} ≠ ∅
+            ((min_element_in_counterexamples,_),
+             (counterexample_elems_not_below_min,_),
+             min_element) <- applyWellFoundednessM counterexamples dom rel_obj 
+            -- we have proven 
+            -- 1. min ∈ {𝑥₀ ∈ S | ¬P(𝑥₀)} ∧ 
+            -- 2. ∀𝑥₁(𝑥₁ ∈ {𝑥₀ ∈ S | ¬P(𝑥₀)} → 𝑥₁ ≮ min)  
+            repM spec_prop
+            -- We are asserting the already-proven statement 
+            -- IsSet ({𝑥₀ ∈ S | C ≠ 𝑥₀}) ∧ ∀𝑥₁(𝑥₁ ∈ {𝑥₀ ∈ S | ¬P(𝑥₀)} ↔ ¬P(𝑥₁) ∧ 𝑥₁ ∈ S)
+            (spec_prop_main,_) <- simpRM spec_prop
+            -- We have proven ∀𝑥₁(𝑥₁ ∈ {𝑥₀ ∈ S | ¬P(𝑥₀)} ↔ ¬P(𝑥₁) ∧ 𝑥₁ ∈ S)
+            (spec_prop_inst_min_el,_) <- uiM min_element spec_prop_main
+            -- We have proven
+            -- min ∈ {𝑥₀ ∈ S | ¬P(𝑥₀)} ↔ ¬P(min) ∧ min ∈ S
+            (spec_prop_inst_min_el_fwd,_) <- bicondElimLM spec_prop_inst_min_el
+            -- We have proven
+            -- min ∈ {𝑥₀ ∈ S | ¬P(𝑥₀)} → ¬P(min) ∧ min ∈ S
+            (min_element_prop,_) <- mpM spec_prop_inst_min_el_fwd
+            -- We have proven
+            -- ¬P(min) ∧ min ∈ S
+            simpLM min_element_prop
+            -- We have proven ¬P(min)
+            (induction_premise_on_min,idxA) <- uiM min_element induction_premise
+            -- We have proven that ∀𝑥₀(𝑥₀ < min → P(𝑥₀)) → P(min)
+            (x,_) <- modusTollensM induction_premise_on_min
+            -- We have proven that ¬∀𝑥₀(𝑥₀ < min → P(𝑥₀))
+            (exists_statement, idx) <- aNegIntroM x
+            -- We have proven that ∃𝑥₀¬(𝑥₀ < min → P(𝑥₀))
+            (sub_min_element_prop_pre,_, submin_element) <- eiHilbertM exists_statement 
+            -- We have proven that
+            --   ¬(submin < min → P(submin))
+            (sub_min_element_prop,_) <- negImpToConjViaEquivM sub_min_element_prop_pre
+            -- We have proven that
+            --   submin < min ∧ ¬P(submin)
+            (submin_lt_min,_) <- simpLM sub_min_element_prop
+            -- We have proven: submin < min
+
+            (notPsubmin,_) <- simpRM sub_min_element_prop
+            -- We have proven: ¬P(submin)
+            -- let submin_element_in_n = submin_element `memberOf` natSet
+            (rel_prop,_) <- simpRM rel_is_relation
+            -- We have proven: ∀𝑥₀(𝑥₀ ∈ (<) → 𝑥₀ ∈ S ⨯ S)
+            let xobj = pair submin_element min_element
+            (relprop_instance,_) <- uiM xobj rel_prop
+            -- We have proven that: submin < min → (submin,min) ∈ S ⨯ S)
+            mpM relprop_instance
+            -- We have proven that (submin,min) ∈ S ⨯ S
+
+            (domXdomProps,_,domXdom)<- crossProductInstantiateM dom dom
+            -- We have proven that:
+            -- isSet(S ⨯ S) ∧ ∀𝑥₁(∀𝑥₀(𝑥₁ ∈ S ∧ 𝑥₀ ∈ S ↔ (𝑥₁,𝑥₀) ∈ S ⨯ S))
+            (crossProdProp, _) <- simpRM domXdomProps
+            -- We have proven that: ∀𝑥₁(∀𝑥₀(𝑥₁ ∈ S ∧ 𝑥₀ ∈ S ↔ (𝑥₁,𝑥₀) ∈ S ⨯ S))
+            (crossProdPropInst,_) <- multiUIM crossProdProp [submin_element,min_element]
+            -- We have proven that: min ∈ S ∧ submin ∈ S ↔ (min,submin) ∈ S ⨯ S)
+            (crossProdPropInstFwd,_) <- bicondElimRM crossProdPropInst
+            -- We have proven that: (min,submin) ∈ S ⨯ S → min ∈ S ∧ submin ∈ S
+
+            (min_in_s_and_submin_in_s, _) <- mpM crossProdPropInstFwd
+            -- We have proven that: min ∈ S ∧ submin ∈ S
+            (min_in_s,_) <- simpLM min_in_s_and_submin_in_s
+            -- We have proven that: min ∈ S
+            adjM notPsubmin min_in_s
+            -- We have proven that: ¬P(submin) ∧ min ∈ S
+            repM spec_prop_main
+            -- We are reasserting: ∀𝑥₁(𝑥₁ ∈ {𝑥₀ ∈ S | ¬P(𝑥₀)} ↔ ¬P(𝑥₁) ∧ 𝑥₁ ∈ S)
+            (spec_prop_inst_submin_el,_) <- uiM submin_element spec_prop_main
+            -- We have proven that submin ∈ {𝑥₀ ∈ S | ¬P(𝑥₀)} ↔ ¬P(submin) ∧ submin ∈ S
+
+            (spec_prop_inst_submin_el_bwd,_) <- bicondElimRM spec_prop_inst_submin_el
+            -- We have proven that: ¬P(submin) ∧ submin ∈ S → submin ∈ {𝑥₀ ∈ S | ¬P(𝑥₀)}
+            final_ante <- mpM spec_prop_inst_submin_el_bwd
+            -- We have proven that: submin ∈ {𝑥₀ ∈ S | ¬P(𝑥₀)}
+            repM counterexample_elems_not_below_min
+            -- We are reasserting: ∀𝑥₁(𝑥₁ ∈ {𝑥₀ ∈ S | ¬P(𝑥₀)} → 𝑥₁ ≮ min)
+            (final_imp,_) <- uiM submin_element counterexample_elems_not_below_min
+            -- We have proven that: submin ∈ {𝑥₀ ∈ S | ¬P(𝑥₀)} → submin ≮ min
+            (not_submin_lt_min,_) <- mpM final_imp
+            -- We have proven that: submin ≮ min
+            repM submin_lt_min
+            -- We are reasserting: submin < min
+            contraFM submin_lt_min
+            -- We have proven: ⊥
+        return ()
+
+strongInductionTheoremProgFree::HelperConstraints sE s eL m r t => 
+               Int -> t -> s -> ProofGenTStd () r s Text m (s,[Int])
+strongInductionTheoremProgFree idx dom p_pred = do
+            let rel_idx = idx + 1
+            let asmMain = eX rel_idx (
+                           x rel_idx `subset` (dom `crossProd` dom)
+                               .&&. isRelWellFoundedOn dom (x rel_idx)
+                                .&&. strongInductionPremiseOnRel p_pred idx dom (x rel_idx))
+            let (anti_spec_prop,anti_counterexamples) = builderPropsFree idx dom p_pred
+            let (spec_prop, counterexamples) = builderPropsFree idx dom (neg p_pred)
+            let builderSubsetTmFree = builderSubsetTheorem [] idx dom (neg p_pred)
+            let specAntiRedundancyTmFreeConditional = specAntiRedundancyTheorem [] idx dom p_pred
+            (specAntiRedundancyTmFree,_) <- mpM specAntiRedundancyTmFreeConditional
+            runProofByAsmM asmMain $ do
+                (asm_after_ei,_,rel_obj) <- eiHilbertM asmMain
+                -- We have established: (<) ⊆ S ⨯ S ∧ ∀𝑥₂(𝑥₂ ⊆ S ∧ 𝑥₂ ≠ ∅ → ∃𝑥₁(𝑥₁ ∈ 𝑥₂ ∧ ∀𝑥₀(𝑥₀ ∈ 𝑥₂ → 𝑥₀ ≮ 𝑥₁))) 
+                --                                     ∧ ∀𝑥₁(∀𝑥₀(𝑥₀ < 𝑥₁ → P(𝑥₀)) → P(𝑥₁))
+                -- I.e. (<) is a relation over S,
+                -- S is well-founded on (<),
+                -- and the induction premise holds for (<) over S.
+                (rel_is_relation,rel_is_relation_idx) <- simpLM asm_after_ei
+                -- We have established that
+                --  (<) ⊆ S ⨯ S
+                (bAndC,_) <- simpRM asm_after_ei
+                (well_founded,well_founded_idx) <- simpLM bAndC
+                -- We have established that
+                --  ∀𝑥₂(𝑥₂ ⊆ S ∧ 𝑥₂ ≠ ∅ → ∃𝑥₁(𝑥₁ ∈ 𝑥₂ ∧ ∀𝑥₀(𝑥₀ ∈ 𝑥₂ → 𝑥₀ ≮ 𝑥₁))) 
+                -- This is the assertion that S is well-founded on (<).
+                (induction_premise,induction_premise_idx) <- simpRM bAndC
+                -- We have established that
+                -- ∀𝑥₁(∀𝑥₀(𝑥₀ < 𝑥₁ → P(𝑥₀)) → P(𝑥₁))
+                -- This is the induction premise.
+                remarkM $   (pack . show) rel_is_relation_idx <> " asserts that rel is a relation over S.\n" 
+                           <> (pack . show) well_founded_idx <> " asserts that rel is well-founded over S.\n"
+                           <> (pack . show) induction_premise_idx <> " asserts that the induction premise holds for S"
+                
+                (proves_false,_,()) <- deriveInductiveContradictionM counterexamples dom rel_obj 
+                          induction_premise spec_prop
+                -- We have proven that {𝑥₀ ∈ S | ¬P(𝑥₀)} ≠ ∅ → ⊥
+                (double_neg,_) <- absurdM proves_false
+                -- We have proven that ¬¬{𝑥₀ ∈ S | ¬P(𝑥₀)} = ∅
+                (final_generalization_set_version,_) <- doubleNegElimM double_neg
+                -- We have proven that {𝑥₀ ∈ S | ¬P(𝑥₀)} = ∅
+                (final_imp,_) <- bicondElimLM specAntiRedundancyTmFree
+                -- We have proven that {𝑥₀ ∈ S | ¬P(𝑥₀)} = ∅ → ∀𝑥₀(𝑥₀ ∈ S → P(𝑥₀))
+                
+                mpM final_imp
+                -- We have proven that ∀𝑥₀(𝑥₀ ∈ S → P(𝑥₀))
+
+
+strongInductionTheoremProg:: HelperConstraints sE s eL m r t => 
+               [Int] -> Int -> t -> s -> ProofGenTStd () r s Text m ()
+strongInductionTheoremProg outerTemplateIdxs idx dom_template p_template = do
+
+
+
+    let builderSubsetTmInstance = builderSubsetTheorem outerTemplateIdxs idx dom_template (neg p_template)
+    let specAntiRedundancyTmInstance = specAntiRedundancyTheorem outerTemplateIdxs idx dom_template p_template
+    
+
+    multiUGM (replicate (length outerTemplateIdxs) ()) $ do
+        -- Inside the UG, we have free variables (V_i) corresponding to the X_k parameters.
+        instantiationTerms <- getTopFreeVars (length outerTemplateIdxs)
+
+
+
+
+        (_,_,(_,dom,_)) <- builderInstantiateM instantiationTerms outerTemplateIdxs idx 
+                          dom_template (neg p_template)
+        (_,_,(_,_,p_pred)) <- 
+                          builderInstantiateM instantiationTerms outerTemplateIdxs idx dom_template p_template
+
+
+
+        multiUIM builderSubsetTmInstance instantiationTerms
+        multiUIM specAntiRedundancyTmInstance instantiationTerms
+        let rel_idx = idx + 1
+
+        let isSetDom = isSet dom
+        (main_imp, _) <- runProofByAsmM isSetDom $ do
+            strongInductionTheoremProgFree idx dom p_pred
+        let asmMain = eX rel_idx (
+                           x rel_idx `subset` (dom `crossProd` dom)
+                               .&&. isRelWellFoundedOn dom (x rel_idx)
+                                .&&. strongInductionPremiseOnRel p_pred idx dom (x rel_idx))
+        let full_asm = isSetDom .&&. asmMain
+        runProofByAsmM full_asm $ do
+            (isSet_dom,_) <- simpLM full_asm
+            (sub_imp,_) <- mpM main_imp
+            (inductive_asm,_) <- simpRM full_asm
+            mpM sub_imp
+    return ()
+
+
+
+strongInductionTheoremMSchema :: HelperConstraints sE s eL m r t => 
+     [Int] -> Int -> t -> s -> TheoremSchemaMT () r s Text m ()
+strongInductionTheoremMSchema outerTemplateIdxs spec_var_idx dom p_template= 
+    let
+      dom_tmplt_consts = extractConstsTerm dom
+      p_tmplt_consts = extractConstsSent p_template
+      all_consts = dom_tmplt_consts `Set.union` p_tmplt_consts
+      typed_consts = zip (Data.Set.toList all_consts) (repeat ()) 
+    in
+      TheoremSchemaMT typed_consts [crossProductExistsTheorem
+                              , builderSubsetTheorem outerTemplateIdxs spec_var_idx dom (neg p_template)
+                              , specAntiRedundancyTheorem outerTemplateIdxs spec_var_idx dom p_template
+                             ] (strongInductionTheoremProg outerTemplateIdxs spec_var_idx dom p_template)
+
+
+-- END STRONG INDUCTION SECTION
 
 
 data MetaRuleError s where

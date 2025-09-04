@@ -232,6 +232,8 @@ instance ZFC.LogicTerm ObjDeBr where
     intNeg = Intneg
     intSet :: ObjDeBr
     intSet = IntSet
+    natSet :: ObjDeBr
+    natSet = natSetObj
     roster :: [ObjDeBr] -> ObjDeBr
     roster = roster
     (.\/.) :: ObjDeBr -> ObjDeBr -> ObjDeBr

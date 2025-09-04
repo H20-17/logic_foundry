@@ -93,6 +93,7 @@ class LogicTerm t where
    (.*.) :: t -> t -> t
    intNeg :: t -> t
    intSet :: t
+   natSet :: t
    roster :: [t] -> t
    (.\/.) :: t -> t -> t
    (./\.) :: t -> t -> t
