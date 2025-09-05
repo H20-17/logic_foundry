@@ -29,6 +29,7 @@ module RuleSets.ZFC.Theorems
     crossProductExistsTheorem,
     crossProductExistsSchema,
     crossProductInstantiateM,
+    strongInductionTheorem,
     strongInductionTheoremMSchema
 
 ) where
@@ -109,6 +110,7 @@ import RuleSets.ZFC.Helpers hiding
      (MetaRuleError(..))
 import Text.XHtml (target)
 import Control.Exception (throw)
+import Data.Type.Equality (outer)
 
 
 
@@ -2191,16 +2193,17 @@ crossProductInstantiateM setA setB = do
 -- let myDomain = Constant "MySet"
 -- let myRelation = Constant "MyRelation" -- Assume this is a set of pairs
 -- let wellFoundedStatement = isRelWellFoundedOn myDomain myRelation
-isRelWellFoundedOn :: SentConstraints s t => t -> t -> s
-isRelWellFoundedOn dom rel =
+isRelWellFoundedOn :: SentConstraints s t => [Int] -> t -> t -> s
+isRelWellFoundedOn outerTemplateIdxs dom rel =
     let
+        new_idx_base = if null outerTemplateIdxs then 0 else maximum outerTemplateIdxs + 1
         -- Template Variables for the quantifiers in the well-foundedness definition
-        idx_S = 0 -- Represents the subset S of 'dom'
-        idx_x = 1 -- Represents the minimal element x in S
-        idx_y = 2 -- Represents any element y in S for comparison
+        idx_S = new_idx_base -- Represents the subset S of 'dom'
+        idx_x = new_idx_base + 1 -- Represents the minimal element x in S
+        idx_y = new_idx_base + 2 -- Represents any element y in S for comparison
 
-        dom_idx = 3
-        rel_idx = 4
+        dom_idx = new_idx_base + 3
+        rel_idx = new_idx_base + 4
 
         -- Antecedent for the main implication: S is a non-empty subset of 'dom'
         s_is_subset_dom = subset (x idx_S) (x dom_idx)  -- S subset dom
@@ -2233,15 +2236,15 @@ isRelWellFoundedOn dom rel =
 --                  ( (project 2 0 (X 0)) .<. (project 2 1 (X 0)) ) -- Property X 0 is a pair <a,b> and a < b
 -- let premise = strongInductionPremiseOnRel myProperty myDomain lessThanRel
 
-strongInductionPremiseOnRel :: SentConstraints s t => s -> Int -> t -> t -> s
-strongInductionPremiseOnRel p_template idx dom rel =
+strongInductionPremiseOnRel :: SentConstraints s t => s -> Int -> [Int] -> t -> s
+strongInductionPremiseOnRel p_template idx outerTemplateIdxs rel =
     let
+        new_idx_base = maximum (idx:outerTemplateIdxs) + 1
         -- Template variable indices for the quantifiers in this premise
-        n_idx = 0 -- The main induction variable 'n'
-        k_idx = 1 -- The universally quantified variable 'k' such that k Rel n
+        n_idx = new_idx_base -- The main induction variable 'n'
+        k_idx = new_idx_base + 1 -- The universally quantified variable 'k' such that k Rel n
 
-        dom_idx = 2
-        rel_idx = 3
+        rel_idx = new_idx_base + 2
 
         -- P(n) - using X n_idx for n.
         -- Since P_template uses X idx, we substitute X idx in P_template with X n_idx.
@@ -2268,7 +2271,7 @@ strongInductionPremiseOnRel p_template idx dom rel =
         -- Body of the main Forall n: (IS_for_n)
         main_forall_body = inductive_step_for_n
     in
-        sentSubXs [(dom_idx, dom), (rel_idx, rel)] $ aX n_idx main_forall_body
+        sentSubX rel_idx rel $ aX n_idx main_forall_body
 
 -- | A monadic helper that applies the definition of a well-founded relation.
 -- |
@@ -2297,7 +2300,7 @@ applyWellFoundednessM subsetS domainD relationR = do
         -- We have proven {𝑥₀ ∈ S | ¬P(𝑥₀)} ⊆ S ∧ {𝑥₀ ∈ S | ¬P(𝑥₀)} ≠ ∅ 
         -- Step 1: Formally acknowledge the required premises from the outer context.
         -- The proof will fail if these are not already proven.
-        let wellFoundedProp = isRelWellFoundedOn domainD relationR
+        let wellFoundedProp = isRelWellFoundedOn [] domainD relationR
         (isRelWellFounded_proven, _) <- repM wellFoundedProp
         -- This is the assertion ∀𝑥₂(𝑥₂ ⊆ S ∧ 𝑥₂ ≠ ∅ → ∃𝑥₁(𝑥₁ ∈ 𝑥₂ ∧ ∀𝑥₀(𝑥₀ ∈ 𝑥₂ → 𝑥₀ ≮ 𝑥₁))) 
         let subset_and_nonempty_prop = (subsetS `subset` domainD) .&&. (subsetS ./=. emptySet)
@@ -2435,14 +2438,36 @@ deriveInductiveContradictionM counterexamples dom rel_obj induction_premise spec
             -- We have proven: ⊥
         return ()
 
+
+strongInductionTheorem :: SentConstraints s t =>
+               [Int] -> Int -> t -> s -> s
+strongInductionTheorem outerTemplateIdxs idx dom_template p_template =
+    let new_idx_base = maximum (idx:outerTemplateIdxs) + 1
+        rel_idx = new_idx_base
+        -- The theorem states:
+        -- For any set S and property P, if there exists a well-founded relation < on S such that
+        -- the strong induction premise holds for < over S, then P holds for all elements of S.
+        theorem_body_tmplt = 
+            isSet dom_template .&&.
+            eX rel_idx (
+                           (x rel_idx `subset` (dom_template `crossProd` dom_template))
+                               .&&. isRelWellFoundedOn outerTemplateIdxs dom_template (x rel_idx)
+                                .&&. strongInductionPremiseOnRel p_template idx outerTemplateIdxs (x rel_idx)
+                       )
+                           .->. 
+            aX idx ( (x idx `memberOf` dom_template) .->. p_template)
+        theorem_body = multiAx outerTemplateIdxs theorem_body_tmplt
+    in
+        theorem_body
+
 strongInductionTheoremProgFree::HelperConstraints sE s eL m r t => 
                Int -> t -> s -> ProofGenTStd () r s Text m (s,[Int])
 strongInductionTheoremProgFree idx dom p_pred = do
             let rel_idx = idx + 1
             let asmMain = eX rel_idx (
                            x rel_idx `subset` (dom `crossProd` dom)
-                               .&&. isRelWellFoundedOn dom (x rel_idx)
-                                .&&. strongInductionPremiseOnRel p_pred idx dom (x rel_idx))
+                               .&&. isRelWellFoundedOn [] dom (x rel_idx)
+                                .&&. strongInductionPremiseOnRel p_pred idx [] (x rel_idx))
             let (anti_spec_prop,anti_counterexamples) = builderPropsFree idx dom p_pred
             let (spec_prop, counterexamples) = builderPropsFree idx dom (neg p_pred)
             let builderSubsetTmFree = builderSubsetTheorem [] idx dom (neg p_pred)
@@ -2494,11 +2519,14 @@ strongInductionTheoremProg outerTemplateIdxs idx dom_template p_template = do
     let builderSubsetTmInstance = builderSubsetTheorem outerTemplateIdxs idx dom_template (neg p_template)
     let specAntiRedundancyTmInstance = specAntiRedundancyTheorem outerTemplateIdxs idx dom_template p_template
     
+    txt <- showSentM (strongInductionTheorem outerTemplateIdxs idx dom_template p_template)
+    remarkM $ "Strong Induction Theorem to be proven: " <> txt
+
 
     multiUGM (replicate (length outerTemplateIdxs) ()) $ do
         -- Inside the UG, we have free variables (V_i) corresponding to the X_k parameters.
-        instantiationTerms <- getTopFreeVars (length outerTemplateIdxs)
-
+        instantiationTermsRev <- getTopFreeVars (length outerTemplateIdxs)
+        let instantiationTerms = reverse instantiationTermsRev
 
 
 
@@ -2518,8 +2546,8 @@ strongInductionTheoremProg outerTemplateIdxs idx dom_template p_template = do
             strongInductionTheoremProgFree idx dom p_pred
         let asmMain = eX rel_idx (
                            x rel_idx `subset` (dom `crossProd` dom)
-                               .&&. isRelWellFoundedOn dom (x rel_idx)
-                                .&&. strongInductionPremiseOnRel p_pred idx dom (x rel_idx))
+                               .&&. isRelWellFoundedOn [] dom (x rel_idx)
+                                .&&. strongInductionPremiseOnRel p_pred idx [] (x rel_idx))
         let full_asm = isSetDom .&&. asmMain
         runProofByAsmM full_asm $ do
             (isSet_dom,_) <- simpLM full_asm
@@ -2537,7 +2565,7 @@ strongInductionTheoremMSchema outerTemplateIdxs spec_var_idx dom p_template=
       dom_tmplt_consts = extractConstsTerm dom
       p_tmplt_consts = extractConstsSent p_template
       all_consts = dom_tmplt_consts `Set.union` p_tmplt_consts
-      typed_consts = zip (Data.Set.toList all_consts) (repeat ()) 
+      typed_consts = Prelude.map (, ()) (Data.Set.toList all_consts) 
     in
       TheoremSchemaMT typed_consts [crossProductExistsTheorem
                               , builderSubsetTheorem outerTemplateIdxs spec_var_idx dom (neg p_template)
