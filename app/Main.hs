@@ -1549,7 +1549,7 @@ main = do
     (a,b,c,d) <- checkTheoremM ((strongInductionTheoremMSchema [1,2] 0 source_set_template p_template)::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text IO ()))
     (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
     
-    error "STOPPING HERE"
+    -- error "STOPPING HERE"
 
     print "TEST STRONG INDUCTION THEOREM 2-------------------------------------"
     let p_template = Constant "C" :==: X 0

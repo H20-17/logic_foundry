@@ -2236,16 +2236,15 @@ isRelWellFoundedOn outerTemplateIdxs dom rel =
 --                  ( (project 2 0 (X 0)) .<. (project 2 1 (X 0)) ) -- Property X 0 is a pair <a,b> and a < b
 -- let premise = strongInductionPremiseOnRel myProperty myDomain lessThanRel
 
-strongInductionPremiseOnRel :: SentConstraints s t => s -> Int -> [Int] -> t -> t -> s
-strongInductionPremiseOnRel p_template idx outerTemplateIdxs dom rel =
+strongInductionPremiseOnRel :: SentConstraints s t => s -> Int -> [Int] -> t -> s
+strongInductionPremiseOnRel p_template idx outerTemplateIdxs rel =
     let
         new_idx_base = maximum (idx:outerTemplateIdxs) + 1
         -- Template variable indices for the quantifiers in this premise
         n_idx = new_idx_base -- The main induction variable 'n'
         k_idx = new_idx_base + 1 -- The universally quantified variable 'k' such that k Rel n
 
-        dom_idx = new_idx_base + 2
-        rel_idx = new_idx_base + 3
+        rel_idx = new_idx_base + 2
 
         -- P(n) - using X n_idx for n.
         -- Since P_template uses X idx, we substitute X idx in P_template with X n_idx.
@@ -2272,7 +2271,7 @@ strongInductionPremiseOnRel p_template idx outerTemplateIdxs dom rel =
         -- Body of the main Forall n: (IS_for_n)
         main_forall_body = inductive_step_for_n
     in
-        sentSubXs [(dom_idx, dom), (rel_idx, rel)] $ aX n_idx main_forall_body
+        sentSubX rel_idx rel $ aX n_idx main_forall_body
 
 -- | A monadic helper that applies the definition of a well-founded relation.
 -- |
@@ -2445,8 +2444,6 @@ strongInductionTheorem :: SentConstraints s t =>
 strongInductionTheorem outerTemplateIdxs idx dom_template p_template =
     let new_idx_base = maximum (idx:outerTemplateIdxs) + 1
         rel_idx = new_idx_base
-        dom_idx = rel_idx + 1
-        p_idx = dom_idx + 1
         -- The theorem states:
         -- For any set S and property P, if there exists a well-founded relation < on S such that
         -- the strong induction premise holds for < over S, then P holds for all elements of S.
@@ -2455,7 +2452,7 @@ strongInductionTheorem outerTemplateIdxs idx dom_template p_template =
             eX rel_idx (
                            (x rel_idx `subset` (dom_template `crossProd` dom_template))
                                .&&. isRelWellFoundedOn outerTemplateIdxs dom_template (x rel_idx)
-                                .&&. strongInductionPremiseOnRel p_template idx outerTemplateIdxs dom_template (x rel_idx)
+                                .&&. strongInductionPremiseOnRel p_template idx outerTemplateIdxs (x rel_idx)
                        )
                            .->. 
             aX idx ( (x idx `memberOf` dom_template) .->. p_template)
@@ -2470,7 +2467,7 @@ strongInductionTheoremProgFree idx dom p_pred = do
             let asmMain = eX rel_idx (
                            x rel_idx `subset` (dom `crossProd` dom)
                                .&&. isRelWellFoundedOn [] dom (x rel_idx)
-                                .&&. strongInductionPremiseOnRel p_pred idx [] dom (x rel_idx))
+                                .&&. strongInductionPremiseOnRel p_pred idx [] (x rel_idx))
             let (anti_spec_prop,anti_counterexamples) = builderPropsFree idx dom p_pred
             let (spec_prop, counterexamples) = builderPropsFree idx dom (neg p_pred)
             let builderSubsetTmFree = builderSubsetTheorem [] idx dom (neg p_pred)
@@ -2550,7 +2547,7 @@ strongInductionTheoremProg outerTemplateIdxs idx dom_template p_template = do
         let asmMain = eX rel_idx (
                            x rel_idx `subset` (dom `crossProd` dom)
                                .&&. isRelWellFoundedOn [] dom (x rel_idx)
-                                .&&. strongInductionPremiseOnRel p_pred idx [] dom (x rel_idx))
+                                .&&. strongInductionPremiseOnRel p_pred idx [] (x rel_idx))
         let full_asm = isSetDom .&&. asmMain
         runProofByAsmM full_asm $ do
             (isSet_dom,_) <- simpLM full_asm
