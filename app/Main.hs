@@ -1500,19 +1500,6 @@ main = do
 
 
 
-
-    print "TEST STRONG INDUCTION THEOREM-------------------------------------"
-    let p_template = Constant "C" :+: X 0 :==: (X 1 :+: X 2)
-    let source_set_template = X 1 .\/. X 2
-    (a,b,c,d) <- checkTheoremM ((strongInductionTheoremMSchema [1,2] 0 source_set_template p_template)::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text IO ()))
-    (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
-
-    print "TEST STRONG INDUCTION THEOREM 2-------------------------------------"
-    let p_template = Constant "C" :==: X 0
-    let source_set_template = Constant "S"
-    (a,b,c,d) <- checkTheoremM ((strongInductionTheoremMSchema [] 0 source_set_template p_template)::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text IO ()))
-    (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
-
     print "TEST UNION WITH EMPTY SET THEOREM-------------------------------------"
     (a,b,c,d) <- checkTheoremM (unionWithEmptySetSchema::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text IO ()))
     (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
@@ -1555,6 +1542,20 @@ main = do
                        :: (TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text IO ()))
     (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
 
+
+    print "TEST STRONG INDUCTION THEOREM-------------------------------------"
+    let p_template = Constant "C" :+: X 0 :==: (X 1 :+: X 2)
+    let source_set_template = X 1 .\/. X 2
+    (a,b,c,d) <- checkTheoremM ((strongInductionTheoremMSchema [1,2] 0 source_set_template p_template)::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text IO ()))
+    (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
+    
+    error "STOPPING HERE"
+
+    print "TEST STRONG INDUCTION THEOREM 2-------------------------------------"
+    let p_template = Constant "C" :==: X 0
+    let source_set_template = Constant "S"
+    (a,b,c,d) <- checkTheoremM ((strongInductionTheoremMSchema [] 0 source_set_template p_template)::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text IO ()))
+    (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
 
     return ()
 
