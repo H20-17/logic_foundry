@@ -16,9 +16,7 @@ module Internal.StdPattern(
     getFreeVarCount,
     showTermM, showSentM,
     ShowableSent(..),
-    ShowableTerm(..),
-    Subexp(..),
-    getFreshTemplateVar
+    ShowableTerm(..)
 
 
 ) where
@@ -152,15 +150,6 @@ class (Ord s, Eq tType, Ord o) => TypedSent o tType sE s | s-> tType, s-> sE, s 
 
 
 
-
-class Subexp exp t | exp -> t where
-    getFreshTemplateVarSingle :: exp -> (Int, t)
-
-getFreshTemplateVar :: (Subexp exp t) => [exp] -> (Int, t)
-getFreshTemplateVar exps = foldr f (0,undefined) exps
-  where
-    f exp (curMax,_) = let (v,t) = getFreshTemplateVarSingle exp in
-                       (max curMax v, t)
 
 
 

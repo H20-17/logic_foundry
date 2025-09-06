@@ -45,7 +45,8 @@ import RuleSets.BaseLogic.Core hiding
    LogicRule(..),
    LogicError(..),
    runProofAtomic,
-   HelperConstraints(..))
+   HelperConstraints(..),
+   SentConstraints(..))
 import qualified RuleSets.BaseLogic.Core as REM
 
 import RuleSets.PropLogic.Core hiding 
@@ -59,7 +60,8 @@ import RuleSets.PropLogic.Core hiding
    LogicSent,
    SubproofMException(..),
    MetaRuleError(..),
-   HelperConstraints(..))
+   HelperConstraints(..),
+   SentConstraints(..)  )
 import qualified RuleSets.PropLogic.Core as PL
 
 import RuleSets.PredLogic.Core hiding 
@@ -74,7 +76,8 @@ import RuleSets.PredLogic.Core hiding
    SubproofMException(..),
    MetaRuleError(..),
    LogicTerm(..),
-   HelperConstraints(..))
+   HelperConstraints(..),
+   SentConstraints(..))
 import qualified RuleSets.PredLogic.Core as PREDL
 import GHC.Num (integerMul)
 
@@ -854,5 +857,5 @@ type HelperConstraints sE s eL m r t =
     LogicSent s t, LogicTerm t
     )
 
-type SentConstraints s t  = (PREDL.LogicSent s t () Text, LogicSent s t, RuleSets.ZFC.Core.LogicTerm t,
-                    PREDL.LogicTerm t)
+type SentConstraints s t  
+   = (PREDL.SentConstraints s t () Text, LogicSent s t, RuleSets.ZFC.Core.LogicTerm t)

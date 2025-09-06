@@ -516,18 +516,6 @@ instance TypedSent  Text () DeBrSe PropDeBr where
 
 
 
-instance Subexp ObjDeBr ObjDeBr where
-    getFreshTemplateVarSingle :: ObjDeBr -> (Int, ObjDeBr)
-    getFreshTemplateVarSingle obj = (maxIdx + 1, X maxIdx)
-      where
-        maxIdx = maybe 0 id (objMaxXIdx obj)
-
-instance Subexp PropDeBr ObjDeBr where
-    getFreshTemplateVarSingle :: PropDeBr -> (Int, ObjDeBr)
-    getFreshTemplateVarSingle prop = (maxIdx + 1, X maxIdx)
-      where
-        maxIdx = maybe 0 id (propMaxXIdx prop)
-
 
 
 propDeBrBoundVarInside :: PropDeBr -> Int -> Bool

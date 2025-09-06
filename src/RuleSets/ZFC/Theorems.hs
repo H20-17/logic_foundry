@@ -97,7 +97,8 @@ import RuleSets.PredLogic.Core hiding
    LogicSent,
    SubproofMException(..),
    MetaRuleError(..),
-   HelperConstraints(..))
+   HelperConstraints(..),
+   SentConstraints(..))
 import qualified RuleSets.PredLogic.Core as PREDL
 import RuleSets.ZFC.Core
 import RuleSets.BaseLogic.Helpers hiding

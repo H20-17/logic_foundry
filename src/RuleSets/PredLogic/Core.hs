@@ -15,7 +15,8 @@ module RuleSets.PredLogic.Core
     establishTheorem,
     runProofByUG,
     checkTheoremMOpen,
-    HelperConstraints(..)
+    HelperConstraints(..),
+    SentConstraints
 ) where
 
 
@@ -864,3 +865,4 @@ type HelperConstraints m s tType o t sE eL r = (
             , Show t
             ) 
             
+type SentConstraints s t tType o = (LogicSent s t tType o, LogicTerm t)

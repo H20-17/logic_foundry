@@ -11,9 +11,7 @@ module StdPattern(
     ShowableSent(..),
     ShowableTerm(..),
     showSentM,
-    showTermM,
-    Subexp(..),
-    getFreshTemplateVar
+    showTermM
     
 ) where
 import Kernel
@@ -44,6 +42,4 @@ import Internal.StdPattern
       ShowableSent(..),
       ShowableTerm(..),
       showSentM,
-      showTermM,
-      Subexp(..),
-      getFreshTemplateVar)
+      showTermM)
