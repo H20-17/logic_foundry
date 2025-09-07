@@ -112,6 +112,7 @@ import RuleSets.ZFC.Helpers hiding
 import Text.XHtml (target)
 import Control.Exception (throw)
 import Data.Type.Equality (outer)
+import IndexTracker 
 
 
 
@@ -2194,35 +2195,31 @@ crossProductInstantiateM setA setB = do
 -- let myDomain = Constant "MySet"
 -- let myRelation = Constant "MyRelation" -- Assume this is a set of pairs
 -- let wellFoundedStatement = isRelWellFoundedOn myDomain myRelation
-isRelWellFoundedOn :: SentConstraints s t => [Int] -> t -> t -> s
-isRelWellFoundedOn outerTemplateIdxs dom rel =
-    let
-        new_idx_base = if null outerTemplateIdxs then 0 else maximum outerTemplateIdxs + 1
-        -- Template Variables for the quantifiers in the well-foundedness definition
-        idx_S = new_idx_base -- Represents the subset S of 'dom'
-        idx_x = new_idx_base + 1 -- Represents the minimal element x in S
-        idx_y = new_idx_base + 2 -- Represents any element y in S for comparison
+isRelWellFoundedOn :: SentConstraints s t => t -> t -> IndexTracker s
+isRelWellFoundedOn dom rel = do
 
-        dom_idx = new_idx_base + 3
-        rel_idx = new_idx_base + 4
+    idx_S <- newIndex -- Represents the subset S of 'dom'
+    idx_x <- newIndex -- Represents the minimal element x in S
+    idx_y <- newIndex -- Represents any element y in S for comparison
+
 
         -- Antecedent for the main implication: S is a non-empty subset of 'dom'
-        s_is_subset_dom = subset (x idx_S) (x dom_idx)  -- S subset dom
-        s_is_not_empty  = neg ( x idx_S .==. emptySet ) -- S /= EmptySet
-        antecedent_S    = s_is_subset_dom .&&. s_is_not_empty
+    let s_is_subset_dom = subset (x idx_S) dom  -- S subset dom
+    let s_is_not_empty  = neg ( x idx_S .==. emptySet ) -- S /= EmptySet
+    let antecedent_S    = s_is_subset_dom .&&. s_is_not_empty
 
-        -- Consequent: Exists an R-minimal element x in S
-        -- x In S
-        x_is_in_S       = x idx_x `memberOf` x idx_S
-        -- y Rel x  (pair <y,x> In rel)
-        y_rel_x         = pair (x idx_y) (x idx_x) `memberOf` x rel_idx
-        -- Forall y (y In S -> not (y Rel x))
-        x_is_minimal_in_S = aX idx_y ( (x idx_y `memberOf` x idx_S) .->. neg y_rel_x )
-        -- Exists x (x In S /\ x_is_minimal_in_S)
-        consequent_exists_x = eX idx_x ( x_is_in_S .&&. x_is_minimal_in_S )
-    in
-        sentSubXs [(dom_idx,dom),(rel_idx,rel)] $ aX idx_S ( antecedent_S .->. consequent_exists_x )
-
+    -- Consequent: Exists an R-minimal element x in S
+    -- x In S
+    let x_is_in_S       = x idx_x `memberOf` x idx_S
+    -- y Rel x  (pair <y,x> In rel)
+    let y_rel_x         = pair (x idx_y) (x idx_x) `memberOf` rel
+    -- Forall y (y In S -> not (y Rel x))
+    let x_is_minimal_in_S = aX idx_y ( (x idx_y `memberOf` x idx_S) .->. neg y_rel_x )
+    -- Exists x (x In S /\ x_is_minimal_in_S)
+    let consequent_exists_x = eX idx_x ( x_is_in_S .&&. x_is_minimal_in_S )
+    let resultSent = aX idx_S ( antecedent_S .->. consequent_exists_x )
+    dropIndices 3
+    return resultSent
 
 
 
@@ -2237,42 +2234,39 @@ isRelWellFoundedOn outerTemplateIdxs dom rel =
 --                  ( (project 2 0 (X 0)) .<. (project 2 1 (X 0)) ) -- Property X 0 is a pair <a,b> and a < b
 -- let premise = strongInductionPremiseOnRel myProperty myDomain lessThanRel
 
-strongInductionPremiseOnRel :: SentConstraints s t => s -> Int -> [Int] -> t -> s
-strongInductionPremiseOnRel p_template idx outerTemplateIdxs rel =
-    let
-        new_idx_base = maximum (idx:outerTemplateIdxs) + 1
-        -- Template variable indices for the quantifiers in this premise
-        n_idx = new_idx_base -- The main induction variable 'n'
-        k_idx = new_idx_base + 1 -- The universally quantified variable 'k' such that k Rel n
+strongInductionPremiseOnRel :: SentConstraints s t => s ->  Int -> t -> IndexTracker s
+strongInductionPremiseOnRel p_template idx rel = do
+    n_idx <- newIndex -- The main induction variable 'n'
+    k_idx <- newIndex -- The universally quantified variable 'k' such that k Rel n
 
-        rel_idx = new_idx_base + 2
-
-        -- P(n) - using X n_idx for n.
-        -- Since P_template uses X idx, we substitute X idx in P_template with X n_idx.
-        p_n = sentSubX idx (x n_idx) p_template
+    -- P(n) - using X n_idx for n.
+    -- Since P_template uses X idx, we substitute X idx in P_template with X n_idx.
+    let p_n = sentSubX idx (x n_idx) p_template
 
         -- P(k) - using X k_idx for k.
         -- Substitute X idx in P_template with X k_idx.
-        p_k = sentSubX idx (x k_idx) p_template
+    let p_k = sentSubX idx (x k_idx) p_template
 
-        -- Inner hypothesis: k Rel n -> P(k)
-        -- Here, n is X n_idx and k is X k_idx
-        k_rel_n     = pair (x k_idx) (x n_idx) `memberOf` x rel_idx -- k Rel n
-        hyp_antecedent = k_rel_n
-        hyp_body    = hyp_antecedent .->. p_k
+    -- Inner hypothesis: k Rel n -> P(k)
+    -- Here, n is X n_idx and k is X k_idx
+    let k_rel_n     = pair (x k_idx) (x n_idx) `memberOf` rel -- k Rel n
+    let hyp_antecedent = k_rel_n
+    let hyp_body    = hyp_antecedent .->. p_k
 
-        -- Forall k (hyp_body)
-        -- This is the "for all predecessors k of n, P(k) holds" part.
-        forall_k_predecessors_hold_P = aX k_idx hyp_body
+    -- Forall k (hyp_body)
+    -- This is the "for all predecessors k of n, P(k) holds" part.
+    let forall_k_predecessors_hold_P = aX k_idx hyp_body
 
-        -- Inductive Step (IS) for a specific n: (Forall k predecessors...) -> P(n)
-        -- Here, n is X n_idx
-        inductive_step_for_n = forall_k_predecessors_hold_P .->. p_n
+    -- Inductive Step (IS) for a specific n: (Forall k predecessors...) -> P(n)
+    -- Here, n is X n_idx
+    let inductive_step_for_n = forall_k_predecessors_hold_P .->. p_n
 
-        -- Body of the main Forall n: (IS_for_n)
-        main_forall_body = inductive_step_for_n
-    in
-        sentSubX rel_idx rel $ aX n_idx main_forall_body
+    -- Body of the main Forall n: (IS_for_n)
+    let main_forall_body = inductive_step_for_n
+    let resultSent = aX n_idx main_forall_body
+    dropIndices 2
+    return resultSent
+
 
 -- | A monadic helper that applies the definition of a well-founded relation.
 -- |
@@ -2301,7 +2295,11 @@ applyWellFoundednessM subsetS domainD relationR = do
         -- We have proven {𝑥₀ ∈ S | ¬P(𝑥₀)} ⊆ S ∧ {𝑥₀ ∈ S | ¬P(𝑥₀)} ≠ ∅ 
         -- Step 1: Formally acknowledge the required premises from the outer context.
         -- The proof will fail if these are not already proven.
-        let wellFoundedProp = isRelWellFoundedOn [] domainD relationR
+        let (wellFoundedProp,_) = runIndexTracker ( 
+                 isRelWellFoundedOn domainD relationR
+
+             ) []        
+        -- let wellFoundedProp = isRelWellFoundedOn [] domainD relationR
         (isRelWellFounded_proven, _) <- repM wellFoundedProp
         -- This is the assertion ∀𝑥₂(𝑥₂ ⊆ S ∧ 𝑥₂ ≠ ∅ → ∃𝑥₁(𝑥₁ ∈ 𝑥₂ ∧ ∀𝑥₀(𝑥₀ ∈ 𝑥₂ → 𝑥₀ ≮ 𝑥₁))) 
         let subset_and_nonempty_prop = (subsetS `subset` domainD) .&&. (subsetS ./=. emptySet)
@@ -2443,20 +2441,26 @@ deriveInductiveContradictionM counterexamples dom rel_obj induction_premise spec
 strongInductionTheorem :: SentConstraints s t =>
                [Int] -> Int -> t -> s -> s
 strongInductionTheorem outerTemplateIdxs idx dom_template p_template =
-    let new_idx_base = maximum (idx:outerTemplateIdxs) + 1
-        rel_idx = new_idx_base
-        -- The theorem states:
-        -- For any set S and property P, if there exists a well-founded relation < on S such that
-        -- the strong induction premise holds for < over S, then P holds for all elements of S.
-        theorem_body_tmplt = 
-            isSet dom_template .&&.
-            eX rel_idx (
+    let 
+        (theorem_body_tmplt,_) = runIndexTracker (do
+            rel_idx <- newIndex
+            -- The theorem states:
+            -- For any set S and property P, if there exists a well-founded relation < on S such that
+            -- the strong induction premise holds for < over S, then P holds for all elements of S.
+            wellFoundedExp <- isRelWellFoundedOn dom_template (x rel_idx)
+            strongInductionExp <- strongInductionPremiseOnRel p_template idx (x rel_idx)
+            let theorem_body_tmplt = 
+                    isSet dom_template .&&.
+                    eX rel_idx (
                            (x rel_idx `subset` (dom_template `crossProd` dom_template))
-                               .&&. isRelWellFoundedOn outerTemplateIdxs dom_template (x rel_idx)
-                                .&&. strongInductionPremiseOnRel p_template idx outerTemplateIdxs (x rel_idx)
+                               .&&. wellFoundedExp
+                                .&&. strongInductionExp
                        )
                            .->. 
-            aX idx ( (x idx `memberOf` dom_template) .->. p_template)
+                    aX idx ( (x idx `memberOf` dom_template) .->. p_template)
+            dropIndices 1
+            return theorem_body_tmplt
+            ) (idx:outerTemplateIdxs)
         theorem_body = multiAx outerTemplateIdxs theorem_body_tmplt
     in
         theorem_body
@@ -2464,50 +2468,56 @@ strongInductionTheorem outerTemplateIdxs idx dom_template p_template =
 strongInductionTheoremProgFree::HelperConstraints sE s eL m r t => 
                Int -> t -> s -> ProofGenTStd () r s Text m (s,[Int])
 strongInductionTheoremProgFree idx dom p_pred = do
-            let rel_idx = idx + 1
-            let asmMain = eX rel_idx (
-                           x rel_idx `subset` (dom `crossProd` dom)
-                               .&&. isRelWellFoundedOn [] dom (x rel_idx)
-                                .&&. strongInductionPremiseOnRel p_pred idx [] (x rel_idx))
-            let (anti_spec_prop,anti_counterexamples) = builderPropsFree idx dom p_pred
-            let (spec_prop, counterexamples) = builderPropsFree idx dom (neg p_pred)
-            let builderSubsetTmFree = builderSubsetTheorem [] idx dom (neg p_pred)
-            let specAntiRedundancyTmFreeConditional = specAntiRedundancyTheorem [] idx dom p_pred
-            (specAntiRedundancyTmFree,_) <- mpM specAntiRedundancyTmFreeConditional
-            runProofByAsmM asmMain $ do
-                (asm_after_ei,_,rel_obj) <- eiHilbertM asmMain
-                -- We have established: (<) ⊆ S ⨯ S ∧ ∀𝑥₂(𝑥₂ ⊆ S ∧ 𝑥₂ ≠ ∅ → ∃𝑥₁(𝑥₁ ∈ 𝑥₂ ∧ ∀𝑥₀(𝑥₀ ∈ 𝑥₂ → 𝑥₀ ≮ 𝑥₁))) 
-                --                                     ∧ ∀𝑥₁(∀𝑥₀(𝑥₀ < 𝑥₁ → P(𝑥₀)) → P(𝑥₁))
-                -- I.e. (<) is a relation over S,
-                -- S is well-founded on (<),
-                -- and the induction premise holds for (<) over S.
-                (rel_is_relation,rel_is_relation_idx) <- simpLM asm_after_ei
-                -- We have established that
-                --  (<) ⊆ S ⨯ S
-                (bAndC,_) <- simpRM asm_after_ei
-                (well_founded,well_founded_idx) <- simpLM bAndC
-                -- We have established that
-                --  ∀𝑥₂(𝑥₂ ⊆ S ∧ 𝑥₂ ≠ ∅ → ∃𝑥₁(𝑥₁ ∈ 𝑥₂ ∧ ∀𝑥₀(𝑥₀ ∈ 𝑥₂ → 𝑥₀ ≮ 𝑥₁))) 
-                -- This is the assertion that S is well-founded on (<).
-                (induction_premise,induction_premise_idx) <- simpRM bAndC
-                -- We have established that
-                -- ∀𝑥₁(∀𝑥₀(𝑥₀ < 𝑥₁ → P(𝑥₀)) → P(𝑥₁))
-                -- This is the induction premise.
-                remarkM $   (pack . show) rel_is_relation_idx <> " asserts that rel is a relation over S.\n" 
-                           <> (pack . show) well_founded_idx <> " asserts that rel is well-founded over S.\n"
-                           <> (pack . show) induction_premise_idx <> " asserts that the induction premise holds for S"
+    let (asmMain,_) = runIndexTracker (do
+        rel_idx <- newIndex
+        wellFoundedExp <- isRelWellFoundedOn dom (x rel_idx)
+        strongInductionExp <- strongInductionPremiseOnRel p_pred idx (x rel_idx)
+        let asmMain = eX rel_idx (
+                       x rel_idx `subset` (dom `crossProd` dom)
+                           .&&. wellFoundedExp
+                            .&&. strongInductionExp)
+        dropIndices 1
+        return asmMain
+        ) [idx]    
+    let (anti_spec_prop,anti_counterexamples) = builderPropsFree idx dom p_pred
+    let (spec_prop, counterexamples) = builderPropsFree idx dom (neg p_pred)
+    let builderSubsetTmFree = builderSubsetTheorem [] idx dom (neg p_pred)
+    let specAntiRedundancyTmFreeConditional = specAntiRedundancyTheorem [] idx dom p_pred
+    (specAntiRedundancyTmFree,_) <- mpM specAntiRedundancyTmFreeConditional
+    runProofByAsmM asmMain $ do
+        (asm_after_ei,_,rel_obj) <- eiHilbertM asmMain
+        -- We have established: (<) ⊆ S ⨯ S ∧ ∀𝑥₂(𝑥₂ ⊆ S ∧ 𝑥₂ ≠ ∅ → ∃𝑥₁(𝑥₁ ∈ 𝑥₂ ∧ ∀𝑥₀(𝑥₀ ∈ 𝑥₂ → 𝑥₀ ≮ 𝑥₁))) 
+        --                                     ∧ ∀𝑥₁(∀𝑥₀(𝑥₀ < 𝑥₁ → P(𝑥₀)) → P(𝑥₁))
+        -- I.e. (<) is a relation over S,
+        -- S is well-founded on (<),
+        -- and the induction premise holds for (<) over S.
+        (rel_is_relation,rel_is_relation_idx) <- simpLM asm_after_ei
+        -- We have established that
+        --  (<) ⊆ S ⨯ S
+        (bAndC,_) <- simpRM asm_after_ei
+        (well_founded,well_founded_idx) <- simpLM bAndC
+        -- We have established that
+        --  ∀𝑥₂(𝑥₂ ⊆ S ∧ 𝑥₂ ≠ ∅ → ∃𝑥₁(𝑥₁ ∈ 𝑥₂ ∧ ∀𝑥₀(𝑥₀ ∈ 𝑥₂ → 𝑥₀ ≮ 𝑥₁))) 
+        -- This is the assertion that S is well-founded on (<).
+        (induction_premise,induction_premise_idx) <- simpRM bAndC
+        -- We have established that
+        -- ∀𝑥₁(∀𝑥₀(𝑥₀ < 𝑥₁ → P(𝑥₀)) → P(𝑥₁))
+        -- This is the induction premise.
+        remarkM $   (pack . show) rel_is_relation_idx <> " asserts that rel is a relation over S.\n" 
+                    <> (pack . show) well_founded_idx <> " asserts that rel is well-founded over S.\n"
+                    <> (pack . show) induction_premise_idx <> " asserts that the induction premise holds for S"
                 
-                (proves_false,_,()) <- deriveInductiveContradictionM counterexamples dom rel_obj 
-                          induction_premise spec_prop
-                -- We have proven that {𝑥₀ ∈ S | ¬P(𝑥₀)} ≠ ∅ → ⊥
-                (double_neg,_) <- absurdM proves_false
-                -- We have proven that ¬¬{𝑥₀ ∈ S | ¬P(𝑥₀)} = ∅
-                (final_generalization_set_version,_) <- doubleNegElimM double_neg
-                -- We have proven that {𝑥₀ ∈ S | ¬P(𝑥₀)} = ∅
-                (final_imp,_) <- bicondElimLM specAntiRedundancyTmFree
-                -- We have proven that {𝑥₀ ∈ S | ¬P(𝑥₀)} = ∅ → ∀𝑥₀(𝑥₀ ∈ S → P(𝑥₀))
+        (proves_false,_,()) <- deriveInductiveContradictionM counterexamples dom rel_obj 
+                    induction_premise spec_prop
+        -- We have proven that {𝑥₀ ∈ S | ¬P(𝑥₀)} ≠ ∅ → ⊥
+        (double_neg,_) <- absurdM proves_false
+        -- We have proven that ¬¬{𝑥₀ ∈ S | ¬P(𝑥₀)} = ∅
+        (final_generalization_set_version,_) <- doubleNegElimM double_neg
+        -- We have proven that {𝑥₀ ∈ S | ¬P(𝑥₀)} = ∅
+        (final_imp,_) <- bicondElimLM specAntiRedundancyTmFree
+        -- We have proven that {𝑥₀ ∈ S | ¬P(𝑥₀)} = ∅ → ∀𝑥₀(𝑥₀ ∈ S → P(𝑥₀))
                 
-                mpM final_imp
+        mpM final_imp
                 -- We have proven that ∀𝑥₀(𝑥₀ ∈ S → P(𝑥₀))
 
 
@@ -2540,15 +2550,22 @@ strongInductionTheoremProg outerTemplateIdxs idx dom_template p_template = do
 
         multiUIM builderSubsetTmInstance instantiationTerms
         multiUIM specAntiRedundancyTmInstance instantiationTerms
-        let rel_idx = idx + 1
+
 
         let isSetDom = isSet dom
         (main_imp, _) <- runProofByAsmM isSetDom $ do
             strongInductionTheoremProgFree idx dom p_pred
-        let asmMain = eX rel_idx (
+        let (asmMain,_) = runIndexTracker (do
+            rel_idx <- newIndex
+            wellFoundedExp <- isRelWellFoundedOn dom (x rel_idx)
+            strongInductionExp <- strongInductionPremiseOnRel p_pred idx (x rel_idx)
+            let asmMain = eX rel_idx (
                            x rel_idx `subset` (dom `crossProd` dom)
-                               .&&. isRelWellFoundedOn [] dom (x rel_idx)
-                                .&&. strongInductionPremiseOnRel p_pred idx [] (x rel_idx))
+                               .&&. wellFoundedExp
+                                .&&. strongInductionExp)
+            dropIndices 1
+            return asmMain
+            ) [idx]
         let full_asm = isSetDom .&&. asmMain
         runProofByAsmM full_asm $ do
             (isSet_dom,_) <- simpLM full_asm

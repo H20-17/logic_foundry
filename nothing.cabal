@@ -30,7 +30,7 @@ library
    build-depends: base,mtl>=2.3.1,containers,text,Cabal,transformers,xhtml, exceptions
    other-modules: Internal.StdPattern, Langs.Internal.BasicUntyped.Core, Langs.Internal.BasicUntyped.Shorthands, Langs.Internal.BasicUntyped.Rendering, Langs.Internal.BasicUntyped.Axiomizations
    hs-source-dirs: src
-   exposed-modules: Kernel,StdPattern,RuleSets.PropLogic.Core,RuleSets.PropLogic.Helpers,RuleSets.PredLogic.Core, RuleSets.PredLogic.Helpers,Langs.BasicUntyped,RuleSets.BaseLogic.Core, RuleSets.BaseLogic.Helpers, RuleSets.ZFC.Core, RuleSets.ZFC.Helpers, RuleSets.ZFC.Theorems
+   exposed-modules: Kernel,StdPattern,RuleSets.PropLogic.Core,RuleSets.PropLogic.Helpers,RuleSets.PredLogic.Core, RuleSets.PredLogic.Helpers,Langs.BasicUntyped,RuleSets.BaseLogic.Core, RuleSets.BaseLogic.Helpers, RuleSets.ZFC.Core, RuleSets.ZFC.Helpers, RuleSets.ZFC.Theorems, IndexTracker
 
 
 
