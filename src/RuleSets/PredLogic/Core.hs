@@ -454,23 +454,23 @@ instance (LogicSent s t tType o, Show sE, Typeable sE, Show s, Typeable s, Typed
                      -> PrfStdContext tType 
                      -> PrfStdState s o tType 
                      -> Either (LogicError s sE o t tType ) (PrfStdState s o tType,[PrfStdStep s o tType], Last s)
-    runProofOpen rs context oldState = foldM f (PrfStdState mempty mempty 0,[], Last Nothing) rs
+    runProofOpen rs context oldState = foldM f (PrfStdState mempty mempty 0 0,[], Last Nothing) rs
        where
            f (newState,newSteps, mayLastProp) r =  fmap g (runProofAtomic r context (oldState <> newState))
              where
                  g ruleResult = case ruleResult of
-                    (Just s,Nothing,step) -> (newState <> PrfStdState (Data.Map.insert s newLineIndex mempty) mempty 1,
+                    (Just s,Nothing,step) -> (newState <> PrfStdState (Data.Map.insert s newLineIndex mempty) mempty 1 0,
                                          newSteps <> [step], (Last . Just) s)
                     (Just s,Just (newConst,tType), step) -> (newState <> 
                             PrfStdState (Data.Map.insert s newLineIndex mempty) 
-                               (Data.Map.insert newConst (tType,newLineIndex) mempty) 1,
+                               (Data.Map.insert newConst (tType,newLineIndex) mempty) 1 0,
                                newSteps <> [step], (Last . Just) s)
                     (Nothing,Just (newConst,tType), step) -> (newState <> 
                             PrfStdState mempty
-                               (Data.Map.insert newConst (tType,newLineIndex) mempty) 1,
+                               (Data.Map.insert newConst (tType,newLineIndex) mempty) 1 0,
                                newSteps <> [step], mayLastProp)
                     (Nothing,Nothing, step) -> (newState <>
-                            PrfStdState mempty mempty 1,
+                            PrfStdState mempty mempty 1 0,
                                newSteps <> [step], mayLastProp)
                     where
                         newStepCount = stepCount newState + 1
@@ -564,7 +564,7 @@ checkTheoremOpen mayPrStateCxt (TheoremSchema constdict lemmas theorem subproof)
        let constdictPure = Data.Map.map fst newConsts
        maybe (return ()) throwError (maybe (g1 constdictPure) (g2 constdictPure) mayPrStateCxt)
        let newContext = PrfStdContext [] [] (maybe []  ((<>[True]) . contextFrames . snd) mayPrStateCxt)
-       let newState = PrfStdState newProven newConsts newStepCountB
+       let newState = PrfStdState newProven newConsts newStepCountB 0
        let preambleSteps = conststeps <> lemmasteps
        let mayPreambleLastProp = if Prelude.null lemmas then Last Nothing else (Last . Just . last) lemmas  
        left ChkTheoremErrSubproofErr (
@@ -581,7 +581,7 @@ checkTheoremOpen mayPrStateCxt (TheoremSchema constdict lemmas theorem subproof)
                  q Nothing = Nothing
                  q (Just (state,_)) = Data.Map.lookup lemma (provenSents state) 
 
-         g2 constdictPure (PrfStdState alreadyProven alreadyDefinedConsts stepCount, 
+         g2 constdictPure (PrfStdState alreadyProven alreadyDefinedConsts stepCount 0, 
                  PrfStdContext freeVarTypeStack stepIdfPrefix contextDepth) 
                = fmap constDictErr (constDictTest (fmap fst alreadyDefinedConsts) constdictPure)
                                                <|> Prelude.foldr f1 Nothing lemmas
@@ -673,7 +673,7 @@ checkTheoremMOpen mayPrStateCxt (TheoremSchemaMT constdict lemmas prog) =  do
     maybe (maybe (return ()) throwM (g1 constdictPure)) (maybe (return ()) throwM . g2 constdictPure) mayPrStateCxt
     let newContext = PrfStdContext [] [] (maybe []  ((<>[True]) . contextFrames . snd) mayPrStateCxt)
     let preambleSteps = conststeps <> lemmasteps
-    let newState = PrfStdState newProven newConsts newStepCountB
+    let newState = PrfStdState newProven newConsts newStepCountB 0
     let mayPreambleLastProp = if Prelude.null lemmas then Last Nothing else (Last . Just . last) lemmas
     (extra,tm,proof,newSteps) 
                <- runSubproofM newContext mempty newState preambleSteps mayPreambleLastProp prog
@@ -690,7 +690,7 @@ checkTheoremMOpen mayPrStateCxt (TheoremSchemaMT constdict lemmas prog) =  do
                  q Nothing = Nothing
                  q (Just (state,_)) = Data.Map.lookup lemma (provenSents state) 
 
-            g2 constdictPure (PrfStdState alreadyProven alreadyDefinedConsts stepCount, PrfStdContext freeVarTypeStack stepIdfPrefix contextDepth) 
+            g2 constdictPure (PrfStdState alreadyProven alreadyDefinedConsts stepCount 0, PrfStdContext freeVarTypeStack stepIdfPrefix contextDepth) 
                  = fmap constDictErr (constDictTest (fmap fst alreadyDefinedConsts) constdictPure)
                                                <|> Prelude.foldr f1 Nothing lemmas
              where
@@ -817,7 +817,7 @@ runProofByUG (ProofByUGSchema generalization subproof) context state =
          let newContext = PrfStdContext newVarstack
          let newContextFrames = contextFrames context <> [False]
          let newContext = PrfStdContext newVarstack newStepIdxPrefix newContextFrames
-         let newState = PrfStdState mempty mempty 1
+         let newState = PrfStdState mempty mempty 1 0
          let newFreeTerm = free2Term $ length varstack
          let generalizable = f newFreeTerm
          let preambleSteps = [PrfStdStepFreevar (length varstack) tType]

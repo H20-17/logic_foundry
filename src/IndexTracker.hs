@@ -2,7 +2,8 @@ module IndexTracker (
     IndexTracker,
     newIndex,
     dropIndices,
-    runIndexTracker
+    runIndexTracker,
+    TemplateVarTracker(..)
 )
   where
 import Control.Monad.State
@@ -22,7 +23,20 @@ dropIndices n = do
        currentIndex <- get
        put (currentIndex - n)
 
-runIndexTracker :: IndexTracker a -> [Int] -> (a, Int)
-runIndexTracker tracker idxSet =
-    let initialIndex = if null idxSet then 0 else maximum idxSet + 1
+runIndexTracker :: IndexTracker a -> (a, Int)
+runIndexTracker tracker =
+    let initialIndex = 0
     in runState tracker initialIndex
+
+class TemplateVarTracker m where
+    newTemplateVar :: m Int
+    dropTemplateVars :: Int -> m ()
+    runTemplateVarTracker :: m a -> (a, Int)
+
+instance TemplateVarTracker (State Int)  where
+    newTemplateVar :: IndexTracker Int
+    newTemplateVar = newIndex
+    dropTemplateVars :: Int -> IndexTracker ()
+    dropTemplateVars = dropIndices
+    runTemplateVarTracker :: IndexTracker a -> (a, Int)
+    runTemplateVarTracker = runIndexTracker

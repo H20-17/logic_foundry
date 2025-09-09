@@ -696,7 +696,7 @@ runProofByAsmM asm prog =  do
         let newSents = Data.Map.insert asm (newStepIdxPrefix ++ [0]) mempty
         let newContextFrames = contextFrames context <> [False]
         let newContext = PrfStdContext frVarTypeStack newStepIdxPrefix newContextFrames
-        let newState = PrfStdState newSents mempty 1
+        let newState = PrfStdState newSents mempty 1 0
         let preambleSteps = [PrfStdStepStep asm "ASM" []]
         let mayPreambleLastProp = (Last . Just) asm
         (extraData,consequent,subproof,newSteps) 

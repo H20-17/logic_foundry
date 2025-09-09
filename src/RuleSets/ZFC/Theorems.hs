@@ -1935,7 +1935,7 @@ crossProductDefEquivTheorem =
             dropIndices 2 -- Drop a_idx, b_idx
 
             return returnSent
-        ) []
+        )
 
     
 
@@ -2333,7 +2333,7 @@ applyWellFoundednessM subsetS domainD relationR = do
         let (wellFoundedProp,_) = runIndexTracker ( 
                  isRelWellFoundedOn domainD relationR
 
-             ) []        
+             )      
         -- let wellFoundedProp = isRelWellFoundedOn [] domainD relationR
         (isRelWellFounded_proven, _) <- repM wellFoundedProp
         -- This is the assertion ∀𝑥₂(𝑥₂ ⊆ S ∧ 𝑥₂ ≠ ∅ → ∃𝑥₁(𝑥₁ ∈ 𝑥₂ ∧ ∀𝑥₀(𝑥₀ ∈ 𝑥₂ → 𝑥₀ ≮ 𝑥₁))) 

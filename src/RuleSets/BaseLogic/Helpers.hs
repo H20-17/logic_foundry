@@ -42,7 +42,7 @@ runProofBySubArgM prog =  do
         let newStepIdxPrefix = stepIdxPrefix context ++ [stepCount state]
         let newContextFrames = contextFrames context <> [False]
         let newContext = PrfStdContext frVarTypeStack newStepIdxPrefix newContextFrames
-        let newState = PrfStdState mempty mempty 0
+        let newState = PrfStdState mempty mempty 0 0
         let preambleSteps = []
         (extraData,consequent,subproof,newSteps) 
             <- lift $ runSubproofM newContext state newState preambleSteps (Last Nothing) prog

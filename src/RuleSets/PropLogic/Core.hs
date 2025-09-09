@@ -374,23 +374,23 @@ instance (LogicSent s tType, Show sE, Typeable sE, Show s, Typeable s, Ord o, Ty
                  [LogicRule tType s sE o] -> 
                  PrfStdContext tType  -> PrfStdState s o tType
                         -> Either (LogicError s sE o tType) (PrfStdState s o tType, [PrfStdStep s o tType],Last s) 
-  runProofOpen rs context oldState = foldM f (PrfStdState mempty mempty 0,[], Last Nothing) rs
+  runProofOpen rs context oldState = foldM f (PrfStdState mempty mempty 0 0,[], Last Nothing) rs
        where
            f (newState,newSteps, mayLastProp) r =  fmap g (runProofAtomic r context (oldState <> newState))
              where
                  g ruleResult = case ruleResult of
-                    (Just s,Nothing,step) -> (newState <> PrfStdState (Data.Map.insert s newLineIndex mempty) mempty 1,
+                    (Just s,Nothing,step) -> (newState <> PrfStdState (Data.Map.insert s newLineIndex mempty) mempty 1 0,
                                          newSteps <> [step], (Last . Just) s)
                     (Just s,Just (newConst,tType), step) -> (newState <> 
                             PrfStdState (Data.Map.insert s newLineIndex mempty) 
-                               (Data.Map.insert newConst (tType,newLineIndex) mempty) 1,
+                               (Data.Map.insert newConst (tType,newLineIndex) mempty) 1 0,
                                newSteps <> [step], (Last . Just) s)
                     (Nothing,Just (newConst,tType), step) -> (newState <> 
                             PrfStdState mempty
-                               (Data.Map.insert newConst (tType,newLineIndex) mempty) 1,
+                               (Data.Map.insert newConst (tType,newLineIndex) mempty) 1 0,
                                newSteps <> [step], mayLastProp)
                     (Nothing,Nothing, step) -> (newState <>
-                            PrfStdState mempty mempty 1,
+                            PrfStdState mempty mempty 1 0,
                                newSteps <> [step], mayLastProp)
                     where
                         newStepCount = stepCount newState + 1
@@ -598,7 +598,7 @@ runProofByAsm (ProofByAsmSchema assumption consequent subproof) context state  =
          let newSents = Data.Map.insert assumption (newStepIdxPrefix ++ [0]) mempty
          let newContextFrames = contextFrames context <> [False]
          let newContext = PrfStdContext frVarTypeStack newStepIdxPrefix newContextFrames
-         let newState = PrfStdState newSents mempty 1
+         let newState = PrfStdState newSents mempty 1 0
          let preambleSteps = [PrfStdStepStep assumption "ASM" []]
          let mayPreambleLastProp = (Last . Just) assumption
          let eitherTestResult = testSubproof newContext state newState preambleSteps mayPreambleLastProp consequent subproof
