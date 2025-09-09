@@ -1836,6 +1836,26 @@ pairInUniverseTheorem =
         pair_in_universe_theorem_closed
 
 
+predicate_P :: SentConstraints s t => Int -> Int -> Int -> s
+predicate_P varIdx a_idx b_idx =
+    fst $ runIndexTracker (
+        do
+            spec_x_idx <- newIndex
+            spec_y_idx <- newIndex
+            let setA = x a_idx
+            let setB = x b_idx
+            let pred = eX spec_x_idx (eX spec_y_idx (
+                      (x varIdx .==. pair (x spec_x_idx) (x spec_y_idx))
+                      .&&. (x spec_x_idx `memberOf` setA)
+                      .&&. (x spec_y_idx `memberOf` setB)
+                  ))
+            dropIndices 2
+            return pred
+        ) [varIdx, a_idx, b_idx]
+
+
+
+
 -- | Constructs the PropDeBr term for the closed theorem stating that the property
 -- | of a cross product derived via the Axiom of Specification implies the
 -- | canonical property of a cross product.
@@ -1855,12 +1875,12 @@ crossProductDefEquivTheorem =
 
         -- Define the inner predicate P(z) used in the specification.
         -- P(z) := ∃x∃y (z = <x,y> ∧ x ∈ A ∧ y ∈ B)
-        spec_z_idx = 2; spec_x_idx = 3; spec_y_idx = 4
-        predicate_P = eX spec_x_idx (eX spec_y_idx (
-                          (x spec_z_idx .==. pair (x spec_x_idx) (x spec_y_idx))
-                          .&&. (x spec_x_idx `memberOf` setA)
-                          .&&. (x spec_y_idx `memberOf` setB)
-                      ))
+        spec_z_idx = 2
+        --predicate_Q = eX spec_x_idx (eX spec_y_idx (
+        --                  (x spec_z_idx .==. pair (x spec_x_idx) (x spec_y_idx))
+        --                  .&&. (x spec_x_idx `memberOf` setA)
+        --                  .&&. (x spec_y_idx `memberOf` setB)
+        --              ))
 
         -- Define the universe set U = P(P(A U B))
         universeSet = powerSet (powerSet (setA .\/. setB))
@@ -1868,7 +1888,8 @@ crossProductDefEquivTheorem =
         -- Define the cross product object B via the builder shorthand, which
         -- is equivalent to the Hilbert term from specification.
         -- B := {z ∈ U | P(z)}
-        crossProdObj = builderX spec_z_idx universeSet predicate_P
+
+        crossProdObj = builderX spec_z_idx universeSet (predicate_P spec_z_idx a_idx b_idx)
 
         -- Now, construct the two main properties that form the implication.
 
@@ -1877,7 +1898,7 @@ crossProductDefEquivTheorem =
         spec_prop_z_idx = 2 -- A new z for this quantifier
 
         spec_prop_body = (x spec_prop_z_idx `memberOf` crossProdObj) .<->.
-                         (sentSubX spec_z_idx (x spec_prop_z_idx) predicate_P .&&. (x spec_prop_z_idx `memberOf` universeSet))
+                         ((predicate_P spec_prop_z_idx a_idx b_idx) .&&. (x spec_prop_z_idx `memberOf` universeSet))
         spec_prop = isSet crossProdObj .&&. aX spec_prop_z_idx spec_prop_body
 
         -- 2. CanonicalProp(A,B): The standard definition of the property of A × B.
@@ -1902,6 +1923,8 @@ crossProductDefEquivTheorem =
     in
         -- Universally quantify over A and B to create the final closed theorem.
         multiAx [a_idx, b_idx] theorem_body
+
+
     
 
 -- | Proves "crossProductDefEquivTheorem".

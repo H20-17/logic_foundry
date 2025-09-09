@@ -122,7 +122,7 @@ infixl 6 `crossProd`
 infixl 9 .@.
 infixr 8 .:.
 
-class (PREDL.LogicSent s t () Text) => LogicSent s t | s ->t where
+class (PREDL.LogicSent s t () Text) => LogicSent s t | s ->t, t->s where
    specAxiom :: [Int] -> Int -> t -> s -> s
    replaceAxiom :: [Int] -> Int -> Int -> t -> s -> s
    parseMemberOf :: s -> Maybe (t, t)
