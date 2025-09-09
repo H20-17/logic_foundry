@@ -59,7 +59,9 @@ module Langs.BasicUntyped (
     parseIn,
     -- isSet,
     parseBiconditional,
-    isRelationOn
+    isRelationOn,
+    propMaxXIdx,
+    objMaxXIdx
 ) where
 
 

@@ -172,6 +172,7 @@ instance PREDL.LogicSent PropDeBr ObjDeBr () Text where
     (./=.) = (./=.)
     eXBang :: Int -> PropDeBr -> PropDeBr
     eXBang = eXBang
+    
 
 instance PREDL.LogicTerm ObjDeBr where
     termSubX :: Int -> ObjDeBr -> ObjDeBr -> ObjDeBr
@@ -179,7 +180,9 @@ instance PREDL.LogicTerm ObjDeBr where
     termSubXs :: [(Int, ObjDeBr)] -> ObjDeBr -> ObjDeBr
     termSubXs = objDeBrSubXs
     x :: Int -> ObjDeBr
-    x = X     
+    x = X
+    termMaxXidx :: ObjDeBr -> Maybe Int
+    termMaxXidx = objMaxXIdx
 
 
 objDeBrApplyUGWorker :: ObjDeBr -> Int -> Int -> ObjDeBr

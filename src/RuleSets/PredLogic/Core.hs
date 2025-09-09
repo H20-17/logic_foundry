@@ -778,6 +778,7 @@ class (PL.LogicSent s tType) => LogicSent s t tType o | s ->tType, s ->t, s->t, 
     multiAx :: [Int] -> s -> s
     (./=.) :: t -> t -> s
     eXBang :: Int -> s -> s
+    
 
 infix 4 .==.
 infix 4 ./=.
@@ -787,7 +788,7 @@ class LogicTerm t where
     termSubX :: Int -> t -> t -> t
     termSubXs :: [(Int, t)] -> t -> t
     x :: Int -> t
-
+    termMaxXidx :: t -> Maybe Int
 
 
 

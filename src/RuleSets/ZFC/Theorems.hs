@@ -1836,23 +1836,6 @@ pairInUniverseTheorem =
         pair_in_universe_theorem_closed
 
 
-predicate_P :: SentConstraints s t => Int -> Int -> Int -> s
-predicate_P varIdx a_idx b_idx =
-    fst $ runIndexTracker (
-        do
-            spec_x_idx <- newIndex
-            spec_y_idx <- newIndex
-            let setA = x a_idx
-            let setB = x b_idx
-            let pred = eX spec_x_idx (eX spec_y_idx (
-                      (x varIdx .==. pair (x spec_x_idx) (x spec_y_idx))
-                      .&&. (x spec_x_idx `memberOf` setA)
-                      .&&. (x spec_y_idx `memberOf` setB)
-                  ))
-            dropIndices 2
-            return pred
-        ) [varIdx, a_idx, b_idx]
-
 
 
 
@@ -1864,66 +1847,90 @@ predicate_P varIdx a_idx b_idx =
 -- | Theorem: ∀A∀B((isSet A ∧ isSet B) → (SpecProp(A,B) → CanonicalProp(A,B)))
 crossProductDefEquivTheorem :: SentConstraints s t => s
 crossProductDefEquivTheorem =
-    let
-        -- Define integer indices for the template variables (X k).
-        -- These will be bound by the outermost quantifiers for A and B.
-        a_idx = 0 -- Represents set A
-        b_idx = 1 -- Represents set B
+    fst $ runIndexTracker (
+        do
+            -- Define integer indices for the template variables (X k).
+            -- These will be bound by the outermost quantifiers for A and B.
+            a_idx <- newIndex
+            b_idx <- newIndex
 
-        setA = x a_idx
-        setB = x b_idx
+            let setA = x a_idx
+            let setB = x b_idx
 
-        -- Define the inner predicate P(z) used in the specification.
-        -- P(z) := ∃x∃y (z = <x,y> ∧ x ∈ A ∧ y ∈ B)
-        spec_z_idx = 2
-        --predicate_Q = eX spec_x_idx (eX spec_y_idx (
-        --                  (x spec_z_idx .==. pair (x spec_x_idx) (x spec_y_idx))
-        --                  .&&. (x spec_x_idx `memberOf` setA)
-        --                  .&&. (x spec_y_idx `memberOf` setB)
-        --              ))
+            -- Define the inner predicate P(z) used in the specification.
+            -- P(z) := ∃x∃y (z = <x,y> ∧ x ∈ A ∧ y ∈ B)
+            let predicateP var = 
+                 let
+                    pre_idx_init_set = [a_idx, b_idx]
+                    idx_init_set = case termMaxXidx var of
+                        Just v -> v : pre_idx_init_set
+                        Nothing -> pre_idx_init_set
+                    sent = fst $ runIndexTracker (
+                        do
+                            spec_x_idx <- newIndex
+                            spec_y_idx <- newIndex
+                            let pred = eX spec_x_idx (eX spec_y_idx (
+                                    (var .==. pair (x spec_x_idx) (x spec_y_idx))
+                                    .&&. (x spec_x_idx `memberOf` setA)
+                                    .&&. (x spec_y_idx `memberOf` setB)
+                                    ))
+                            dropIndices 2
+                            return pred
+                        ) idx_init_set
+                 in
+                    sent
 
-        -- Define the universe set U = P(P(A U B))
-        universeSet = powerSet (powerSet (setA .\/. setB))
 
-        -- Define the cross product object B via the builder shorthand, which
-        -- is equivalent to the Hilbert term from specification.
-        -- B := {z ∈ U | P(z)}
+ 
+            -- Define the universe set U = P(P(A U B))
+            let universeSet = powerSet (powerSet (setA .\/. setB))
 
-        crossProdObj = builderX spec_z_idx universeSet (predicate_P spec_z_idx a_idx b_idx)
+            -- Define the cross product object B via the builder shorthand, which
+            -- is equivalent to the Hilbert term from specification.
+            -- B := {z ∈ U | P(z)}
+            spec_z_idx <- newIndex
+            let crossProdObj = builderX spec_z_idx universeSet (predicateP (x spec_z_idx))
+            dropIndices 1 -- Drop spec_z_idx
 
-        -- Now, construct the two main properties that form the implication.
+            -- Now, construct the two main properties that form the implication.
 
-        -- 1. SpecProp(A,B): The defining property of B as derived from specification.
-        --    isSet(B) ∧ ∀z(z∈B ↔ (P(z) ∧ z∈U))
-        spec_prop_z_idx = 2 -- A new z for this quantifier
+            -- 1. SpecProp(A,B): The defining property of B as derived from specification.
+            --    isSet(B) ∧ ∀z(z∈B ↔ (P(z) ∧ z∈U))
+            spec_prop_z_idx <- newIndex
 
-        spec_prop_body = (x spec_prop_z_idx `memberOf` crossProdObj) .<->.
-                         ((predicate_P spec_prop_z_idx a_idx b_idx) .&&. (x spec_prop_z_idx `memberOf` universeSet))
-        spec_prop = isSet crossProdObj .&&. aX spec_prop_z_idx spec_prop_body
+            let spec_prop_body = (x spec_prop_z_idx `memberOf` crossProdObj) .<->.
+                             (predicateP (x spec_prop_z_idx) .&&. (x spec_prop_z_idx `memberOf` universeSet))
+            let spec_prop = isSet crossProdObj .&&. aX spec_prop_z_idx spec_prop_body
 
-        -- 2. CanonicalProp(A,B): The standard definition of the property of A × B.
-        --    isSet(B) ∧ ∀x∀y(<x,y>∈B ↔ (x∈A ∧ y∈B))
-        canon_x_idx = 2; canon_y_idx = 3
-        canon_element_prop = (x canon_x_idx `memberOf` setA) .&&. (x canon_y_idx `memberOf` setB)
-        canon_pair_in_b = pair (x canon_x_idx) (x canon_y_idx) `memberOf` crossProdObj
-        canon_quantified_bicond = aX canon_x_idx (aX canon_y_idx (canon_element_prop .<->. canon_pair_in_b))
-        canonical_prop = isSet crossProdObj .&&. canon_quantified_bicond
+            dropIndices 1 -- Drop spec_prop_z_idx
 
-        -- Construct the main implication of the theorem: SpecProp(A,B) → CanonicalProp(A,B)
-        spec_implies_canonical = spec_prop .->. canonical_prop
 
-        -- Construct the antecedent for the entire theorem: isSet(A) ∧ isSet(B)
-        isSet_A = isSet setA
-        isSet_B = isSet setB
-        theorem_antecedent = isSet_A .&&. isSet_B
+            -- 2. CanonicalProp(A,B): The standard definition of the property of A × B.
+            --    isSet(B) ∧ ∀x∀y(<x,y>∈B ↔ (x∈A ∧ y∈B))
+            canon_x_idx <- newIndex
+            canon_y_idx <- newIndex
+            let canon_element_prop = (x canon_x_idx `memberOf` setA) .&&. (x canon_y_idx `memberOf` setB)
+            let canon_pair_in_b = pair (x canon_x_idx) (x canon_y_idx) `memberOf` crossProdObj
+            let canon_quantified_bicond = aX canon_x_idx (aX canon_y_idx (canon_element_prop .<->. canon_pair_in_b))
+            dropIndices 2 -- Drop canon_x_idx, canon_y_idx
+            let canonical_prop = isSet crossProdObj .&&. canon_quantified_bicond
 
-        -- Form the implication for the body of the theorem
-        theorem_body = theorem_antecedent .->. spec_implies_canonical
+            -- Construct the main implication of the theorem: SpecProp(A,B) → CanonicalProp(A,B)
+            let spec_implies_canonical = spec_prop .->. canonical_prop
 
-    in
-        -- Universally quantify over A and B to create the final closed theorem.
-        multiAx [a_idx, b_idx] theorem_body
+            -- Construct the antecedent for the entire theorem: isSet(A) ∧ isSet(B)
+            let isSet_A = isSet setA
+            let isSet_B = isSet setB
+            let theorem_antecedent = isSet_A .&&. isSet_B
 
+            -- Form the implication for the body of the theorem
+            let theorem_body = theorem_antecedent .->. spec_implies_canonical
+            let returnSent = multiAx [a_idx, b_idx] theorem_body
+
+            dropIndices 2 -- Drop a_idx, b_idx
+
+            return returnSent
+        ) []
 
     
 
