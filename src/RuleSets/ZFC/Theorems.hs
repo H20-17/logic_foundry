@@ -1837,6 +1837,20 @@ pairInUniverseTheorem =
 
 
 
+predicateP :: SentConstraints s t => t -> t -> t -> IndexTracker s
+predicateP setA setB var = do
+    -- Create the indices for the existential quantifiers.
+    x_idx <- newIndex
+    y_idx <- newIndex
+
+    -- Construct the predicate P(z) := ∃x∃y (z = <x,y> ∧ x ∈ A ∧ y ∈ B)
+    let pred = eX x_idx (eX y_idx (
+            (var .==. pair (x x_idx) (x y_idx))
+                    .&&. (x x_idx `memberOf` setA)
+                    .&&. (x y_idx `memberOf` setB)
+            ))
+    dropIndices 2
+    return pred
 
 
 -- | Constructs the PropDeBr term for the closed theorem stating that the property
@@ -1859,26 +1873,16 @@ crossProductDefEquivTheorem =
 
             -- Define the inner predicate P(z) used in the specification.
             -- P(z) := ∃x∃y (z = <x,y> ∧ x ∈ A ∧ y ∈ B)
-            let predicateP var = 
-                 let
-                    pre_idx_init_set = [a_idx, b_idx]
-                    idx_init_set = case termMaxXidx var of
-                        Just v -> v : pre_idx_init_set
-                        Nothing -> pre_idx_init_set
-                    sent = fst $ runIndexTracker (
-                        do
-                            spec_x_idx <- newIndex
-                            spec_y_idx <- newIndex
-                            let pred = eX spec_x_idx (eX spec_y_idx (
-                                    (var .==. pair (x spec_x_idx) (x spec_y_idx))
+            let predicateQ var = do
+                    spec_x_idx <- newIndex
+                    spec_y_idx <- newIndex
+                    let pred = eX spec_x_idx (eX spec_y_idx (
+                            (var .==. pair (x spec_x_idx) (x spec_y_idx))
                                     .&&. (x spec_x_idx `memberOf` setA)
                                     .&&. (x spec_y_idx `memberOf` setB)
-                                    ))
-                            dropIndices 2
-                            return pred
-                        ) idx_init_set
-                 in
-                    sent
+                            ))
+                    dropIndices 2
+                    return pred
 
 
  
@@ -1889,7 +1893,8 @@ crossProductDefEquivTheorem =
             -- is equivalent to the Hilbert term from specification.
             -- B := {z ∈ U | P(z)}
             spec_z_idx <- newIndex
-            let crossProdObj = builderX spec_z_idx universeSet (predicateP (x spec_z_idx))
+            propP <- predicateP setA setB (x spec_z_idx)
+            let crossProdObj = builderX spec_z_idx universeSet propP
             dropIndices 1 -- Drop spec_z_idx
 
             -- Now, construct the two main properties that form the implication.
@@ -1897,9 +1902,9 @@ crossProductDefEquivTheorem =
             -- 1. SpecProp(A,B): The defining property of B as derived from specification.
             --    isSet(B) ∧ ∀z(z∈B ↔ (P(z) ∧ z∈U))
             spec_prop_z_idx <- newIndex
-
+            propP <- predicateP setA setB (x spec_prop_z_idx)
             let spec_prop_body = (x spec_prop_z_idx `memberOf` crossProdObj) .<->.
-                             (predicateP (x spec_prop_z_idx) .&&. (x spec_prop_z_idx `memberOf` universeSet))
+                             (propP .&&. (x spec_prop_z_idx `memberOf` universeSet))
             let spec_prop = isSet crossProdObj .&&. aX spec_prop_z_idx spec_prop_body
 
             dropIndices 1 -- Drop spec_prop_z_idx
