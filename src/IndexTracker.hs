@@ -3,6 +3,7 @@ module IndexTracker (
     newIndex,
     dropIndices,
     runIndexTracker,
+    setBaseIndexFromSet,
     TemplateVarTracker(..)
 )
   where
@@ -28,15 +29,23 @@ runIndexTracker tracker =
     let initialIndex = 0
     in runState tracker initialIndex
 
+
+setBaseIndexFromSet :: [Int] -> IndexTracker ()
+setBaseIndexFromSet idxs = do
+    let newBase = if null idxs then 0 else maximum idxs + 1
+    put newBase
+
 class TemplateVarTracker m where
-    newTemplateVar :: m Int
-    dropTemplateVars :: Int -> m ()
-    runTemplateVarTracker :: m a -> (a, Int)
+    newTemplateVarIdx :: m Int
+    dropTemplateVarIdxs :: Int -> m ()
+    setTemplateVarBaseFromSet :: [Int] -> m ()
+
 
 instance TemplateVarTracker (State Int)  where
-    newTemplateVar :: IndexTracker Int
-    newTemplateVar = newIndex
-    dropTemplateVars :: Int -> IndexTracker ()
-    dropTemplateVars = dropIndices
-    runTemplateVarTracker :: IndexTracker a -> (a, Int)
-    runTemplateVarTracker = runIndexTracker
+    newTemplateVarIdx :: State Int Int
+    newTemplateVarIdx = newIndex
+    dropTemplateVarIdxs :: Int -> State Int ()
+    dropTemplateVarIdxs = dropIndices
+    setTemplateVarBaseFromSet :: [Int] -> State Int ()
+    setTemplateVarBaseFromSet = setBaseIndexFromSet
+    

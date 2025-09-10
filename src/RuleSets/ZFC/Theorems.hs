@@ -2478,6 +2478,7 @@ strongInductionTheorem :: SentConstraints s t =>
 strongInductionTheorem outerTemplateIdxs idx dom_template p_template =
     let 
         (theorem_body_tmplt,_) = runIndexTracker (do
+            setTemplateVarBaseFromSet (idx:outerTemplateIdxs)
             rel_idx <- newIndex
             -- The theorem states:
             -- For any set S and property P, if there exists a well-founded relation < on S such that
@@ -2495,7 +2496,7 @@ strongInductionTheorem outerTemplateIdxs idx dom_template p_template =
                     aX idx ( (x idx `memberOf` dom_template) .->. p_template)
             dropIndices 1
             return theorem_body_tmplt
-            ) (idx:outerTemplateIdxs)
+            )
         theorem_body = multiAx outerTemplateIdxs theorem_body_tmplt
     in
         theorem_body
@@ -2504,6 +2505,7 @@ strongInductionTheoremProgFree::HelperConstraints sE s eL m r t =>
                Int -> t -> s -> ProofGenTStd () r s Text m (s,[Int])
 strongInductionTheoremProgFree idx dom p_pred = do
     let (asmMain,_) = runIndexTracker (do
+        setTemplateVarBaseFromSet [idx]
         rel_idx <- newIndex
         wellFoundedExp <- isRelWellFoundedOn dom (x rel_idx)
         strongInductionExp <- strongInductionPremiseOnRel p_pred idx (x rel_idx)
@@ -2513,7 +2515,7 @@ strongInductionTheoremProgFree idx dom p_pred = do
                             .&&. strongInductionExp)
         dropIndices 1
         return asmMain
-        ) [idx]    
+        )    
     let (anti_spec_prop,anti_counterexamples) = builderPropsFree idx dom p_pred
     let (spec_prop, counterexamples) = builderPropsFree idx dom (neg p_pred)
     let builderSubsetTmFree = builderSubsetTheorem [] idx dom (neg p_pred)
@@ -2591,6 +2593,7 @@ strongInductionTheoremProg outerTemplateIdxs idx dom_template p_template = do
         (main_imp, _) <- runProofByAsmM isSetDom $ do
             strongInductionTheoremProgFree idx dom p_pred
         let (asmMain,_) = runIndexTracker (do
+            setTemplateVarBaseFromSet [idx]
             rel_idx <- newIndex
             wellFoundedExp <- isRelWellFoundedOn dom (x rel_idx)
             strongInductionExp <- strongInductionPremiseOnRel p_pred idx (x rel_idx)
@@ -2600,7 +2603,7 @@ strongInductionTheoremProg outerTemplateIdxs idx dom_template p_template = do
                                 .&&. strongInductionExp)
             dropIndices 1
             return asmMain
-            ) [idx]
+            )
         let full_asm = isSetDom .&&. asmMain
         runProofByAsmM full_asm $ do
             (isSet_dom,_) <- simpLM full_asm
