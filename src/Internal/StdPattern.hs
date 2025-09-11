@@ -51,7 +51,7 @@ import Control.Monad.Reader ( MonadReader(ask) )
 import Control.Monad.State ( MonadState(get) )
 import Control.Monad.Writer ( MonadWriter(tell) )
 import Data.Monoid ( Monoid(mempty, mappend),Last(..) )
-
+import IndexTracker
 
 
 
@@ -78,6 +78,10 @@ data PrfStdState s o tType where
    } -> PrfStdState s o tType
    deriving Show
 
+
+
+
+
 instance Semigroup (PrfStdContext tType) where
      (<>) :: PrfStdContext tType -> PrfStdContext tType -> PrfStdContext tType
      (<>) (PrfStdContext v1 prf1 frames1) (PrfStdContext v2 prf2 frames2) =
@@ -101,12 +105,23 @@ instance (Ord s, Ord o) => Monoid (PrfStdState s o tType ) where
 
 
 
+
+
+
 type ProofGenTStd tType r s o m 
                = ProofGeneratorT s [PrfStdStep s o tType] (PrfStdContext tType) r (PrfStdState s o tType) m
 
 
 
+instance TemplateVarTracker (ProofGenTStd tType r s o m) where
+    newTemplateVarIdx :: ProofGenTStd tType r s o m Int
+    newTemplateVarIdx = do
 
+
+    --dropTemplateVarIdxs :: Int -> PrfStdState s o tType ()
+    --dropTemplateVarIdxs n = do
+    --       currentIdx <- get
+    --       put (currentIdx - n)
 
 
 
