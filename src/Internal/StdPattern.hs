@@ -72,9 +72,7 @@ data PrfStdState s o tType where
    PrfStdState :: {
       provenSents :: Map s [Int],
       consts :: Map o (tType, [Int]),
-      stepCount :: Int,
-      tmpltIdxCount :: Int
-
+      stepCount :: Int
    } -> PrfStdState s o tType
    deriving Show
 
@@ -95,13 +93,13 @@ instance Monoid (PrfStdContext tType) where
 instance (Ord s, Ord o) => Semigroup (PrfStdState s o tType ) where
     (<>) :: PrfStdState s o tType
               -> PrfStdState s o tType -> PrfStdState s o tType
-    (<>) (PrfStdState proven1 consts1 count1 idxCount1) (PrfStdState proven2 consts2 count2 idxCount2)
-            = PrfStdState (proven2 <> proven1) (consts1 <> consts2) (count1 + count2) (idxCount1 + idxCount2)
+    (<>) (PrfStdState proven1 consts1 count1) (PrfStdState proven2 consts2 count2)
+            = PrfStdState (proven2 <> proven1) (consts1 <> consts2) (count1 + count2)
 
 
 instance (Ord s, Ord o) => Monoid (PrfStdState s o tType ) where
      mempty :: (Ord s, Ord o) => PrfStdState s o tType
-     mempty = PrfStdState mempty mempty 0 0
+     mempty = PrfStdState mempty mempty 0
 
 
 
@@ -111,17 +109,6 @@ instance (Ord s, Ord o) => Monoid (PrfStdState s o tType ) where
 type ProofGenTStd tType r s o m 
                = ProofGeneratorT s [PrfStdStep s o tType] (PrfStdContext tType) r (PrfStdState s o tType) m
 
-
-
-instance TemplateVarTracker (ProofGenTStd tType r s o m) where
-    newTemplateVarIdx :: ProofGenTStd tType r s o m Int
-    newTemplateVarIdx = do
-
-
-    --dropTemplateVarIdxs :: Int -> PrfStdState s o tType ()
-    --dropTemplateVarIdxs n = do
-    --       currentIdx <- get
-    --       put (currentIdx - n)
 
 
 
@@ -201,7 +188,7 @@ testSubproof context baseState preambleState preambleSteps mayPreambleLastProp t
       --either return (const Nothing) eitherResult
       do
              let frVarTypeStack = freeVarTypeStack context
-             let baseStateZero = PrfStdState (provenSents baseState) (consts baseState) 0 0
+             let baseStateZero = PrfStdState (provenSents baseState) (consts baseState) 0
              let startState = baseStateZero <> preambleState
              let constdict = fmap fst (consts startState)
              let sc = checkSanity mempty frVarTypeStack constdict targetProp
@@ -349,7 +336,7 @@ runSubproofM context baseState preambleState preambleSteps mayPreambleLastProp p
 
           unless (Prelude.null preambleSteps) 
                     (printSteps (contextFrames context) (stepIdxPrefix context) 0 (provenSents baseState) preambleSteps)
-          let baseStateZero = PrfStdState (provenSents baseState) (consts baseState) 0 0
+          let baseStateZero = PrfStdState (provenSents baseState) (consts baseState) 0
           let startState = baseStateZero <> preambleState
           (extraData,newState,r,newSteps, mayLastProp) <- runProofGeneratorTOpen prog context startState
           let constdict = fmap fst (consts startState)

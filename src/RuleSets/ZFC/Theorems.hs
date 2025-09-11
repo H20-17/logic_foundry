@@ -1861,7 +1861,7 @@ predicateP setA setB var = do
 -- | Theorem: ∀A∀B((isSet A ∧ isSet B) → (SpecProp(A,B) → CanonicalProp(A,B)))
 crossProductDefEquivTheorem :: SentConstraints s t => s
 crossProductDefEquivTheorem =
-    fst $ runIndexTracker (
+    runIndexTracker (
         do
             -- Define integer indices for the template variables (X k).
             -- These will be bound by the outermost quantifiers for A and B.
@@ -1870,19 +1870,6 @@ crossProductDefEquivTheorem =
 
             let setA = x a_idx
             let setB = x b_idx
-
-            -- Define the inner predicate P(z) used in the specification.
-            -- P(z) := ∃x∃y (z = <x,y> ∧ x ∈ A ∧ y ∈ B)
-            let predicateQ var = do
-                    spec_x_idx <- newIndex
-                    spec_y_idx <- newIndex
-                    let pred = eX spec_x_idx (eX spec_y_idx (
-                            (var .==. pair (x spec_x_idx) (x spec_y_idx))
-                                    .&&. (x spec_x_idx `memberOf` setA)
-                                    .&&. (x spec_y_idx `memberOf` setB)
-                            ))
-                    dropIndices 2
-                    return pred
 
 
  
@@ -2330,7 +2317,7 @@ applyWellFoundednessM subsetS domainD relationR = do
         -- We have proven {𝑥₀ ∈ S | ¬P(𝑥₀)} ⊆ S ∧ {𝑥₀ ∈ S | ¬P(𝑥₀)} ≠ ∅ 
         -- Step 1: Formally acknowledge the required premises from the outer context.
         -- The proof will fail if these are not already proven.
-        let (wellFoundedProp,_) = runIndexTracker ( 
+        let wellFoundedProp = runIndexTracker ( 
                  isRelWellFoundedOn domainD relationR
 
              )      
@@ -2477,8 +2464,8 @@ strongInductionTheorem :: SentConstraints s t =>
                [Int] -> Int -> t -> s -> s
 strongInductionTheorem outerTemplateIdxs idx dom_template p_template =
     let 
-        (theorem_body_tmplt,_) = runIndexTracker (do
-            addTemplateVarsFromSet (idx:outerTemplateIdxs)
+        theorem_body_tmplt = runIndexTracker (do
+            setBaseIndex (idx:outerTemplateIdxs)
             rel_idx <- newIndex
             -- The theorem states:
             -- For any set S and property P, if there exists a well-founded relation < on S such that
@@ -2504,8 +2491,8 @@ strongInductionTheorem outerTemplateIdxs idx dom_template p_template =
 strongInductionTheoremProgFree::HelperConstraints sE s eL m r t => 
                Int -> t -> s -> ProofGenTStd () r s Text m (s,[Int])
 strongInductionTheoremProgFree idx dom p_pred = do
-    let (asmMain,_) = runIndexTracker (do
-        addTemplateVarsFromSet [idx]
+    let asmMain = runIndexTracker (do
+        setBaseIndex [idx]
         rel_idx <- newIndex
         wellFoundedExp <- isRelWellFoundedOn dom (x rel_idx)
         strongInductionExp <- strongInductionPremiseOnRel p_pred idx (x rel_idx)
@@ -2592,8 +2579,8 @@ strongInductionTheoremProg outerTemplateIdxs idx dom_template p_template = do
         let isSetDom = isSet dom
         (main_imp, _) <- runProofByAsmM isSetDom $ do
             strongInductionTheoremProgFree idx dom p_pred
-        let (asmMain,_) = runIndexTracker (do
-            addTemplateVarsFromSet [idx]
+        let asmMain = runIndexTracker (do
+            setBaseIndex [idx]
             rel_idx <- newIndex
             wellFoundedExp <- isRelWellFoundedOn dom (x rel_idx)
             strongInductionExp <- strongInductionPremiseOnRel p_pred idx (x rel_idx)

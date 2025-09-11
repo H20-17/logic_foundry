@@ -2,58 +2,42 @@ module IndexTracker (
     IndexTracker,
     newIndex,
     dropIndices,
-    addIndices,
     runIndexTracker,
-    addTemplateVarsFromSet,
-    TemplateVarTracker(..)
+    setBaseIndex
+
 )
   where
 import Control.Monad.State
 import Control.Monad.Accum (MonadAccum(add))
 import Control.Monad (unless)
+import Data.Monoid (Sum(..), getSum)
 
-type IndexTracker o =  State Int o
+type IndexTracker o =  State (Sum Int) o
 
 
 
-newIndex :: IndexTracker Int
+newIndex :: (MonadState (Sum Int) m) => m Int
 newIndex = do
     currentIndex <- get
-    put (currentIndex + 1)
-    return currentIndex
+    put (currentIndex + Sum 1)
+    return $ getSum currentIndex
 
-dropIndices :: Int -> IndexTracker ()
+dropIndices :: (MonadState (Sum Int) m) => Int -> m ()
 dropIndices n = do
-       currentIndex <- get
-       put (currentIndex - n)
+    currentIndex <- get
+    put (currentIndex - Sum n)
 
 
-addIndices :: Int -> IndexTracker ()
-addIndices n = do
-       currentIndex <- get
-       put (currentIndex + n)
 
 
-runIndexTracker :: IndexTracker a -> (a, Int)
+runIndexTracker :: IndexTracker a -> a
 runIndexTracker tracker =
     let initialIndex = 0
-    in runState tracker initialIndex
+    in evalState tracker initialIndex
 
 
+setBaseIndex :: (MonadState (Sum Int) m) => [Int] -> m ()
+setBaseIndex idxs = do
+    let baseIdx = if null idxs then 0 else (maximum idxs) + 1
+    put (Sum baseIdx)
 
-
-class (Monad m) => TemplateVarTracker m where
-    newTemplateVarIdx :: m Int
-    dropTemplateVarIdxs :: Int -> m ()
-    addTemplateVarIdxs :: Int -> m ()
-
-instance TemplateVarTracker (State Int)  where
-    newTemplateVarIdx :: State Int Int
-    newTemplateVarIdx = newIndex
-    dropTemplateVarIdxs :: Int -> State Int ()
-    dropTemplateVarIdxs = dropIndices
-    addTemplateVarIdxs :: Int -> State Int ()
-    addTemplateVarIdxs = addIndices
-
-addTemplateVarsFromSet :: (TemplateVarTracker m) => [Int] -> m ()
-addTemplateVarsFromSet idxs = unless (null idxs) ((addTemplateVarIdxs . maximum) idxs)

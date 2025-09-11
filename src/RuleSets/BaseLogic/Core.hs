@@ -112,23 +112,23 @@ instance ( Show s, Typeable s, Ord o, TypedSent o tType sE s,
                  PrfStdContext tType  -> PrfStdState s o tType
                         -> Either (LogicError s sE o) (PrfStdState s o tType, [PrfStdStep s o tType],Last s) 
 
-  runProofOpen rs context oldState = foldM f (PrfStdState mempty mempty 0 0,[], Last Nothing) rs
+  runProofOpen rs context oldState = foldM f (PrfStdState mempty mempty 0,[], Last Nothing) rs
        where
            f (newState,newSteps, mayLastProp) r =  fmap g (runProofAtomic r context (oldState <> newState))
              where
                  g ruleResult = case ruleResult of
-                    (Just s,Nothing,step) -> (newState <> PrfStdState (Data.Map.insert s newLineIndex mempty) mempty 1 0,
+                    (Just s,Nothing,step) -> (newState <> PrfStdState (Data.Map.insert s newLineIndex mempty) mempty 1,
                                          newSteps <> [step], (Last . Just) s)
                     (Just s,Just (newConst,tType), step) -> (newState <> 
                             PrfStdState (Data.Map.insert s newLineIndex mempty) 
-                               (Data.Map.insert newConst (tType,newLineIndex) mempty) 1 0,
+                               (Data.Map.insert newConst (tType,newLineIndex) mempty) 1,
                                newSteps <> [step], (Last . Just) s)
                     (Nothing,Just (newConst,tType), step) -> (newState <> 
                             PrfStdState mempty
-                               (Data.Map.insert newConst (tType,newLineIndex) mempty) 1 0,
+                               (Data.Map.insert newConst (tType,newLineIndex) mempty) 1,
                                newSteps <> [step], mayLastProp)
                     (Nothing,Nothing, step) -> (newState <>
-                            PrfStdState mempty mempty 1 0,
+                            PrfStdState mempty mempty 1,
                                newSteps <> [step], mayLastProp)
                     where
                         newStepCount = stepCount newState + 1
@@ -196,7 +196,7 @@ runProofBySubArg (ProofBySubArgSchema consequent subproof) context state  =
          let newStepIdxPrefix = stepIdxPrefix context ++ [stepCount state]
          let newContextFrames = contextFrames context <> [False]
          let newContext = PrfStdContext frVarTypeStack newStepIdxPrefix newContextFrames
-         let newState = PrfStdState mempty mempty 0 0
+         let newState = PrfStdState mempty mempty 0
          let preambleSteps = []
          let eitherTestResult = testSubproof newContext state newState preambleSteps (Last Nothing) consequent subproof
          finalSteps <- either (throwError . ProofBySubArgErrSubproofFailedOnErr) return eitherTestResult

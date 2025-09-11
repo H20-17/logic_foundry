@@ -266,7 +266,7 @@ runProofByUGM tt prog =  do
         let newContextFrames = contextFrames context <> [False]
         let newStepIdxPrefix = stepIdxPrefix context ++ [stepCount state]
         let newContext = PrfStdContext newFrVarTypStack newStepIdxPrefix newContextFrames
-        let newState = PrfStdState mempty mempty 1 0
+        let newState = PrfStdState mempty mempty 1
         let preambleSteps = [PrfStdStepFreevar (length frVarTypeStack) tt]
         (extraData,generalizable,subproof, newSteps) 
                  <- lift $ runSubproofM newContext state newState preambleSteps (Last Nothing) prog

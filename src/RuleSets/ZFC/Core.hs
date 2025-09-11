@@ -783,23 +783,23 @@ instance (Show sE, Typeable sE, Show s, Typeable s, TypedSent Text () sE s,
                      -> PrfStdContext () 
                      -> PrfStdState s Text ()
                      -> Either (LogicError s sE t) (PrfStdState s Text (),[PrfStdStep s Text ()], Last s)
-    runProofOpen rs context oldState = foldM f (PrfStdState mempty mempty 0 0,[], Last Nothing) rs
+    runProofOpen rs context oldState = foldM f (PrfStdState mempty mempty 0,[], Last Nothing) rs
        where
            f (newState,newSteps, mayLastProp) r =  fmap g (runProofAtomic r context (oldState <> newState))
              where
                  g ruleResult = case ruleResult of
-                    (Just s,Nothing,step) -> (newState <> PrfStdState (Data.Map.insert s newLineIndex mempty ) mempty 1 0,
+                    (Just s,Nothing,step) -> (newState <> PrfStdState (Data.Map.insert s newLineIndex mempty ) mempty 1,
                                          newSteps <> [step], (Last . Just) s)
                     (Just s,Just (newConst,tType), step) -> (newState <> 
                             PrfStdState (Data.Map.insert s newLineIndex mempty) 
-                               (Data.Map.insert newConst (tType,newLineIndex) mempty) 1 0,
+                               (Data.Map.insert newConst (tType,newLineIndex) mempty) 1,
                                newSteps <> [step], (Last . Just) s)
                     (Nothing,Just (newConst,tType), step) -> (newState <> 
                             PrfStdState mempty
-                               (Data.Map.insert newConst (tType,newLineIndex) mempty) 1 0,
+                               (Data.Map.insert newConst (tType,newLineIndex) mempty) 1,
                                newSteps <> [step], mayLastProp)
                     (Nothing,Nothing, step) -> (newState <>
-                            PrfStdState mempty mempty 1 0,
+                            PrfStdState mempty mempty 1,
                                newSteps <> [step], mayLastProp)
                     where
                         newStepCount = stepCount newState + 1
