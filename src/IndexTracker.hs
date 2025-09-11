@@ -2,12 +2,15 @@ module IndexTracker (
     IndexTracker,
     newIndex,
     dropIndices,
+    addIndices,
     runIndexTracker,
-    setBaseIndexFromSet,
+    addTemplateVarsFromSet,
     TemplateVarTracker(..)
 )
   where
 import Control.Monad.State
+import Control.Monad.Accum (MonadAccum(add))
+import Control.Monad (unless)
 
 type IndexTracker o =  State Int o
 
@@ -24,28 +27,33 @@ dropIndices n = do
        currentIndex <- get
        put (currentIndex - n)
 
+
+addIndices :: Int -> IndexTracker ()
+addIndices n = do
+       currentIndex <- get
+       put (currentIndex + n)
+
+
 runIndexTracker :: IndexTracker a -> (a, Int)
 runIndexTracker tracker =
     let initialIndex = 0
     in runState tracker initialIndex
 
 
-setBaseIndexFromSet :: [Int] -> IndexTracker ()
-setBaseIndexFromSet idxs = do
-    let newBase = if null idxs then 0 else maximum idxs + 1
-    put newBase
 
-class TemplateVarTracker m where
+
+class (Monad m) => TemplateVarTracker m where
     newTemplateVarIdx :: m Int
     dropTemplateVarIdxs :: Int -> m ()
-    setTemplateVarBaseFromSet :: [Int] -> m ()
-
+    addTemplateVarIdxs :: Int -> m ()
 
 instance TemplateVarTracker (State Int)  where
     newTemplateVarIdx :: State Int Int
     newTemplateVarIdx = newIndex
     dropTemplateVarIdxs :: Int -> State Int ()
     dropTemplateVarIdxs = dropIndices
-    setTemplateVarBaseFromSet :: [Int] -> State Int ()
-    setTemplateVarBaseFromSet = setBaseIndexFromSet
-    
+    addTemplateVarIdxs :: Int -> State Int ()
+    addTemplateVarIdxs = addIndices
+
+addTemplateVarsFromSet :: (TemplateVarTracker m) => [Int] -> m ()
+addTemplateVarsFromSet idxs = unless (null idxs) ((addTemplateVarIdxs . maximum) idxs)

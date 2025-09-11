@@ -2478,7 +2478,7 @@ strongInductionTheorem :: SentConstraints s t =>
 strongInductionTheorem outerTemplateIdxs idx dom_template p_template =
     let 
         (theorem_body_tmplt,_) = runIndexTracker (do
-            setTemplateVarBaseFromSet (idx:outerTemplateIdxs)
+            addTemplateVarsFromSet (idx:outerTemplateIdxs)
             rel_idx <- newIndex
             -- The theorem states:
             -- For any set S and property P, if there exists a well-founded relation < on S such that
@@ -2505,7 +2505,7 @@ strongInductionTheoremProgFree::HelperConstraints sE s eL m r t =>
                Int -> t -> s -> ProofGenTStd () r s Text m (s,[Int])
 strongInductionTheoremProgFree idx dom p_pred = do
     let (asmMain,_) = runIndexTracker (do
-        setTemplateVarBaseFromSet [idx]
+        addTemplateVarsFromSet [idx]
         rel_idx <- newIndex
         wellFoundedExp <- isRelWellFoundedOn dom (x rel_idx)
         strongInductionExp <- strongInductionPremiseOnRel p_pred idx (x rel_idx)
@@ -2593,7 +2593,7 @@ strongInductionTheoremProg outerTemplateIdxs idx dom_template p_template = do
         (main_imp, _) <- runProofByAsmM isSetDom $ do
             strongInductionTheoremProgFree idx dom p_pred
         let (asmMain,_) = runIndexTracker (do
-            setTemplateVarBaseFromSet [idx]
+            addTemplateVarsFromSet [idx]
             rel_idx <- newIndex
             wellFoundedExp <- isRelWellFoundedOn dom (x rel_idx)
             strongInductionExp <- strongInductionPremiseOnRel p_pred idx (x rel_idx)
