@@ -38,12 +38,13 @@ runProof r = do
                 return (steps, state)
 
 
-data ProofGeneratorT resultT stpT c r s m x where
-  ProofGenInternalT  :: {runProofGenTInternal :: RWST c (r,stpT, Last resultT) s m x}
-                   -> ProofGeneratorT resultT stpT c r s m x
+data ProofGeneratorT resultT stpT c r s v m x where
+  ProofGenInternalT  :: {runProofGenTInternal :: RWST c (r,stpT, Last resultT) (v,s) m x}
+                   -> ProofGeneratorT resultT stpT c r s v m x
 
 
-runProofGeneratorTOpen ::  (Monad m, MonadThrow m, Proof eL r s c stpT resultT) => ProofGeneratorT resultT stpT c r s m x -> c -> s -> m (x,s, r,stpT, Last resultT)
+runProofGeneratorTOpen ::  (Monad m, MonadThrow m, Proof eL r s c stpT resultT) => 
+             ProofGeneratorT resultT stpT c r s v m x -> c -> s -> m (x,s, r,stpT, Last resultT)
 runProofGeneratorTOpen ps context state = do
            (x, s, (r,stpT, resultT)) <- runRWST (runProofGenTInternal ps) context state
            return (x,s,r,stpT, resultT)
