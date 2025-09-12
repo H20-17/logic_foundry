@@ -50,7 +50,7 @@ import Control.Monad.Trans ( MonadTrans(lift) )
 import Control.Monad.Reader ( MonadReader(ask) )
 import Control.Monad.State ( MonadState(get) )
 import Control.Monad.Writer ( MonadWriter(tell) )
-import Data.Monoid ( Monoid(mempty, mappend),Last(..) )
+import Data.Monoid ( Monoid(mempty, mappend),Last(..), Sum(..), getSum )
 import IndexTracker
 
 
@@ -107,7 +107,7 @@ instance (Ord s, Ord o) => Monoid (PrfStdState s o tType ) where
 
 
 type ProofGenTStd tType r s o m 
-               = ProofGeneratorT s [PrfStdStep s o tType] (PrfStdContext tType) r (PrfStdState s o tType) m
+               = ProofGeneratorT s [PrfStdStep s o tType] (PrfStdContext tType) r (PrfStdState s o tType) (Sum Int) m
 
 
 
@@ -338,7 +338,7 @@ runSubproofM context baseState preambleState preambleSteps mayPreambleLastProp p
                     (printSteps (contextFrames context) (stepIdxPrefix context) 0 (provenSents baseState) preambleSteps)
           let baseStateZero = PrfStdState (provenSents baseState) (consts baseState) 0
           let startState = baseStateZero <> preambleState
-          (extraData,newState,r,newSteps, mayLastProp) <- runProofGeneratorTOpen prog context startState
+          (extraData,newState,r,newSteps, mayLastProp) <- runProofGeneratorTOpen prog context startState mempty
           let constdict = fmap fst (consts startState)
           let mayPrfResult = getLast $ mayPreambleLastProp <> mayLastProp
           prfResult <- maybe (throwM BigExceptNothingProved) return mayPrfResult

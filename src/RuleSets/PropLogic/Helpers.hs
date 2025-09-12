@@ -158,7 +158,7 @@ instance (Show s, Typeable s, Show sE, Typeable sE) => Exception (MetaRuleError 
 -- | A more appropriate name would be 'impToDisjM' or 'materialImplicationM'.
 imp2DisjM :: HelperConstraints r1 s o tType sE eL m =>
             s -- ^ A proven proposition 's' of the form (A → B).
-            -> ProofGeneratorT s [PrfStdStep s o tType] (PrfStdContext tType) r1 (PrfStdState s o tType) m (s, [Int]) -- ^ Returns the proven proposition (¬A ∨ B) and its proof index.
+            -> ProofGenTStd tType r1 s o m (s, [Int]) -- ^ Returns the proven proposition (¬A ∨ B) and its proof index.
 imp2DisjM s_imp_ab = do
     -- 1. Parse the input implication s_imp_ab = (a -> b) to extract antecedent 'a' and consequent 'b'.
     (a_term, b_term) <- maybe (throwM $ MetaRuleErrNotImp s_imp_ab) return (parse_implication s_imp_ab)
@@ -230,7 +230,7 @@ imp2DisjM s_imp_ab = do
 -- | 6. Since assuming A led to B, conclude A → B.
 disj2ImpM :: HelperConstraints r1 s o tType sE eL m =>
             s -- ^ A proven proposition 's' of the form (¬A ∨ B).
-            -> ProofGeneratorT s [PrfStdStep s o tType] (PrfStdContext tType) r1 (PrfStdState s o tType) m (s, [Int]) -- ^ Returns the proven proposition (A → B) and its proof index.
+            -> ProofGenTStd tType r1 s o m (s, [Int]) -- ^ Returns the proven proposition (A → B) and its proof index.
 disj2ImpM s_notA_or_B_proven = do
     -- 1. Parse the input disjunction s_notA_or_B_proven = (¬A ∨ B)
     --    to get terms ¬A (not_a_term_parsed), B (b_term_parsed), and A (a_term_parsed).
@@ -369,7 +369,7 @@ negAndNotToOrM provenNegAAndNotB = do
 -- | 4. Apply Double Negation Elimination (`doubleNegElimM`) to get (A ∧ ¬B).
 negImpToConjViaEquivM :: (HelperConstraints r1 s o tType sE eL m) =>
             s -- ^ A proven proposition 's_input' of the form ¬(A → B).
-            -> ProofGeneratorT s [PrfStdStep s o tType] (PrfStdContext tType) r1 (PrfStdState s o tType) m (s, [Int]) -- ^ Returns the proven proposition (A ∧ ¬B) and its proof index.
+            -> ProofGenTStd tType r1 s o m (s, [Int]) -- ^ Returns the proven proposition (A ∧ ¬B) and its proof index.
 negImpToConjViaEquivM s_input_neg_A_implies_B = do
     -- 1. Parse the input s_input_neg_A_implies_B = ¬(A → B) to get terms A and B.
     --    These terms are needed to construct the assumption for RAA: ¬(A ∧ ¬B).
@@ -414,7 +414,8 @@ negImpToConjViaEquivM s_input_neg_A_implies_B = do
 
 modusTollensM :: (HelperConstraints r1 s o tType sE eL m)
     => s
-    -> ProofGeneratorT s [PrfStdStep s o tType] (PrfStdContext tType) r1 (PrfStdState s o tType) m (s, [Int])
+    -> -- ProofGeneratorT s [PrfStdStep s o tType] (PrfStdContext tType) r1 (PrfStdState s o tType) m (s, [Int])
+       ProofGenTStd tType r1 s o m (s, [Int])
 modusTollensM s = do
     -- Parse (P → Q) and ¬Q from the input statement s
     (p,q) <- maybe (throwM $ MetaRuleErrNotModusTollens s) return (parse_implication s)

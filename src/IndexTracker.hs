@@ -38,6 +38,6 @@ runIndexTracker tracker =
 
 setBaseIndex :: (MonadState (Sum Int) m) => [Int] -> m ()
 setBaseIndex idxs = do
-    let baseIdx = if null idxs then 0 else (maximum idxs) + 1
+    let baseIdx = if null idxs then 0 else maximum idxs + 1
     put (Sum baseIdx)
 
