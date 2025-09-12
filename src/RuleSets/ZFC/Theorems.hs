@@ -57,6 +57,7 @@ import Control.Monad.Reader ( MonadReader(ask) )
 import Control.Monad.State ( MonadState(get) )
 import Control.Monad.Writer ( MonadWriter(tell) )
 import Data.Maybe ( isNothing )
+import Data.Monoid (Sum (..))
 
 import Kernel
 import Internal.StdPattern
@@ -235,10 +236,7 @@ proveBinaryUnionExistsM = do
             (exists_U, _) <- mpM unionAxiom_inst
             -- Step 5: Assert a general, CLOSED theorem about the equivalence of the two forms of union.
             -- Thm: ∀A,B. (isSet A ∧ isSet B) → ( (∃U. from Axiom of Union on {A,B}) ↔ (∃S. with canonical binary union prop) )
-            -- We build the two existential statements as templates first.
-
-            let tmpl_A_idx = 0; tmpl_B_idx = 1; tmpl_S_idx = 2; tmpl_U_idx = 2; tmpl_Y_idx = 3; tmpl_x_idx = 4
-                      
+            -- We build the two existential statements as templates first.                      
 
             -- Step 6: Instantiate the theorem with our specific sets A and B.
             (instantiated_thm, _) <- multiUIM unionEquivTheorem [setA, setB]
@@ -1837,7 +1835,7 @@ pairInUniverseTheorem =
 
 
 
-predicateP :: SentConstraints s t => t -> t -> t -> IndexTracker s
+predicateP :: MonadSent s t m => t -> t -> t -> m s
 predicateP setA setB var = do
     -- Create the indices for the existential quantifiers.
     x_idx <- newIndex
@@ -1941,24 +1939,22 @@ proveCrossProductDefEquivM = do
         runProofByAsmM (isSet setA .&&. isSet setB) $ do
             -- Within this subproof, isSet A and isSet B are proven assumptions.
             -- Construct all necessary terms and properties internally.
-            let universeSet = powerSet (powerSet (setA .\/. setB))
-            let z_idx = 0; x_idx = 1; y_idx = 2; setA_idx = 3; setB_idx = 4
+
+            setA_idx <- newIndex
+            setB_idx <- newIndex
             let universeSet_tmplt = powerSet (powerSet (x setA_idx .\/. x setB_idx))
-            -- let predicate_P = eX x_idx (eX y_idx (
-            --                      (x z_idx .==. pair (x x_idx) (x y_idx))
-            --                      .&&. (x x_idx `memberOf` setA)
-            --                      .&&. (x y_idx `memberOf` setB)
-            --                  ))
-            let predicate_P_tmplt = eX x_idx (eX y_idx (
-                                  (x z_idx .==. pair (x x_idx) (x y_idx))
-                                  .&&. (x x_idx `memberOf` x setA_idx)
-                                  .&&. (x y_idx `memberOf` x setB_idx)
-                              ))
- 
+
+            z_idx <- newIndex
+            predicate_P_tmplt <- predicateP (x setA_idx) (x setB_idx) (x z_idx)
+
+
             -- Correctly use specificationFreeMBuilder, which is designed to handle
             -- the free variables v_A and v_B present in 'setA', 'setB', and thus in 'predicate_P'.
             (definingProp_of_B, _, (crossProdObj,_,_)) <- 
                  builderInstantiateM [setA, setB] [setA_idx, setB_idx] z_idx universeSet_tmplt predicate_P_tmplt
+
+            dropIndices 1 -- drop z_idx
+            dropIndices 2 -- drop setA_idx and setB_idx
 
             crossProdObj_txt <- showTermM crossProdObj
             remarkM $ "Cross Product Object from Builder: " <> crossProdObj_txt
@@ -2217,7 +2213,7 @@ crossProductInstantiateM setA setB = do
 -- let myDomain = Constant "MySet"
 -- let myRelation = Constant "MyRelation" -- Assume this is a set of pairs
 -- let wellFoundedStatement = isRelWellFoundedOn myDomain myRelation
-isRelWellFoundedOn :: SentConstraints s t => t -> t -> IndexTracker s
+isRelWellFoundedOn :: MonadSent s t m => t -> t -> m s
 isRelWellFoundedOn dom rel = do
 
     idx_S <- newIndex -- Represents the subset S of 'dom'
@@ -2256,7 +2252,7 @@ isRelWellFoundedOn dom rel = do
 --                  ( (project 2 0 (X 0)) .<. (project 2 1 (X 0)) ) -- Property X 0 is a pair <a,b> and a < b
 -- let premise = strongInductionPremiseOnRel myProperty myDomain lessThanRel
 
-strongInductionPremiseOnRel :: SentConstraints s t => s ->  Int -> t -> IndexTracker s
+strongInductionPremiseOnRel :: MonadSent s t m  => s ->  Int -> t -> m s
 strongInductionPremiseOnRel p_template idx rel = do
     n_idx <- newIndex -- The main induction variable 'n'
     k_idx <- newIndex -- The universally quantified variable 'k' such that k Rel n
@@ -2549,7 +2545,7 @@ strongInductionTheoremProg:: HelperConstraints sE s eL m r t =>
                [Int] -> Int -> t -> s -> ProofGenTStd () r s Text m ()
 strongInductionTheoremProg outerTemplateIdxs idx dom_template p_template = do
 
-
+    setBaseIndex (idx : outerTemplateIdxs)
 
     let builderSubsetTmInstance = builderSubsetTheorem outerTemplateIdxs idx dom_template (neg p_template)
     let specAntiRedundancyTmInstance = specAntiRedundancyTheorem outerTemplateIdxs idx dom_template p_template
@@ -2579,19 +2575,33 @@ strongInductionTheoremProg outerTemplateIdxs idx dom_template p_template = do
         let isSetDom = isSet dom
         (main_imp, _) <- runProofByAsmM isSetDom $ do
             strongInductionTheoremProgFree idx dom p_pred
-        let asmMain = runIndexTracker (do
-            setBaseIndex [idx]
-            rel_idx <- newIndex
-            wellFoundedExp <- isRelWellFoundedOn dom (x rel_idx)
-            strongInductionExp <- strongInductionPremiseOnRel p_pred idx (x rel_idx)
-            let asmMain = eX rel_idx (
+        
+
+        ----
+        rel_idx <- newIndex
+        wellFoundedExp <- isRelWellFoundedOn dom (x rel_idx)
+        strongInductionExp <- strongInductionPremiseOnRel p_pred idx (x rel_idx)
+        let asmMain = eX rel_idx (
                            x rel_idx `subset` (dom `crossProd` dom)
                                .&&. wellFoundedExp
                                 .&&. strongInductionExp)
-            dropIndices 1
-            return asmMain
-            )
+        dropIndices 1
+        ----
         let full_asm = isSetDom .&&. asmMain
+
+        -- let asmMain = runIndexTracker (do
+        --    setBaseIndex [idx]
+        --    rel_idx <- newIndex
+        --    wellFoundedExp <- isRelWellFoundedOn dom (x rel_idx)
+        --    strongInductionExp <- strongInductionPremiseOnRel p_pred idx (x rel_idx)
+        --    let asmMain = eX rel_idx (
+        --                   x rel_idx `subset` (dom `crossProd` dom)
+        --                       .&&. wellFoundedExp
+        --                        .&&. strongInductionExp)
+        --    dropIndices 1
+        --    return asmMain
+        --    )
+        -- let full_asm = isSetDom .&&. asmMain
         runProofByAsmM full_asm $ do
             (isSet_dom,_) <- simpLM full_asm
             (sub_imp,_) <- mpM main_imp

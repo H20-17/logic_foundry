@@ -700,8 +700,9 @@ runProofByAsmM asm prog =  do
         let newState = PrfStdState newSents mempty 1
         let preambleSteps = [PrfStdStepStep asm "ASM" []]
         let mayPreambleLastProp = (Last . Just) asm
+        vIdx <- get
         (extraData,consequent,subproof,newSteps) 
-                 <- lift $ runSubproofM newContext state newState preambleSteps mayPreambleLastProp prog
+                 <- lift $ runSubproofM newContext state newState preambleSteps mayPreambleLastProp prog vIdx
         mayMonadifyRes <- monadifyProofStd $ proofByAsm asm consequent subproof
         idx <- maybe (error "No theorem returned by monadifyProofStd on asm schema. This shouldn't happen") (return . snd) mayMonadifyRes
         return (asm .->. consequent,idx)

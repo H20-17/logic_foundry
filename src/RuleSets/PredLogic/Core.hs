@@ -676,7 +676,7 @@ checkTheoremMOpen mayPrStateCxt (TheoremSchemaMT constdict lemmas prog) =  do
     let newState = PrfStdState newProven newConsts newStepCountB
     let mayPreambleLastProp = if Prelude.null lemmas then Last Nothing else (Last . Just . last) lemmas
     (extra,tm,proof,newSteps) 
-               <- runSubproofM newContext mempty newState preambleSteps mayPreambleLastProp prog
+               <- runSubproofM newContext mempty newState preambleSteps mayPreambleLastProp prog mempty
     return (tm,proof,extra,newSteps) 
        where
             conststeps = Prelude.foldr h1 [] constdict

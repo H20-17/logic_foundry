@@ -329,8 +329,9 @@ runSubproofM :: ( Monoid r1, ProofStd s eL1 r1 o tType, Monad m,
                         MonadThrow m, TypedSent o tType sE s, Show sE, Typeable sE, StdPrfPrintMonad s o tType m )
                  =>    PrfStdContext tType -> PrfStdState s o tType -> PrfStdState s o tType
                           -> [PrfStdStep s o tType] -> Last s -> ProofGenTStd tType r1 s o m x
+                          -> Sum Int
                           ->  m (x,s,r1,[PrfStdStep s o tType])
-runSubproofM context baseState preambleState preambleSteps mayPreambleLastProp prog =  do
+runSubproofM context baseState preambleState preambleSteps mayPreambleLastProp prog vIdx = do
           printStartFrame (contextFrames context)
 
 
@@ -338,7 +339,7 @@ runSubproofM context baseState preambleState preambleSteps mayPreambleLastProp p
                     (printSteps (contextFrames context) (stepIdxPrefix context) 0 (provenSents baseState) preambleSteps)
           let baseStateZero = PrfStdState (provenSents baseState) (consts baseState) 0
           let startState = baseStateZero <> preambleState
-          (extraData,newState,r,newSteps, mayLastProp) <- runProofGeneratorTOpen prog context startState mempty
+          (extraData,newState,r,newSteps, mayLastProp) <- runProofGeneratorTOpen prog context startState vIdx
           let constdict = fmap fst (consts startState)
           let mayPrfResult = getLast $ mayPreambleLastProp <> mayLastProp
           prfResult <- maybe (throwM BigExceptNothingProved) return mayPrfResult

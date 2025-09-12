@@ -20,7 +20,7 @@ import Control.Monad.Catch
 import Data.Data (Typeable)
 import Data.Map(lookup,insert)
 
-import Control.Monad.RWS (MonadReader(ask))
+import Control.Monad.RWS (MonadReader(ask),MonadState(get))
 import Data.Maybe ( isNothing )
 import Control.Arrow (left)
 import Control.Monad.Trans ( MonadTrans(lift) )
@@ -44,8 +44,9 @@ runProofBySubArgM prog =  do
         let newContext = PrfStdContext frVarTypeStack newStepIdxPrefix newContextFrames
         let newState = PrfStdState mempty mempty 0
         let preambleSteps = []
+        vIdx <- get
         (extraData,consequent,subproof,newSteps) 
-            <- lift $ runSubproofM newContext state newState preambleSteps (Last Nothing) prog
+            <- lift $ runSubproofM newContext state newState preambleSteps (Last Nothing) prog vIdx
         mayMonadifyRes <- monadifyProofStd $ proofBySubArg consequent subproof
         idx <- maybe (error "No theorem returned by monadifyProofStd on subarg schema. This shouldn't happen") (return . snd) mayMonadifyRes
         return (consequent, idx, extraData)

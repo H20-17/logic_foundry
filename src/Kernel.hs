@@ -123,7 +123,9 @@ instance (Monad m, Proof eL r s c stpT resultT, Monoid r) => MonadState v (Proof
      (v,s) <- ProofGenInternalT get
      return v
    put :: v -> ProofGeneratorT resultT stpT c r s v m ()
-   put v = ProofGenInternalT $ put (v,mempty)
+   put v = do
+             (_,s) <- ProofGenInternalT get
+             ProofGenInternalT $ put (v,s)
 
 
 

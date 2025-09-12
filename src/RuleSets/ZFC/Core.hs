@@ -7,7 +7,8 @@ module RuleSets.ZFC.Core
     LogicSent(..),
     LogicTerm(..),
     HelperConstraints(..),
-    SentConstraints(..)
+    SentConstraints(..),
+    MonadSent
 ) where
 
 
@@ -80,6 +81,8 @@ import RuleSets.PredLogic.Core hiding
    SentConstraints(..))
 import qualified RuleSets.PredLogic.Core as PREDL
 import GHC.Num (integerMul)
+import Data.Monoid (Sum (..))
+
 
 
 
@@ -859,3 +862,5 @@ type HelperConstraints sE s eL m r t =
 
 type SentConstraints s t  
    = (PREDL.SentConstraints s t () Text, LogicSent s t, RuleSets.ZFC.Core.LogicTerm t)
+
+type MonadSent s t m = (SentConstraints s t,  MonadState (Sum Int) m)
