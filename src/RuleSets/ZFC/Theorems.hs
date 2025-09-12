@@ -2487,7 +2487,7 @@ strongInductionTheorem outerTemplateIdxs idx dom_template p_template =
 strongInductionTheoremProgFree::HelperConstraints sE s eL m r t => 
                Int -> t -> s -> ProofGenTStd () r s Text m (s,[Int])
 strongInductionTheoremProgFree idx dom p_pred = do
-
+    setBaseIndex [idx]
     rel_idx <- newIndex
     wellFoundedExp <- isRelWellFoundedOn dom (x rel_idx)
     strongInductionExp <- strongInductionPremiseOnRel p_pred idx (x rel_idx)
@@ -2543,7 +2543,6 @@ strongInductionTheoremProg:: HelperConstraints sE s eL m r t =>
                [Int] -> Int -> t -> s -> ProofGenTStd () r s Text m ()
 strongInductionTheoremProg outerTemplateIdxs idx dom_template p_template = do
 
-    setBaseIndex (idx : outerTemplateIdxs)
 
     let builderSubsetTmInstance = builderSubsetTheorem outerTemplateIdxs idx dom_template (neg p_template)
     let specAntiRedundancyTmInstance = specAntiRedundancyTheorem outerTemplateIdxs idx dom_template p_template
