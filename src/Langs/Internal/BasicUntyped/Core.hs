@@ -1022,7 +1022,7 @@ parseRoster obj
 
         elems <- extractElemsFromDisjunction (Bound idx_x) disjunction_part
         guard (all (not . (`objDeBrBoundVarInside` idx_S)) elems)
-        Just $ elems
+        Just elems
 
 -- Definition for isSet
 -- isSet x  translates to  x ∉ ℤ  which is  ¬(x ∈ ℤ)

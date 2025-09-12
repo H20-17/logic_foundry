@@ -2487,18 +2487,16 @@ strongInductionTheorem outerTemplateIdxs idx dom_template p_template =
 strongInductionTheoremProgFree::HelperConstraints sE s eL m r t => 
                Int -> t -> s -> ProofGenTStd () r s Text m (s,[Int])
 strongInductionTheoremProgFree idx dom p_pred = do
-    let asmMain = runIndexTracker (do
-        setBaseIndex [idx]
-        rel_idx <- newIndex
-        wellFoundedExp <- isRelWellFoundedOn dom (x rel_idx)
-        strongInductionExp <- strongInductionPremiseOnRel p_pred idx (x rel_idx)
-        let asmMain = eX rel_idx (
+
+    rel_idx <- newIndex
+    wellFoundedExp <- isRelWellFoundedOn dom (x rel_idx)
+    strongInductionExp <- strongInductionPremiseOnRel p_pred idx (x rel_idx)
+    let asmMain = eX rel_idx (
                        x rel_idx `subset` (dom `crossProd` dom)
                            .&&. wellFoundedExp
                             .&&. strongInductionExp)
-        dropIndices 1
-        return asmMain
-        )    
+    dropIndices 1
+
     let (anti_spec_prop,anti_counterexamples) = builderPropsFree idx dom p_pred
     let (spec_prop, counterexamples) = builderPropsFree idx dom (neg p_pred)
     let builderSubsetTmFree = builderSubsetTheorem [] idx dom (neg p_pred)
@@ -2589,19 +2587,6 @@ strongInductionTheoremProg outerTemplateIdxs idx dom_template p_template = do
         ----
         let full_asm = isSetDom .&&. asmMain
 
-        -- let asmMain = runIndexTracker (do
-        --    setBaseIndex [idx]
-        --    rel_idx <- newIndex
-        --    wellFoundedExp <- isRelWellFoundedOn dom (x rel_idx)
-        --    strongInductionExp <- strongInductionPremiseOnRel p_pred idx (x rel_idx)
-        --    let asmMain = eX rel_idx (
-        --                   x rel_idx `subset` (dom `crossProd` dom)
-        --                       .&&. wellFoundedExp
-        --                        .&&. strongInductionExp)
-        --    dropIndices 1
-        --    return asmMain
-        --    )
-        -- let full_asm = isSetDom .&&. asmMain
         runProofByAsmM full_asm $ do
             (isSet_dom,_) <- simpLM full_asm
             (sub_imp,_) <- mpM main_imp
