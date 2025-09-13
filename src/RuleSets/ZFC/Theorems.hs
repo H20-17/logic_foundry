@@ -119,6 +119,7 @@ import IndexTracker
 
 
 
+
 ----begin binary union section------
 
 -- | This is the lemma
@@ -2553,7 +2554,10 @@ strongInductionTheoremProg:: HelperConstraints sE s eL m r t =>
                [Int] -> Int -> t -> s -> ProofGenTStd () r s Text m ()
 strongInductionTheoremProg outerTemplateIdxs idx dom_template p_template = do
     setBaseIndex [idx]
-
+    -- we do not need to do setBaseIndex idx : outerTemplateIdxs
+    -- because the outerTemplate indexes play no role when newIndex is called througout this function.
+    -- The first use is inside of strongInductionTheoremProgFree. The 
+    -- p_pred paramater will have x idx inside of it. 
     let builderSubsetTmInstance = builderSubsetTheorem outerTemplateIdxs idx dom_template (neg p_template)
     let specAntiRedundancyTmInstance = specAntiRedundancyTheorem outerTemplateIdxs idx dom_template p_template
     
