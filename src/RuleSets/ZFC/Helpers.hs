@@ -205,27 +205,28 @@ natWellOrderingAxiomM = standardRuleM natWellOrdering
 -- | responsible for providing the terms to instantiate the parameters of the source set
 -- | and predicate, which should use `X k` template variables for those parameters.
 -- |
--- | @param instantiationTerms The list of `ObjDeBr` terms to instantiate with.
--- | @param outerTemplateIdxs  The list of `Int` indices for the `X` variables in the templates
--- |                           that will be universally quantified. The order must correspond
--- |                           to `instantiationTerms`.
+-- | @param substitutions      A list of pairs, where each pair contains an `Int` index for
+-- |                           a template variable `X k` and the `ObjDeBr` term to substitute for it.
 -- | @param spec_var_X_idx     The `Int` index for the `X` variable that is the variable of specification
 -- |                           (the 'x' in {x ∈ T | P(x)}).
 -- | @param source_set_template The source set `T`, which may contain `X k` parameters.
 -- | @param p_template         The predicate `P`, which uses `X spec_var_X_idx` for the specification
 -- |                           variable and may contain `X k` parameters.
 -- | @return A tuple containing the proven defining property of the new set, its proof index,
--- |         and and a tuple of type (ObjDeBr, ObjDeBr, PropDeBr) which is the newly built set,
+-- |         and a tuple of type (ObjDeBr, ObjDeBr, PropDeBr) which is the newly built set,
 -- |         the instantiated source set, and the instantiated p_template.
 builderInstantiateM :: HelperConstraints sE s eL m r t =>
-    [t] ->    -- instantiationTerms
-    [Int] ->        -- outerTemplateIdxs
+    [(Int, t)] ->   -- substitutions
     Int ->          -- spec_var_X_idx
-    t ->      -- source_set_template
-    s ->     -- p_template
+    t ->            -- source_set_template
+    s ->            -- p_template
     ProofGenTStd () r s Text m (s,[Int], (t,t,s))
-builderInstantiateM instantiationTerms outerTemplateIdxs spec_var_X_idx source_set_template p_template =
+builderInstantiateM substitutions spec_var_X_idx source_set_template p_template =
     runProofBySubArgM $ do
+        -- Extract the indices and terms from the substitution pairs.
+        let outerTemplateIdxs = Prelude.map fst substitutions
+        let instantiationTerms = Prelude.map snd substitutions
+
         -- Step 1: Get the closed, universally quantified Axiom of Specification.
         -- 'specificationM' quantifies over the parameters specified in 'outerTemplateIdxs'.
         (closedSpecAxiom, _) <- specificationM outerTemplateIdxs spec_var_X_idx source_set_template p_template
@@ -238,12 +239,13 @@ builderInstantiateM instantiationTerms outerTemplateIdxs spec_var_X_idx source_s
         -- This is the final result of the construction.
         (defining_prop, prop_idx, built_obj) <- eiHilbertM instantiated_existential_prop
 
-        let instantiated_source_set = termSubXs (zip outerTemplateIdxs instantiationTerms) source_set_template
-        let instantiated_p_template = sentSubXs (zip outerTemplateIdxs instantiationTerms) p_template
+        let instantiated_source_set = termSubXs substitutions source_set_template
+        let instantiated_p_template = sentSubXs substitutions p_template
          
         -- The runProofBySubArgM wrapper requires the 'do' block to return the 'extraData'
         -- that the caller of builderInstantiateM will receive.
         return (built_obj, instantiated_source_set, instantiated_p_template)
+
 
 
 -- | Helper to instantiate the power set axiom and return the power set.

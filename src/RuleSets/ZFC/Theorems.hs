@@ -368,9 +368,9 @@ proveBinaryIntersectionExistsM = do
             -- Step 2: Use builderInstantiateM to apply the Axiom of Specification.
             -- It will construct the set {x ∈ A | x ∈ B} and prove its defining property.
             -- The instantiation terms [setA, setB] correspond to the template params [X 0, X 1].
+            let substitutions = zip [a_param_idx, b_param_idx] [setA, setB]
             (defining_prop, _, (intersectionObj,_,_)) <- builderInstantiateM
-                [setA, setB]                         -- instantiationTerms
-                [a_param_idx, b_param_idx]           -- outerTemplateIdxs
+                substitutions
                 spec_var_idx                         -- spec_var_X_idx
                 source_set_template                  -- source_set_template (A)
                 p_template                           -- p_template (x ∈ B)
@@ -857,7 +857,9 @@ proveBuilderSubsetTheoremM outerTemplateIdxs spec_var_X_idx source_set_template 
         -- Step 2: Get the defining property of this specific builtObj, as well as builtObj.
         -- We call builderInstantiateM, which handles the spec axiom, UI, and EI steps.
         -- It needs the original templates and the list of terms to instantiate with.
-        (definingProperty, _, (builtObj, instantiated_source_set,instantiated_predicate)) <- builderInstantiateM freeVars outerTemplateIdxs spec_var_X_idx source_set_template p_template
+        let substitutions = zip outerTemplateIdxs freeVars
+        (definingProperty, _, (builtObj, instantiated_source_set,instantiated_predicate)) 
+           <- builderInstantiateM substitutions spec_var_X_idx source_set_template p_template
 
         -- Step 3: Now call the helper that proves the subset relation from the defining property.
         -- The result of this call (the proven subset relation) will become the conclusion
@@ -1204,9 +1206,10 @@ proveBuilderSrcPartitionTheoremM outerTemplateIdxs spec_var_idx source_set_templ
         -- Step 1:
         -- instantiate both builder sets of the partition, and acquire the specific source_set and
         -- p_tmplt for this context.
-        (_,_,(_,sourceSet,p_tmplt)) <- builderInstantiateM instantiationTerms outerTemplateIdxs spec_var_idx source_set_template p_template 
+        let substitutions = zip outerTemplateIdxs instantiationTerms
+        (_,_,(_,sourceSet,p_tmplt)) <- builderInstantiateM substitutions spec_var_idx source_set_template p_template 
 
-        builderInstantiateM instantiationTerms outerTemplateIdxs spec_var_idx source_set_template (neg p_template) 
+        builderInstantiateM substitutions spec_var_idx source_set_template (neg p_template) 
 
         -- Step 2:
         -- Instantiate the context-dependent lemmas with the context-dependent free variables.
@@ -1426,8 +1429,9 @@ proveSpecRedundancyTheoremM outerTemplateIdxs spec_var_idx source_set_template p
 
         -- Establish the properties of the builderSet here
         -- and acquire the instantiated templates with the free variables for this specific proof context.
-        (_,_,(_,sourceSet,p_tmplt)) <- builderInstantiateM instantiationTerms outerTemplateIdxs spec_var_idx source_set_template p_template
-        builderInstantiateM instantiationTerms outerTemplateIdxs spec_var_idx source_set_template (neg p_template)
+        let substitutions = zip outerTemplateIdxs instantiationTerms
+        (_,_,(_,sourceSet,p_tmplt)) <- builderInstantiateM substitutions spec_var_idx source_set_template p_template
+        builderInstantiateM substitutions spec_var_idx source_set_template (neg p_template)
         let lemma2 = builderSubsetTheorem outerTemplateIdxs spec_var_idx source_set_template p_template
         multiUIM lemma2 instantiationTerms
         
@@ -1640,8 +1644,10 @@ proveSpecAntiRedundancyTheoremM outerTemplateIdxs spec_var_idx source_set_templa
         instantiationTerms <- getTopFreeVars (length outerTemplateIdxs)
         -- Establish the properties of the builderSet here
         -- and acquire the instantiated templates with the free variables for this specific proof context.
-        (_,_,(_,sourceSet,p_tmplt)) <- builderInstantiateM instantiationTerms outerTemplateIdxs spec_var_idx source_set_template p_template
-        builderInstantiateM instantiationTerms outerTemplateIdxs spec_var_idx source_set_template (neg p_template)
+        let substitutions = zip outerTemplateIdxs instantiationTerms
+        (_,_,(_,sourceSet,p_tmplt)) <- builderInstantiateM substitutions spec_var_idx source_set_template p_template
+
+        builderInstantiateM substitutions spec_var_idx source_set_template (neg p_template)
 
         multiUIM (builderSrcPartitionTheorem outerTemplateIdxs spec_var_idx source_set_template p_template) instantiationTerms
         multiUIM (specRedundancyTheorem outerTemplateIdxs spec_var_idx source_set_template p_template) instantiationTerms
@@ -1949,9 +1955,10 @@ proveCrossProductDefEquivM = do
 
 
             -- Correctly use specificationFreeMBuilder, which is designed to handle
-            -- the free variables v_A and v_B present in 'setA', 'setB', and thus in 'predicate_P'.
+            -- the free variables v_A and v_B present in 'setA', 'setB', and thus in 'predicate_P'
+            let substitutions = zip [setA_idx, setB_idx] [setA, setB]
             (definingProp_of_B, _, (crossProdObj,_,_)) <- 
-                 builderInstantiateM [setA, setB] [setA_idx, setB_idx] z_idx universeSet_tmplt predicate_P_tmplt
+                 builderInstantiateM substitutions z_idx universeSet_tmplt predicate_P_tmplt
 
             dropIndices 1 -- drop z_idx
             dropIndices 2 -- drop setA_idx and setB_idx
@@ -2126,8 +2133,9 @@ proveCrossProductExistsM = do
                               ))
         predicate_P_txt <- showSentM predicate_P_tmplt
         remarkM $ "Predicate P(z): " <> predicate_P_txt
-        (definingProp_of_B, _, (crossProdObj,_,_)) <- builderInstantiateM [setA, setB]
-                         [setA_idx, setB_idx] z_idx universeSet_tmplt predicate_P_tmplt
+        let substitutions = zip [setA_idx, setB_idx]  [setA, setB]
+        (definingProp_of_B, _, (crossProdObj,_,_)) <- builderInstantiateM
+                         substitutions z_idx universeSet_tmplt predicate_P_tmplt
 
         -- Step 2: Use the theorem about definition equivalence to get the canonical property.
 
@@ -2557,11 +2565,11 @@ strongInductionTheoremProg outerTemplateIdxs idx dom_template p_template = do
         let instantiationTerms = reverse instantiationTermsRev
 
 
-
-        (_,_,(_,dom,_)) <- builderInstantiateM instantiationTerms outerTemplateIdxs idx 
+        let substitutions = zip outerTemplateIdxs instantiationTerms
+        (_,_,(_,dom,_)) <- builderInstantiateM substitutions idx 
                           dom_template (neg p_template)
         (_,_,(_,_,p_pred)) <- 
-                          builderInstantiateM instantiationTerms outerTemplateIdxs idx dom_template p_template
+                          builderInstantiateM substitutions idx dom_template p_template
 
 
 
