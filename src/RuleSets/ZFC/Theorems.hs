@@ -261,7 +261,7 @@ proveBinaryUnionExistsM = do
 binaryUnionExistsSchema ::  HelperConstraints sE s eL m r t => 
      TheoremSchemaMT () r s Text m ()
 binaryUnionExistsSchema =       
-    TheoremSchemaMT [] [unionEquivTheorem] proveBinaryUnionExistsM 
+    TheoremSchemaMT [] [unionEquivTheorem] proveBinaryUnionExistsM []
 
 
 
@@ -399,7 +399,7 @@ proveBinaryIntersectionExistsM = do
 binaryIntersectionExistsSchema :: HelperConstraints sE s eL m r t =>
      TheoremSchemaMT () r s Text m ()
 binaryIntersectionExistsSchema =
-    TheoremSchemaMT [] [] proveBinaryIntersectionExistsM
+    TheoremSchemaMT [] [] proveBinaryIntersectionExistsM []
 
 
 
@@ -890,8 +890,11 @@ builderSubsetTheoremSchema outerTemplateIdxs spec_var_X_idx source_set_template 
       p_tmplt_consts = extractConstsSent p_template
       all_consts = source_set_tmplt_consts `Set.union` p_tmplt_consts
       typed_consts = Prelude.map (, ()) (Data.Set.toList all_consts)
+      protectedIdxs = spec_var_X_idx : outerTemplateIdxs
     in   
-      TheoremSchemaMT typed_consts [] (proveBuilderSubsetTheoremM outerTemplateIdxs spec_var_X_idx source_set_template p_template)
+      TheoremSchemaMT typed_consts [] 
+          (proveBuilderSubsetTheoremM outerTemplateIdxs 
+             spec_var_X_idx source_set_template p_template) protectedIdxs
 
 ----- END BUILDER SUBSET THEOREM
 
@@ -1868,7 +1871,7 @@ predicateP setA setB var = do
 -- | Theorem: ∀A∀B((isSet A ∧ isSet B) → (SpecProp(A,B) → CanonicalProp(A,B)))
 crossProductDefEquivTheorem :: SentConstraints s t => s
 crossProductDefEquivTheorem =
-    runIndexTracker (
+    runIndexTracker [] (
         do
             -- Define integer indices for the template variables (X k).
             -- These will be bound by the outermost quantifiers for A and B.
@@ -2057,6 +2060,7 @@ crossProductDefEquivSchema =
                     , tupleEqTheorem 2
                     , pairInUniverseTheorem] 
                     proveCrossProductDefEquivM
+                    []
 
 
 
@@ -2173,7 +2177,9 @@ proveCrossProductExistsM = do
 crossProductExistsSchema :: HelperConstraints sE s eL m r t => 
      TheoremSchemaMT () r s Text m ()
 crossProductExistsSchema = 
-    TheoremSchemaMT [] [binaryUnionExistsTheorem,crossProductDefEquivTheorem] proveCrossProductExistsM
+    TheoremSchemaMT []
+      [binaryUnionExistsTheorem,crossProductDefEquivTheorem] 
+      proveCrossProductExistsM []
 
 
 -- | Helper to instantiate the cross product existence theorem and return the
@@ -2324,10 +2330,10 @@ applyWellFoundednessM subsetS domainD relationR = do
         -- We have proven {𝑥₀ ∈ S | ¬P(𝑥₀)} ⊆ S ∧ {𝑥₀ ∈ S | ¬P(𝑥₀)} ≠ ∅ 
         -- Step 1: Formally acknowledge the required premises from the outer context.
         -- The proof will fail if these are not already proven.
-        let wellFoundedProp = runIndexTracker ( 
-                 isRelWellFoundedOn domainD relationR
+        
+        
+        wellFoundedProp <- isRelWellFoundedOn domainD relationR
 
-             )      
         -- let wellFoundedProp = isRelWellFoundedOn [] domainD relationR
         (isRelWellFounded_proven, _) <- repM wellFoundedProp
         -- This is the assertion ∀𝑥₂(𝑥₂ ⊆ S ∧ 𝑥₂ ≠ ∅ → ∃𝑥₁(𝑥₁ ∈ 𝑥₂ ∧ ∀𝑥₀(𝑥₀ ∈ 𝑥₂ → 𝑥₀ ≮ 𝑥₁))) 
@@ -2471,8 +2477,7 @@ strongInductionTheorem :: SentConstraints s t =>
                [Int] -> Int -> t -> s -> s
 strongInductionTheorem outerTemplateIdxs idx dom_template p_template =
     let 
-        theorem_body_tmplt = runIndexTracker (do
-            setBaseIndex (idx:outerTemplateIdxs)
+        theorem_body_tmplt = runIndexTracker (idx:outerTemplateIdxs) (do
             rel_idx <- newIndex
             -- The theorem states:
             -- For any set S and property P, if there exists a well-founded relation < on S such that
@@ -2490,7 +2495,7 @@ strongInductionTheorem outerTemplateIdxs idx dom_template p_template =
                     aX idx ( (x idx `memberOf` dom_template) .->. p_template)
             dropIndices 1
             return theorem_body_tmplt
-            )
+            ) 
         theorem_body = multiAx outerTemplateIdxs theorem_body_tmplt
     in
         theorem_body
@@ -2553,7 +2558,6 @@ strongInductionTheoremProgFree idx dom p_pred = do
 strongInductionTheoremProg:: HelperConstraints sE s eL m r t => 
                [Int] -> Int -> t -> s -> ProofGenTStd () r s Text m ()
 strongInductionTheoremProg outerTemplateIdxs idx dom_template p_template = do
-    setBaseIndex [idx]
     -- we do not need to do setBaseIndex idx : outerTemplateIdxs
     -- because the outerTemplate indexes play no role when newIndex is called througout this function.
     -- The first use is inside of strongInductionTheoremProgFree. The 
@@ -2617,11 +2621,14 @@ strongInductionTheoremMSchema outerTemplateIdxs spec_var_idx dom p_template=
       p_tmplt_consts = extractConstsSent p_template
       all_consts = dom_tmplt_consts `Set.union` p_tmplt_consts
       typed_consts = Prelude.map (, ()) (Data.Set.toList all_consts) 
+      protectedIdxs = spec_var_idx : outerTemplateIdxs
     in
       TheoremSchemaMT typed_consts [crossProductExistsTheorem
                               , builderSubsetTheorem outerTemplateIdxs spec_var_idx dom (neg p_template)
                               , specAntiRedundancyTheorem outerTemplateIdxs spec_var_idx dom p_template
-                             ] (strongInductionTheoremProg outerTemplateIdxs spec_var_idx dom p_template)
+                             ] 
+                             (strongInductionTheoremProg outerTemplateIdxs spec_var_idx dom p_template)
+                             protectedIdxs
 
 
 -- END STRONG INDUCTION SECTION

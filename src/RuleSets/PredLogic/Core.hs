@@ -20,7 +20,7 @@ module RuleSets.PredLogic.Core
 ) where
 
 
-import Data.Monoid ( Last(..) )
+import Data.Monoid ( Last(..), Sum(..) )
 
 import Control.Monad ( foldM, unless )
 import Data.Set (Set, fromList)
@@ -620,14 +620,15 @@ data TheoremSchemaMT tType r s o m x where
    TheoremSchemaMT :: {
                        constDictM :: [(o,tType)],
                        lemmasM :: [s],
-                       proofM :: ProofGenTStd tType r s o m x
+                       proofM :: ProofGenTStd tType r s o m x,
+                       protectedXVars :: [Int]
 
                      } -> TheoremSchemaMT tType r s o m x
 
 
 instance (Show s, Show o, Show tType) => Show (TheoremSchemaMT tType r s o m x) where
     show :: (Show s, Show o, Show tType) => TheoremSchemaMT tType r s o m x -> String
-    show (TheoremSchemaMT constDict ls prog) =
+    show (TheoremSchemaMT constDict ls prog idxs) =
         "TheoremSchemaMT " <> show ls <> " <<Monadic subproof>> " <> show constDict
 
 
@@ -665,7 +666,7 @@ checkTheoremMOpen :: (Show s, Typeable s, Monoid r1, ProofStd s eL1 r1 o tType, 
                       Typeable o, Show o, StdPrfPrintMonad s o tType m )
                  =>  Maybe (PrfStdState s o tType,PrfStdContext tType) ->  TheoremSchemaMT tType r1 s o m x
                               -> m (s, r1, x, [PrfStdStep s o tType])
-checkTheoremMOpen mayPrStateCxt (TheoremSchemaMT constdict lemmas prog) =  do
+checkTheoremMOpen mayPrStateCxt (TheoremSchemaMT constdict lemmas prog idxs) =  do
     let eitherConstDictMap = assignSequentialMap 0 constdict
     (newStepCountA, newConsts) <- either (throwM . BigExceptSchemaConstDup) return eitherConstDictMap
     let (newStepCountB, newProven) = assignSequentialSet newStepCountA lemmas
@@ -675,8 +676,9 @@ checkTheoremMOpen mayPrStateCxt (TheoremSchemaMT constdict lemmas prog) =  do
     let preambleSteps = conststeps <> lemmasteps
     let newState = PrfStdState newProven newConsts newStepCountB
     let mayPreambleLastProp = if Prelude.null lemmas then Last Nothing else (Last . Just . last) lemmas
+    let maxIndex = if null idxs then 0 else maximum idxs + 1
     (extra,tm,proof,newSteps) 
-               <- runSubproofM newContext mempty newState preambleSteps mayPreambleLastProp prog mempty
+               <- runSubproofM newContext mempty newState preambleSteps mayPreambleLastProp prog (Sum maxIndex)
     return (tm,proof,extra,newSteps) 
        where
             conststeps = Prelude.foldr h1 [] constdict
@@ -741,9 +743,9 @@ expandTheoremM :: (Monoid r1, ProofStd s eL1 r1 o tType ,
                      Show eL1, Typeable eL1,
                      Typeable tType, Show tType, Typeable o, Show o, StdPrfPrintMonad s o tType (Either SomeException))
                             => TheoremAlgSchema tType r1 s o () -> Either  SomeException (TheoremSchema s r1 o tType)
-expandTheoremM ((TheoremSchemaMT constdict lemmas proofprog):: TheoremAlgSchema tType r1 s o ()) =
+expandTheoremM ((TheoremSchemaMT constdict lemmas proofprog idxs):: TheoremAlgSchema tType r1 s o ()) =
       do
-          (tm,r1,(),_) <- checkTheoremMOpen Nothing (TheoremSchemaMT constdict lemmas proofprog)
+          (tm,r1,(),_) <- checkTheoremMOpen Nothing (TheoremSchemaMT constdict lemmas proofprog idxs)
           return $ TheoremSchema constdict lemmas tm r1
 
 

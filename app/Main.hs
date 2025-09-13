@@ -79,7 +79,7 @@ import RuleSets.PredLogic.Helpers hiding
 import RuleSets.ZFC.Theorems
 
 testTheoremMSchema :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) => TheoremSchemaMT () [PredRuleDeBr] PropDeBr Text m ()
-testTheoremMSchema = TheoremSchemaMT  [("N",())] [z1,z2] theoremProg 
+testTheoremMSchema = TheoremSchemaMT  [("N",())] [z1,z2] theoremProg []
   where
     z1 = aX 99 ((X 99 `In` Constant "N") :&&: (X 99 :<=: Integ 10) :->: (X 99 :<=: Integ 0))
     z2 = aX 0 ((X 0 `In` Constant "N") :&&: (X 0 :<=: Integ 0) :->: (X 0 :==: Integ 0))

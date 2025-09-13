@@ -2,8 +2,7 @@ module IndexTracker (
     IndexTracker,
     newIndex,
     dropIndices,
-    runIndexTracker,
-    setBaseIndex
+    runIndexTracker
 
 )
   where
@@ -30,14 +29,10 @@ dropIndices n = do
 
 
 
-runIndexTracker :: IndexTracker a -> a
-runIndexTracker tracker =
-    let initialIndex = 0
-    in evalState tracker initialIndex
+runIndexTracker :: [Int] -> IndexTracker a -> a
+runIndexTracker protectedIdxs tracker =
+    let initialIndex = if null protectedIdxs then 0 else maximum protectedIdxs + 1
+    in evalState tracker (Sum initialIndex)
 
 
-setBaseIndex :: (MonadState (Sum Int) m) => [Int] -> m ()
-setBaseIndex idxs = do
-    let baseIdx = if null idxs then 0 else maximum idxs + 1
-    put (Sum baseIdx)
 

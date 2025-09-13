@@ -346,10 +346,10 @@ constDictTest envDict = Data.Map.foldrWithKey f Nothing
 runTheoremM :: HelperConstraints m s tType o t sE eL r1
                  =>   TheoremSchemaMT tType r1 s o m x ->
                                ProofGenTStd tType r1 s o m (s, [Int], x)
-runTheoremM (TheoremSchemaMT constDict lemmas prog) =  do
+runTheoremM (TheoremSchemaMT constDict lemmas prog idxs) =  do
         state <- getProofState
         context <- ask
-        (tm, proof, extra, newSteps) <- lift $ checkTheoremMOpen (Just (state,context)) (TheoremSchemaMT constDict lemmas prog)
+        (tm, proof, extra, newSteps) <- lift $ checkTheoremMOpen (Just (state,context)) (TheoremSchemaMT constDict lemmas prog idxs)
         mayMonadifyRes <- monadifyProofStd (theoremSchema $ TheoremSchema constDict lemmas tm proof)
         idx <- maybe (error "No theorem returned by monadifyProofStd on theorem schema. This shouldn't happen") (return . snd) mayMonadifyRes
         return (tm, idx, extra)
@@ -359,14 +359,14 @@ runTmSilentM :: HelperConstraints m s tType o t sE eL r1
                  =>   TheoremAlgSchema tType r1 s o x ->
                                ProofGenTStd tType r1 s o m (s, [Int], x)
 -- runTmSilentM f (TheoremSchemaMT constDict lemmas prog) =  do
-runTmSilentM (TheoremSchemaMT constDict lemmas prog) =  do
+runTmSilentM (TheoremSchemaMT constDict lemmas prog idxs) =  do
         state <- getProofState
         context <- ask
         let eitherResult = checkTheoremMOpen 
                      (Just (state,context)) 
-                     (TheoremSchemaMT constDict lemmas prog)
+                     (TheoremSchemaMT constDict lemmas prog idxs)
         (tm, proof, extra, newSteps) <- either throwM return eitherResult
-        mayMonadifyRes <- monadifyProofStd (theoremAlgSchema $ TheoremSchemaMT constDict lemmas newProg)
+        mayMonadifyRes <- monadifyProofStd (theoremAlgSchema $ TheoremSchemaMT constDict lemmas newProg idxs)
         idx <- maybe (error "No theorem returned by monadifyProofStd on theorem schema. This shouldn't happen") (return . snd) mayMonadifyRes
         return (tm, idx, extra)
     where
