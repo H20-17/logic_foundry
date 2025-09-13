@@ -40,6 +40,8 @@ module RuleSets.ZFC.Helpers
     builderInstantiateM,
     powerSetInstantiateM,
     builderPropsFree,
+    runProofByUGM,
+    multiUGM,
     MetaRuleError(..)
 ) where
 
@@ -111,12 +113,15 @@ import RuleSets.PredLogic.Core hiding
    HelperConstraints(..),
    SentConstraints(..))
 import qualified RuleSets.PredLogic.Core as PREDL
+import qualified RuleSets.PredLogic.Helpers as PREDL
 import GHC.Num (integerMul)
 import RuleSets.ZFC.Core
 import RuleSets.BaseLogic.Helpers hiding
      (MetaRuleError(..))
 import RuleSets.PredLogic.Helpers hiding
-     (MetaRuleError(..))
+     (MetaRuleError(..),
+     runProofByUGM,
+     multiUGM)
 import RuleSets.PropLogic.Helpers hiding
      (MetaRuleError(..))
 
@@ -343,7 +348,17 @@ builderPropsFree idx t p_template =
             (free_props, hilbert_obj)
 
 
+runProofByUGM :: HelperConstraints sE s eL m r t
+                 =>  ProofGenTStd () r s Text m x
+                            -> ProofGenTStd () r s Text m (s, [Int])
+runProofByUGM = PREDL.runProofByUGM ()
 
+multiUGM :: HelperConstraints sE s eL m r t =>
+    Int ->                             -- ^ Number of UG's
+    ProofGenTStd () r s Text m x ->       -- ^ The core program. Its monadic return 'x' is discarded.
+                                           --   It must set 'Last s' with the prop to be generalized.
+    ProofGenTStd () r s Text m (s, [Int])  -- ^ Returns (final_generalized_prop, its_index).
+multiUGM n = PREDL.multiUGM (replicate n ()) 
 
 
 

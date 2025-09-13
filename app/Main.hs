@@ -56,6 +56,8 @@ import RuleSets.PredLogic.Core hiding
    SubproofMException(..))
 import qualified RuleSets.PredLogic.Core as PRED
 
+import qualified RuleSets.PredLogic.Helpers as PRED
+
 import RuleSets.ZFC.Core hiding
     (LogicRuleClass,
    SubproofRule,
@@ -72,7 +74,8 @@ import Langs.BasicUntyped
 import Distribution.Compat.Lens (set)
 import RuleSets.BaseLogic.Helpers
 import RuleSets.PropLogic.Helpers
-import RuleSets.PredLogic.Helpers
+import RuleSets.PredLogic.Helpers hiding
+   (runProofByUGM)
 import RuleSets.ZFC.Theorems
 
 testTheoremMSchema :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) => TheoremSchemaMT () [PredRuleDeBr] PropDeBr Text m ()
@@ -1546,7 +1549,7 @@ main = do
     print "TEST STRONG INDUCTION THEOREM-------------------------------------"
     let p_template = Constant "C" :+: X 0 :==: (X 1 :+: X 2)
     let source_set_template = X 1 .\/. X 2
-    (a,b,c,d) <- checkTheoremM ((strongInductionTheoremMSchema [1,2] 0 source_set_template p_template)::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text IO ()))
+    (a,b,c,d) <- checkTheoremM (strongInductionTheoremMSchema [1,2] 0 source_set_template p_template::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text IO ()))
     (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
     
     -- error "STOPPING HERE"
@@ -1554,7 +1557,7 @@ main = do
     print "TEST STRONG INDUCTION THEOREM 2-------------------------------------"
     let p_template = Constant "C" :==: X 0
     let source_set_template = Constant "S"
-    (a,b,c,d) <- checkTheoremM ((strongInductionTheoremMSchema [] 0 source_set_template p_template)::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text IO ()))
+    (a,b,c,d) <- checkTheoremM (strongInductionTheoremMSchema [] 0 source_set_template p_template::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text IO ()))
     (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
 
     return ()
@@ -1573,7 +1576,7 @@ testprog = do
       fakePropM [] z1
       fakePropM [] z2
       
-      fux<- runProofByUGM () do
+      fux<- PRED.runProofByUGM () $ do
           runProofByAsmM  asm2 do
               (s5,_,_)<- runProofBySubArgM  do
                  newFreeVar <- getTopFreeVar
@@ -1650,7 +1653,7 @@ theoremProg = do
     let z2 = aX 0 ((X 0 `In` Constant "N") :&&: (X 0 :<=: Integ 0) :->: (X 0 :==: Integ  0))
     let asm = (V 0 `In` Constant "N") :&&: (V 0 :<=: Integ 10)
     let asm2 = (V 0 `In` Constant "N") :&&: (V 0 :<=: Integ 10)
-    (generalized, _) <- runProofByUGM () do
+    (generalized, _) <- PRED.runProofByUGM () $ do
           runProofByAsmM asm2 do
               newFreeVar <- getTopFreeVar
               (s1,_) <- uiM newFreeVar z1

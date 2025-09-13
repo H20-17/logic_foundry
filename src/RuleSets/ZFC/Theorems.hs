@@ -105,7 +105,9 @@ import RuleSets.ZFC.Core
 import RuleSets.BaseLogic.Helpers hiding
      (MetaRuleError(..))
 import RuleSets.PredLogic.Helpers hiding
-     (MetaRuleError(..))
+     (MetaRuleError(..),
+     runProofByUGM,
+     multiUGM)
 import RuleSets.PropLogic.Helpers hiding
      (MetaRuleError(..))
 import RuleSets.ZFC.Helpers hiding
@@ -205,7 +207,7 @@ proveBinaryUnionExistsM :: HelperConstraints sE s eL m r t =>
     ProofGenTStd () r s Text m ()
 proveBinaryUnionExistsM = do
     -- Universally generalize over A and B.
-    multiUGM (replicate 2 ()) $ do
+    multiUGM 2 $ do
         -- Inside the UG, we have free variables (V_i) corresponding to A and B.
         -- We will use these variables to represent the sets A and B.
         
@@ -345,7 +347,7 @@ proveBinaryIntersectionExistsM :: HelperConstraints sE s eL m r t =>
     ProofGenTStd () r s Text m ()
 proveBinaryIntersectionExistsM = do
     -- The theorem is universally quantified over two sets, A and B.
-    multiUGM [(), ()] $ do
+    multiUGM 2 $ do
         -- Inside the UG, free variables v_A and v_B are introduced.
         v_Av_B <- getTopFreeVars 2
         let setA = head v_Av_B
@@ -489,7 +491,7 @@ proveUnionWithEmptySetM :: HelperConstraints sE s eL m r t =>
     ProofGenTStd () r s Text m ()
 proveUnionWithEmptySetM = do
     -- Prove the theorem: ∀x (isSet x → x ∪ ∅ = x)
-    runProofByUGM () $ do
+    runProofByUGM  $ do
         -- Inside UG, a free variable 'v' is introduced for 'x'.
         v <- getTopFreeVar
         
@@ -516,7 +518,7 @@ proveUnionWithEmptySetM = do
             (isSet_unionObj_proven, _) <- proveUnionIsSetM v emptySet
 
             -- Step 3: Prove ∀y (y ∈ v ↔ y ∈ (v ∪ ∅))
-            (forall_bicond, _) <- runProofByUGM () $ do
+            (forall_bicond, _) <- runProofByUGM $ do
                 y <- getTopFreeVar
 
                -- Direction 1: y ∈ v → y ∈ (v ∪ ∅)
@@ -614,7 +616,7 @@ proveDisjointSubsetIsEmptyM :: HelperConstraints sE s eL m r t =>
     ProofGenTStd () r s Text m ()
 proveDisjointSubsetIsEmptyM = do
     -- Prove: ∀a ∀b (isSet(a) ∧ a ∩ b = ∅ ∧ b ⊆ a → b=∅)
-    multiUGM [(), ()] $ do
+    multiUGM 2 $ do
         -- Inside UG, free variables for a and b are introduced (v_a, v_b).
         v_Av_B <- getTopFreeVars 2
         let v_a = head v_Av_B
@@ -631,7 +633,7 @@ proveDisjointSubsetIsEmptyM = do
             (subset_b_a,_) <- simpRM rest1 
 
             -- Step 2: Prove ∀x(¬(x ∈ v_b)) by contradiction.
-            (forall_not_in_b, _) <- runProofByUGM () $ do
+            (forall_not_in_b, _) <- runProofByUGM $ do
                 x_var <- getTopFreeVar
                 (x_in_b_implies_false, _) <- runProofByAsmM (x_var `memberOf` v_b) $ do
                     -- From b ⊆ a and x ∈ b, we get x ∈ a.
@@ -666,7 +668,7 @@ proveDisjointSubsetIsEmptyM = do
                 absurdM x_in_b_implies_false
 
             -- Step 3: Use the result from Step 2 to prove ∀x(x ∈ b ↔ x ∈ ∅).
-            (forall_bicond, _) <- runProofByUGM () $ do
+            (forall_bicond, _) <- runProofByUGM $ do
                 x <- getTopFreeVar
                 (not_in_b, _) <- uiM x forall_not_in_b
                 (forall_not_in_empty, _) <- emptySetAxiomM
@@ -776,7 +778,7 @@ proveBuilderIsSubsetOfDomMFree spec_var_idx sourceSet p_tmplt =
         -- This is done using Universal Generalization (UG).
         -- The '()' for runProofByUGM's type argument assumes the element type is not tracked
         -- in the context, which is common in your ZFC setup.
-        (forall_implication, _) <- runProofByUGM () $ do
+        (forall_implication, _) <- runProofByUGM $ do
             -- Inside the UG subproof, a new free variable 'v' is introduced into the context.
             -- getTopFreeVar retrieves this variable.
             v <- getTopFreeVar -- Needs to be implemented, e.g., 'V . length . freeVarTypeStack <$> ask'
@@ -841,7 +843,7 @@ proveBuilderSubsetTheoremM :: HelperConstraints sE s eL m r t =>
 proveBuilderSubsetTheoremM outerTemplateIdxs spec_var_X_idx source_set_template p_template = do
     -- Step 1: Universally generalize over all parameters.
     -- The number of quantifiers is determined by the length of 'outerTemplateIdxs'.
-    multiUGM (replicate (length outerTemplateIdxs) ()) $ do
+    multiUGM (length outerTemplateIdxs) $ do
         
         -- Step 1: Get the list of free variables. All will be active since
         -- the source_set_template and the p_template would be deemed insane
@@ -996,7 +998,7 @@ proveBuilderSrcPartitionUnionMFree spec_var_idx sourceSet p_tmplt =
         (isSet_builder_NotP, _) <- simpLM subset_NotP_proven
         (isSet_union, _) <- proveUnionIsSetM builderSet_P builderSet_NotP
         -- Step 3: Prove ∀x (x ∈ sourceSet ↔ x ∈ union_of_builders)
-        (forall_bicond, _) <- runProofByUGM () $ do
+        (forall_bicond, _) <- runProofByUGM $ do
             v <- getTopFreeVar
             
             -- Construct the specific instance of the partition equivalence lemma that we need.
@@ -1114,7 +1116,7 @@ proveBuilderSrcPartitionIntersectionEmptyMFree spec_var_idx sourceSet p_tmplt
 
         -- Step 3: Prove ∀y (¬(y ∈ intersection_of_builders))
         -- This is equivalent to proving the intersection is empty.
-        (forall_not_in_intersection, _) <- runProofByUGM () $ do
+        (forall_not_in_intersection, _) <- runProofByUGM $ do
             v <- getTopFreeVar
             -- We prove ¬(v ∈ intersection) by assuming (v ∈ intersection) and deriving a contradiction.
             (absurd_imp,_) <- runProofByAsmM (v `memberOf` intersection_of_builders) $ do
@@ -1154,7 +1156,7 @@ proveBuilderSrcPartitionIntersectionEmptyMFree spec_var_idx sourceSet p_tmplt
         (isSet_Empty_prop, _) <- emptySetAxiomM -- Extracts ∀x. ¬(x ∈ ∅)
         -- We need to prove ∀y (y ∈ intersection ↔ y ∈ ∅).
         -- Since both sides are always false, the biconditional is always true.
-        (forall_bicond, _) <- runProofByUGM () $ do
+        (forall_bicond, _) <- runProofByUGM $ do
             v <- getTopFreeVar
             (not_in_inter, _) <- uiM v forall_not_in_intersection
             (not_in_empty, _) <- uiM v isSet_Empty_prop
@@ -1197,7 +1199,7 @@ proveBuilderSrcPartitionTheoremM :: HelperConstraints sE s eL m r t =>
     ProofGenTStd () r s Text m ()
 proveBuilderSrcPartitionTheoremM outerTemplateIdxs spec_var_idx source_set_template p_template = do
     -- Step 1: Universally generalize over all parameters.
-    multiUGM (replicate (length outerTemplateIdxs) ()) $ do
+    multiUGM (length outerTemplateIdxs) $ do
         -- Inside the UG, we have free variables (V_i) corresponding to the X_k parameters.
 
         instantiationTerms <- getTopFreeVars (length outerTemplateIdxs)
@@ -1359,7 +1361,7 @@ proveSpecRedundancyMFree spec_var_idx sourceSet p_tmplt
         -- == Direction 1: ({x ∈ S | P(x)} = S) → (∀x(x ∈ S → P(x))) ==
         (dir1_implication, _) <- runProofByAsmM (builderSet .==. sourceSet) $ do
             -- Assume B = S. Goal: ∀x(x ∈ S → P(x))
-            runProofByUGM () $ do
+            runProofByUGM $ do
                 v <- getTopFreeVar
                 -- Goal: v ∈ S → P(v)
                 runProofByAsmM (v `memberOf` sourceSet) $ do
@@ -1382,7 +1384,7 @@ proveSpecRedundancyMFree spec_var_idx sourceSet p_tmplt
             -- Assume ∀x(x ∈ S → P(x)). Goal: B = S.
             (isSet_B, _) <- simpLM builderSubsetTmInst
 
-            (forall_bicond_sets, _) <- runProofByUGM () $ do
+            (forall_bicond_sets, _) <- runProofByUGM $ do
                 v <- getTopFreeVar
                 (forall_subset_imp, _) <- simpRM builderSubsetTmInst
 
@@ -1422,7 +1424,7 @@ proveSpecRedundancyTheoremM :: HelperConstraints sE s eL m r t  =>
     ProofGenTStd () r s Text m ()
 proveSpecRedundancyTheoremM outerTemplateIdxs spec_var_idx source_set_template p_template = do
     -- Step 1: Universally generalize over all parameters specified in outerTemplateIdxs.
-    multiUGM (replicate (length outerTemplateIdxs) ()) $ do
+    multiUGM (length outerTemplateIdxs) $ do
         -- Inside the UG, we have free variables (V_i) corresponding to the X_k parameters.
 
         instantiationTerms <- getTopFreeVars (length outerTemplateIdxs)
@@ -1639,7 +1641,7 @@ proveSpecAntiRedundancyTheoremM :: HelperConstraints sE s eL m r t  =>
     ProofGenTStd () r s Text m ()
 proveSpecAntiRedundancyTheoremM outerTemplateIdxs spec_var_idx source_set_template p_template = do
     -- Step 1: Universally generalize over all parameters specified in outerTemplateIdxs.
-    multiUGM (replicate (length outerTemplateIdxs) ()) $ do
+    multiUGM (length outerTemplateIdxs) $ do
         -- Inside the UG, we have free variables (V_i) corresponding to the X_k parameters.
         instantiationTerms <- getTopFreeVars (length outerTemplateIdxs)
         -- Establish the properties of the builderSet here
@@ -1935,7 +1937,7 @@ proveCrossProductDefEquivM :: (HelperConstraints sE s eL m r t)  =>
     ProofGenTStd () r s Text m ()
 proveCrossProductDefEquivM = do
     -- Universally generalize over A and B
-    multiUGM [(), ()] $ do
+    multiUGM 2 $ do
         -- Inside UG, free variables v_A and v_B are introduced
         v_Av_B <- getTopFreeVars 2
         let setB = head v_Av_B
@@ -1971,7 +1973,7 @@ proveCrossProductDefEquivM = do
                 -- This inner proof derives the canonical property from the specification property.
                 (isSet_B_proven, _) <- simpLM definingProp_of_B
                 (spec_forall_bicond, _) <- simpRM definingProp_of_B
-                (quantified_bicond_derived, _) <- multiUGM [(), ()] $ do
+                (quantified_bicond_derived, _) <- multiUGM 2 $ do
                     v_x_innerV_y_inner <- getTopFreeVars 2
                     let v_x_inner = head v_x_innerV_y_inner
                     let v_y_inner = v_x_innerV_y_inner !! 1
@@ -2113,7 +2115,7 @@ proveCrossProductExistsM :: (HelperConstraints sE s eL m r t) =>
 proveCrossProductExistsM = do
     -- The theorem is universally quantified over two sets, A and B.
     -- We use multiUGM to handle the two ∀ quantifiers.
-    multiUGM [(), ()] $ do
+    multiUGM 2 $ do
         -- Inside the UG, free variables v_B (most recent) and v_A are introduced.
         v_Av_B <- getTopFreeVars 2
         let setB = head v_Av_B
@@ -2495,7 +2497,7 @@ strongInductionTheorem outerTemplateIdxs idx dom_template p_template =
 strongInductionTheoremProgFree::HelperConstraints sE s eL m r t => 
                Int -> t -> s -> ProofGenTStd () r s Text m (s,[Int])
 strongInductionTheoremProgFree idx dom p_pred = do
-    setBaseIndex [idx]
+    
     rel_idx <- newIndex
     wellFoundedExp <- isRelWellFoundedOn dom (x rel_idx)
     strongInductionExp <- strongInductionPremiseOnRel p_pred idx (x rel_idx)
@@ -2550,7 +2552,7 @@ strongInductionTheoremProgFree idx dom p_pred = do
 strongInductionTheoremProg:: HelperConstraints sE s eL m r t => 
                [Int] -> Int -> t -> s -> ProofGenTStd () r s Text m ()
 strongInductionTheoremProg outerTemplateIdxs idx dom_template p_template = do
-
+    setBaseIndex [idx]
 
     let builderSubsetTmInstance = builderSubsetTheorem outerTemplateIdxs idx dom_template (neg p_template)
     let specAntiRedundancyTmInstance = specAntiRedundancyTheorem outerTemplateIdxs idx dom_template p_template
@@ -2559,7 +2561,7 @@ strongInductionTheoremProg outerTemplateIdxs idx dom_template p_template = do
     remarkM $ "Strong Induction Theorem to be proven: " <> txt
 
 
-    multiUGM (replicate (length outerTemplateIdxs) ()) $ do
+    multiUGM (length outerTemplateIdxs) $ do
         -- Inside the UG, we have free variables (V_i) corresponding to the X_k parameters.
         instantiationTermsRev <- getTopFreeVars (length outerTemplateIdxs)
         let instantiationTerms = reverse instantiationTermsRev
@@ -2571,7 +2573,7 @@ strongInductionTheoremProg outerTemplateIdxs idx dom_template p_template = do
         (_,_,(_,_,p_pred)) <- 
                           builderInstantiateM substitutions idx dom_template p_template
 
-
+        
 
         multiUIM builderSubsetTmInstance instantiationTerms
         multiUIM specAntiRedundancyTmInstance instantiationTerms
