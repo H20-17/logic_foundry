@@ -125,7 +125,7 @@ import RuleSets.PredLogic.Helpers hiding
 import RuleSets.PropLogic.Helpers hiding
      (MetaRuleError(..))
 
-
+import IndexTracker
 
 
 standardRuleM :: HelperConstraints sE s eL m r t
@@ -296,56 +296,54 @@ powerSetInstantiateM x = do
 -- | after builderInstantiateM has been called
 -- | Reproduces some of the work of builderInstantiateM but allows
 -- | us to pass less information to functions as a consequence.
-builderPropsFree :: SentConstraints s t  =>
+builderPropsFree :: MonadSent s t m  =>
     Int ->      -- idx: The 'x' in {x ∈ S | P(x)}
     t ->  -- t: The instantiated set, with all of the original outer context
                 --    variables instantiated
     s -> -- p_template: the original p_template with all outer context variables
                 -- instantiated with free variables
-    (s, t) -- the properties of the builderset and the builder set object
-builderPropsFree idx t p_template =
-        let
-            new_idx_base = idx + 1
-            internalBIdx = new_idx_base -- Placeholder index for the specified set 'B' (which will be XInternal internalBIdx)
+    m (s, t) -- the properties of the builderset and the builder set object
+builderPropsFree idx t p_template = do
+        
+    internalBIdx <- newIndex -- Placeholder index for the specified set 'B' (which will be XInternal internalBIdx)
             
-            -- The core relationship: x ∈ B ↔ (P(x) ∧ x ∈ t)
-            -- X idx represents 'x' (the element variable)
-            -- XInternal internalBIdx represents 'B' (the set being specified)
-            -- XInternal internalTIdx represents 't' (the source set)
-            -- p_template represents P(x)
-            -- Observe that t won't have any template variables in it so there is
-            -- no risk of capture at this time.
-            core_prop_template = (x idx `memberOf` x internalBIdx)
+    -- The core relationship: x ∈ B ↔ (P(x) ∧ x ∈ t)
+    -- X idx represents 'x' (the element variable)
+    -- XInternal internalBIdx represents 'B' (the set being specified)
+    -- XInternal internalTIdx represents 't' (the source set)
+    -- p_template represents P(x)
+    -- Observe that t won't have any template variables in it so there is
+    -- no risk of capture at this time.
+    let core_prop_template = (x idx `memberOf` x internalBIdx)
                              .<->.
                              (p_template .&&. (x idx `memberOf` t))
 
-            -- Universally quantify over x: ∀x (x ∈ B ↔ (P(x) ∧ x ∈ t))
+    -- Universally quantify over x: ∀x (x ∈ B ↔ (P(x) ∧ x ∈ t))
 
-            quantified_over_x = aX idx core_prop_template
+    let quantified_over_x = aX idx core_prop_template
 
-            -- Condition that B must be a set: isSet(B)
-            -- isSet is defined in Shorthands as Neg (B `In` IntSet)
+    -- Condition that B must be a set: isSet(B)
+    -- isSet is defined in Shorthands as Neg (B `In` IntSet)
 
-            condition_B_isSet = isSet (x internalBIdx) -- Using the isSet shorthand
+    let condition_B_isSet = isSet (x internalBIdx) -- Using the isSet shorthand
 
-            -- Combine the conditions for B: isSet(B) ∧ ∀x(...)
+    -- Combine the conditions for B: isSet(B) ∧ ∀x(...)
 
-            full_condition_for_B = 
-                      (condition_B_isSet .&&. quantified_over_x)
+    let full_condition_for_B = 
+                      condition_B_isSet .&&. quantified_over_x
 
 
-            -- hilbertObj
+    -- hilbertObj
 
-            hilbert_obj = hX internalBIdx full_condition_for_B
+    let hilbert_obj = hX internalBIdx full_condition_for_B
 
-            -- substitute the hilbert obj into the template
+    -- substitute the hilbert obj into the template
 
-            free_props = sentSubX internalBIdx hilbert_obj
+    let free_props = sentSubX internalBIdx hilbert_obj
                     full_condition_for_B
-            
+      
 
-        in
-            (free_props, hilbert_obj)
+    return (free_props, hilbert_obj)
 
 
 runProofByUGM :: HelperConstraints sE s eL m r t
