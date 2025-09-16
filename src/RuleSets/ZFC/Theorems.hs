@@ -31,8 +31,8 @@ module RuleSets.ZFC.Theorems
     crossProductInstantiateM,
     strongInductionTheorem,
     strongInductionTheoremMSchema,
-    specToBuilderTheorem,
-    specToBuilderSchema
+    builderTheorem,
+    builderSchema
 
 ) where
 
@@ -120,10 +120,10 @@ import Data.Type.Equality (outer)
 import IndexTracker 
 
 
---- BEGIN Spec to Builder section
+--- BEGIN Builder Theorem section
 
--- | Worker employed by specToBuilderTheorem
-specToBuilderTheoremWorker :: MonadSent s t m  =>
+-- | Worker employed by builderTheorem
+builderTheoremWorker :: MonadSent s t m  =>
     Int ->    -- spec_idx: The 'x' in {x ∈ Source(Params...) | P(x, Params)}
     [Int] ->  -- outer_idxs: 'Params' in {x ∈ Source(Params...) | P(x, Params)}
     t ->  -- t: The set, which may have outer context variables (template variables of form X i,
@@ -132,7 +132,7 @@ specToBuilderTheoremWorker :: MonadSent s t m  =>
          -- of the specification variables (i.e. X i, where i = spec_idx)
         
     m s -- the theorem
-specToBuilderTheoremWorker idx outer_idxs t p_template = do
+builderTheoremWorker idx outer_idxs t p_template = do
         
     internalBIdx <- newIndex -- Placeholder index for the specified set 'B' (which will be XInternal internalBIdx)
             
@@ -194,7 +194,7 @@ specToBuilderTheoremWorker idx outer_idxs t p_template = do
 -- |    isSet(B(Params...)) ∧
 -- |    ∀x (x ∈ B(Params...) ↔ (x ∈ Source(Params...) ∧ Predicate(x, Params...)))
 -- | This function composes said theorem.
-specToBuilderTheorem :: SentConstraints s t =>
+builderTheorem :: SentConstraints s t =>
     Int ->    -- spec_idx: The 'x' in {x ∈ Source(Params...) | P(x, Params)}
     [Int] ->  -- outer_idxs: 'Params' in {x ∈ Source(Params...) | P(x, Params)}
     t ->  -- t: The set, which may have outer context variables (template variables of form X i,
@@ -203,19 +203,19 @@ specToBuilderTheorem :: SentConstraints s t =>
          -- of the specification variables (i.e. X i, where i = spec_idx)
         
     s -- the theorem
-specToBuilderTheorem idx outer_idxs t p_template =
+builderTheorem idx outer_idxs t p_template =
     runIndexTracker (idx:outer_idxs)
-        (specToBuilderTheoremWorker idx outer_idxs t p_template)
+        (builderTheoremWorker idx outer_idxs t p_template)
 
 
 
-proveSpecToBuilderTheoremM :: HelperConstraints sE s eL m r t =>
+proveBuilderTheoremM :: HelperConstraints sE s eL m r t =>
     Int ->          -- spec_idx
     [Int] ->        -- outer_idxs
     t ->            -- source_set_template
     s ->            -- p_template
     ProofGenTStd () r s Text m ()
-proveSpecToBuilderTheoremM spec_idx outer_idxs source_set_template p_template = do
+proveBuilderTheoremM spec_idx outer_idxs source_set_template p_template = do
     runProofBySubArgM $ do
 
         -- Step 1: Get the closed, universally quantified Axiom of Specification.
@@ -231,13 +231,13 @@ proveSpecToBuilderTheoremM spec_idx outer_idxs source_set_template p_template = 
     return ()
              
 
-specToBuilderSchema :: HelperConstraints sE s eL m r t =>
+builderSchema :: HelperConstraints sE s eL m r t =>
     Int ->          -- spec_idx
     [Int] ->        -- outer_idxs
     t ->            -- source_set_template
     s ->            -- p_template
     TheoremSchemaMT () r s Text m ()
-specToBuilderSchema spec_idx outer_idxs source_set_template p_template = 
+builderSchema spec_idx outer_idxs source_set_template p_template = 
     let
         dom_tmplt_consts = extractConstsTerm source_set_template
         p_tmplt_consts = extractConstsSent p_template
@@ -247,7 +247,7 @@ specToBuilderSchema spec_idx outer_idxs source_set_template p_template =
     in
         TheoremSchemaMT {
             lemmasM = [],
-            proofM = proveSpecToBuilderTheoremM spec_idx outer_idxs source_set_template p_template,
+            proofM = proveBuilderTheoremM spec_idx outer_idxs source_set_template p_template,
             constDictM = typed_consts,
             protectedXVars = protectedIdxs
 
@@ -283,7 +283,7 @@ builderInstantiateMNew substitutions spec_var_X_idx source_set_template p_templa
         let outerTemplateIdxs = Prelude.map fst substitutions
         let instantiationTerms = Prelude.map snd substitutions
 
-        let closedBuilderTm = specToBuilderTheorem spec_var_X_idx outerTemplateIdxs source_set_template p_template
+        let closedBuilderTm = builderTheorem spec_var_X_idx outerTemplateIdxs source_set_template p_template
         
 
         -- Use multiUIM to instantiate the theorem with the provided terms.
@@ -1073,7 +1073,7 @@ builderSubsetTheoremSchema outerTemplateIdxs spec_var_X_idx source_set_template 
       typed_consts = Prelude.map (, ()) (Data.Set.toList all_consts)
       protectedIdxs = spec_var_X_idx : outerTemplateIdxs
     in   
-      TheoremSchemaMT typed_consts [specToBuilderTheorem spec_var_X_idx outerTemplateIdxs source_set_template p_template] 
+      TheoremSchemaMT typed_consts [builderTheorem spec_var_X_idx outerTemplateIdxs source_set_template p_template] 
           (proveBuilderSubsetTheoremM outerTemplateIdxs 
              spec_var_X_idx source_set_template p_template) protectedIdxs
 
@@ -1460,8 +1460,8 @@ builderSrcPartitionSchema outerTemplateIdxs spec_var_idx source_set_template p_t
         lemma4 = binaryUnionExistsTheorem
         -- Lemma 5: binaryIntersectionExistsTheorem
         lemma5 = binaryIntersectionExistsTheorem
-        lemma6 = specToBuilderTheorem spec_var_idx outerTemplateIdxs source_set_template p_template
-        lemma7 = specToBuilderTheorem spec_var_idx outerTemplateIdxs source_set_template (neg p_template)
+        lemma6 = builderTheorem spec_var_idx outerTemplateIdxs source_set_template p_template
+        lemma7 = builderTheorem spec_var_idx outerTemplateIdxs source_set_template (neg p_template)
 
         -- Extract constants for the schema from the templates.
         source_set_tmplt_consts = extractConstsTerm source_set_template
