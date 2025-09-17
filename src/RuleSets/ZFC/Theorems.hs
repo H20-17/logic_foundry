@@ -2150,7 +2150,7 @@ proveCrossProductDefEquivM = do
             -- the free variables v_A and v_B present in 'setA', 'setB', and thus in 'predicate_P'
             let substitutions = zip [setA_idx, setB_idx] [setA, setB]
             (definingProp_of_B, _, (crossProdObj,_,_)) <- 
-                 builderInstantiateM substitutions z_idx universeSet_tmplt predicate_P_tmplt
+                 builderInstantiateMNew substitutions z_idx universeSet_tmplt predicate_P_tmplt
 
             dropIndices 1 -- drop z_idx
             dropIndices 2 -- drop setA_idx and setB_idx
@@ -2241,10 +2241,18 @@ proveCrossProductDefEquivM = do
 crossProductDefEquivSchema :: (HelperConstraints sE s eL m r t) => 
      TheoremSchemaMT () r s Text m ()
 crossProductDefEquivSchema = 
-    TheoremSchemaMT [] 
+    let
+        z_idx = 0
+        setA_idx = 1
+        setB_idx = 2 
+        predicate_P_tmplt = runIndexTracker [z_idx, setA_idx, setB_idx] (predicateP (x setA_idx) (x setB_idx) (x z_idx))
+        universeSet_tmplt = powerSet (powerSet (x setA_idx .\/. x setB_idx))
+    in
+        TheoremSchemaMT [] 
                     [binaryUnionExistsTheorem
                     , tupleEqTheorem 2
-                    , pairInUniverseTheorem] 
+                    , pairInUniverseTheorem
+                    , builderTheorem z_idx [setA_idx,setB_idx] universeSet_tmplt predicate_P_tmplt] 
                     proveCrossProductDefEquivM
                     []
 
@@ -2314,22 +2322,20 @@ proveCrossProductExistsM = do
  
 
         -- Step 1: Define the predicate P(z) for specification.
-        let z_idx = 0; x_idx = 1; y_idx = 2; 
-                setA_idx = 3; setB_idx = 4
-        let universeSet_tmplt = powerSet (powerSet (x setA_idx .\/. x setB_idx))
-        -- Define the predicate P(z) as ∃x
+        z_idx <- newIndex
+        setA_idx <- newIndex
+        setB_idx <- newIndex
 
-        let predicate_P_tmplt = eX x_idx (eX y_idx (
-                                  (x z_idx .==. pair (x x_idx) (x y_idx))
-                                  .&&. (x x_idx `memberOf` x setA_idx)
-                                  .&&. (x y_idx `memberOf` x setB_idx)
-                              ))
+        let universeSet_tmplt = powerSet (powerSet (x setA_idx .\/. x setB_idx))
+        predicate_P_tmplt <- predicateP (x setA_idx) (x setB_idx) (x z_idx)
         predicate_P_txt <- showSentM predicate_P_tmplt
         remarkM $ "Predicate P(z): " <> predicate_P_txt
         let substitutions = zip [setA_idx, setB_idx]  [setA, setB]
-        (definingProp_of_B, _, (crossProdObj,_,_)) <- builderInstantiateM
+        dropIndices 2 -- drop setA_idx and setB_idx
+        (definingProp_of_B, _, (crossProdObj,_,_)) <- builderInstantiateMNew
                          substitutions z_idx universeSet_tmplt predicate_P_tmplt
 
+        dropIndices 1 -- drop z_idx
         -- Step 2: Use the theorem about definition equivalence to get the canonical property.
 
         (thm_equiv_inst1, _) <- uiM setA crossProductDefEquivTheorem
@@ -2363,9 +2369,20 @@ proveCrossProductExistsM = do
 crossProductExistsSchema :: HelperConstraints sE s eL m r t => 
      TheoremSchemaMT () r s Text m ()
 crossProductExistsSchema = 
-    TheoremSchemaMT []
-      [binaryUnionExistsTheorem,crossProductDefEquivTheorem] 
-      proveCrossProductExistsM []
+    let
+        z_idx = 0
+        setA_idx = 1
+        setB_idx = 2 
+        predicate_P_tmplt = runIndexTracker [z_idx, setA_idx, setB_idx] (predicateP (x setA_idx) (x setB_idx) (x z_idx))
+        universeSet_tmplt = powerSet (powerSet (x setA_idx .\/. x setB_idx))
+    in
+        TheoremSchemaMT []
+        [ 
+          binaryUnionExistsTheorem
+        , crossProductDefEquivTheorem
+        , builderTheorem z_idx [setA_idx,setB_idx] universeSet_tmplt predicate_P_tmplt 
+        ] 
+        proveCrossProductExistsM []
 
 
 -- | Helper to instantiate the cross product existence theorem and return the
