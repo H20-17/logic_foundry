@@ -174,7 +174,7 @@ builderTheoremWorker idx outer_idxs t p_template = do
       
 
     let final_prop = multiAx outer_idxs innerprops
-
+    
 
     return final_prop
 
@@ -271,13 +271,13 @@ builderSchema spec_idx outer_idxs source_set_template p_template =
 -- | the theorem composed by
 -- |    'specBuilderTheorem spec_var_X_idx outer_idxs source_set_template p_template'
 -- | must already be established in the proof.
-builderInstantiateMNew :: HelperConstraints sE s eL m r t =>
+builderInstantiateM :: HelperConstraints sE s eL m r t =>
     [(Int, t)] ->   -- substitutions
     Int ->          -- spec_var_X_idx
     t ->            -- source_set_template
     s ->            -- p_template
     ProofGenTStd () r s Text m (s,[Int], (t,t,s))
-builderInstantiateMNew substitutions spec_var_X_idx source_set_template p_template =
+builderInstantiateM substitutions spec_var_X_idx source_set_template p_template =
     runProofBySubArgM $ do
         -- Extract the indices and terms from the substitution pairs.
         let outerTemplateIdxs = Prelude.map fst substitutions
@@ -297,6 +297,28 @@ builderInstantiateMNew substitutions spec_var_X_idx source_set_template p_templa
         -- The runProofBySubArgM wrapper requires the 'do' block to return the 'extraData'
         -- that the caller of builderInstantiateM will receive.
         return (built_obj, instantiated_source_set, instantiated_p_template)
+
+
+
+-- | Gives us properties of a builder set, as well as the builder set object,
+-- | after builderInstantiateM has been called
+-- | Reproduces some of the work of builderInstantiateM but allows
+-- | us to pass less information to functions as a consequence.
+builderPropsFree :: SentConstraints s t => 
+    Int ->      -- idx: The 'x' in {x ∈ S | P(x)}
+    t ->  -- t: The instantiated set, with all of the original outer context
+                --    variables instantiated
+    s -> -- p_template: the original p_template with all outer context variables
+                -- instantiated with free variables
+    (s, t) -- the properties of the builderset and the builder set object      
+builderPropsFree idx t p_template =
+    let
+        props = builderTheorem idx [] t p_template
+        t = builderX idx t p_template
+    in
+        (props, t)
+
+
 
 -- END SPEC TO BUILDER SECTION
 ----begin binary union section------
@@ -540,9 +562,9 @@ proveBinaryIntersectionExistsM = do
             -- Step 1: Define the templates for the Axiom of Specification.
             -- The source set T will be A. The predicate P(x) will be (x ∈ B).
             -- The parameters to our templates are A and B.
-            let a_param_idx = 0
-            let b_param_idx = 1
-            let spec_var_idx = 2 -- The 'x' in {x ∈ T | P(x)}
+            a_param_idx <- newIndex
+            b_param_idx <- newIndex
+            spec_var_idx <- newIndex -- The 'x' in {x ∈ T | P(x)}
 
             let source_set_template = x a_param_idx
             let p_template = x spec_var_idx `memberOf` x b_param_idx
@@ -559,12 +581,12 @@ proveBinaryIntersectionExistsM = do
 
             -- 'defining_prop' is: isSet(B) ∧ ∀x(x∈B ↔ (x∈A ∧ x∈B)), where B is the new intersectionObj.
             -- This is exactly the property required for the existential statement.
-
+            dropIndices 1 -- drop spec_var_idx
+            dropIndices 2  -- drop a_param_idx and b_param_idx
             -- Step 3: Construct the target existential statement from the theorem definition.
             let target_existential = eX 0 (isSet (x 0) .&&. aX 1 (x 1 `memberOf` x 0 .<->. 
                                           (x 1 `memberOf` setB .&&. x 1 `memberOf` setA)))
             -- target_existential is the statement ∃S (isSet S ∧ ∀x(x ∈ S ↔ (x ∈ A ∧ x ∈ B))))
-
 
             -- Step 4: Apply Existential Generalization.
             -- This works because 'defining_prop' is the instantiated version of the
@@ -578,7 +600,21 @@ proveBinaryIntersectionExistsM = do
 binaryIntersectionExistsSchema :: HelperConstraints sE s eL m r t =>
      TheoremSchemaMT () r s Text m ()
 binaryIntersectionExistsSchema =
-    TheoremSchemaMT [] [] proveBinaryIntersectionExistsM []
+    let
+        a_param_idx = 0
+        b_param_idx = 1
+        spec_var_idx = 2 -- The 'x' in {x ∈ T | P(x)}
+
+        source_set_template = x a_param_idx
+        p_template = x spec_var_idx `memberOf` x b_param_idx
+        outer_idxs = [a_param_idx,b_param_idx]
+    in
+        TheoremSchemaMT {
+              constDictM = []
+            , lemmasM = [builderTheorem spec_var_idx outer_idxs source_set_template p_template]
+            , proofM = proveBinaryIntersectionExistsM 
+            , protectedXVars = []
+        }  
 
 
 
@@ -947,10 +983,13 @@ proveBuilderIsSubsetOfDomMFree spec_var_idx sourceSet p_tmplt =
     
     runProofBySubArgM $ do
         -- The final goal is to prove the proposition corresponding to 'builderSet `subset` domainSet'
-        (definingProperty,builderSet) <- builderPropsFree spec_var_idx sourceSet p_tmplt
-        
+        let (definingProperty,builderSet) = builderPropsFree spec_var_idx sourceSet p_tmplt
         -- let targetSubsetProp = builderSet `subset` domainSet
-
+        remarkM "Hello"
+        txtA <- showSentM p_tmplt
+        txtB <- showTermM sourceSet
+        remarkM txtA
+        remarkM txtB
 
         -- Step 1: Deconstruct the given 'definingProperty' to get its two main parts.
         (isSet_B_proven, _) <- simpLM definingProperty         -- isSet(B) is now proven
@@ -989,7 +1028,7 @@ proveBuilderIsSubsetOfDomMFree spec_var_idx sourceSet p_tmplt =
 
         -- Step 3: Adjoin 'isSet(B)' and '∀x(x ∈ B → x ∈ dom)' to form the final subset definition.
         (final_subset_prop, _) <- adjM isSet_B_proven forall_implication
-        
+
         -- As a sanity check, ensure the proven proposition matches the definition of subset.
         --guard (final_subset_prop == targetSubsetProp)
 
@@ -1043,7 +1082,7 @@ proveBuilderSubsetTheoremM outerTemplateIdxs spec_var_X_idx source_set_template 
         -- It needs the original templates and the list of terms to instantiate with.
         let substitutions = zip outerTemplateIdxs freeVars
         (definingProperty, _, (builtObj, instantiated_source_set,instantiated_predicate)) 
-           <- builderInstantiateMNew substitutions spec_var_X_idx source_set_template p_template
+           <- builderInstantiateM substitutions spec_var_X_idx source_set_template p_template
 
         -- Step 3: Now call the helper that proves the subset relation from the defining property.
         -- The result of this call (the proven subset relation) will become the conclusion
@@ -1162,8 +1201,8 @@ proveBuilderSrcPartitionUnionMFree spec_var_idx sourceSet p_tmplt =
               -- partition_equiv_theorem_free =
     runProofBySubArgM $ do
         let partition_equiv_theorem_free = partitionEquivTheorem [] spec_var_idx sourceSet p_tmplt
-        (def_prop_P,builderSet_P) <- builderPropsFree spec_var_idx sourceSet p_tmplt
-        (def_prop_NotP,builderSet_NotP) <- builderPropsFree spec_var_idx sourceSet (neg p_tmplt)
+        let (def_prop_P,builderSet_P) = builderPropsFree spec_var_idx sourceSet p_tmplt
+        let (def_prop_NotP,builderSet_NotP) = builderPropsFree spec_var_idx sourceSet (neg p_tmplt)
 
         -- Assumed premise: isSet sourceSet
 
@@ -1275,8 +1314,8 @@ proveBuilderSrcPartitionIntersectionEmptyMFree ::  HelperConstraints sE s eL m r
 proveBuilderSrcPartitionIntersectionEmptyMFree spec_var_idx sourceSet p_tmplt
            =
     runProofBySubArgM $ do
-        (def_prop_P,builderSet_P) <- builderPropsFree spec_var_idx sourceSet p_tmplt
-        (def_prop_NotP,builderSet_NotP) <- builderPropsFree spec_var_idx sourceSet (neg p_tmplt)
+        let (def_prop_P,builderSet_P) = builderPropsFree spec_var_idx sourceSet p_tmplt
+        let (def_prop_NotP,builderSet_NotP) = builderPropsFree spec_var_idx sourceSet (neg p_tmplt)
         -- Assumed premise: isSet sourceSet
 
         -- Step 1: Construct the two builder sets and their intersection.
@@ -1394,9 +1433,9 @@ proveBuilderSrcPartitionTheoremM outerTemplateIdxs spec_var_idx source_set_templ
         -- instantiate both builder sets of the partition, and acquire the specific source_set and
         -- p_tmplt for this context.
         let substitutions = zip outerTemplateIdxs instantiationTerms
-        (_,_,(_,sourceSet,p_tmplt)) <- builderInstantiateMNew substitutions spec_var_idx source_set_template p_template 
+        (_,_,(_,sourceSet,p_tmplt)) <- builderInstantiateM substitutions spec_var_idx source_set_template p_template 
 
-        builderInstantiateMNew substitutions spec_var_idx source_set_template (neg p_template) 
+        builderInstantiateM substitutions spec_var_idx source_set_template (neg p_template) 
 
         -- Step 2:
         -- Instantiate the context-dependent lemmas with the context-dependent free variables.
@@ -1536,7 +1575,7 @@ proveSpecRedundancyMFree :: HelperConstraints sE s eL m r t =>
 proveSpecRedundancyMFree spec_var_idx sourceSet p_tmplt 
          -- def_prop_B 
          = do
-    (def_prop_B, builderSet) <- builderPropsFree spec_var_idx sourceSet p_tmplt
+    let (def_prop_B, builderSet) = builderPropsFree spec_var_idx sourceSet p_tmplt
     let builderSubsetTmInst = builderSubsetTheorem [] spec_var_idx sourceSet p_tmplt
     (resultProp,idx,_) <- runProofBySubArgM $ do
         repM (isSet sourceSet) -- We assert this here to emphasize that it should already be proven in the context.
@@ -1669,7 +1708,9 @@ specRedundancySchema outerTemplateIdxs spec_var_idx source_set_template p_templa
     in
         TheoremSchemaMT {
             lemmasM = [ 
-                       builderSubsetTheorem outerTemplateIdxs spec_var_idx source_set_template p_template],
+                       builderSubsetTheorem outerTemplateIdxs spec_var_idx source_set_template p_template,
+                       builderTheorem spec_var_idx outerTemplateIdxs source_set_template p_template,
+                       builderTheorem spec_var_idx outerTemplateIdxs source_set_template (neg p_template)],
             proofM = proof_program,
             constDictM = typed_consts,
             protectedXVars = spec_var_idx : outerTemplateIdxs
@@ -1736,8 +1777,8 @@ proveSpecAntiRedundancyMFree :: HelperConstraints sE s eL m r t =>
 proveSpecAntiRedundancyMFree spec_var_idx sourceSet p_tmplt 
          -- def_prop_B 
          = do
-    (anti_spec_prop, negBuilderSet) <- builderPropsFree spec_var_idx sourceSet (neg p_tmplt)
-    (spec_prop, builderSet) <- builderPropsFree spec_var_idx sourceSet p_tmplt
+    let (anti_spec_prop, negBuilderSet) = builderPropsFree spec_var_idx sourceSet (neg p_tmplt)
+    let (spec_prop, builderSet) = builderPropsFree spec_var_idx sourceSet p_tmplt
     let negBuilderSubsetTmInst = builderSubsetTheorem [] spec_var_idx sourceSet (neg p_tmplt)
     let builderSrcPartitionTmInst = builderSrcPartitionTheorem [] spec_var_idx sourceSet p_tmplt
     let specRedundancyTmInst = specRedundancyTheorem [] spec_var_idx sourceSet p_tmplt
@@ -1891,7 +1932,8 @@ specAntiRedundancySchema outerTemplateIdxs spec_var_idx source_set_template p_te
         TheoremSchemaMT {
             lemmasM = [--eqSubstTheorem, 
                        builderSubsetTheorem outerTemplateIdxs spec_var_idx source_set_template (neg p_template),
-                       
+                       builderTheorem spec_var_idx outerTemplateIdxs source_set_template p_template,
+                       builderTheorem spec_var_idx outerTemplateIdxs source_set_template (neg p_template),
                        specRedundancyTheorem outerTemplateIdxs spec_var_idx source_set_template p_template,
                        builderSrcPartitionTheorem outerTemplateIdxs spec_var_idx source_set_template p_template,
                        unionWithEmptySetTheorem,
@@ -2150,7 +2192,7 @@ proveCrossProductDefEquivM = do
             -- the free variables v_A and v_B present in 'setA', 'setB', and thus in 'predicate_P'
             let substitutions = zip [setA_idx, setB_idx] [setA, setB]
             (definingProp_of_B, _, (crossProdObj,_,_)) <- 
-                 builderInstantiateMNew substitutions z_idx universeSet_tmplt predicate_P_tmplt
+                 builderInstantiateM substitutions z_idx universeSet_tmplt predicate_P_tmplt
 
             dropIndices 1 -- drop z_idx
             dropIndices 2 -- drop setA_idx and setB_idx
@@ -2332,7 +2374,7 @@ proveCrossProductExistsM = do
         remarkM $ "Predicate P(z): " <> predicate_P_txt
         let substitutions = zip [setA_idx, setB_idx]  [setA, setB]
         dropIndices 2 -- drop setA_idx and setB_idx
-        (definingProp_of_B, _, (crossProdObj,_,_)) <- builderInstantiateMNew
+        (definingProp_of_B, _, (crossProdObj,_,_)) <- builderInstantiateM
                          substitutions z_idx universeSet_tmplt predicate_P_tmplt
 
         dropIndices 1 -- drop z_idx
@@ -2716,8 +2758,8 @@ strongInductionTheoremProgFree idx dom p_pred = do
                             .&&. strongInductionExp)
     dropIndices 1
 
-    (anti_spec_prop,anti_counterexamples) <- builderPropsFree idx dom p_pred
-    (spec_prop, counterexamples) <- builderPropsFree idx dom (neg p_pred)
+    let (anti_spec_prop,anti_counterexamples) = builderPropsFree idx dom p_pred
+    let (spec_prop, counterexamples) = builderPropsFree idx dom (neg p_pred)
     let builderSubsetTmFree = builderSubsetTheorem [] idx dom (neg p_pred)
     let specAntiRedundancyTmFreeConditional = specAntiRedundancyTheorem [] idx dom p_pred
     (specAntiRedundancyTmFree,_) <- mpM specAntiRedundancyTmFreeConditional
@@ -2826,12 +2868,18 @@ strongInductionTheoremMSchema outerTemplateIdxs spec_var_idx dom p_template=
       typed_consts = Prelude.map (, ()) (Data.Set.toList all_consts) 
       protectedIdxs = spec_var_idx : outerTemplateIdxs
     in
-      TheoremSchemaMT typed_consts [crossProductExistsTheorem
-                              , builderSubsetTheorem outerTemplateIdxs spec_var_idx dom (neg p_template)
-                              , specAntiRedundancyTheorem outerTemplateIdxs spec_var_idx dom p_template
-                             ] 
-                             (strongInductionTheoremProg outerTemplateIdxs spec_var_idx dom p_template)
-                             protectedIdxs
+      TheoremSchemaMT { 
+            constDictM = typed_consts,
+            lemmasM =  
+                [ crossProductExistsTheorem
+                , builderSubsetTheorem outerTemplateIdxs spec_var_idx dom (neg p_template)
+                , specAntiRedundancyTheorem outerTemplateIdxs spec_var_idx dom p_template
+                , builderTheorem spec_var_idx outerTemplateIdxs dom p_template
+                , builderTheorem spec_var_idx outerTemplateIdxs dom (neg p_template)
+                ], 
+            proofM = (strongInductionTheoremProg outerTemplateIdxs spec_var_idx dom p_template),
+            protectedXVars = protectedIdxs
+        }
 
 
 -- END STRONG INDUCTION SECTION

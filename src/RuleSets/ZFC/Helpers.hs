@@ -37,9 +37,7 @@ module RuleSets.ZFC.Helpers
     intOrderAddCompatibilityAxiomM,
     intOrderMulCompatibilityAxiomM,
     natWellOrderingAxiomM,
-    builderInstantiateM,
     powerSetInstantiateM,
-    builderPropsFree,
     runProofByUGM,
     multiUGM,
     MetaRuleError(..)
@@ -202,55 +200,6 @@ intOrderMulCompatibilityAxiomM = standardRuleM intOrderMulCompatibility
 natWellOrderingAxiomM = standardRuleM natWellOrdering
 
 
--- | A generic and powerful helper that instantiates the Axiom of Specification with
--- | provided parameter terms, and then uses Existential Instantiation to construct
--- | the specified set object and prove its defining property.
--- |
--- | This function replaces the more complex `specificationFreeMBuilder`. The caller is now
--- | responsible for providing the terms to instantiate the parameters of the source set
--- | and predicate, which should use `X k` template variables for those parameters.
--- |
--- | @param substitutions      A list of pairs, where each pair contains an `Int` index for
--- |                           a template variable `X k` and the `ObjDeBr` term to substitute for it.
--- | @param spec_var_X_idx     The `Int` index for the `X` variable that is the variable of specification
--- |                           (the 'x' in {x ∈ T | P(x)}).
--- | @param source_set_template The source set `T`, which may contain `X k` parameters.
--- | @param p_template         The predicate `P`, which uses `X spec_var_X_idx` for the specification
--- |                           variable and may contain `X k` parameters.
--- | @return A tuple containing the proven defining property of the new set, its proof index,
--- |         and a tuple of type (ObjDeBr, ObjDeBr, PropDeBr) which is the newly built set,
--- |         the instantiated source set, and the instantiated p_template.
-builderInstantiateM :: HelperConstraints sE s eL m r t =>
-    [(Int, t)] ->   -- substitutions
-    Int ->          -- spec_var_X_idx
-    t ->            -- source_set_template
-    s ->            -- p_template
-    ProofGenTStd () r s Text m (s,[Int], (t,t,s))
-builderInstantiateM substitutions spec_var_X_idx source_set_template p_template =
-    runProofBySubArgM $ do
-        -- Extract the indices and terms from the substitution pairs.
-        let outerTemplateIdxs = Prelude.map fst substitutions
-        let instantiationTerms = Prelude.map snd substitutions
-
-        -- Step 1: Get the closed, universally quantified Axiom of Specification.
-        -- 'specificationM' quantifies over the parameters specified in 'outerTemplateIdxs'.
-        (closedSpecAxiom, _) <- specificationM outerTemplateIdxs spec_var_X_idx source_set_template p_template
-
-        -- Step 2: Use multiUIM to instantiate the axiom with the provided terms.
-        -- This proves the specific existential statement for the given parameters.
-        (instantiated_existential_prop, _) <- multiUIM closedSpecAxiom instantiationTerms
-
-        -- Step 3: Apply Existential Instantiation to get the Hilbert object and its property.
-        -- This is the final result of the construction.
-        (defining_prop, prop_idx, built_obj) <- eiHilbertM instantiated_existential_prop
-
-        let instantiated_source_set = termSubXs substitutions source_set_template
-        let instantiated_p_template = sentSubXs substitutions p_template
-         
-        -- The runProofBySubArgM wrapper requires the 'do' block to return the 'extraData'
-        -- that the caller of builderInstantiateM will receive.
-        return (built_obj, instantiated_source_set, instantiated_p_template)
-
 
 
 -- | Helper to instantiate the power set axiom and return the power set.
@@ -292,58 +241,6 @@ powerSetInstantiateM x = do
 
 
 
--- | Gives us properties of a builder set, as well as the builder set object,
--- | after builderInstantiateM has been called
--- | Reproduces some of the work of builderInstantiateM but allows
--- | us to pass less information to functions as a consequence.
-builderPropsFree :: MonadSent s t m  =>
-    Int ->      -- idx: The 'x' in {x ∈ S | P(x)}
-    t ->  -- t: The instantiated set, with all of the original outer context
-                --    variables instantiated
-    s -> -- p_template: the original p_template with all outer context variables
-                -- instantiated with free variables
-    m (s, t) -- the properties of the builderset and the builder set object
-builderPropsFree idx t p_template = do
-        
-    internalBIdx <- newIndex -- Placeholder index for the specified set 'B' (which will be XInternal internalBIdx)
-            
-    -- The core relationship: x ∈ B ↔ (P(x) ∧ x ∈ t)
-    -- X idx represents 'x' (the element variable)
-    -- XInternal internalBIdx represents 'B' (the set being specified)
-    -- XInternal internalTIdx represents 't' (the source set)
-    -- p_template represents P(x)
-    -- Observe that t won't have any template variables in it so there is
-    -- no risk of capture at this time.
-    let core_prop_template = (x idx `memberOf` x internalBIdx)
-                             .<->.
-                             (p_template .&&. (x idx `memberOf` t))
-
-    -- Universally quantify over x: ∀x (x ∈ B ↔ (P(x) ∧ x ∈ t))
-
-    let quantified_over_x = aX idx core_prop_template
-
-    -- Condition that B must be a set: isSet(B)
-    -- isSet is defined in Shorthands as Neg (B `In` IntSet)
-
-    let condition_B_isSet = isSet (x internalBIdx) -- Using the isSet shorthand
-
-    -- Combine the conditions for B: isSet(B) ∧ ∀x(...)
-
-    let full_condition_for_B = 
-                      condition_B_isSet .&&. quantified_over_x
-
-
-    -- hilbertObj
-
-    let hilbert_obj = hX internalBIdx full_condition_for_B
-
-    -- substitute the hilbert obj into the template
-
-    let free_props = sentSubX internalBIdx hilbert_obj
-                    full_condition_for_B
-      
-
-    return (free_props, hilbert_obj)
 
 
 runProofByUGM :: HelperConstraints sE s eL m r t
