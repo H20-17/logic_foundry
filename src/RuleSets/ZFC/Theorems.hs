@@ -321,6 +321,34 @@ builderPropsFree idx t p_template =
 
 
 -- END SPEC TO BUILDER SECTION
+
+
+unionEquivTheoremWorker :: MonadSent s t m => m s
+unionEquivTheoremWorker = do
+    tmpl_A_idx <- newIndex
+    tmpl_B_idx <- newIndex
+    tmpl_U_idx <- newIndex
+    tmpl_x_idx <- newIndex
+    tmpl_Y_idx <- newIndex
+
+
+    let prop_from_union_axiom = eX tmpl_U_idx (isSet (x tmpl_U_idx) .&&.
+                                          aX tmpl_x_idx ((x tmpl_x_idx `memberOf` x tmpl_U_idx) .<->.
+                                              eX tmpl_Y_idx ((x tmpl_Y_idx `memberOf` roster [x tmpl_A_idx, x tmpl_B_idx]) .&&. (x tmpl_x_idx `memberOf` x tmpl_Y_idx))))
+    dropIndices 1 -- drop tmpl_U_idx
+    dropIndices 2 -- drop tmpl_x_idx and tmpl_Y_idx
+    tmpl_x_idx <- newIndex
+    let canonical_body = (x tmpl_x_idx `memberOf` x tmpl_A_idx) .||. (x tmpl_x_idx `memberOf` x tmpl_B_idx)                                     
+    tmpl_S_idx <- newIndex
+    let canonical_prop = eX tmpl_S_idx (isSet (x tmpl_S_idx) .&&.
+                                          aX tmpl_x_idx ((x tmpl_x_idx `memberOf` x tmpl_S_idx) .<->. canonical_body))
+    dropIndices 1 -- drop tmpl_S_idx
+    dropIndices 1 -- drop tmpl_x_idx                                      
+    let thm_antecedent = isSet (x tmpl_A_idx) .&&. isSet (x tmpl_B_idx)
+    let final_prop = multiAx [tmpl_A_idx, tmpl_B_idx] (thm_antecedent .->. (prop_from_union_axiom .<->. canonical_prop))
+    dropIndices 2 -- drop tmpl_A_idx tmplB_idx
+    return final_prop
+
 ----begin binary union section------
 
 -- | This is the lemma
@@ -328,20 +356,7 @@ builderPropsFree idx t p_template =
 -- |    ↔ (∃S (isSet S ∧ ∀x(x ∈ S ↔ (x ∈ A ∨ x ∈ B)))) ) )
 unionEquivTheorem :: SentConstraints s t => s
 unionEquivTheorem =
-    let
-        tmpl_A_idx = 0; tmpl_B_idx = 1; tmpl_S_idx = 2; tmpl_U_idx = 2; tmpl_Y_idx = 3; tmpl_x_idx = 4
-                      
-        -- Construct the two existential statements using these Int indices.
-        prop_from_union_axiom = eX tmpl_U_idx (isSet (x tmpl_U_idx) .&&.
-                                          aX tmpl_x_idx ((x tmpl_x_idx `memberOf` x tmpl_U_idx) .<->.
-                                              eX tmpl_Y_idx ((x tmpl_Y_idx `memberOf` roster [x tmpl_A_idx, x tmpl_B_idx]) .&&. (x tmpl_x_idx `memberOf` x tmpl_Y_idx))))
-        canonical_body = (x tmpl_x_idx `memberOf` x tmpl_A_idx) .||. (x tmpl_x_idx `memberOf` x tmpl_B_idx)
-        canonical_prop = eX tmpl_S_idx (isSet (x tmpl_S_idx) .&&.
-                                          aX tmpl_x_idx ((x tmpl_x_idx `memberOf` x tmpl_S_idx) .<->. canonical_body))
-            
-        thm_antecedent = isSet (x tmpl_A_idx) .&&. isSet (x tmpl_B_idx)
-    in    
-        multiAx [tmpl_A_idx, tmpl_B_idx] (thm_antecedent .->. (prop_from_union_axiom .<->. canonical_prop))
+    runIndexTracker [] unionEquivTheoremWorker
 
 
 
@@ -462,7 +477,12 @@ proveBinaryUnionExistsM = do
 binaryUnionExistsSchema ::  HelperConstraints sE s eL m r t => 
      TheoremSchemaMT () r s Text m ()
 binaryUnionExistsSchema =       
-    TheoremSchemaMT [] [unionEquivTheorem] proveBinaryUnionExistsM []
+    TheoremSchemaMT {
+        lemmasM = [unionEquivTheorem],
+        proofM = proveBinaryUnionExistsM,
+        constDictM = [],
+        protectedXVars = []
+    }
 
 
 
@@ -1806,8 +1826,11 @@ proveSpecAntiRedundancyMFree spec_var_idx sourceSet p_tmplt
             -- Assume {x ∈ S | ¬P(x)} = ∅. Goal: ∀x(x ∈ S → P(x)).
             simpLM builderSrcPartitionTmInstMain
             -- We have now proven: S = ({𝑥₀ ∈ S | P(𝑥₀)} ∪ {𝑥₀ ∈ S | ¬P(𝑥₀)})
-            let substTmplt = sourceSet .==. (builderSet .\/. x 0)
-            eqSubstM 0 substTmplt cond_ls
+            templateVarIdx <- newIndex
+            let templateVar = x templateVarIdx
+            let substTmplt = sourceSet .==. (builderSet .\/. templateVar)
+            eqSubstM templateVarIdx substTmplt cond_ls
+            dropIndices 1 -- drop templateVarIdx
             -- We have now proven: S = ({𝑥₀ ∈ S | P(𝑥₀)} ∪ ∅)
             (unionWithEmptySetTmInstance,_) <- uiM builderSet unionWithEmptySetTheorem
             -- We have now proven:  IsSet ({𝑥₀ ∈ S | P(𝑥₀)}) → ({𝑥₀ ∈ S | P(𝑥₀)} ∪ ∅) = {𝑥₀ ∈ S | P(𝑥₀)} 
@@ -1815,8 +1838,11 @@ proveSpecAntiRedundancyMFree spec_var_idx sourceSet p_tmplt
             -- We have now proven: IsSet  ({𝑥₀ ∈ S | P(𝑥₀)}) 
             (actual_union_w_emptyset,_) <- mpM unionWithEmptySetTmInstance
             -- We have now proven: ({𝑥₀ ∈ S | P(𝑥₀)} ∪ ∅) = {𝑥₀ ∈ S | P(𝑥₀)}
-            let substTmplt = sourceSet .==. x 0
-            (specRedCond,_) <- eqSubstM 0 substTmplt actual_union_w_emptyset
+            templateVarIdx <- newIndex
+            let templateVar = x templateVarIdx
+            let substTmplt = sourceSet .==. templateVar
+            (specRedCond,_) <- eqSubstM templateVarIdx substTmplt actual_union_w_emptyset
+            dropIndices 1  --drop templateVarIdx
             -- We have proven: S = {𝑥₀ ∈ S | 𝑥₀ = 𝑥₀}
             eqSymM specRedCond
             -- We have now proven: {𝑥₀ ∈ S | P(𝑥₀)} = S
