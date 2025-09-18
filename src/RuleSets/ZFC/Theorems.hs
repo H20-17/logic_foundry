@@ -173,8 +173,8 @@ builderTheoremWorker idx outer_idxs t p_template = do
                     full_condition_for_B
       
 
+
     let final_prop = multiAx outer_idxs innerprops
-    
 
     return final_prop
 
@@ -314,9 +314,9 @@ builderPropsFree :: SentConstraints s t =>
 builderPropsFree idx t p_template =
     let
         props = builderTheorem idx [] t p_template
-        t = builderX idx t p_template
+        setObj = builderX idx t p_template
     in
-        (props, t)
+        (props, setObj)
 
 
 
@@ -985,11 +985,6 @@ proveBuilderIsSubsetOfDomMFree spec_var_idx sourceSet p_tmplt =
         -- The final goal is to prove the proposition corresponding to 'builderSet `subset` domainSet'
         let (definingProperty,builderSet) = builderPropsFree spec_var_idx sourceSet p_tmplt
         -- let targetSubsetProp = builderSet `subset` domainSet
-        remarkM "Hello"
-        txtA <- showSentM p_tmplt
-        txtB <- showTermM sourceSet
-        remarkM txtA
-        remarkM txtB
 
         -- Step 1: Deconstruct the given 'definingProperty' to get its two main parts.
         (isSet_B_proven, _) <- simpLM definingProperty         -- isSet(B) is now proven
@@ -2877,7 +2872,7 @@ strongInductionTheoremMSchema outerTemplateIdxs spec_var_idx dom p_template=
                 , builderTheorem spec_var_idx outerTemplateIdxs dom p_template
                 , builderTheorem spec_var_idx outerTemplateIdxs dom (neg p_template)
                 ], 
-            proofM = (strongInductionTheoremProg outerTemplateIdxs spec_var_idx dom p_template),
+            proofM = strongInductionTheoremProg outerTemplateIdxs spec_var_idx dom p_template,
             protectedXVars = protectedIdxs
         }
 
