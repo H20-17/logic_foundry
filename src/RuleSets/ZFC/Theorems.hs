@@ -359,48 +359,59 @@ unionEquivTheorem =
     runIndexTracker [] unionEquivTheoremWorker
 
 
+binUnionExistsTmWorker :: MonadSent s t m => m s
+binUnionExistsTmWorker = do
+    a_idx <- newIndex -- Represents set A
+    b_idx <- newIndex -- Represents set B
+
+    s_idx <- newIndex -- Represents the union set S
+
+    -- Construct the inner part of the formula: x ∈ S ↔ (x ∈ A ∨ x ∈ B)
+    x_idx <- newIndex
+
+    let x_in_S = x x_idx `memberOf` x s_idx
+    let x_in_A = x x_idx `memberOf` x a_idx
+    let x_in_B = x x_idx `memberOf` x b_idx
+
+    let x_in_A_or_B = x_in_A .||. x_in_B
+    let biconditional = x_in_S .<->. x_in_A_or_B
+
+    -- Quantify over x: ∀x(x ∈ S ↔ (x ∈ A ∨ x ∈ B))
+    let forall_x_bicond = aX x_idx biconditional
+
+    -- Construct the property of the union set S: isSet(S) ∧ ∀x(...)
+    let isSet_S = isSet (x s_idx)
+    let property_of_S = isSet_S .&&. forall_x_bicond
+
+    dropIndices 1 --drop x_idx
+
+    -- Quantify over S: ∃S (isSet(S) ∧ ∀x(...))
+    let exists_S = eX s_idx property_of_S
+
+    dropIndices 1 -- drop s_idx
+
+    -- Construct the antecedent of the main implication: isSet(A) ∧ isSet(B)
+    let isSet_A = isSet (x a_idx)
+    let isSet_B = isSet (x b_idx)
+    let antecedent = isSet_A .&&. isSet_B
+
+    -- Construct the main implication
+    let implication = antecedent .->. exists_S
+    -- Construct the main implication
+    let implication = antecedent .->. exists_S
+
+    let finalProp = multiAx [a_idx, b_idx] implication
+
+    dropIndices 2 --drop a_idx and b_idx
+
+    return finalProp
+
 
 -- | Constructs the PropDeBr term for the closed theorem of binary union existence.
 -- | The theorem is: ∀A ∀B ((isSet A ∧ isSet B) → ∃S (isSet S ∧ ∀x(x ∈ S ↔ (x ∈ A ∨ x ∈ B))))
 binaryUnionExistsTheorem :: SentConstraints s t  => s
 binaryUnionExistsTheorem =
-    let
-        -- Define the integer indices for the template variables (X k).
-        -- These will be bound by the quantifiers.
-        a_idx = 0 -- Represents set A
-        b_idx = 1 -- Represents set B
-        s_idx = 2 -- Represents the union set S
-        x_idx = 3 -- Represents an element x
-
-        -- Construct the inner part of the formula: x ∈ S ↔ (x ∈ A ∨ x ∈ B)
-        x_in_S = x x_idx `memberOf` x s_idx
-        x_in_A = x x_idx `memberOf` x a_idx
-        x_in_B = x x_idx `memberOf` x b_idx
-        x_in_A_or_B = x_in_A .||. x_in_B
-        biconditional = x_in_S .<->. x_in_A_or_B
-
-        -- Quantify over x: ∀x(x ∈ S ↔ (x ∈ A ∨ x ∈ B))
-        forall_x_bicond = aX x_idx biconditional
-
-        -- Construct the property of the union set S: isSet(S) ∧ ∀x(...)
-        isSet_S = isSet (x s_idx)
-        property_of_S = isSet_S .&&. forall_x_bicond
-
-        -- Quantify over S: ∃S (isSet(S) ∧ ∀x(...))
-        exists_S = eX s_idx property_of_S
-
-        -- Construct the antecedent of the main implication: isSet(A) ∧ isSet(B)
-        isSet_A = isSet (x a_idx)
-        isSet_B = isSet (x b_idx)
-        antecedent = isSet_A .&&. isSet_B
-
-        -- Construct the main implication
-        implication = antecedent .->. exists_S
-
-    in
-        -- Universally quantify over A and B to create the final closed theorem.
-        -- multiAx [0, 1] is equivalent to aX 0 (aX 1 (...))
-        multiAx [a_idx, b_idx] implication
+    runIndexTracker [] binUnionExistsTmWorker
 
 
 
