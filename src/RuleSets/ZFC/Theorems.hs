@@ -120,6 +120,42 @@ import Data.Type.Equality (outer)
 import IndexTracker 
 
 
+
+---NEW IDEA
+
+aXM :: MonadSent s t m => m s -> m s
+aXM inner = do
+    x_idx <- newIndex
+    innerSent <-inner
+    let returnSent = aX x_idx innerSent
+    dropIndices 1
+    return returnSent
+
+multiAXM :: MonadSent s t m => Int -> m s -> m s
+-- | Applies the universal quantifier ('∀') `quantDepth` times to the result
+-- | of the inner monadic action.
+multiAXM quantDepth inner =
+    if quantDepth <= 0
+        then inner
+        else aXM (multiAXM (quantDepth - 1) inner)
+
+eXM :: MonadSent s t m => m s -> m s
+eXM inner = do
+    x_idx <- newIndex
+    innerSent <-inner
+    let returnSent = aX x_idx innerSent
+    dropIndices 1
+    return returnSent
+
+
+-- | Applies the existential quantifier ('∃') `quantDepth` times to the result
+-- | of the inner monadic action.
+multiEXM :: MonadSent s t m => Int -> m s -> m s
+multiEXM quantDepth inner =
+    if quantDepth <= 0
+        then inner
+        else eXM (multiEXM (quantDepth - 1) inner)
+
 --- BEGIN Builder Theorem section
 
 -- | Worker employed by builderTheorem
@@ -337,6 +373,10 @@ unionEquivTheoremWorker = do
                                               eX tmpl_Y_idx ((x tmpl_Y_idx `memberOf` roster [x tmpl_A_idx, x tmpl_B_idx]) .&&. (x tmpl_x_idx `memberOf` x tmpl_Y_idx))))
     dropIndices 1 -- drop tmpl_U_idx
     dropIndices 2 -- drop tmpl_x_idx and tmpl_Y_idx
+
+
+
+
     tmpl_x_idx <- newIndex
     let canonical_body = (x tmpl_x_idx `memberOf` x tmpl_A_idx) .||. (x tmpl_x_idx `memberOf` x tmpl_B_idx)                                     
     tmpl_S_idx <- newIndex
