@@ -123,6 +123,15 @@ import IndexTracker
 
 ---NEW IDEA
 
+getXVar :: MonadSent s t m => m t
+getXVar = (x . (\x ->  x - 1) . getSum) <$> get
+
+getXVars :: MonadSent s t m => Int -> m [t]
+getXVars n = do
+    topIdx <- getSum <$> get
+    return [x (topIdx - i) | i <- [0..(n-1)]]
+
+
 aXM :: MonadSent s t m => m s -> m s
 aXM inner = do
     x_idx <- newIndex
@@ -148,6 +157,16 @@ eXM inner = do
     return returnSent
 
 
+hXM :: MonadSent s t m => m s -> m t
+hXM inner = do
+    x_idx <- newIndex
+    innerSent <-inner
+    let returnTerm = hX x_idx innerSent
+    dropIndices 1
+    return returnTerm
+
+
+
 -- | Applies the existential quantifier ('∃') `quantDepth` times to the result
 -- | of the inner monadic action.
 multiEXM :: MonadSent s t m => Int -> m s -> m s
@@ -169,6 +188,44 @@ builderTheoremWorker :: MonadSent s t m  =>
         
     m s -- the theorem
 builderTheoremWorker idx outer_idxs t p_template = do
+    let full_condition_on term = 
+            let
+                core_prop_template = (x idx `memberOf` term)
+                             .<->.
+                             (p_template .&&. (x idx `memberOf` t))
+                quantified_over_x = aX idx core_prop_template
+                condition_on_isSet = isSet term
+            in
+                condition_on_isSet .&&. quantified_over_x 
+
+    hilbert_obj <- hXM $ do
+        objVar <- getXVar
+        return $ full_condition_on objVar
+
+    let innerprops = full_condition_on hilbert_obj
+
+    let final_prop = multiAx outer_idxs innerprops
+
+    return final_prop
+
+
+
+
+
+
+
+
+-- | Worker employed by builderTheorem
+builderTheoremWorkerOld :: MonadSent s t m  =>
+    Int ->    -- spec_idx: The 'x' in {x ∈ Source(Params...) | P(x, Params)}
+    [Int] ->  -- outer_idxs: 'Params' in {x ∈ Source(Params...) | P(x, Params)}
+    t ->  -- t: The set, which may have outer context variables (template variables of form X i,
+          -- with i taken from outer_idxs)
+    s -> -- p_template: the original p_template which may have outer context variables as well as instances
+         -- of the specification variables (i.e. X i, where i = spec_idx)
+        
+    m s -- the theorem
+builderTheoremWorkerOld idx outer_idxs t p_template = do
         
     internalBIdx <- newIndex -- Placeholder index for the specified set 'B' (which will be XInternal internalBIdx)
             
@@ -242,6 +299,8 @@ builderTheorem :: SentConstraints s t =>
 builderTheorem idx outer_idxs t p_template =
     runIndexTracker (idx:outer_idxs)
         (builderTheoremWorker idx outer_idxs t p_template)
+
+
 
 
 
@@ -649,7 +708,6 @@ proveBinaryIntersectionExistsM = do
                 spec_var_idx                         -- spec_var_X_idx
                 source_set_template                  -- source_set_template (A)
                 p_template                           -- p_template (x ∈ B)
-
             -- 'defining_prop' is: isSet(B) ∧ ∀x(x∈B ↔ (x∈A ∧ x∈B)), where B is the new intersectionObj.
             -- This is exactly the property required for the existential statement.
             dropIndices 1 -- drop spec_var_idx
