@@ -370,17 +370,18 @@ unionEquivTheoremWorker = do
         let setAsetB = reverse setAsetBrev
         let setA = head setAsetB
         let setB = setAsetB !! 1
-        tmpl_U_idx <- newIndex
-        tmpl_x_idx <- newIndex
-        tmpl_Y_idx <- newIndex
+        prop_from_union_axiom <- eXM $ do
+            setU <- getXVar
+            tmpl_x_idx <- newIndex
+            tmpl_Y_idx <- newIndex
 
 
-        let prop_from_union_axiom = eX tmpl_U_idx (isSet (x tmpl_U_idx) .&&.
-                                          aX tmpl_x_idx ((x tmpl_x_idx `memberOf` x tmpl_U_idx) .<->.
+            let prop_from_union_ax_inner = (isSet setU .&&.
+                                          aX tmpl_x_idx ((x tmpl_x_idx `memberOf` setU) .<->.
                                               eX tmpl_Y_idx ((x tmpl_Y_idx `memberOf` roster [setA, setB]) .&&. (x tmpl_x_idx `memberOf` x tmpl_Y_idx))))
-        dropIndices 1 -- drop tmpl_U_idx
-        dropIndices 2 -- drop tmpl_x_idx and tmpl_Y_idx
-
+        
+            dropIndices 2 -- drop tmpl_x_idx and tmpl_Y_idx
+            return prop_from_union_ax_inner
 
 
 
