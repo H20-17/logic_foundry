@@ -129,7 +129,7 @@ getXVar = (x . (\x ->  x - 1) . getSum) <$> get
 getXVars :: MonadSent s t m => Int -> m [t]
 getXVars n = do
     topIdx <- getSum <$> get
-    return [x (topIdx - i) | i <- [0..(n-1)]]
+    return [x (topIdx - i - 1) | i <- [0..(n-1)]]
 
 
 aXM :: MonadSent s t m => m s -> m s
@@ -143,16 +143,17 @@ aXM inner = do
 multiAXM :: MonadSent s t m => Int -> m s -> m s
 -- | Applies the universal quantifier ('∀') `quantDepth` times to the result
 -- | of the inner monadic action.
-multiAXM quantDepth inner =
-    if quantDepth <= 0
-        then inner
-        else aXM (multiAXM (quantDepth - 1) inner)
+multiAXM quantDepth inner
+    | quantDepth <= 0 = inner
+    | quantDepth == 1 = aXM inner
+    | otherwise = aXM (multiAXM (quantDepth - 1) inner)
+
 
 eXM :: MonadSent s t m => m s -> m s
 eXM inner = do
     x_idx <- newIndex
     innerSent <-inner
-    let returnSent = aX x_idx innerSent
+    let returnSent = eX x_idx innerSent
     dropIndices 1
     return returnSent
 
@@ -170,24 +171,23 @@ hXM inner = do
 -- | Applies the existential quantifier ('∃') `quantDepth` times to the result
 -- | of the inner monadic action.
 multiEXM :: MonadSent s t m => Int -> m s -> m s
-multiEXM quantDepth inner =
-    if quantDepth <= 0
-        then inner
-        else eXM (multiEXM (quantDepth - 1) inner)
+multiEXM quantDepth inner
+    | quantDepth <= 0 = inner
+    | quantDepth == 1 = eXM inner
+    | otherwise = eXM (multiEXM (quantDepth - 1) inner)
 
 --- BEGIN Builder Theorem section
 
 -- | Worker employed by builderTheorem
 builderTheoremWorker :: MonadSent s t m  =>
     Int ->    -- spec_idx: The 'x' in {x ∈ Source(Params...) | P(x, Params)}
-    [Int] ->  -- outer_idxs: 'Params' in {x ∈ Source(Params...) | P(x, Params)}
     t ->  -- t: The set, which may have outer context variables (template variables of form X i,
           -- with i taken from outer_idxs)
     s -> -- p_template: the original p_template which may have outer context variables as well as instances
          -- of the specification variables (i.e. X i, where i = spec_idx)
         
-    m s -- the theorem
-builderTheoremWorker idx outer_idxs t p_template = do
+    m s -- the inner proposition of the theorem
+builderTheoremWorker idx t p_template = do
     let full_condition_on term = 
             let
                 core_prop_template = (x idx `memberOf` term)
@@ -204,10 +204,8 @@ builderTheoremWorker idx outer_idxs t p_template = do
 
     let innerprops = full_condition_on hilbert_obj
 
-    let final_prop = multiAx outer_idxs innerprops
 
-    return final_prop
-
+    return innerprops
 
 
 
@@ -215,61 +213,7 @@ builderTheoremWorker idx outer_idxs t p_template = do
 
 
 
--- | Worker employed by builderTheorem
-builderTheoremWorkerOld :: MonadSent s t m  =>
-    Int ->    -- spec_idx: The 'x' in {x ∈ Source(Params...) | P(x, Params)}
-    [Int] ->  -- outer_idxs: 'Params' in {x ∈ Source(Params...) | P(x, Params)}
-    t ->  -- t: The set, which may have outer context variables (template variables of form X i,
-          -- with i taken from outer_idxs)
-    s -> -- p_template: the original p_template which may have outer context variables as well as instances
-         -- of the specification variables (i.e. X i, where i = spec_idx)
-        
-    m s -- the theorem
-builderTheoremWorkerOld idx outer_idxs t p_template = do
-        
-    internalBIdx <- newIndex -- Placeholder index for the specified set 'B' (which will be XInternal internalBIdx)
-            
-    -- The core relationship: x ∈ B ↔ (P(x,Params) ∧ x ∈ t)
-    -- X idx represents 'x' (the element variable)
-    -- XInternal internalBIdx represents 'B' (the set being specified)
-    -- XInternal internalTIdx represents 't(Params)' (the source set)
-    -- p_template represents P(x,Params)
-    -- There should be no risk of capture of idx or outer_idxs if
-    -- this is used monadically by runIndexTracker or as a monadic component of a proof,
-    -- as long as (idx : outer_idxs) are specified as the protected variables. 
-    let core_prop_template = (x idx `memberOf` x internalBIdx)
-                             .<->.
-                             (p_template .&&. (x idx `memberOf` t))
 
-    -- Universally quantify over x: ∀x (x ∈ B ↔ (P(x) ∧ x ∈ t))
-
-    let quantified_over_x = aX idx core_prop_template
-
-    -- Condition that B must be a set: isSet(B)
-    -- isSet is defined in Shorthands as Neg (B `In` IntSet)
-
-    let condition_B_isSet = isSet (x internalBIdx) -- Using the isSet shorthand
-
-    -- Combine the conditions for B: isSet(B) ∧ ∀x(...)
-
-    let full_condition_for_B = 
-                      condition_B_isSet .&&. quantified_over_x
-
-
-    -- hilbertObj
-
-    let hilbert_obj = hX internalBIdx full_condition_for_B
-
-    -- substitute the hilbert obj into the template
-
-    let innerprops = sentSubX internalBIdx hilbert_obj
-                    full_condition_for_B
-      
-
-
-    let final_prop = multiAx outer_idxs innerprops
-
-    return final_prop
 
 
 
@@ -297,11 +241,12 @@ builderTheorem :: SentConstraints s t =>
         
     s -- the theorem
 builderTheorem idx outer_idxs t p_template =
-    runIndexTracker (idx:outer_idxs)
-        (builderTheoremWorker idx outer_idxs t p_template)
+    let
+        inner_props = runIndexTracker (idx:outer_idxs)
+            (builderTheoremWorker idx t p_template)
 
-
-
+    in
+        multiAx outer_idxs inner_props
 
 
 proveBuilderTheoremM :: HelperConstraints sE s eL m r t =>
@@ -420,33 +365,37 @@ builderPropsFree idx t p_template =
 
 unionEquivTheoremWorker :: MonadSent s t m => m s
 unionEquivTheoremWorker = do
-    tmpl_A_idx <- newIndex
-    tmpl_B_idx <- newIndex
-    tmpl_U_idx <- newIndex
-    tmpl_x_idx <- newIndex
-    tmpl_Y_idx <- newIndex
+    multiAXM 2 $ do
+        setAsetBrev <- getXVars 2
+        let setAsetB = reverse setAsetBrev
+        let setA = head setAsetB
+        let setB = setAsetB !! 1
+        tmpl_U_idx <- newIndex
+        tmpl_x_idx <- newIndex
+        tmpl_Y_idx <- newIndex
 
 
-    let prop_from_union_axiom = eX tmpl_U_idx (isSet (x tmpl_U_idx) .&&.
+        let prop_from_union_axiom = eX tmpl_U_idx (isSet (x tmpl_U_idx) .&&.
                                           aX tmpl_x_idx ((x tmpl_x_idx `memberOf` x tmpl_U_idx) .<->.
-                                              eX tmpl_Y_idx ((x tmpl_Y_idx `memberOf` roster [x tmpl_A_idx, x tmpl_B_idx]) .&&. (x tmpl_x_idx `memberOf` x tmpl_Y_idx))))
-    dropIndices 1 -- drop tmpl_U_idx
-    dropIndices 2 -- drop tmpl_x_idx and tmpl_Y_idx
+                                              eX tmpl_Y_idx ((x tmpl_Y_idx `memberOf` roster [setA, setB]) .&&. (x tmpl_x_idx `memberOf` x tmpl_Y_idx))))
+        dropIndices 1 -- drop tmpl_U_idx
+        dropIndices 2 -- drop tmpl_x_idx and tmpl_Y_idx
 
 
 
 
-    tmpl_x_idx <- newIndex
-    let canonical_body = (x tmpl_x_idx `memberOf` x tmpl_A_idx) .||. (x tmpl_x_idx `memberOf` x tmpl_B_idx)                                     
-    tmpl_S_idx <- newIndex
-    let canonical_prop = eX tmpl_S_idx (isSet (x tmpl_S_idx) .&&.
+        tmpl_x_idx <- newIndex
+        let canonical_body = (x tmpl_x_idx `memberOf` setA) .||. (x tmpl_x_idx `memberOf` setB)
+        tmpl_S_idx <- newIndex
+        let canonical_prop = eX tmpl_S_idx (isSet (x tmpl_S_idx) .&&.
                                           aX tmpl_x_idx ((x tmpl_x_idx `memberOf` x tmpl_S_idx) .<->. canonical_body))
-    dropIndices 1 -- drop tmpl_S_idx
-    dropIndices 1 -- drop tmpl_x_idx                                      
-    let thm_antecedent = isSet (x tmpl_A_idx) .&&. isSet (x tmpl_B_idx)
-    let final_prop = multiAx [tmpl_A_idx, tmpl_B_idx] (thm_antecedent .->. (prop_from_union_axiom .<->. canonical_prop))
-    dropIndices 2 -- drop tmpl_A_idx tmplB_idx
-    return final_prop
+        dropIndices 1 -- drop tmpl_S_idx
+        dropIndices 1 -- drop tmpl_x_idx                                      
+        let thm_antecedent = isSet setA .&&. isSet setB
+        -- let final_prop = multiAx [tmpl_A_idx, tmpl_B_idx] (thm_antecedent .->. (prop_from_union_axiom .<->. canonical_prop))
+        -- dropIndices 2 -- drop tmpl_A_idx tmplB_idx
+        -- return final_prop
+        return (thm_antecedent .->. (prop_from_union_axiom .<->. canonical_prop))
 
 ----begin binary union section------
 
