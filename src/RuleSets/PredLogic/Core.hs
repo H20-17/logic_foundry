@@ -16,7 +16,8 @@ module RuleSets.PredLogic.Core
     runProofByUG,
     checkTheoremMOpen,
     HelperConstraints(..),
-    SentConstraints
+    SentConstraints,
+    MonadSent
 ) where
 
 
@@ -757,7 +758,7 @@ data ProofByUGSchema s r where
     deriving (Show)
 
 
-class (PL.LogicSent s tType) => LogicSent s t tType o | s ->tType, s ->t, s->t, s->o where
+class (PL.LogicSent s tType) => LogicSent s t tType o | s ->tType, s ->t, s->o, t->s where
     parseExists :: s -> Maybe (t->s,tType)
     parseHilbert :: t -> Maybe (t->s,tType)
     parseEq :: s -> Maybe (t,t)
@@ -869,3 +870,6 @@ type HelperConstraints m s tType o t sE eL r = (
             ) 
             
 type SentConstraints s t tType o = (LogicSent s t tType o, LogicTerm t)
+
+
+type MonadSent s t tType o m = (SentConstraints s t tType o,  MonadState (Sum Int) m)

@@ -1,4 +1,5 @@
 {-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE AllowAmbiguousTypes #-}
 
 module RuleSets.PredLogic.Helpers
 (
@@ -9,11 +10,13 @@ module RuleSets.PredLogic.Helpers
     eqReflM, eqSymM, eqTransM, eqSubstM,
     extractConstsSentM,
     multiUGM, runTheoremM, runTmSilentM,multiUIM,
-    eqSubstMultiM
+    eqSubstMultiM,
+    getXVar, getXVars,
+    aXM, multiAXM, eXM, multiEXM, hXM
 ) where
 
 
-import Data.Monoid ( Last(..) )
+import Data.Monoid ( Last(..) ,Sum (..))
 
 import Control.Monad ( foldM, unless )
 import Data.Set (Set, fromList)
@@ -32,7 +35,7 @@ import GHC.Generics (Associativity (NotAssociative, RightAssociative, LeftAssoci
 import Control.Arrow ( left )
 import Control.Monad.Trans ( MonadTrans(lift) )
 import Control.Monad.Reader ( MonadReader(ask) )
-import Control.Monad.State ( MonadState(get) )
+import Control.Monad.State ( MonadState(get),gets )
 import Control.Monad.Writer ( MonadWriter(tell) )
 import Data.Maybe ( isNothing, mapMaybe )
 
@@ -68,6 +71,8 @@ import RuleSets.BaseLogic.Helpers
 import RuleSets.PropLogic.Helpers hiding
    (MetaRuleError(..))
 import RuleSets.PredLogic.Core
+import IndexTracker
+
 
 
 
@@ -418,3 +423,56 @@ multiUIM initialProposition instantiationTerms =
                     -- by runProofBySubArgM as the 'consequent' of the sub-argument.
                     )
                 return (result_prop, idx)
+
+
+getXVar :: MonadSent s t tType o m => m t
+getXVar = gets (x . (\x -> x - 1) . getSum)
+
+getXVars :: MonadSent s t tType o m => Int -> m [t]
+getXVars n = do
+    topIdx <- gets getSum
+    return [x (topIdx - i) | i <- [0..(n-1)]]
+
+
+aXM :: MonadSent s t tType o m => m s -> m s
+aXM inner = do
+    x_idx <- newIndex
+    innerSent <-inner
+    let returnSent = aX x_idx innerSent
+    dropIndices 1
+    return returnSent
+
+multiAXM :: MonadSent s t tType o m => Int -> m s -> m s
+-- | Applies the universal quantifier ('∀') `quantDepth` times to the result
+-- | of the inner monadic action.
+multiAXM quantDepth inner =
+    if quantDepth <= 0
+        then inner
+        else aXM (multiAXM (quantDepth - 1) inner)
+
+eXM :: MonadSent s t tType o m => m s -> m s
+eXM inner = do
+    x_idx <- newIndex
+    innerSent <-inner
+    let returnSent = aX x_idx innerSent
+    dropIndices 1
+    return returnSent
+
+
+hXM :: MonadSent s t tType o m => m s -> m t
+hXM inner = do
+    x_idx <- newIndex
+    innerSent <-inner
+    let returnTerm = hX x_idx innerSent
+    dropIndices 1
+    return returnTerm
+
+
+
+-- | Applies the existential quantifier ('∃') `quantDepth` times to the result
+-- | of the inner monadic action.
+multiEXM :: MonadSent s t tType o m => Int -> m s -> m s
+multiEXM quantDepth inner =
+    if quantDepth <= 0
+        then inner
+        else eXM (multiEXM (quantDepth - 1) inner)

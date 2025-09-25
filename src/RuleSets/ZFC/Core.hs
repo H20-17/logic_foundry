@@ -74,6 +74,7 @@ import RuleSets.PredLogic.Core hiding
    LogicError(..),
    runProofAtomic,
    LogicSent,
+   MonadSent,
    SubproofMException(..),
    MetaRuleError(..),
    LogicTerm(..),
@@ -861,6 +862,9 @@ type HelperConstraints sE s eL m r t =
     )
 
 type SentConstraints s t  
-   = (PREDL.SentConstraints s t () Text, LogicSent s t, RuleSets.ZFC.Core.LogicTerm t)
+   = (
+    PREDL.SentConstraints s t () Text, 
+    LogicSent s t, RuleSets.ZFC.Core.LogicTerm t)
 
 type MonadSent s t m = (SentConstraints s t,  MonadState (Sum Int) m)
+-- , PREDL.MonadSent s t () Text m)
