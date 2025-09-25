@@ -430,8 +430,8 @@ getXVar = gets (x . (\x -> x - 1) . getSum)
 
 getXVars :: MonadSent s t tType o m => Int -> m [t]
 getXVars n = do
-    topIdx <- gets getSum
-    return [x (topIdx - i) | i <- [0..(n-1)]]
+    topIdx <- getSum <$> get
+    return [x (topIdx - i - 1) | i <- [0..(n-1)]]
 
 
 aXM :: MonadSent s t tType o m => m s -> m s
@@ -445,16 +445,16 @@ aXM inner = do
 multiAXM :: MonadSent s t tType o m => Int -> m s -> m s
 -- | Applies the universal quantifier ('∀') `quantDepth` times to the result
 -- | of the inner monadic action.
-multiAXM quantDepth inner =
-    if quantDepth <= 0
-        then inner
-        else aXM (multiAXM (quantDepth - 1) inner)
+multiAXM quantDepth inner
+    | quantDepth <= 0 = inner
+    | quantDepth == 1 = aXM inner
+    | otherwise = aXM (multiAXM (quantDepth - 1) inner)
 
 eXM :: MonadSent s t tType o m => m s -> m s
 eXM inner = do
     x_idx <- newIndex
     innerSent <-inner
-    let returnSent = aX x_idx innerSent
+    let returnSent = eX x_idx innerSent
     dropIndices 1
     return returnSent
 
@@ -472,7 +472,7 @@ hXM inner = do
 -- | Applies the existential quantifier ('∃') `quantDepth` times to the result
 -- | of the inner monadic action.
 multiEXM :: MonadSent s t tType o m => Int -> m s -> m s
-multiEXM quantDepth inner =
-    if quantDepth <= 0
-        then inner
-        else eXM (multiEXM (quantDepth - 1) inner)
+multiEXM quantDepth inner
+    | quantDepth <= 0 = inner
+    | quantDepth == 1 = eXM inner
+    | otherwise = eXM (multiEXM (quantDepth - 1) inner)

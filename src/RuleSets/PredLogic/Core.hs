@@ -250,7 +250,7 @@ instance LogicRuleClass [LogicRule s sE o t tType ] s t tType sE o where
      eqTrans s1 s2 = [EqTrans s1 s2]
      eqSubst :: Int -> s -> s -> [LogicRule s sE o t tType]
      eqSubst idx s1 s2 = [EqSubst idx s1 s2]
-
+     
 
 
 
@@ -781,6 +781,7 @@ class (PL.LogicSent s tType) => LogicSent s t tType o | s ->tType, s ->t, s->o, 
     multiAx :: [Int] -> s -> s
     (./=.) :: t -> t -> s
     eXBang :: Int -> s -> s
+    tmpltPToFuncP :: Int -> s -> (t->s)
     
 
 infix 4 .==.

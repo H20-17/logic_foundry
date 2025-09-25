@@ -135,8 +135,54 @@ import IndexTracker
 
 --- BEGIN Builder Theorem section
 
+
+
+
+
+
+
+
 -- | Worker employed by builderTheorem
 builderTheoremWorker :: (MonadSent s t m)  =>
+    t ->  -- t: The set, which may have outer context variables (template variables of form X i,
+          -- with i taken from outer_idxs)
+    (t -> s) -> -- p_pred: the original p_template now expressed as a function (ObjDeBr -> PropDeBr),
+         -- the result of which may have instances of outer context variables.
+         -- which may have outer context variables as well as instances
+         -- of the specification variables (i.e. X i, where i = spec_idx)
+
+    m s -- the theorem
+builderTheoremWorker t p_pred = do
+    let core_prop_template spec_var source_set =
+            (spec_var `memberOf` source_set)
+                             .<->.
+                             (p_pred spec_var .&&. (spec_var `memberOf` t))
+
+    let quantifiedOverX source_set = aXM $ do
+            specVar <- getXVar
+            let core_prop = core_prop_template specVar source_set
+            return core_prop
+
+    let full_condition_on source_set = do
+            quantified_over_x <- quantifiedOverX source_set
+            let condition_on_isSet = isSet source_set
+            return $ condition_on_isSet .&&. quantified_over_x
+
+
+
+    innerprops <- do
+        hilbert_obj <- hXM $ do
+            specVar <- getXVar
+            full_condition_on specVar
+        full_condition_on hilbert_obj
+
+
+    return innerprops
+
+
+
+-- | Worker employed by builderTheorem
+builderTheoremWorkerOld :: (MonadSent s t m)  =>
     Int ->    -- spec_idx: The 'x' in {x ∈ Source(Params...) | P(x, Params)}
     [Int] ->  -- outer_idxs: 'Params' in {x ∈ Source(Params...) | P(x, Params)}
     t ->  -- t: The set, which may have outer context variables (template variables of form X i,
@@ -145,7 +191,7 @@ builderTheoremWorker :: (MonadSent s t m)  =>
          -- of the specification variables (i.e. X i, where i = spec_idx)
 
     m s -- the theorem
-builderTheoremWorker idx outer_idxs t p_template = do
+builderTheoremWorkerOld idx outer_idxs t p_template = do
     let full_condition_on term = 
             let
                 core_prop_template = (x idx `memberOf` term)
@@ -193,8 +239,12 @@ builderTheorem :: SentConstraints s t =>
         
     s -- the theorem
 builderTheorem idx outer_idxs t p_template =
-    runIndexTracker (idx:outer_idxs)
-        (builderTheoremWorker idx outer_idxs t p_template)
+    let
+        p_pred = tmpltPToFuncP idx p_template
+        inner_props = runIndexTracker outer_idxs (builderTheoremWorker t p_pred)
+    in
+
+        multiAx outer_idxs inner_props
 
 
 
