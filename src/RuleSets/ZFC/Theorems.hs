@@ -170,45 +170,13 @@ builderTheoremWorker t p_pred = do
 
 
 
-    innerprops <- do
-        hilbert_obj <- hXM $ do
+    hilbert_obj <- hXM $ do
             specVar <- getXVar
             full_condition_on specVar
-        full_condition_on hilbert_obj
-
-
-    return innerprops
+    full_condition_on hilbert_obj
 
 
 
--- | Worker employed by builderTheorem
-builderTheoremWorkerOld :: (MonadSent s t m)  =>
-    Int ->    -- spec_idx: The 'x' in {x ∈ Source(Params...) | P(x, Params)}
-    [Int] ->  -- outer_idxs: 'Params' in {x ∈ Source(Params...) | P(x, Params)}
-    t ->  -- t: The set, which may have outer context variables (template variables of form X i,
-          -- with i taken from outer_idxs)
-    s -> -- p_template: the original p_template which may have outer context variables as well as instances
-         -- of the specification variables (i.e. X i, where i = spec_idx)
-
-    m s -- the theorem
-builderTheoremWorkerOld idx outer_idxs t p_template = do
-    let full_condition_on term = 
-            let
-                core_prop_template = (x idx `memberOf` term)
-                             .<->.
-                             (p_template .&&. (x idx `memberOf` t))
-                quantified_over_x = aX idx core_prop_template
-                condition_on_isSet = isSet term
-            in
-                condition_on_isSet .&&. quantified_over_x 
-
-    hilbert_obj <- hXM $ full_condition_on <$> getXVar
-
-    let innerprops = full_condition_on hilbert_obj
-
-    let final_prop = multiAx outer_idxs innerprops
-
-    return final_prop
 
 
 
@@ -364,37 +332,44 @@ builderPropsFree idx t p_template =
 -- END SPEC TO BUILDER SECTION
 
 
-unionEquivTheoremWorker :: MonadSent s t m => m s
-unionEquivTheoremWorker = do
-    tmpl_A_idx <- newIndex
-    tmpl_B_idx <- newIndex
-    tmpl_U_idx <- newIndex
-    tmpl_x_idx <- newIndex
-    tmpl_Y_idx <- newIndex
-
-
-    let prop_from_union_axiom = eX tmpl_U_idx (isSet (x tmpl_U_idx) .&&.
-                                          aX tmpl_x_idx ((x tmpl_x_idx `memberOf` x tmpl_U_idx) .<->.
-                                              eX tmpl_Y_idx ((x tmpl_Y_idx `memberOf` roster [x tmpl_A_idx, x tmpl_B_idx]) .&&. (x tmpl_x_idx `memberOf` x tmpl_Y_idx))))
-    dropIndices 1 -- drop tmpl_U_idx
-    dropIndices 2 -- drop tmpl_x_idx and tmpl_Y_idx
-
-
-
-
-    tmpl_x_idx <- newIndex
-    let canonical_body = (x tmpl_x_idx `memberOf` x tmpl_A_idx) .||. (x tmpl_x_idx `memberOf` x tmpl_B_idx)                                     
-    tmpl_S_idx <- newIndex
-    let canonical_prop = eX tmpl_S_idx (isSet (x tmpl_S_idx) .&&.
-                                          aX tmpl_x_idx ((x tmpl_x_idx `memberOf` x tmpl_S_idx) .<->. canonical_body))
-    dropIndices 1 -- drop tmpl_S_idx
-    dropIndices 1 -- drop tmpl_x_idx                                      
-    let thm_antecedent = isSet (x tmpl_A_idx) .&&. isSet (x tmpl_B_idx)
-    let final_prop = multiAx [tmpl_A_idx, tmpl_B_idx] (thm_antecedent .->. (prop_from_union_axiom .<->. canonical_prop))
-    dropIndices 2 -- drop tmpl_A_idx tmplB_idx
-    return final_prop
 
 ----begin binary union section------
+
+unionEquivTheoremWorker :: MonadSent s t m => m s
+unionEquivTheoremWorker = do
+    multiAXM 2 $ do
+        setAsetBrev <- getXVars 2
+        let setAsetB = reverse setAsetBrev
+        let setA = head setAsetB
+        let setB = setAsetB !! 1
+        prop_from_union_axiom <- eXM $ do
+            setU <- getXVar
+            tmpl_x_idx <- newIndex
+            tmpl_Y_idx <- newIndex
+
+
+            let prop_from_union_ax_inner = isSet setU .&&.
+                                          aX tmpl_x_idx ((x tmpl_x_idx `memberOf` setU) .<->.
+                                              eX tmpl_Y_idx ((x tmpl_Y_idx `memberOf` roster [setA, setB]) .&&. (x tmpl_x_idx `memberOf` x tmpl_Y_idx)))
+        
+            dropIndices 2 -- drop tmpl_x_idx and tmpl_Y_idx
+            return prop_from_union_ax_inner
+
+
+
+        tmpl_x_idx <- newIndex
+        let canonical_body = (x tmpl_x_idx `memberOf` setA) .||. (x tmpl_x_idx `memberOf` setB)
+        tmpl_S_idx <- newIndex
+        let canonical_prop = eX tmpl_S_idx (isSet (x tmpl_S_idx) .&&.
+                                          aX tmpl_x_idx ((x tmpl_x_idx `memberOf` x tmpl_S_idx) .<->. canonical_body))
+        dropIndices 1 -- drop tmpl_S_idx
+        dropIndices 1 -- drop tmpl_x_idx                                      
+        let thm_antecedent = isSet setA .&&. isSet setB
+        -- let final_prop = multiAx [tmpl_A_idx, tmpl_B_idx] (thm_antecedent .->. (prop_from_union_axiom .<->. canonical_prop))
+        -- dropIndices 2 -- drop tmpl_A_idx tmplB_idx
+        -- return final_prop
+        return (thm_antecedent .->. (prop_from_union_axiom .<->. canonical_prop))
+
 
 -- | This is the lemma
 -- | ∀A ∀B ( (isSet A ∧ isSet B) → ( (∃U (isSet U ∧ ∀x(x ∈ U ↔ ∃Y(Y ∈ {A,B} ∧ x ∈ Y)))) 
