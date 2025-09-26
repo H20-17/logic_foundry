@@ -40,7 +40,8 @@ module RuleSets.ZFC.Helpers
     powerSetInstantiateM,
     runProofByUGM,
     multiUGM,
-    MetaRuleError(..)
+    MetaRuleError(..),
+    builderXM
 ) where
 
 
@@ -109,7 +110,8 @@ import RuleSets.PredLogic.Core hiding
    SubproofMException(..),
    MetaRuleError(..),
    HelperConstraints(..),
-   SentConstraints(..))
+   SentConstraints(..),
+   MonadSent)
 import qualified RuleSets.PredLogic.Core as PREDL
 import qualified RuleSets.PredLogic.Helpers as PREDL
 import GHC.Num (integerMul)
@@ -255,6 +257,22 @@ multiUGM :: HelperConstraints sE s eL m r t =>
     ProofGenTStd () r s Text m (s, [Int])  -- ^ Returns (final_generalized_prop, its_index).
 multiUGM n = PREDL.multiUGM (replicate n ()) 
 
+
+-- | Gives us properties of a builder set, as well as the builder set object,
+-- | after builderInstantiateM has been called
+-- | Reproduces some of the work of builderInstantiateM but allows
+-- | us to pass less information to functions as a consequence.
+builderXM ::  MonadSent s t m => 
+    t ->  -- t: The instantiated set, with all of the original outer context
+                --    variables instantiated
+    (t -> s) -> -- p_pred: the original p_template expressed as a function (ObjDeBr -> PropDeBr),
+                -- the application of which will contain instantiated free variables.
+    m t -- the properties of the builderset and the builder set object      
+builderXM t p_pred = do
+    idx <- newIndex
+    let  setObj = builderX idx t (p_pred (x idx))
+    dropIndices 1
+    return setObj
 
 
 data MetaRuleError s where

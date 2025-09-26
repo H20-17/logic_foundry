@@ -339,9 +339,7 @@ builderPropsFreeM ::  MonadSent s t m =>
     m (s, t) -- the properties of the builderset and the builder set object      
 builderPropsFreeM t p_pred = do
     props <- builderTheoremWorker t p_pred
-    idx <- newIndex
-    let  setObj = builderX idx t (p_pred (x idx))
-    dropIndices 1
+    setObj <- builderXM t p_pred
     return (props, setObj)
 
 -- END SPEC TO BUILDER SECTION
@@ -391,48 +389,46 @@ unionEquivTheorem =
 
 binUnionExistsTmWorker :: MonadSent s t m => m s
 binUnionExistsTmWorker = do
-    a_idx <- newIndex -- Represents set A
-    b_idx <- newIndex -- Represents set B
+    finalProp <- multiAXM 2 $ do
+        setAsetBrev <- getXVars 2
+        let setAsetB = reverse setAsetBrev
+        let setA = head setAsetB
+        let setB = setAsetB !! 1
 
-    s_idx <- newIndex -- Represents the union set S
 
-    -- Construct the inner part of the formula: x ∈ S ↔ (x ∈ A ∨ x ∈ B)
-    x_idx <- newIndex
+        -- Quantify over S: ∃S (isSet(S) ∧ ∀x(...))
+        exists_S <- eXM $ do
+            set_s <- getXVar
+            -- Quantify over x: ∀x(x ∈ S ↔ (x ∈ A ∨ x ∈ B))
+            forall_x_bicond <- aXM $ do
+                -- Construct the inner part of the formula: x ∈ S ↔ (x ∈ A ∨ x ∈ B)
+                set_x <- getXVar
+                let x_in_S = set_x `memberOf` set_s
+                let x_in_A = set_x `memberOf` setA
+                let x_in_B = set_x `memberOf` setB
 
-    let x_in_S = x x_idx `memberOf` x s_idx
-    let x_in_A = x x_idx `memberOf` x a_idx
-    let x_in_B = x x_idx `memberOf` x b_idx
+                let x_in_A_or_B = x_in_A .||. x_in_B
+                let biconditional = x_in_S .<->. x_in_A_or_B
+                return biconditional
 
-    let x_in_A_or_B = x_in_A .||. x_in_B
-    let biconditional = x_in_S .<->. x_in_A_or_B
+            -- Construct the property of the union set S: isSet(S) ∧ ∀x(...)
+            let isSet_S = isSet (set_s)
+            let property_of_S = isSet_S .&&. forall_x_bicond
+            return property_of_S
 
-    -- Quantify over x: ∀x(x ∈ S ↔ (x ∈ A ∨ x ∈ B))
-    let forall_x_bicond = aX x_idx biconditional
 
-    -- Construct the property of the union set S: isSet(S) ∧ ∀x(...)
-    let isSet_S = isSet (x s_idx)
-    let property_of_S = isSet_S .&&. forall_x_bicond
 
-    dropIndices 1 --drop x_idx
 
-    -- Quantify over S: ∃S (isSet(S) ∧ ∀x(...))
-    let exists_S = eX s_idx property_of_S
+        -- Construct the antecedent of the main implication: isSet(A) ∧ isSet(B)
+        let isSet_A = isSet setA
+        let isSet_B = isSet setB
+        let antecedent = isSet_A .&&. isSet_B
 
-    dropIndices 1 -- drop s_idx
+        -- Construct the main implication
+        let implication = antecedent .->. exists_S
+        return implication
 
-    -- Construct the antecedent of the main implication: isSet(A) ∧ isSet(B)
-    let isSet_A = isSet (x a_idx)
-    let isSet_B = isSet (x b_idx)
-    let antecedent = isSet_A .&&. isSet_B
 
-    -- Construct the main implication
-    let implication = antecedent .->. exists_S
-    -- Construct the main implication
-    let implication = antecedent .->. exists_S
-
-    let finalProp = multiAx [a_idx, b_idx] implication
-
-    dropIndices 2 --drop a_idx and b_idx
 
     return finalProp
 
