@@ -327,7 +327,22 @@ builderPropsFree idx t p_template =
     in
         (props, setObj)
 
-
+-- | Gives us properties of a builder set, as well as the builder set object,
+-- | after builderInstantiateM has been called
+-- | Reproduces some of the work of builderInstantiateM but allows
+-- | us to pass less information to functions as a consequence.
+builderPropsFreeM ::  MonadSent s t m => 
+    t ->  -- t: The instantiated set, with all of the original outer context
+                --    variables instantiated
+    (t -> s) -> -- p_pred: the original p_template expressed as a function (ObjDeBr -> PropDeBr),
+                -- the application of which will contain instantiated free variables.
+    m (s, t) -- the properties of the builderset and the builder set object      
+builderPropsFreeM t p_pred = do
+    props <- builderTheoremWorker t p_pred
+    idx <- newIndex
+    let  setObj = builderX idx t (p_pred (x idx))
+    dropIndices 1
+    return (props, setObj)
 
 -- END SPEC TO BUILDER SECTION
 
@@ -344,19 +359,14 @@ unionEquivTheoremWorker = do
         let setB = setAsetB !! 1
         prop_from_union_axiom <- eXM $ do
             setU <- getXVar
-            tmpl_x_idx <- newIndex
-            tmpl_Y_idx <- newIndex
-
-
-            let prop_from_union_ax_inner = isSet setU .&&.
-                                          aX tmpl_x_idx ((x tmpl_x_idx `memberOf` setU) .<->.
-                                              eX tmpl_Y_idx ((x tmpl_Y_idx `memberOf` roster [setA, setB]) .&&. (x tmpl_x_idx `memberOf` x tmpl_Y_idx)))
-        
-            dropIndices 2 -- drop tmpl_x_idx and tmpl_Y_idx
-            return prop_from_union_ax_inner
-
-
-
+            ax_inner <- aXM $ do
+                tmpl_x_var <- getXVar
+                ex_inner <- eXM $ do
+                    tmpl_Y_var <- getXVar
+                    let inner_prop = (tmpl_Y_var `memberOf` roster [setA, setB]) .&&. (tmpl_x_var `memberOf` tmpl_Y_var)
+                    return inner_prop
+                return (tmpl_x_var `memberOf` setU .<->. ex_inner)
+            return (isSet setU .&&. ax_inner)
         tmpl_x_idx <- newIndex
         let canonical_body = (x tmpl_x_idx `memberOf` setA) .||. (x tmpl_x_idx `memberOf` setB)
         tmpl_S_idx <- newIndex
@@ -2463,17 +2473,21 @@ crossProductExistsSchema :: HelperConstraints sE s eL m r t =>
      TheoremSchemaMT () r s Text m ()
 crossProductExistsSchema = 
     let
-        z_idx = 0
-        setA_idx = 1
-        setB_idx = 2 
-        predicate_P_tmplt = runIndexTracker [z_idx, setA_idx, setB_idx] (predicateP (x setA_idx) (x setB_idx) (x z_idx))
-        universeSet_tmplt = powerSet (powerSet (x setA_idx .\/. x setB_idx))
+        builderTheoremInst = runIndexTracker [] $ do
+            setA_idx <- newIndex
+            setB_idx <- newIndex
+            z_idx <- newIndex
+            predicate_P_tmplt <- predicateP (x setA_idx) (x setB_idx) (x z_idx)
+            let universeSet_tmplt = powerSet (powerSet (x setA_idx .\/. x setB_idx))
+            let resultProp = builderTheorem z_idx [setA_idx,setB_idx] universeSet_tmplt predicate_P_tmplt
+            dropIndices 3
+            return resultProp
     in
         TheoremSchemaMT []
         [ 
           binaryUnionExistsTheorem
         , crossProductDefEquivTheorem
-        , builderTheorem z_idx [setA_idx,setB_idx] universeSet_tmplt predicate_P_tmplt 
+        , builderTheoremInst
         ] 
         proveCrossProductExistsM []
 
