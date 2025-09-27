@@ -219,19 +219,18 @@ builderTheorem idx outer_idxs t p_template =
 
 
 proveBuilderTheoremM :: HelperConstraints sE s eL m r t =>
-    Int ->          -- spec_idx
     [Int] ->        -- outer_idxs
     t ->            -- source_set_template
-    s ->            -- p_template
+    (t->s) ->            -- p_template
     ProofGenTStd () r s Text m ()
-proveBuilderTheoremM spec_idx outer_idxs source_set_template p_template = do
+proveBuilderTheoremM outer_idxs source_set_template p_pred = do
     runProofBySubArgM $ do
 
         -- Step 1: Get the closed, universally quantified Axiom of Specification.
         -- 'specificationM' quantifies over the parameters specified in 'outerTemplateIdxs'.
 
         let quant_depth = length outer_idxs
-        (closedSpecAxiom, _) <- specificationM outer_idxs spec_idx source_set_template p_template
+        (closedSpecAxiom, _) <- specificationMNew outer_idxs source_set_template p_pred
         multiUGM quant_depth $ do
             freeVarsRev <- getTopFreeVars quant_depth
             let freeVars = reverse freeVarsRev
@@ -252,13 +251,13 @@ builderSchema spec_idx outer_idxs source_set_template p_template =
         p_tmplt_consts = extractConstsSent p_template
         all_consts = dom_tmplt_consts `Set.union` p_tmplt_consts
         typed_consts = Prelude.map (, ()) (Data.Set.toList all_consts) 
-        protectedIdxs = spec_idx : outer_idxs
+        p_pred = tmpltPToFuncP spec_idx p_template
     in
         TheoremSchemaMT {
             lemmasM = [],
-            proofM = proveBuilderTheoremM spec_idx outer_idxs source_set_template p_template,
+            proofM = proveBuilderTheoremM outer_idxs source_set_template p_pred,
             constDictM = typed_consts,
-            protectedXVars = protectedIdxs
+            protectedXVars = outer_idxs
 
         }
    
@@ -389,7 +388,7 @@ unionEquivTheorem =
 
 binUnionExistsTmWorker :: MonadSent s t m => m s
 binUnionExistsTmWorker = do
-    finalProp <- multiAXM 2 $ do
+    multiAXM 2 $ do
         setAsetBrev <- getXVars 2
         let setAsetB = reverse setAsetBrev
         let setA = head setAsetB
@@ -430,7 +429,6 @@ binUnionExistsTmWorker = do
 
 
 
-    return finalProp
 
 
 -- | Constructs the PropDeBr term for the closed theorem of binary union existence.

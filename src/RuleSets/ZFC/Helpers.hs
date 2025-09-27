@@ -41,7 +41,8 @@ module RuleSets.ZFC.Helpers
     runProofByUGM,
     multiUGM,
     MetaRuleError(..),
-    builderXM
+    builderXM,
+    specificationMNew
 ) where
 
 
@@ -141,6 +142,19 @@ standardRuleM rule = do
 specificationM :: HelperConstraints sE s eL m r t
        => [Int] -> Int -> t -> s -> ProofGenTStd () r s Text m (s,[Int])
 specificationM outerIdxs idx t s = standardRuleM (specification outerIdxs idx t s)
+
+
+specificationMNew :: HelperConstraints sE s eL m r t
+       => [Int] -> t -> (t -> s) -> ProofGenTStd () r s Text m (s,[Int])
+specificationMNew outerIdxs t p_pred = do
+    spec_var_idx <- newIndex
+    let spec_var = x spec_var_idx
+    result <- standardRuleM (specification outerIdxs spec_var_idx t (p_pred spec_var))
+    dropIndices 1 -- drop the spec var index
+    return result
+
+
+
 
 
 
