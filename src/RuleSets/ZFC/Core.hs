@@ -126,7 +126,7 @@ infixl 6 `crossProd`
 infixl 9 .@.
 infixr 8 .:.
 
-class (PREDL.LogicSent s t () Text) => LogicSent s t | s ->t, t->s where
+class (PREDL.LogicSent s t () Text ()) => LogicSent s t | s ->t, t->s where
    specAxiom :: [Int] -> Int -> t -> s -> s
    replaceAxiom :: [Int] -> Int -> Int -> t -> s -> s
    parseMemberOf :: s -> Maybe (t, t)
@@ -490,7 +490,7 @@ runProofAtomic :: (
                 TypedSent Text () sE s,
                Show t, Typeable t,
                StdPrfPrintMonad s Text () (Either SomeException),
-                            PREDL.LogicSent s t () Text, LogicSent s t ,
+                            PREDL.LogicSent s t () Text (), LogicSent s t ,
                             Eq t, LogicTerm t) =>
                             LogicRule s sE t  ->
                             PrfStdContext () ->
@@ -773,7 +773,7 @@ instance (Show sE, Typeable sE, Show s, Typeable s, TypedSent Text () sE s,
              Monoid (PrfStdState s Text ()), Show t, Typeable t,
              StdPrfPrintMonad s Text () (Either SomeException),
              Monoid (PrfStdContext ()),
-             PREDL.LogicSent s t () Text,
+             PREDL.LogicSent s t () Text (),
              LogicSent s t, Eq t, LogicTerm t) 
           => Proof (LogicError s sE t) 
              [LogicRule s sE t] 
@@ -856,14 +856,14 @@ instance RuleInject [PREDL.LogicRule s sE Text t ()] [LogicRule s sE t] where
 
 type HelperConstraints sE s eL m r t =
     ( 
-      PREDL.HelperConstraints m s () Text t sE eL r
+      PREDL.HelperConstraints m s () Text t sE eL r ()
     , LogicRuleClass r s sE t,
     LogicSent s t, LogicTerm t
     )
 
 type SentConstraints s t  
    = (
-    PREDL.SentConstraints s t () Text, 
+    PREDL.SentConstraints s t () Text (), 
     LogicSent s t, RuleSets.ZFC.Core.LogicTerm t)
 
 type MonadSent s t m = (SentConstraints s t,  MonadState (Sum Int) m)

@@ -1,3 +1,4 @@
+{-# LANGUAGE UndecidableInstances #-}
 module RuleSets.PredLogic.Core
 (
     LogicError(..), LogicRule(..), 
@@ -257,7 +258,7 @@ instance LogicRuleClass [LogicRule s sE o t tType ] s t tType sE o where
 
 
 
-runProofAtomic :: (LogicSent s t tType o,
+runProofAtomic :: (LogicSent s t tType o q,
                ProofStd s (LogicError s sE o t tType ) [LogicRule s sE o t tType ] o tType,
                Show sE, Typeable sE, Show s, Typeable s, TypeableTerm t o tType sE, TypedSent o tType sE s,
                Typeable o, Show o,Typeable tType, Show tType, Show t, Typeable t,
@@ -435,7 +436,7 @@ runProofAtomic rule context state  =
 
 
 
-instance (LogicSent s t tType o, Show sE, Typeable sE, Show s, Typeable s, TypedSent o tType sE s,
+instance (LogicSent s t tType o q, Show sE, Typeable sE, Show s, Typeable s, TypedSent o tType sE s,
              TypeableTerm t o tType sE, Typeable o, Show o, Typeable tType, Show tType,
              Monoid (PrfStdState s o tType), Show t, Typeable t,
              StdPrfPrintMonad s o tType (Either SomeException),
@@ -448,7 +449,7 @@ instance (LogicSent s t tType o, Show sE, Typeable sE, Show s, Typeable s, Typed
                s 
                  where
 
-    runProofOpen :: (LogicSent s t tType o, Show sE, Typeable sE, Show s, Typeable s,
+    runProofOpen :: (LogicSent s t tType o q, Show sE, Typeable sE, Show s, Typeable s,
                  TypedSent o tType sE s, TypeableTerm t o tType sE, Typeable o,
                  Show o, Typeable tType, Show tType) =>
                     [LogicRule s sE o t tType ]
@@ -758,7 +759,7 @@ data ProofByUGSchema s r where
     deriving (Show)
 
 
-class (PL.LogicSent s tType) => LogicSent s t tType o | s ->tType, s ->t, s->o, t->s where
+class (PL.LogicSent s tType) => LogicSent s t tType o q | s ->tType, s ->t, s->o, t->s, s->q where
     parseExists :: s -> Maybe (t->s,tType)
     parseHilbert :: t -> Maybe (t->s,tType)
     parseEq :: s -> Maybe (t,t)
@@ -775,12 +776,12 @@ class (PL.LogicSent s tType) => LogicSent s t tType o | s ->tType, s ->t, s->o, 
     createForall ::s -> tType -> Int -> s
     sentSubX :: Int -> t -> s -> s
     sentSubXs :: [(Int, t)] -> s -> s
-    aX :: Int -> s -> s
-    eX :: Int -> s -> s
-    hX :: Int -> s -> t
-    multiAx :: [Int] -> s -> s
+    aX :: q -> Int -> s -> s
+    eX :: q -> Int -> s -> s
+    hX :: q -> Int -> s -> t
+    multiAx :: [(q,Int)] -> s -> s
     (./=.) :: t -> t -> s
-    eXBang :: Int -> s -> s
+    eXBang :: q -> Int -> s -> s
     tmpltPToFuncP :: Int -> s -> (t->s)
     
 
@@ -804,7 +805,7 @@ data SubproofError s sE eL where
    ProofByUGErrGenNotForall :: s -> SubproofError s sE eL 
      deriving(Show)
 
-runProofByUG :: ( ProofStd s eL1 r1 o tType, LogicSent s t tType o, TypedSent o tType sE s,
+runProofByUG :: ( ProofStd s eL1 r1 o tType, LogicSent s t tType o q, TypedSent o tType sE s,
                   TypeableTerm t o tType sE)
                         => ProofByUGSchema s r1
                             -> PrfStdContext tType 
@@ -858,9 +859,9 @@ constDictTest envDict = Data.Map.foldrWithKey f Nothing
 
 
 
-type HelperConstraints m s tType o t sE eL r = ( 
+type HelperConstraints m s tType o t sE eL r q= ( 
               PL.HelperConstraints r s o tType sE eL m
-            , LogicSent s t tType o
+            , LogicSent s t tType o q
             , LogicRuleClass r s t tType sE o
             , SubproofRule r s o tType
             , TypeableTerm t o tType sE
@@ -870,7 +871,7 @@ type HelperConstraints m s tType o t sE eL r = (
             , Show t
             ) 
             
-type SentConstraints s t tType o = (LogicSent s t tType o, LogicTerm t)
+type SentConstraints s t tType o q = (LogicSent s t tType o q, LogicTerm t)
 
 
-type MonadSent s t tType o m = (SentConstraints s t tType o,  MonadState (Sum Int) m)
+type MonadSent s t tType o q m = (SentConstraints s t tType o q,  MonadState (Sum Int) m)

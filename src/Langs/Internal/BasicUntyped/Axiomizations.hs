@@ -107,7 +107,7 @@ boundExpToFunc p obj = propDeBrSubX 0 obj template
                  boundDepth = boundDepthPropDeBr p
                  template = propDeBrSubBoundVarToX0 boundDepth p
 
-instance PREDL.LogicSent PropDeBr ObjDeBr () Text where
+instance PREDL.LogicSent PropDeBr ObjDeBr () Text () where
     parseExists :: PropDeBr -> Maybe (ObjDeBr -> PropDeBr, ())
     parseExists prop =
       case prop of
@@ -160,20 +160,20 @@ instance PREDL.LogicSent PropDeBr ObjDeBr () Text where
     sentSubX = propDeBrSubX
     sentSubXs :: [(Int, ObjDeBr)] -> PropDeBr -> PropDeBr
     sentSubXs = propDeBrSubXs
-    aX :: Int -> PropDeBr -> PropDeBr
-    aX = aX
-    eX :: Int -> PropDeBr -> PropDeBr
-    eX = eX
-    hX :: Int -> PropDeBr -> ObjDeBr
-    hX = hX
-    multiAx :: [Int] -> PropDeBr -> PropDeBr
-    multiAx = multiAx
+    aX :: () -> Int -> PropDeBr -> PropDeBr
+    aX _ = aX
+    eX :: () -> Int -> PropDeBr -> PropDeBr
+    eX _ = eX
+    hX :: () -> Int -> PropDeBr -> ObjDeBr
+    hX _ = hX
+    multiAx :: [((),Int)] -> PropDeBr -> PropDeBr
+    multiAx quantTypesIdxs = multiAx (Prelude.map (\((),i) -> i) quantTypesIdxs) 
     (./=.) :: ObjDeBr -> ObjDeBr -> PropDeBr
     (./=.) = (./=.)
-    eXBang :: Int -> PropDeBr -> PropDeBr
-    eXBang = eXBang
+    eXBang :: () ->Int -> PropDeBr -> PropDeBr
+    eXBang _ = eXBang
     tmpltPToFuncP :: Int -> PropDeBr -> (ObjDeBr -> PropDeBr)
-    tmpltPToFuncP idx template = \obj -> propDeBrSubX idx obj template
+    tmpltPToFuncP idx template obj = propDeBrSubX idx obj template
 
 instance PREDL.LogicTerm ObjDeBr where
     termSubX :: Int -> ObjDeBr -> ObjDeBr -> ObjDeBr
@@ -454,7 +454,7 @@ instance ZFC.LogicSent PropDeBr ObjDeBr where
     -- Forall A (A /= EmptySet -> Exists x (x In A /\ (x intersect A) == EmptySet))
     regularityAxiom :: PropDeBr
     regularityAxiom = aX 0 ( 
-                         (isSet (X 0)) :&&: Neg (X 0 :==: EmptySet) :->: 
+                         isSet (X 0) :&&: Neg (X 0 :==: EmptySet) :->: 
                                 eX 1 ( 
                                        (X 1 `In` X 0) :&&: ((X 1 ./\. X 0) :==: EmptySet) 
                                      ) 
@@ -466,10 +466,10 @@ instance ZFC.LogicSent PropDeBr ObjDeBr where
     unionAxiom :: PropDeBr
     unionAxiom =
         aX 0 ( -- Forall F (X 0 is F)
-                (isSet (X 0)) -- isSet(F)
+                isSet (X 0) -- isSet(F)
                  :->:        -- ->
                 eX 1 (      -- Exists A (X 1 is A)
-                    (isSet (X 1)) -- isSet(A)
+                    isSet (X 1) -- isSet(A)
                         :&&:        -- /\
                     aX 2 (      -- Forall x (X 2 is x)
                             (X 2 `In` X 1) -- x In A
@@ -491,7 +491,7 @@ instance ZFC.LogicSent PropDeBr ObjDeBr where
         aX 0 ( -- Forall x (X 0 is x)
             aX 1 ( -- Forall y (X 1 is y)
                 eX 2 ( -- Exists A (X 2 is A, the pair set)
-                    (isSet (X 2)) -- isSet(A)
+                    isSet (X 2) -- isSet(A)
                         :&&:        -- /\
                     aX 3 (      -- Forall z (X 3 is z, an element of A)
                             (X 3 `In` X 2) -- z In A
@@ -510,15 +510,15 @@ instance ZFC.LogicSent PropDeBr ObjDeBr where
     powerSetAxStatement :: PropDeBr
     powerSetAxStatement =
         aX 0 ( -- Forall X (X 0 is X)
-               (isSet (X 0)) -- isSet(X)
+               isSet (X 0) -- isSet(X)
             :->:        -- ->
             eX 1 (      -- Exists P (X 1 is P, the power set)
-                      (isSet (X 1)) -- isSet(P)
+                      isSet (X 1) -- isSet(P)
                       :&&:        -- /\
                     aX 2 (      -- Forall Y (X 2 is Y, a potential subset)
                              (X 2 `In` X 1) -- Y In P
                              :<->:       -- <->
-                             (subset (X 2) (X 0)) -- Y subset X (subset shorthand handles isSet Y)
+                             subset (X 2) (X 0) -- Y subset X (subset shorthand handles isSet Y)
                        )
                 )
         )
@@ -547,11 +547,11 @@ instance ZFC.LogicSent PropDeBr ObjDeBr where
             union_A = bigUnion (X idx_A)
             set_of_functions = funcsSet (X idx_A) union_A
 
-            prop_f_is_in_funcSet = (X idx_f) `In` set_of_functions
+            prop_f_is_in_funcSet = X idx_f `In` set_of_functions
             prop_f_chooses_element =
                 aX idx_x ( (X idx_x `In` X idx_A)
                            :->:
-                        (((X idx_f) .@. (X idx_x)) `In` (X idx_x))
+                        ((X idx_f .@. X idx_x) `In` X idx_x)
                          )
             consequent_body = prop_f_is_in_funcSet :&&: prop_f_chooses_element
             consequent = eX idx_f consequent_body
@@ -796,7 +796,7 @@ instance ZFC.LogicSent PropDeBr ObjDeBr where
             -- Antecedent: S is a non-empty subset of natSetObj
             -- S subset natSetObj (also implies isSet S via the definition of subset shorthand)
             s_is_subset_nat = subset (X idx_S) natSetObj
-            s_is_not_empty  = Neg ( (X idx_S) :==: EmptySet )
+            s_is_not_empty  = Neg ( X idx_S :==: EmptySet )
             antecedent_S    = s_is_subset_nat :&&: s_is_not_empty
 
             -- Consequent: Exists a least element x in S

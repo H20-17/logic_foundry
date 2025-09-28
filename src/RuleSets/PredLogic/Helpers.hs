@@ -79,7 +79,7 @@ import IndexTracker
 
 
 
-standardRuleM :: HelperConstraints m s tType o t sE eL r
+standardRuleM :: HelperConstraints m s tType o t sE eL r q
        => r -> ProofGenTStd tType r s o m (s,[Int])
 standardRuleM rule = do
     -- function is unsafe and used for rules that generate one or more sentence.
@@ -90,14 +90,14 @@ standardRuleM rule = do
 
 
 
-uiM, egM :: HelperConstraints m s tType o t sE eL r
+uiM, egM :: HelperConstraints m s tType o t sE eL r q
                    => t -> s -> ProofGenTStd tType r s o m (s,[Int])
 uiM term sent = standardRuleM (ui term sent)
 egM term sent = standardRuleM (eg term sent)
 
 
 
-eiM :: HelperConstraints m s tType o t sE eL r
+eiM :: HelperConstraints m s tType o t sE eL r q
                    => s -> o -> ProofGenTStd tType r s o m (s,[Int],t)
 eiM sent const = do
                    (instantiated, idx) <- standardRuleM (ei sent const)
@@ -105,7 +105,7 @@ eiM sent const = do
 
 
 
-eNegIntroM, aNegIntroM, eqSymM :: HelperConstraints m s tType o t sE eL r
+eNegIntroM, aNegIntroM, eqSymM :: HelperConstraints m s tType o t sE eL r q
                    => s -> ProofGenTStd tType r s o m (s,[Int])
 eNegIntroM sent = standardRuleM (eNegIntro sent)
 
@@ -114,7 +114,7 @@ aNegIntroM sent = standardRuleM (aNegIntro sent)
 eqSymM eqSent = standardRuleM (eqSym eqSent)
 
 
-eiHilbertM :: HelperConstraints m s tType o t sE eL r
+eiHilbertM :: HelperConstraints m s tType o t sE eL r q
                    => s -> ProofGenTStd tType r s o m (s,[Int],t)
 
 eiHilbertM sent = do
@@ -125,7 +125,7 @@ eiHilbertM sent = do
          return (instantiated,idx,hilbertObj)
 
 
-eqTransM :: HelperConstraints m s tType o t sE eL r
+eqTransM :: HelperConstraints m s tType o t sE eL r q
            => s -> s -> ProofGenTStd tType r s o m (s,[Int])
 eqTransM eqSent1 eqSent2 = standardRuleM (eqTrans eqSent1 eqSent2)
 
@@ -139,7 +139,7 @@ eqTransM eqSent1 eqSent2 = standardRuleM (eqTrans eqSent1 eqSent2)
 -- | substituted with their RIGHT-hand sides, and variables after are substituted
 -- | with their LEFT-hand sides. It then uses `eqSubstM` to perform the substitution
 -- | for the current variable.
-eqSubstMultiM :: HelperConstraints m s tType o t sE eL r
+eqSubstMultiM :: HelperConstraints m s tType o t sE eL r q
               => [(Int, s)]  -- ^ List of (index, equality) pairs for substitution.
               -> s           -- ^ The template sentence.
               -> ProofGenTStd tType r s o m (s, [Int])
@@ -201,16 +201,16 @@ eqSubstMultiM substitutions templateSent = do
 
 
 
-eqSubstM :: HelperConstraints m s tType o t sE eL r
+eqSubstM :: HelperConstraints m s tType o t sE eL r q
            => Int -> s -> s -> ProofGenTStd tType r s o m (s,[Int])
 eqSubstM idx templateSent eqSent = standardRuleM (eqSubst idx templateSent eqSent)
 
-eqReflM :: HelperConstraints m s tType o t sE eL r
+eqReflM :: HelperConstraints m s tType o t sE eL r q
           => t -> ProofGenTStd tType r s o m (s,[Int])
 eqReflM term = standardRuleM (eqRefl term)
 
 
-reverseANegIntroM, reverseENegIntroM :: HelperConstraints m s tType o t sE eL r
+reverseANegIntroM, reverseENegIntroM :: HelperConstraints m s tType o t sE eL r q
                    => s -> ProofGenTStd tType r s o m (s,[Int])
 
 
@@ -260,7 +260,7 @@ reverseENegIntroM forallXNotPx = do
 
 
 
-runProofByUGM :: HelperConstraints m s tType o t sE eL r1
+runProofByUGM :: HelperConstraints m s tType o t sE eL r1 q
                  =>  tType -> ProofGenTStd tType r1 s o m x
                             -> ProofGenTStd tType r1 s o m (s, [Int])
 runProofByUGM tt prog =  do
@@ -281,7 +281,7 @@ runProofByUGM tt prog =  do
         idx <- maybe (error "No theorem returned by monadifyProofStd on ug schema. This shouldn't happen") (return . snd) mayMonadifyRes       
         return (resultSent,idx)
 
-multiUGM :: HelperConstraints m s tType o t sE eL r1 =>
+multiUGM :: HelperConstraints m s tType o t sE eL r1 q =>
     [tType] ->                             -- ^ List of types for UG variables (outermost first).
     ProofGenTStd tType r1 s o m x ->       -- ^ The core program. Its monadic return 'x' is discarded.
                                            --   It must set 'Last s' with the prop to be generalized.
@@ -314,7 +314,7 @@ multiUGM typeList programCore =
             runProofByUGM outermost_ug_var_type inner_action_yielding_proven_s_idx
 
 
-extractConstsSentM :: HelperConstraints m  s tType o t sE eL r1
+extractConstsSentM :: HelperConstraints m  s tType o t sE eL r1 q
                  =>   s
                             -> ProofGenTStd tType r1 s o m (Map o tType)
 
@@ -348,7 +348,7 @@ constDictTest envDict = Data.Map.foldrWithKey f Nothing
 
 
 
-runTheoremM :: HelperConstraints m s tType o t sE eL r1
+runTheoremM :: HelperConstraints m s tType o t sE eL r1 q
                  =>   TheoremSchemaMT tType r1 s o m x ->
                                ProofGenTStd tType r1 s o m (s, [Int], x)
 runTheoremM (TheoremSchemaMT constDict lemmas prog idxs) =  do
@@ -360,7 +360,7 @@ runTheoremM (TheoremSchemaMT constDict lemmas prog idxs) =  do
         return (tm, idx, extra)
 
 
-runTmSilentM :: HelperConstraints m s tType o t sE eL r1
+runTmSilentM :: HelperConstraints m s tType o t sE eL r1 q
                  =>   TheoremAlgSchema tType r1 s o x ->
                                ProofGenTStd tType r1 s o m (s, [Int], x)
 -- runTmSilentM f (TheoremSchemaMT constDict lemmas prog) =  do
@@ -384,7 +384,7 @@ runTmSilentM (TheoremSchemaMT constDict lemmas prog idxs) =  do
 -- | - Case 0: No instantiation terms -> re-proves the initial proposition.
 -- | - Case 1: One instantiation term -> applies PREDL.uiM directly.
 -- | - Case >1: Multiple terms -> creates a sub-argument for the sequen
-multiUIM ::  HelperConstraints m s tType o t sE eL r1 =>
+multiUIM ::  HelperConstraints m s tType o t sE eL r1 q =>
     s ->      -- initialProposition: The proposition to start with.
     [t] ->    -- instantiationTerms: List of terms to instantiate with, in order.
     ProofGenTStd tType r1 s o m (s,[Int])
@@ -425,45 +425,46 @@ multiUIM initialProposition instantiationTerms =
                 return (result_prop, idx)
 
 
-getXVar :: MonadSent s t tType o m => m t
+getXVar :: MonadSent s t tType o q m => m t
 getXVar = gets (x . (\x -> x - 1) . getSum)
 
-getXVars :: MonadSent s t tType o m => Int -> m [t]
+getXVars :: MonadSent s t tType o q m => Int -> m [t]
 getXVars n = do
     topIdx <- getSum <$> get
     return [x (topIdx - i - 1) | i <- [0..(n-1)]]
 
 
-aXM :: MonadSent s t tType o m => m s -> m s
-aXM inner = do
+aXM :: MonadSent s t tType o q m => q -> m s -> m s
+aXM quantType inner = do
     x_idx <- newIndex
     innerSent <-inner
-    let returnSent = aX x_idx innerSent
+    let returnSent = aX quantType x_idx innerSent
     dropIndices 1
     return returnSent
 
-multiAXM :: MonadSent s t tType o m => Int -> m s -> m s
+multiAXM :: MonadSent s t tType o q m => [q] -> m s -> m s
 -- | Applies the universal quantifier ('∀') `quantDepth` times to the result
 -- | of the inner monadic action.
-multiAXM quantDepth inner
-    | quantDepth <= 0 = inner
-    | quantDepth == 1 = aXM inner
-    | otherwise = aXM (multiAXM (quantDepth - 1) inner)
+multiAXM quantTypes inner =
+    case quantTypes of
+        [] -> inner
+        [singleType] -> aXM singleType inner
+        (firstType:restTypes) -> aXM firstType (multiAXM restTypes inner)
 
-eXM :: MonadSent s t tType o m => m s -> m s
-eXM inner = do
+eXM :: MonadSent s t tType o q m => q -> m s -> m s
+eXM quantType inner = do
     x_idx <- newIndex
     innerSent <-inner
-    let returnSent = eX x_idx innerSent
+    let returnSent = eX quantType x_idx innerSent
     dropIndices 1
     return returnSent
 
 
-hXM :: MonadSent s t tType o m => m s -> m t
-hXM inner = do
+hXM :: MonadSent s t tType o q m => q -> m s -> m t
+hXM quantType inner = do
     x_idx <- newIndex
     innerSent <-inner
-    let returnTerm = hX x_idx innerSent
+    let returnTerm = hX quantType x_idx innerSent
     dropIndices 1
     return returnTerm
 
@@ -471,8 +472,8 @@ hXM inner = do
 
 -- | Applies the existential quantifier ('∃') `quantDepth` times to the result
 -- | of the inner monadic action.
-multiEXM :: MonadSent s t tType o m => Int -> m s -> m s
-multiEXM quantDepth inner
-    | quantDepth <= 0 = inner
-    | quantDepth == 1 = eXM inner
-    | otherwise = eXM (multiEXM (quantDepth - 1) inner)
+multiEXM :: MonadSent s t tType o q m => [q] -> m s -> m s
+multiEXM quantTypes inner = case quantTypes of
+    [] -> inner
+    [singleType] -> eXM singleType inner
+    (firstType:restTypes) -> eXM firstType (multiEXM restTypes inner)
