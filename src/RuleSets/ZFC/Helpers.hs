@@ -289,6 +289,16 @@ builderXM t p_pred = do
     return setObj
 
 
+aX :: LogicSent s t => Int -> s -> s
+aX idx s = PREDL.aX () idx s
+
+eX :: LogicSent s t => Int -> s -> s
+eX idx s = PREDL.eX () idx s
+
+hX :: LogicSent s t => Int -> s -> t
+hX idx s = PREDL.hX () idx s
+
+
 data MetaRuleError s where
    MetaRuleErrNotClosed :: s -> MetaRuleError s
    MetaRuleErrFreeVarsQuantCountMismatch :: MetaRuleError s

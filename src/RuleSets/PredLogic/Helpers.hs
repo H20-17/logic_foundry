@@ -261,7 +261,7 @@ reverseENegIntroM forallXNotPx = do
 
 
 runProofByUGM :: HelperConstraints m s tType o t sE eL r1 q
-                 =>  tType -> ProofGenTStd tType r1 s o m x
+                 =>  q -> ProofGenTStd tType r1 s o m x
                             -> ProofGenTStd tType r1 s o m (s, [Int])
 runProofByUGM tt prog =  do
         state <- getProofState
@@ -276,13 +276,13 @@ runProofByUGM tt prog =  do
         vIdx <- get
         (extraData,generalizable,subproof, newSteps) 
                  <- lift $ runSubproofM newContext state newState preambleSteps (Last Nothing) prog vIdx
-        let resultSent = createForall generalizable tt (Prelude.length frVarTypeStack)
+        let resultSent = aX  tt (Prelude.length frVarTypeStack) generalizable
         mayMonadifyRes <- monadifyProofStd $ proofByUG resultSent subproof
         idx <- maybe (error "No theorem returned by monadifyProofStd on ug schema. This shouldn't happen") (return . snd) mayMonadifyRes       
         return (resultSent,idx)
 
 multiUGM :: HelperConstraints m s tType o t sE eL r1 q =>
-    [tType] ->                             -- ^ List of types for UG variables (outermost first).
+    [qType] ->                             -- ^ List of types for UG variables (outermost first).
     ProofGenTStd tType r1 s o m x ->       -- ^ The core program. Its monadic return 'x' is discarded.
                                            --   It must set 'Last s' with the prop to be generalized.
     ProofGenTStd tType r1 s o m (s, [Int])  -- ^ Returns (final_generalized_prop, its_index).
