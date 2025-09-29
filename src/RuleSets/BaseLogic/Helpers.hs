@@ -31,9 +31,9 @@ import Kernel
 
 
 
-runProofBySubArgM :: HelperConstraints r1 s o tType sE eL m
-                 =>   ProofGenTStd tType r1 s o m x
-                            -> ProofGenTStd tType r1 s o m (s, [Int],x)
+runProofBySubArgM :: HelperConstraints r1 s o tType sE eL q m
+                 =>   ProofGenTStd tType r1 s o q m x
+                            -> ProofGenTStd tType r1 s o q m (s, [Int],x)
 runProofBySubArgM prog =  do
         state <- getProofState
         context <- ask
@@ -52,8 +52,8 @@ runProofBySubArgM prog =  do
         return (consequent, idx, extraData)
 
 
-remarkM :: HelperConstraints r s o tType sE eL m
-          => Text -> ProofGenTStd tType r s o m [Int]
+remarkM :: HelperConstraints r s o tType sE eL q m
+          => Text -> ProofGenTStd tType r s o q m [Int]
           
 remarkM txt = do
     monadifyProofStd (remark txt)
@@ -66,8 +66,8 @@ remarkM txt = do
     return finalIdx  
 
 
-standardRuleM :: HelperConstraints r s o tType sE eL m
-       => r -> ProofGenTStd tType r s o m (s,[Int])
+standardRuleM :: HelperConstraints r s o tType sE eL q m
+       => r -> ProofGenTStd tType r s o q m (s,[Int])
 standardRuleM rule = do
     -- function is unsafe and used for rules that generate one or more sentence.
     -- probably should not be externally facing.
@@ -79,17 +79,17 @@ standardRuleM rule = do
 
 
 
-repM :: HelperConstraints r s o tType sE eL m
-          => s -> ProofGenTStd tType r s o m (s,[Int])
+repM :: HelperConstraints r s o tType sE eL q m
+          => s -> ProofGenTStd tType r s o q m (s,[Int])
 repM s = standardRuleM (rep s)
 
-fakePropM :: HelperConstraints r s o tType sE eL m
-          => [s] -> s -> ProofGenTStd tType r s o m (s,[Int])
+fakePropM :: HelperConstraints r s o tType sE eL q m
+          => [s] -> s -> ProofGenTStd tType r s o q m (s,[Int])
 fakePropM deps s = standardRuleM (fakeProp deps s)
 
 
-fakeConstM :: HelperConstraints r s o tType sE eL m
-          => o -> tType -> ProofGenTStd tType  r s o m ()
+fakeConstM :: HelperConstraints r s o tType sE eL q m
+          => o -> tType -> ProofGenTStd tType  r s o q m ()
 fakeConstM name tType = do
      monadifyProofStd (fakeConst name tType)
      return ()

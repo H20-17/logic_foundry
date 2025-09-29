@@ -11,7 +11,8 @@ module StdPattern(
     ShowableSent(..),
     ShowableTerm(..),
     showSentM,
-    showTermM
+    showTermM,
+    QuantifiableTerm(..)
     
 ) where
 import Kernel
@@ -42,4 +43,5 @@ import Internal.StdPattern
       ShowableSent(..),
       ShowableTerm(..),
       showSentM,
-      showTermM)
+      showTermM,
+      QuantifiableTerm(..))

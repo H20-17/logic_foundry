@@ -39,12 +39,12 @@ data LogicError s sE o where
     LogicErrFakePropDependencyNotProven :: s -> LogicError s sE o
     deriving (Show)
 
-data LogicRule tType s sE o where
-    Remark :: Text -> LogicRule tType s sE o
-    Rep :: s -> LogicRule tType s sE o
-    ProofBySubArg :: ProofBySubArgSchema s [LogicRule tType s sE o]-> LogicRule tType s sE o
-    FakeProp:: [s] -> s -> LogicRule tType s sE o
-    FakeConst :: o -> tType -> LogicRule tType s sE o
+data LogicRule tType s sE o q where
+    Remark :: Text -> LogicRule tType s sE o q
+    Rep :: s -> LogicRule tType s sE o q
+    ProofBySubArg :: ProofBySubArgSchema s [LogicRule tType s sE o q] -> LogicRule tType s sE o q
+    FakeProp :: [s] -> s -> LogicRule tType s sE o q
+    FakeConst :: o -> tType -> LogicRule tType s sE o q
     deriving(Show)
 
 -- Helper function to fetch proof index of a dependency
@@ -59,7 +59,7 @@ runProofAtomic :: (Ord s, TypedSent o tType sE s,Typeable s, Show s, Typeable o,
                     Typeable tType, Show tType, StdPrfPrintMonad s o tType (Either SomeException)
                     
                      ) =>
-               LogicRule tType s sE o ->  PrfStdContext tType -> PrfStdState s o tType
+               LogicRule tType s sE o q ->  PrfStdContext q -> PrfStdState s o tType
                 -> Either (LogicError s sE o) (Maybe s, Maybe (o,tType), PrfStdStep s o tType)
 runProofAtomic rule context state =
     case rule of
@@ -97,19 +97,19 @@ runProofAtomic rule context state =
 instance ( Show s, Typeable s, Ord o, TypedSent o tType sE s,
           Typeable o, Show o, Typeable tType, Show tType, Monoid (PrfStdState s o tType),
           StdPrfPrintMonad s o tType (Either SomeException),
-          Monoid (PrfStdContext tType))
+          Monoid (PrfStdContext q))
              => Proof (LogicError s sE o)
-                 [LogicRule tType s sE o] 
+                 [LogicRule tType s sE o q] 
                  (PrfStdState s o tType) 
-                 (PrfStdContext tType)
+                 (PrfStdContext q)
                  [PrfStdStep s o tType]
                  s
                     where
   runProofOpen :: (Show s, Typeable s,
                Ord o, TypedSent o tType sE s, Typeable o, Show o, Typeable tType,
                Show tType, Monoid (PrfStdState s o tType)) =>
-                 [LogicRule tType s sE o] -> 
-                 PrfStdContext tType  -> PrfStdState s o tType
+                 [LogicRule tType s sE o q] ->
+                 PrfStdContext q  -> PrfStdState s o tType
                         -> Either (LogicError s sE o) (PrfStdState s o tType, [PrfStdStep s o tType],Last s) 
 
   runProofOpen rs context oldState = foldM f (PrfStdState mempty mempty 0,[], Last Nothing) rs
@@ -134,8 +134,8 @@ instance ( Show s, Typeable s, Ord o, TypedSent o tType sE s,
                         newStepCount = stepCount newState + 1
                         newLineIndex = stepIdxPrefix context <> [stepCount oldState + newStepCount-1]
 
-instance RuleInject [LogicRule tType s sE o] [LogicRule tType s sE o] where
-    injectRule :: [LogicRule tType s sE o] -> [LogicRule tType s sE o]
+instance RuleInject [LogicRule tType s sE o q] [LogicRule tType s sE o q] where
+    injectRule :: [LogicRule tType s sE o q] -> [LogicRule tType s sE o q]
     injectRule = id
 
 
@@ -148,22 +148,22 @@ class LogicRuleClass r s o tType sE | r -> s, r->o, r->tType, r -> sE where
     fakeConst:: o -> tType -> r
    
 
-instance LogicRuleClass [LogicRule tType s sE o] s o tType sE where
-    remark :: Text -> [LogicRule tType s sE o]
+instance LogicRuleClass [LogicRule tType s sE o q] s o tType sE where
+    remark :: Text -> [LogicRule tType s sE o q]
     remark text = [Remark text]
-    rep :: s -> [LogicRule tType s sE o]
+    rep :: s -> [LogicRule tType s sE o q]
     rep s = [Rep s]
-    fakeProp :: [s] -> s -> [LogicRule tType s sE o]
+    fakeProp :: [s] -> s -> [LogicRule tType s sE o q]
     fakeProp deps s = [FakeProp deps s]
-    fakeConst :: o -> tType -> [LogicRule tType s sE o]
+    fakeConst :: o -> tType -> [LogicRule tType s sE o q]
     fakeConst o t = [FakeConst o t]
 
 
 
 
 
-instance SubproofRule [LogicRule tType s sE o] s where
-    proofBySubArg :: s -> [LogicRule tType s sE o] -> [LogicRule tType s sE o]
+instance SubproofRule [LogicRule tType s sE o q] s where
+    proofBySubArg :: s -> [LogicRule tType s sE o q] -> [LogicRule tType s sE o q]
     proofBySubArg s r = [ProofBySubArg $ ProofBySubArgSchema s r]
 
 
@@ -183,9 +183,9 @@ data SubproofError senttype sanityerrtype logcicerrtype where
     deriving(Show)
 
 
-runProofBySubArg :: (ProofStd s eL1 r1 o tType,  TypedSent o tType sE s) => 
+runProofBySubArg :: (ProofStd s eL1 r1 o tType q,  TypedSent o tType sE s) => 
                        ProofBySubArgSchema s r1 ->  
-                        PrfStdContext tType -> 
+                        PrfStdContext q -> 
                         PrfStdState s o tType ->
                         Either (SubproofError s sE eL1) (PrfStdStep s o tType)
 runProofBySubArg (ProofBySubArgSchema consequent subproof) context state  =
@@ -210,8 +210,8 @@ class SubproofRule r s where
    proofBySubArg :: s -> r -> r
 
 
-type HelperConstraints r s o tType sE eL m = (Monad m, Ord o, Show sE, Typeable sE, Show s, Typeable s,
+type HelperConstraints r s o tType sE eL q m = (Monad m, Ord o, Show sE, Typeable sE, Show s, Typeable s,
        MonadThrow m, Show o, Typeable o, Show tType, Typeable tType, TypedSent o tType sE s,
        Monoid (PrfStdState s o tType), StdPrfPrintMonad s o tType m, ShowableSent s,
-       StdPrfPrintMonad s o tType (Either SomeException), Monoid (PrfStdContext tType), LogicRuleClass r s o tType sE, ProofStd s eL r o tType,
+       StdPrfPrintMonad s o tType (Either SomeException), Monoid (PrfStdContext tType), LogicRuleClass r s o tType sE, ProofStd s eL r o tType q,
        Monoid r, Show eL, Typeable eL, SubproofRule r s)

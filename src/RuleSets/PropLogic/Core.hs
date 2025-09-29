@@ -121,42 +121,42 @@ data LogicError s sE o tType where
 
     deriving(Show)
 
-data LogicRule tType s sE o where
-    BaseRule :: REM.LogicRule tType s sE o -> LogicRule tType s sE o
-    MP :: s -> LogicRule tType s sE o
-    ProofByAsm :: ProofByAsmSchema s [LogicRule tType s sE o]-> LogicRule tType s sE o
-    ProofBySubArg :: ProofBySubArgSchema s [LogicRule tType s sE o]-> LogicRule tType s sE o
-    ExclMid :: s -> LogicRule tType s sE o
-    SimpL :: s -> LogicRule tType s sE o
-    SimpR :: s -> LogicRule tType s sE o
-    Adj :: s -> s -> LogicRule tType s sE o
-    ContraF:: s -> LogicRule tType s sE o
-    Absurd :: s -> LogicRule tType s sE o
-    DisjIntroL :: s -> s -> LogicRule tType s sE o
-    DisjIntroR :: s -> s -> LogicRule tType s sE o
-    DisjElim :: s -> s -> s -> LogicRule tType s sE o
-    DoubleNegElim :: s -> LogicRule tType s sE o
-    DeMorganConj :: s -> LogicRule tType s sE o
-    DeMorganDisj :: s -> LogicRule tType s sE o
-    BicondIntro :: s -> s -> LogicRule tType s sE o
-    BicondElimL :: s -> LogicRule tType s sE o
-    BicondElimR :: s -> LogicRule tType s sE o
-    AbsorpAnd :: s -> LogicRule tType s sE o  -- P ∧ (P ∨ Q) ⟶ P
-    AbsorpOr :: s -> LogicRule tType s sE o   -- P ∨ (P ∧ Q) ⟶ P
-    DistAndOverOr :: s -> LogicRule tType s sE o  -- P ∧ (Q ∨ R) ⟶ (P ∧ Q) ∨ (P ∧ R)
-    DistOrOverAnd :: s -> LogicRule tType s sE o   -- P ∨ (Q ∧ R) ⟶ (P ∨ Q) ∧ (P ∨ R)
-    
-    PeircesLaw :: s -> LogicRule tType s sE o  -- Peirce’s Law: ((P → Q) → P) → P
+data LogicRule tType s sE o q where
+    BaseRule :: REM.LogicRule tType s sE o q -> LogicRule tType s sE o q
+    MP :: s -> LogicRule tType s sE o q
+    ProofByAsm :: ProofByAsmSchema s [LogicRule tType s sE o q] -> LogicRule tType s sE o q
+    ProofBySubArg :: ProofBySubArgSchema s [LogicRule tType s sE o q] -> LogicRule tType s sE o q
+    ExclMid :: s -> LogicRule tType s sE o q
+    SimpL :: s -> LogicRule tType s sE o q
+    SimpR :: s -> LogicRule tType s sE o q
+    Adj :: s -> s -> LogicRule tType s sE o q
+    ContraF:: s -> LogicRule tType s sE o q
+    Absurd :: s -> LogicRule tType s sE o q
+    DisjIntroL :: s -> s -> LogicRule tType s sE o q
+    DisjIntroR :: s -> s -> LogicRule tType s sE o q
+    DisjElim :: s -> s -> s -> LogicRule tType s sE o q
+    DoubleNegElim :: s -> LogicRule tType s sE o q
+    DeMorganConj :: s -> LogicRule tType s sE o q
+    DeMorganDisj :: s -> LogicRule tType s sE o q
+    BicondIntro :: s -> s -> LogicRule tType s sE o q
+    BicondElimL :: s -> LogicRule tType s sE o q
+    BicondElimR :: s -> LogicRule tType s sE o q
+    AbsorpAnd :: s -> LogicRule tType s sE o q  -- P ∧ (P ∨ Q) ⟶ P
+    AbsorpOr :: s -> LogicRule tType s sE o q   -- P ∨ (P ∧ Q) ⟶ P
+    DistAndOverOr :: s -> LogicRule tType s sE o q  -- P ∧ (Q ∨ R) ⟶ (P ∧ Q) ∨ (P ∧ R)
+    DistOrOverAnd :: s -> LogicRule tType s sE o q   -- P ∨ (Q ∧ R) ⟶ (P ∨ Q) ∧ (P ∨ R)
+
+    PeircesLaw :: s -> LogicRule tType s sE o q  -- Peirce’s Law: ((P → Q) → P) → P
 
 
     deriving(Show)
 
 
 
-runProofAtomic :: (ProofStd s (LogicError s sE o tType) [LogicRule tType s sE o] o tType,
+runProofAtomic :: (ProofStd s (LogicError s sE o tType) [LogicRule tType s sE o q] o tType q,
                LogicSent s tType, Show sE, Typeable sE, Show s, Typeable s, Ord o, TypedSent o tType sE s,
                Show o, Typeable o, Typeable tType, Show tType, StdPrfPrintMonad s o tType (Either SomeException)) =>
-                            LogicRule tType s sE o -> PrfStdContext tType -> PrfStdState s o tType 
+                            LogicRule tType s sE o q -> PrfStdContext q -> PrfStdState s o tType 
                                       -> Either (LogicError s sE o tType) (Maybe s,Maybe (o,tType),PrfStdStep s o tType)
 runProofAtomic rule context state = 
       case rule of
@@ -360,19 +360,19 @@ runProofAtomic rule context state =
 instance (LogicSent s tType, Show sE, Typeable sE, Show s, Typeable s, Ord o, TypedSent o tType sE s,
           Typeable o, Show o, Typeable tType, Show tType, Monoid (PrfStdState s o tType),
           StdPrfPrintMonad s o tType (Either SomeException),
-          Monoid (PrfStdContext tType))
+          Monoid (PrfStdContext q))
              => Proof (LogicError s sE o tType)
-                 [LogicRule tType s sE o] 
+                 [LogicRule tType s sE o q] 
                  (PrfStdState s o tType) 
-                 (PrfStdContext tType)
+                 (PrfStdContext q)
                  [PrfStdStep s o tType]
                  s
                     where
   runProofOpen :: (LogicSent s tType, Show sE, Typeable sE, Show s, Typeable s,
                Ord o, TypedSent o tType sE s, Typeable o, Show o, Typeable tType,
                Show tType, Monoid (PrfStdState s o tType)) =>
-                 [LogicRule tType s sE o] -> 
-                 PrfStdContext tType  -> PrfStdState s o tType
+                 [LogicRule tType s sE o q] -> 
+                 PrfStdContext q  -> PrfStdState s o tType
                         -> Either (LogicError s sE o tType) (PrfStdState s o tType, [PrfStdStep s o tType],Last s) 
   runProofOpen rs context oldState = foldM f (PrfStdState mempty mempty 0,[], Last Nothing) rs
        where
@@ -398,21 +398,21 @@ instance (LogicSent s tType, Show sE, Typeable sE, Show s, Typeable s, Ord o, Ty
 
 
 
-instance REM.LogicRuleClass [LogicRule tType s sE o] s o tType sE where
-    remark :: Text -> [LogicRule tType s sE o]
+instance REM.LogicRuleClass [LogicRule tType s sE o q] s o tType sE where
+    remark :: Text -> [LogicRule tType s sE o q]
     remark rem = [(BaseRule . REM.Remark) rem]
-    rep :: s -> [LogicRule tType s sE o]
+    rep :: s -> [LogicRule tType s sE o q]
     rep s = [BaseRule . REM.Rep $ s]
-    fakeProp :: [s] -> s -> [LogicRule tType s sE o]
+    fakeProp :: [s] -> s -> [LogicRule tType s sE o q]
     fakeProp deps s = [BaseRule . REM.FakeProp deps $ s]
-    fakeConst:: o -> tType -> [LogicRule tType s sE o]
+    fakeConst:: o -> tType -> [LogicRule tType s sE o q]
     fakeConst o t = [BaseRule $ REM.FakeConst o t]
 
         --   return . PropRemark . REM.ProofBySubArg  
 
 
-instance RuleInject [REM.LogicRule tType s sE o] [LogicRule tType s sE o] where
-    injectRule :: [REM.LogicRule tType s sE o] -> [LogicRule tType s sE o]
+instance RuleInject [REM.LogicRule tType s sE o q] [LogicRule tType s sE o q] where
+    injectRule :: [REM.LogicRule tType s sE o q] -> [LogicRule tType s sE o q]
     injectRule = Prelude.map BaseRule
 
 
@@ -439,60 +439,60 @@ class LogicRuleClass r s tType sE o | r-> s, r->tType, r->sE, r->o where
     distOrOverAnd :: s -> r
     peircesLaw :: s -> r
 
-instance LogicRuleClass [LogicRule tType s sE o] s tType sE o where
-    mp :: s -> [LogicRule tType s sE o]
+instance LogicRuleClass [LogicRule tType s sE o q] s tType sE o where
+    mp :: s -> [LogicRule tType s sE o q]
     mp s = [MP s]
-    exclMid :: s -> [LogicRule tType s sE o]
+    exclMid :: s -> [LogicRule tType s sE o q]
     exclMid s = [ExclMid s]
-    simpL :: s -> [LogicRule tType s sE o]
+    simpL :: s -> [LogicRule tType s sE o q]
     simpL s = [SimpL s]
-    simpR :: s -> [LogicRule tType s sE o]
-    simpR s = [SimpL s]
-    adj :: s -> s -> [LogicRule tType s sE o]
+    simpR :: s -> [LogicRule tType s sE o q]
+    simpR s = [SimpR s]
+    adj :: s -> s -> [LogicRule tType s sE o q]
     adj a b = [Adj a b]
-    contraF :: s -> [LogicRule tType s sE o]
+    contraF :: s -> [LogicRule tType s sE o q]
     contraF s = [ContraF s]
-    absurd :: s -> [LogicRule tType s sE o]
+    absurd :: s -> [LogicRule tType s sE o q]
     absurd s = [Absurd s]
-    disjIntroL :: s -> s -> [LogicRule tType s sE o]
+    disjIntroL :: s -> s -> [LogicRule tType s sE o q]
     disjIntroL a b = [DisjIntroL a b]
-    disjIntroR :: s -> s -> [LogicRule tType s sE o]
+    disjIntroR :: s -> s -> [LogicRule tType s sE o q]
     disjIntroR a b = [DisjIntroR a b]
-    disjElim :: s -> s -> s -> [LogicRule tType s sE o]
+    disjElim :: s -> s -> s -> [LogicRule tType s sE o q]
     disjElim a b c = [DisjElim a b c]
-    doubleNegElim :: s -> [LogicRule tType s sE o]
+    doubleNegElim :: s -> [LogicRule tType s sE o q]
     doubleNegElim s = [DoubleNegElim s]
-    deMorganConj :: s -> [LogicRule tType s sE o]
+    deMorganConj :: s -> [LogicRule tType s sE o q]
     deMorganConj s = [DeMorganConj s]
-    deMorganDisj :: s -> [LogicRule tType s sE o]
+    deMorganDisj :: s -> [LogicRule tType s sE o q]
     deMorganDisj s = [DeMorganDisj s]
-    bicondIntro :: s -> s -> [LogicRule tType s sE o]
+    bicondIntro :: s -> s -> [LogicRule tType s sE o q]
     bicondIntro a b = [BicondIntro a b]
-    bicondElimL :: s -> [LogicRule tType s sE o]
+    bicondElimL :: s -> [LogicRule tType s sE o q]
     bicondElimL s = [BicondElimL s]
-    bicondElimR :: s -> [LogicRule tType s sE o]
+    bicondElimR :: s -> [LogicRule tType s sE o q]
     bicondElimR s = [BicondElimR s]
-    absorpAnd :: s -> [LogicRule tType s sE o]
+    absorpAnd :: s -> [LogicRule tType s sE o q]
     absorpAnd s = [AbsorpAnd s]
-    absorpOr :: s -> [LogicRule tType s sE o]
+    absorpOr :: s -> [LogicRule tType s sE o q]
     absorpOr s = [AbsorpOr s]
-    distAndOverOr :: s -> [LogicRule tType s sE o]
+    distAndOverOr :: s -> [LogicRule tType s sE o q]
     distAndOverOr s = [DistAndOverOr s]
-    distOrOverAnd :: s -> [LogicRule tType s sE o]
+    distOrOverAnd :: s -> [LogicRule tType s sE o q]
     distOrOverAnd s = [DistOrOverAnd s]
-    peircesLaw :: s -> [LogicRule tType s sE o]
+    peircesLaw :: s -> [LogicRule tType s sE o q]
     peircesLaw p = [PeircesLaw p]
 
 
 
 
-instance REM.SubproofRule [LogicRule tType s sE o] s where
-    proofBySubArg :: s -> [LogicRule tType s sE o] -> [LogicRule tType s sE o]
+instance REM.SubproofRule [LogicRule tType s sE o q] s where
+    proofBySubArg :: s -> [LogicRule tType s sE o q] -> [LogicRule tType s sE o q]
     proofBySubArg s r = [ProofBySubArg $ ProofBySubArgSchema s r]
  
 
-instance SubproofRule [LogicRule tType s sE o] s where
-    proofByAsm :: s -> s -> [LogicRule tType s sE o] -> [LogicRule tType s sE o]
+instance SubproofRule [LogicRule tType s sE o q] s where
+    proofByAsm :: s -> s -> [LogicRule tType s sE o q] -> [LogicRule tType s sE o q]
     proofByAsm asm cons subproof = [ProofByAsm $ ProofByAsmSchema asm cons subproof]
 
 
@@ -500,8 +500,8 @@ instance SubproofRule [LogicRule tType s sE o] s where
 
 standardRuleM :: (Monoid r,Monad m, Ord o, Show sE, Typeable sE, Show s, Typeable s, Show eL, Typeable eL,
        MonadThrow m, Show o, Typeable o, Show tType, Typeable tType, TypedSent o tType sE s,
-       Monoid (PrfStdState s o tType), ProofStd s eL r o tType, StdPrfPrintMonad s o tType m    )
-       => r -> ProofGenTStd tType r s o m (s,[Int])
+       Monoid (PrfStdState s o tType), ProofStd s eL r o tType q, StdPrfPrintMonad s o tType m    )
+       => r -> ProofGenTStd tType r s o q m (s,[Int])
 standardRuleM rule = do
     -- function is unsafe and used for rules that generate one or more sentence.
     -- probably should not be externally facing.
@@ -517,8 +517,8 @@ mpM, exclMidM, simpLM, simpRM, absurdM, doubleNegElimM, deMorganConjM,
        Monoid (PrfStdState s o tType), StdPrfPrintMonad s o tType m,
        StdPrfPrintMonad s o tType (Either SomeException), Monoid (PrfStdContext tType),
        LogicRuleClass r s tType sE o, Monoid r,
-       ProofStd s eL r o tType, Typeable eL, Show eL )
-          => s -> ProofGenTStd tType r s o m (s,[Int])
+       ProofStd s eL r o tType q, Typeable eL, Show eL )
+          => s -> ProofGenTStd tType r s o q m (s,[Int])
 
 adjM, disjIntroLM, disjIntroRM,  bicondIntroM  ::
        (Monad m, LogicSent s tType, Ord o, Show sE, Typeable sE, Show s, Typeable s,
@@ -526,8 +526,8 @@ adjM, disjIntroLM, disjIntroRM,  bicondIntroM  ::
        Monoid (PrfStdState s o tType), StdPrfPrintMonad s o tType m,
        StdPrfPrintMonad s o tType (Either SomeException), Monoid (PrfStdContext tType),
        LogicRuleClass r s tType sE o, Monoid r,
-       ProofStd s eL r o tType, Typeable eL, Show eL )
-          => s -> s -> ProofGenTStd tType r s o m (s,[Int])
+       ProofStd s eL r o tType q, Typeable eL, Show eL )
+          => s -> s -> ProofGenTStd tType r s o q m (s,[Int])
 
 disjElimM ::
        (Monad m, LogicSent s tType, Ord o, Show sE, Typeable sE, Show s, Typeable s,
@@ -535,8 +535,8 @@ disjElimM ::
        Monoid (PrfStdState s o tType), StdPrfPrintMonad s o tType m,
        StdPrfPrintMonad s o tType (Either SomeException), Monoid (PrfStdContext tType),
        LogicRuleClass r s tType sE o, Monoid r,
-       ProofStd s eL r o tType, Typeable eL, Show eL )
-          => s -> s -> s -> ProofGenTStd tType r s o m (s,[Int])
+       ProofStd s eL r o tType q, Typeable eL, Show eL )
+          => s -> s -> s -> ProofGenTStd tType r s o q m (s,[Int])
 
 mpM s = standardRuleM (mp s)
 exclMidM s = standardRuleM (exclMid s)
@@ -582,9 +582,9 @@ data SubproofError senttype sanityerrtype logcicerrtype where
     deriving(Show)
 
 
-runProofByAsm :: (ProofStd s eL1 r1 o tType, LogicSent s tType, TypedSent o tType sE s) => 
+runProofByAsm :: (ProofStd s eL1 r1 o tType q, LogicSent s tType, TypedSent o tType sE s) => 
                        ProofByAsmSchema s r1 ->  
-                        PrfStdContext tType -> 
+                        PrfStdContext q -> 
                         PrfStdState s o tType ->
                         Either (SubproofError s sE eL1) (s,PrfStdStep s o tType)
 runProofByAsm (ProofByAsmSchema assumption consequent subproof) context state  =
@@ -639,8 +639,8 @@ infixr 0 .->.
 infixr 0 .<->.
 
 
-type HelperConstraints r1 s o tType sE eL1 m = (
-                      REM.HelperConstraints r1 s o tType sE eL1 m
+type HelperConstraints r1 s o tType sE eL1 q m = (
+                      REM.HelperConstraints r1 s o tType sE eL1 q m
                     , LogicSent s tType
                     , SubproofRule r1 s
                     , LogicRuleClass r1 s tType sE o

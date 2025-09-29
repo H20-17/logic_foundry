@@ -16,7 +16,8 @@ module Internal.StdPattern(
     getFreeVarCount,
     showTermM, showSentM,
     ShowableSent(..),
-    ShowableTerm(..)
+    ShowableTerm(..),
+    QuantifiableTerm(..)
 
 
 ) where
@@ -57,15 +58,15 @@ import IndexTracker
 
 default(Text)
 
-data PrfStdContext tType where
+data PrfStdContext q where
     PrfStdContext :: {
-        freeVarTypeStack :: [tType],
+        freeVarTypeStack :: [q],
         stepIdxPrefix :: [Int],
         contextFrames :: [Bool]
         -- Because theorems are self-contained, it makes sense to use a thick box frame for a theorem, and a thin frame from every other
         -- type of context. When contextFrames !! i is False this means use a thin box frame. Otherwise, if True that means that the context
         -- is the outermost context of a theorem so we should use a thick box frame. 
-    } -> PrfStdContext tType
+    } -> PrfStdContext q
     deriving Show
 
 data PrfStdState s o tType where
@@ -80,13 +81,13 @@ data PrfStdState s o tType where
 
 
 
-instance Semigroup (PrfStdContext tType) where
-     (<>) :: PrfStdContext tType -> PrfStdContext tType -> PrfStdContext tType
+instance Semigroup (PrfStdContext q) where
+     (<>) :: PrfStdContext q -> PrfStdContext q -> PrfStdContext q
      (<>) (PrfStdContext v1 prf1 frames1) (PrfStdContext v2 prf2 frames2) =
             PrfStdContext (v1 <> v2) (prf1 <> prf2) (frames1 <> frames2)
 
-instance Monoid (PrfStdContext tType) where
-    mempty :: PrfStdContext tType
+instance Monoid (PrfStdContext q) where
+    mempty :: PrfStdContext q
     mempty = PrfStdContext [] [] []
 
 
@@ -106,14 +107,14 @@ instance (Ord s, Ord o) => Monoid (PrfStdState s o tType ) where
 
 
 
-type ProofGenTStd tType r s o m 
-               = ProofGeneratorT s [PrfStdStep s o tType] (PrfStdContext tType) r (PrfStdState s o tType) (Sum Int) m
+type ProofGenTStd tType r s o q m 
+               = ProofGeneratorT s [PrfStdStep s o tType] (PrfStdContext q) r (PrfStdState s o tType) (Sum Int) m
 
 
 
 
 
-type ProofStd s eL r o tType = Proof eL r (PrfStdState s o tType) (PrfStdContext tType) [PrfStdStep s o tType] s
+type ProofStd s eL r o tType q = Proof eL r (PrfStdState s o tType) (PrfStdContext q) [PrfStdStep s o tType] s
 
 data PrfStdStep s o tType where
     PrfStdStepStep :: s -> Text -> [[Int]] -> PrfStdStep s o tType
@@ -129,8 +130,8 @@ data PrfStdStep s o tType where
 
 
 
-class (Eq tType, Ord o) => TypeableTerm t o tType sE | t -> o, t ->tType, t -> sE where
-    getTypeTerm :: Map Int tType -> [tType] -> Map o tType -> t -> Either sE tType
+class (Eq tType, Ord o) => TypeableTerm t o tType sE q | t -> o, t ->tType, t -> sE, t -> q where
+    getTypeTerm :: Map Int tType -> [q] -> Map o tType -> t -> Either sE tType
     -- get term type using a list of template variable types, a list of
     -- free variable types and a const dictionary
     const2Term :: o -> t
@@ -138,7 +139,8 @@ class (Eq tType, Ord o) => TypeableTerm t o tType sE | t -> o, t ->tType, t -> s
     extractConstsTerm :: t -> Set o
 
 
-
+class QuantifiableTerm q tType | q -> tType where
+    qTypeToTType :: q -> tType
 
 
 
@@ -149,7 +151,7 @@ class LogicConst o where
 class (Ord s, Eq tType, Ord o) => TypedSent o tType sE s | s-> tType, s-> sE, s -> o where
     -- check the sanity of a sentence using a map of template variable indices to types,
     -- a list of free variable types and a const dictionary
-    checkSanity :: Map Int tType -> [tType] -> Map o tType -> s -> Maybe sE
+    checkSanity :: Map Int tType -> [q] -> Map o tType -> s -> Maybe sE
     extractConstsSent :: s -> Set o
 
 
@@ -180,8 +182,8 @@ data TestSubproofErr s sE eL where
    deriving(Show)
 
 
-testSubproof :: (ProofStd s eL1 r1 o tType, TypedSent o tType sE s    )
-                       => PrfStdContext tType -> PrfStdState s o tType -> PrfStdState s o tType -> 
+testSubproof :: (ProofStd s eL1 r1 o tType q, TypedSent o tType sE s    )
+                       => PrfStdContext q -> PrfStdState s o tType -> PrfStdState s o tType -> 
                           [PrfStdStep s o tType] -> Last s -> s -> r1 
                              -> Either (TestSubproofErr s sE eL1) [PrfStdStep s o tType]
 testSubproof context baseState preambleState preambleSteps mayPreambleLastProp targetProp subproof =
@@ -232,19 +234,19 @@ class (Monad m, StdPrfPrintMonadFrame m) => StdPrfPrintMonad s o tType m |  s ->
 
 
 
-instance (ProofStd s eL r o tType, Monoid r, Monad m, StdPrfPrintMonadFrame m) 
-          => StdPrfPrintMonadFrame (ProofGenTStd tType r s o m) where
-    printStartFrame :: [Bool] -> ProofGenTStd tType r s o m ()
+instance (ProofStd s eL r o tType q, Monoid r, Monad m, StdPrfPrintMonadFrame m) 
+          => StdPrfPrintMonadFrame (ProofGenTStd tType r s o q m) where
+    printStartFrame :: [Bool] -> ProofGenTStd tType r s o q m ()
     printStartFrame contextFrames = lift $ printStartFrame contextFrames
     
 
 
 instance (StdPrfPrintMonad s o tType m, 
-          ProofStd s eL r o tType, 
+          ProofStd s eL r o tType q, 
           Monoid r, 
-          StdPrfPrintMonadFrame (ProofGenTStd tType r s o m))
-             => StdPrfPrintMonad s o tType (ProofGenTStd tType r s o m) where
-  printSteps :: [Bool] -> [Int] -> Int -> Map s [Int] -> [PrfStdStep s o tType] -> ProofGenTStd tType r s o m ()
+          StdPrfPrintMonadFrame (ProofGenTStd tType r s o q m))
+             => StdPrfPrintMonad s o tType (ProofGenTStd tType r s o q m) where
+  printSteps :: [Bool] -> [Int] -> Int -> Map s [Int] -> [PrfStdStep s o tType] -> ProofGenTStd tType r s o q m ()
   printSteps contextFrames idx stepStart dictMap steps = lift $ printSteps contextFrames idx stepStart dictMap steps
 
 
@@ -253,9 +255,9 @@ instance (StdPrfPrintMonad s o tType m,
 
 
 
-monadifyProofStd :: (MonadThrow m, ProofStd s eL r o tType, Monoid r,
+monadifyProofStd :: (MonadThrow m, ProofStd s eL r o tType q, Monoid r,
                     Show eL, Typeable eL, StdPrfPrintMonad s o tType m, Ord s)
-           => r -> ProofGenTStd tType r s o m (Maybe (s,[Int]))
+           => r -> ProofGenTStd tType r s o q m (Maybe (s,[Int]))
 monadifyProofStd p = do
      PrfStdContext fvStack idx contextFrames <- ask
      state <- getProofState
@@ -266,9 +268,9 @@ monadifyProofStd p = do
    where
        f state prop = Just (prop, provenSents state!prop )
           
-newConstM :: (MonadThrow m, ProofStd s eL r o tType, Monoid r,
+newConstM :: (MonadThrow m, ProofStd s eL r o tType q, Monoid r,
                     LogicConst o)
-           => ProofGenTStd tType r s o m o
+           => ProofGenTStd tType r s o q m o
 newConstM = do
     context <- ask
     state <- getProofState
@@ -280,12 +282,12 @@ newConstM = do
 
 
 
-getTopFreeVar :: (Monoid r1, ProofStd s eL1 r1 o tType, Monad m,
+getTopFreeVar :: (Monoid r1, ProofStd s eL1 r1 o tType q, Monad m,
                        Show eL1, Typeable eL1,
                     Show s, Typeable s,
                        MonadThrow m, TypedSent o tType sE s, Show sE, Typeable sE,
-                       StdPrfPrintMonad s o tType m, TypeableTerm t Text tType sE)
-                 =>  ProofGenTStd tType r1 s o m t
+                       StdPrfPrintMonad s o tType m, TypeableTerm t Text tType sE q)
+                 =>  ProofGenTStd tType r1 s o q m t
 getTopFreeVar =  do
         context <- ask
         let frVarTypeStack = freeVarTypeStack context
@@ -293,12 +295,12 @@ getTopFreeVar =  do
             else return (free2Term $ length frVarTypeStack - 1)
 
 
-getTopFreeVars :: (Monoid r1, ProofStd s eL1 r1 o tType, Monad m,
+getTopFreeVars :: (Monoid r1, ProofStd s eL1 r1 o tType q, Monad m,
                        Show eL1, Typeable eL1,
                     Show s, Typeable s,
                        MonadThrow m, TypedSent o tType sE s, Show sE, Typeable sE,
-                       StdPrfPrintMonad s o tType m, TypeableTerm t Text tType sE)
-                 =>  Int -> ProofGenTStd tType r1 s o m [t]
+                       StdPrfPrintMonad s o tType m, TypeableTerm t Text tType sE q)
+                 =>  Int -> ProofGenTStd tType r1 s o q m [t]
 getTopFreeVars n =  do
         context <- ask
         let frVarTypeStack = freeVarTypeStack context
@@ -311,12 +313,12 @@ getTopFreeVars n =  do
 
 
 
-getFreeVarCount :: (Monoid r1, ProofStd s eL1 r1 o tType, Monad m,
+getFreeVarCount :: (Monoid r1, ProofStd s eL1 r1 o tType q, Monad m,
                         Show eL1, Typeable eL1,
                     Show s, Typeable s,
                         MonadThrow m, TypedSent o tType sE s, Show sE, Typeable sE,
                         StdPrfPrintMonad s o tType m)
-                 =>  ProofGenTStd tType r1 s o m Int
+                 =>  ProofGenTStd tType r1 s o q m Int
 getFreeVarCount = do
         context <- ask
         let frVarTypeStack = freeVarTypeStack context
@@ -324,11 +326,11 @@ getFreeVarCount = do
 
 
 
-runSubproofM :: ( Monoid r1, ProofStd s eL1 r1 o tType, Monad m,
+runSubproofM :: ( Monoid r1, ProofStd s eL1 r1 o tType q, Monad m,
                         Show eL1, Typeable eL1, Show s, Typeable s,
                         MonadThrow m, TypedSent o tType sE s, Show sE, Typeable sE, StdPrfPrintMonad s o tType m )
-                 =>    PrfStdContext tType -> PrfStdState s o tType -> PrfStdState s o tType
-                          -> [PrfStdStep s o tType] -> Last s -> ProofGenTStd tType r1 s o m x
+                 =>    PrfStdContext q -> PrfStdState s o tType -> PrfStdState s o tType
+                          -> [PrfStdStep s o tType] -> Last s -> ProofGenTStd tType r1 s o q m x
                           -> Sum Int
                           ->  m (x,s,r1,[PrfStdStep s o tType])
 runSubproofM context baseState preambleState preambleSteps mayPreambleLastProp prog vIdx = do
@@ -351,8 +353,8 @@ runSubproofM context baseState preambleState preambleSteps mayPreambleLastProp p
 
 
 showTermM :: (Monad m, Monoid r,
-             Proof eL r (PrfStdState s o tType) (PrfStdContext tType) [PrfStdStep s o tType] s, ShowableTerm s t)
-                     => t -> ProofGenTStd tType r s o m Text
+             Proof eL r (PrfStdState s o tType) (PrfStdContext q) [PrfStdStep s o tType] s, ShowableTerm s t)
+                     => t -> ProofGenTStd tType r s o q m Text
 showTermM obj = 
     do
       state <- getProofState
@@ -360,8 +362,8 @@ showTermM obj =
       return $ showTerm dict obj
 
 showSentM :: (Monad m, Monoid r,
-             Proof eL r (PrfStdState s o tType) (PrfStdContext tType) [PrfStdStep s o tType] s, ShowableSent s)
-                     => s -> ProofGenTStd tType r s o m Text
+             Proof eL r (PrfStdState s o tType) (PrfStdContext q) [PrfStdStep s o tType] s, ShowableSent s)
+                     => s -> ProofGenTStd tType r s o q m Text
 showSentM obj =
     do
       state <- getProofState
