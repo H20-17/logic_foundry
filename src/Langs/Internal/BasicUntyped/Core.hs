@@ -492,7 +492,7 @@ checkSanityPropDeBr prop freevarStackHeight tmpltVarIndices consts boundVars =
 
 
 
-instance TypeableTerm ObjDeBr Text () DeBrSe where
+instance TypeableTerm ObjDeBr Text () DeBrSe () where
 
      getTypeTerm :: Map Int () -> [()] -> Map Text () -> ObjDeBr -> Either DeBrSe ()
      getTypeTerm ts vs constDict term =
@@ -507,7 +507,7 @@ instance TypeableTerm ObjDeBr Text () DeBrSe where
 
 
 instance TypedSent  Text () DeBrSe PropDeBr where
-    checkSanity :: Map Int () -> [()] -> Map Text () -> PropDeBr -> Maybe DeBrSe
+    checkSanity :: Map Int () -> [q] -> Map Text () -> PropDeBr -> Maybe DeBrSe
     checkSanity tsTypes freeVarStack constDict prop = checkSanityPropDeBr
         prop (Prelude.length freeVarStack)
         (Data.Map.keysSet tsTypes)  (keysSet constDict) mempty
@@ -710,10 +710,10 @@ propDeBrSubXs subs prop =
 
 
 type PropErrDeBr = PL.LogicError PropDeBr DeBrSe Text ObjDeBr
-type PropRuleDeBr = PL.LogicRule () PropDeBr DeBrSe Text
+type PropRuleDeBr = PL.LogicRule () PropDeBr DeBrSe Text ()
 
 type PredErrDeBr = PREDL.LogicError PropDeBr DeBrSe Text ObjDeBr ()
-type PredRuleDeBr = PREDL.LogicRule PropDeBr DeBrSe Text ObjDeBr ()
+type PredRuleDeBr = PREDL.LogicRule PropDeBr DeBrSe Text ObjDeBr () ()
 
 type ZFCRuleDeBr = ZFC.LogicRule PropDeBr DeBrSe ObjDeBr
 

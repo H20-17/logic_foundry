@@ -42,7 +42,10 @@ module RuleSets.ZFC.Helpers
     multiUGM,
     MetaRuleError(..),
     builderXM,
-    specificationMNew
+    specificationMNew,
+    aX, eX, hX, eXBang, multiAx, multiAXM, multiEXM, eXM, aXM, hXM
+
+
 ) where
 
 
@@ -112,7 +115,8 @@ import RuleSets.PredLogic.Core hiding
    MetaRuleError(..),
    HelperConstraints(..),
    SentConstraints(..),
-   MonadSent)
+   MonadSent,
+   aX, eX, hX, eXBang, multiAx)
 import qualified RuleSets.PredLogic.Core as PREDL
 import qualified RuleSets.PredLogic.Helpers as PREDL
 import GHC.Num (integerMul)
@@ -122,7 +126,7 @@ import RuleSets.BaseLogic.Helpers hiding
 import RuleSets.PredLogic.Helpers hiding
      (MetaRuleError(..),
      runProofByUGM,
-     multiUGM)
+     multiUGM, multiAXM, multiEXM, eXM, aXM, hXM)
 import RuleSets.PropLogic.Helpers hiding
      (MetaRuleError(..))
 
@@ -130,7 +134,7 @@ import IndexTracker
 
 
 standardRuleM :: HelperConstraints sE s eL m r t
-       => r -> ProofGenTStd () r s Text m (s,[Int])
+       => r -> ProofGenTStd () r s Text () m (s,[Int])
 standardRuleM rule = do
     -- function is unsafe and used for rules that generate one or more sentence.
     -- probably should not be externally facing.
@@ -140,12 +144,12 @@ standardRuleM rule = do
 
 
 specificationM :: HelperConstraints sE s eL m r t
-       => [Int] -> Int -> t -> s -> ProofGenTStd () r s Text m (s,[Int])
+       => [Int] -> Int -> t -> s -> ProofGenTStd () r s Text ()m (s,[Int])
 specificationM outerIdxs idx t s = standardRuleM (specification outerIdxs idx t s)
 
 
 specificationMNew :: HelperConstraints sE s eL m r t
-       => [Int] -> t -> (t -> s) -> ProofGenTStd () r s Text m (s,[Int])
+       => [Int] -> t -> (t -> s) -> ProofGenTStd () r s Text () m (s,[Int])
 specificationMNew outerIdxs t p_pred = do
     spec_var_idx <- newIndex
     let spec_var = x spec_var_idx
@@ -159,18 +163,18 @@ specificationMNew outerIdxs t p_pred = do
 
 
 replacementM :: HelperConstraints sE s eL m r t
-       => [Int] -> Int -> Int -> t -> s -> ProofGenTStd () r s Text m (s,[Int])
+       => [Int] -> Int -> Int -> t -> s -> ProofGenTStd () r s Text () m (s,[Int])
 replacementM outerIdxs idx1 idx2 t s = standardRuleM (replacement outerIdxs idx1 idx2 t s)
 
 
 integerMembershipM, integerNegationM :: HelperConstraints sE s eL m r t
-       => Int -> ProofGenTStd () r s Text m (s,[Int])
+       => Int -> ProofGenTStd () r s Text ()m (s,[Int])
 integerMembershipM i = standardRuleM (integerMembership i)
 integerNegationM i = standardRuleM (integerNegation i)
 
 integerAdditionM, integerMultiplicationM, integerCompareM, integerInequalityM
  :: HelperConstraints sE s eL m r t
-       => Int -> Int -> ProofGenTStd () r s Text m (s,[Int])
+       => Int -> Int -> ProofGenTStd () r s Text () m (s,[Int])
 integerAdditionM i1 i2 = standardRuleM (integerAddition i1 i2)
 integerMultiplicationM i1 i2 = standardRuleM (integerMultiplication i1 i2)
 integerCompareM i1 i2 = standardRuleM (integerCompare i1 i2)
@@ -186,7 +190,7 @@ integersAreUrelementsM, emptySetAxiomM, extensionalityAxiomM,emptySetNotIntM,reg
              intDistributivityAxiomM,intOrderAddCompatibilityAxiomM, intOrderMulCompatibilityAxiomM,
              natWellOrderingAxiomM
        :: HelperConstraints sE s eL m r t
-       => ProofGenTStd () r s Text m (s,[Int])
+       => ProofGenTStd () r s Text () m (s,[Int])
 integersAreUrelementsM = standardRuleM integersAreUrelements
 emptySetAxiomM = standardRuleM emptySetStatement
 extensionalityAxiomM = standardRuleM extensionality
@@ -234,7 +238,7 @@ natWellOrderingAxiomM = standardRuleM natWellOrdering
 -- |    `isSet(PowerSet(x)) ∧ ∀Y(...)`.
 powerSetInstantiateM :: HelperConstraints sE s eL m r t =>
     t -> -- ^ The object 'x' for which to prove its power set is a set.
-    ProofGenTStd () r s Text m (s, [Int], t)
+    ProofGenTStd () r s Text ()m (s, [Int], t)
 powerSetInstantiateM x = do
     runProofBySubArgM $ do
         -- Step 1: Get the Axiom of Power Set from the ZFC rule set.
@@ -260,15 +264,15 @@ powerSetInstantiateM x = do
 
 
 runProofByUGM :: HelperConstraints sE s eL m r t
-                 =>  ProofGenTStd () r s Text m x
-                            -> ProofGenTStd () r s Text m (s, [Int])
+                 =>  ProofGenTStd () r s Text () m x
+                            -> ProofGenTStd () r s Text () m (s, [Int])
 runProofByUGM = PREDL.runProofByUGM ()
 
 multiUGM :: HelperConstraints sE s eL m r t =>
     Int ->                             -- ^ Number of UG's
-    ProofGenTStd () r s Text m x ->       -- ^ The core program. Its monadic return 'x' is discarded.
+    ProofGenTStd () r s Text () m x ->       -- ^ The core program. Its monadic return 'x' is discarded.
                                            --   It must set 'Last s' with the prop to be generalized.
-    ProofGenTStd () r s Text m (s, [Int])  -- ^ Returns (final_generalized_prop, its_index).
+    ProofGenTStd () r s Text () m (s, [Int])  -- ^ Returns (final_generalized_prop, its_index).
 multiUGM n = PREDL.multiUGM (replicate n ()) 
 
 
@@ -298,6 +302,29 @@ eX idx s = PREDL.eX () idx s
 hX :: LogicSent s t => Int -> s -> t
 hX idx s = PREDL.hX () idx s
 
+eXBang :: LogicSent s t => Int -> s -> s
+eXBang idx s = PREDL.eXBang () idx s
+
+multiAx :: LogicSent s t => [Int] -> s -> s
+multiAx idxs s = PREDL.multiAx (Prelude.map ((),) idxs) s
+
+
+multiAXM :: MonadSent s t m => Int -> m s -> m s
+multiAXM quantDepth inner = PREDL.multiAXM (replicate quantDepth ()) inner
+
+multiEXM :: MonadSent s t m => Int -> m s -> m s
+multiEXM quantDepth inner = PREDL.multiEXM (replicate quantDepth ()) inner
+
+
+eXM :: MonadSent s t m => m s -> m s
+eXM inner = PREDL.eXM () inner
+
+aXM :: MonadSent s t m => m s -> m s
+aXM inner = PREDL.aXM () inner
+
+
+hXM :: MonadSent s t m => m s -> m t
+hXM inner = PREDL.hXM () inner
 
 data MetaRuleError s where
    MetaRuleErrNotClosed :: s -> MetaRuleError s

@@ -208,12 +208,12 @@ data LogicError s sE t where
 
 data LogicRule s sE t  where
    -- t is a term
-    PredRule :: PREDL.LogicRule s sE Text t () -> LogicRule s sE t 
+    PredRule :: PREDL.LogicRule s sE Text t () () -> LogicRule s sE t 
     ProofByAsm :: ProofByAsmSchema s [LogicRule s sE t] -> LogicRule s sE t 
     ProofBySubArg :: ProofBySubArgSchema s [LogicRule s sE t] -> LogicRule s sE t
     ProofByUG :: ProofByUGSchema s [LogicRule s sE t] -> LogicRule s sE t 
     Theorem :: TheoremSchema s [LogicRule s sE t ] Text () -> LogicRule s sE t 
-    TheoremM :: TheoremAlgSchema () [LogicRule s sE t ] s Text () -> 
+    TheoremM :: TheoremAlgSchema () [LogicRule s sE t ] s Text () () -> 
                              LogicRule s sE t
     --EmptySet :: LogicRule s sE t
     Specification :: [Int] -> Int -> t -> s -> LogicRule s sE t
@@ -485,13 +485,13 @@ findFirstDuplicate xs = fst $ foldl' check (Nothing, Set.empty) xs
 
 
 runProofAtomic :: (
-               ProofStd s (LogicError s sE t) [LogicRule s sE t] Text (),
-               Show sE, Typeable sE, Show s, Typeable s, TypeableTerm t Text () sE,
+               ProofStd s (LogicError s sE t) [LogicRule s sE t] Text () (),
+               Show sE, Typeable sE, Show s, Typeable s, TypeableTerm t Text () sE (),
                 TypedSent Text () sE s,
                Show t, Typeable t,
                StdPrfPrintMonad s Text () (Either SomeException),
                             PREDL.LogicSent s t () Text (), LogicSent s t ,
-                            Eq t, LogicTerm t) =>
+                            Eq t, LogicTerm t, QuantifiableTerm () ()) =>
                             LogicRule s sE t  ->
                             PrfStdContext () ->
                             PrfStdState s Text () ->
@@ -769,12 +769,13 @@ runProofAtomic rule context state  =
 
 
 instance (Show sE, Typeable sE, Show s, Typeable s, TypedSent Text () sE s,
-             TypeableTerm t Text () sE, 
+             TypeableTerm t Text () sE (), 
              Monoid (PrfStdState s Text ()), Show t, Typeable t,
              StdPrfPrintMonad s Text () (Either SomeException),
              Monoid (PrfStdContext ()),
              PREDL.LogicSent s t () Text (),
-             LogicSent s t, Eq t, LogicTerm t) 
+             LogicSent s t, Eq t, LogicTerm t,
+             QuantifiableTerm () ()) 
           => Proof (LogicError s sE t) 
              [LogicRule s sE t] 
              (PrfStdState s Text ()) 
@@ -825,10 +826,10 @@ instance PL.SubproofRule [LogicRule s sE t] s where
      proofByAsm asm cons subproof = [ProofByAsm $ ProofByAsmSchema asm cons subproof]
 
 
-instance PREDL.SubproofRule [LogicRule s sE t] s Text () where
+instance PREDL.SubproofRule [LogicRule s sE t] s Text () () where
      theoremSchema:: TheoremSchema s [LogicRule s sE t] Text () -> [LogicRule s sE t]
      theoremSchema schema = [Theorem schema]
-     theoremAlgSchema:: TheoremAlgSchema () [LogicRule s sE t] s Text () -> [LogicRule s sE t]
+     theoremAlgSchema:: TheoremAlgSchema () [LogicRule s sE t] s Text () () -> [LogicRule s sE t]
      theoremAlgSchema schema = [TheoremM schema]
 
      proofByUG:: s -> [LogicRule s sE t] -> [LogicRule s sE t]
@@ -837,19 +838,19 @@ instance PREDL.SubproofRule [LogicRule s sE t] s Text () where
 
 
 
-instance RuleInject [REM.LogicRule () s sE Text] [LogicRule s sE t] where
-    injectRule:: [REM.LogicRule () s sE Text] -> [LogicRule s sE t]
+instance RuleInject [REM.LogicRule () s sE Text ()] [LogicRule s sE t] where
+    injectRule:: [REM.LogicRule () s sE Text ()] -> [LogicRule s sE t]
     injectRule = Prelude.map (PredRule . PREDL.PropRule . PL.BaseRule)
 
 
 
-instance RuleInject [PL.LogicRule () s sE Text] [LogicRule s sE t] where
-    injectRule:: [PL.LogicRule () s sE Text] -> [LogicRule s sE t]
+instance RuleInject [PL.LogicRule () s sE Text ()] [LogicRule s sE t] where
+    injectRule:: [PL.LogicRule () s sE Text ()] -> [LogicRule s sE t]
     injectRule = Prelude.map (PredRule . PREDL.PropRule)
 
 
-instance RuleInject [PREDL.LogicRule s sE Text t ()] [LogicRule s sE t] where
-    injectRule:: [PREDL.LogicRule s sE Text t ()] -> [LogicRule s sE t]
+instance RuleInject [PREDL.LogicRule s sE Text t () ()] [LogicRule s sE t] where
+    injectRule:: [PREDL.LogicRule s sE Text t () ()] -> [LogicRule s sE t]
     injectRule = Prelude.map PredRule
 
 

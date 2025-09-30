@@ -127,8 +127,7 @@ instance PREDL.LogicSent PropDeBr ObjDeBr () Text () where
         case prop of
            Forall p -> Just (boundExpToFunc p,())
            _ -> Nothing
-    createForall :: PropDeBr -> () -> Int -> PropDeBr
-    createForall prop () idx = Forall (propDeBrApplyUG prop idx (boundDepthPropDeBr prop))
+
 
     reverseParseQuantToExistsNot :: (ObjDeBr -> PropDeBr) -> () -> PropDeBr
     reverseParseQuantToExistsNot f () = eX 0 (Neg (f (X 0)))
@@ -824,3 +823,7 @@ instance ZFC.LogicSent PropDeBr ObjDeBr where
 
     builderX :: Int -> ObjDeBr -> PropDeBr -> ObjDeBr
     builderX = builderX
+
+instance QuantifiableTerm () () where
+    qTypeToTType :: () -> ()
+    qTypeToTType _ = ()

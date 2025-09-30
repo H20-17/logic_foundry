@@ -538,7 +538,7 @@ showObj dict obj = showSubexpParseTree $ toSubexpParseTree obj dict
 
 showObjM :: (Monad m, Monoid r, 
              Proof eL r (PrfStdState PropDeBr Text ()) (PrfStdContext ()) [PrfStdStep PropDeBr Text ()] PropDeBr) 
-                     => ObjDeBr -> ProofGenTStd () r PropDeBr Text m Text
+                     => ObjDeBr -> ProofGenTStd () r PropDeBr Text () m Text
 showObjM obj = 
     do
       state <- getProofState
@@ -551,7 +551,7 @@ showProp dict prop = showSubexpParseTree $ toSubexpParseTree prop dict
 
 showPropM :: (Monad m, Monoid r, 
              Proof eL r (PrfStdState PropDeBr Text ()) (PrfStdContext ()) [PrfStdStep PropDeBr Text ()] PropDeBr) 
-                     => PropDeBr -> ProofGenTStd () r PropDeBr Text m Text
+                     => PropDeBr -> ProofGenTStd () r PropDeBr Text () m Text
 showPropM obj = 
     do
       state <- getProofState
@@ -761,7 +761,7 @@ showPropDeBrStepsBase = showPropDeBrSteps [] [] 0 True mempty
 
 showPropDeBrStepsBaseM :: (Monad m, Monoid r, 
              Proof eL r (PrfStdState PropDeBr Text ()) (PrfStdContext ()) [PrfStdStep PropDeBr Text ()] PropDeBr) 
-                     => [PrfStdStepPredDeBr] -> ProofGenTStd () r PropDeBr Text m Text
+                     => [PrfStdStepPredDeBr] -> ProofGenTStd () r PropDeBr Text () m Text
 showPropDeBrStepsBaseM steps = do 
       state <- getProofState
       let dict = provenSents state

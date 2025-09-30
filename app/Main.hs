@@ -53,7 +53,8 @@ import RuleSets.PredLogic.Core hiding
    SubproofError(..),
    LogicError(..),
    LogicSent,
-   SubproofMException(..))
+   SubproofMException(..),
+   aX, eX, hX, eXBang, multiAx)
 import qualified RuleSets.PredLogic.Core as PRED
 
 import qualified RuleSets.PredLogic.Helpers as PRED
@@ -78,7 +79,7 @@ import RuleSets.PredLogic.Helpers hiding
    (runProofByUGM)
 import RuleSets.ZFC.Theorems
 
-testTheoremMSchema :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) => TheoremSchemaMT () [PredRuleDeBr] PropDeBr Text m ()
+testTheoremMSchema :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) => TheoremSchemaMT () [PredRuleDeBr] PropDeBr Text () m ()
 testTheoremMSchema = TheoremSchemaMT  [("N",())] [z1,z2] theoremProg []
   where
     z1 = aX 99 ((X 99 `In` Constant "N") :&&: (X 99 :<=: Integ 10) :->: (X 99 :<=: Integ 0))
@@ -89,7 +90,7 @@ testTheoremMSchema = TheoremSchemaMT  [("N",())] [z1,z2] theoremProg []
 
 
 
-testEqualityRules :: ProofGenTStd () [PredRuleDeBr] PropDeBr Text IO ()
+testEqualityRules :: ProofGenTStd () [PredRuleDeBr] PropDeBr Text () IO ()
 testEqualityRules = do
     remarkM "--- Testing Equality Rules ---"
 
@@ -145,7 +146,7 @@ testEqualityRules = do
     remarkM "--- Equality Rule Tests Complete ---"
     return ()
 
-testNormalization :: ProofGenTStd () [PredRuleDeBr] PropDeBr Text IO ()
+testNormalization :: ProofGenTStd () [PredRuleDeBr] PropDeBr Text () IO ()
 testNormalization = do
     remarkM "--- Testing Normalization ---"
     let term2 = Integ 1
@@ -158,7 +159,7 @@ testNormalization = do
     remarkM $ "Proved: " <> s1Show   
     return ()
  
-testMoreComplexNesting :: ProofGenTStd () [PredRuleDeBr] PropDeBr Text IO ()
+testMoreComplexNesting :: ProofGenTStd () [PredRuleDeBr] PropDeBr Text () IO ()
 testMoreComplexNesting = do
     remarkM "--- Testing More Complex Nesting (A > E > E!) ---"
     
@@ -174,7 +175,7 @@ testMoreComplexNesting = do
     remarkM "--- More Complex Nesting Test Complete ---"
     return ()
 
-testNonSequentialIndices :: ProofGenTStd () [PredRuleDeBr] PropDeBr Text IO ()
+testNonSequentialIndices :: ProofGenTStd () [PredRuleDeBr] PropDeBr Text () IO ()
 testNonSequentialIndices = do
     remarkM "--- Testing Non-Sequential Indices (A5 > E!2 > A7) ---"
 
@@ -195,7 +196,7 @@ testNonSequentialIndices = do
 
 
 
-testComplexSubsetNotation :: ProofGenTStd () [PredRuleDeBr] PropDeBr Text IO ()
+testComplexSubsetNotation :: ProofGenTStd () [PredRuleDeBr] PropDeBr Text ()IO ()
 testComplexSubsetNotation = do
     remarkM "--- Testing More Complex Subset Notation (⊆) ---"
 
@@ -249,7 +250,7 @@ testComplexSubsetNotation = do
     remarkM "--- Complex Subset Notation Test Complete ---"
     return ()
 
-testStrictSubsetNotation :: ProofGenTStd () [PredRuleDeBr] PropDeBr Text IO ()
+testStrictSubsetNotation :: ProofGenTStd () [PredRuleDeBr] PropDeBr Text ()IO ()
 testStrictSubsetNotation = do
     remarkM "--- Testing Strict Subset Notation (⊂) ---"
 
@@ -299,7 +300,7 @@ testStrictSubsetNotation = do
     return ()
 
 
-testNotSubsetNotation :: ProofGenTStd () [PredRuleDeBr] PropDeBr Text IO ()
+testNotSubsetNotation :: ProofGenTStd () [PredRuleDeBr] PropDeBr Text () IO ()
 testNotSubsetNotation = do
     remarkM "--- Testing Not Subset Notation (⊈) ---"
 
@@ -349,7 +350,7 @@ testNotSubsetNotation = do
 
 
 
-testHelperPreconditionViolation :: ProofGenTStd () [PredRuleDeBr] PropDeBr Text IO ()
+testHelperPreconditionViolation :: ProofGenTStd () [PredRuleDeBr] PropDeBr Text () IO ()
 testHelperPreconditionViolation = do
     remarkM "--- Testing Helper Precondition Violation ---"
     let setN = Constant "N"
@@ -382,7 +383,7 @@ testHelperPreconditionViolation = do
     return ()
 
 
-testBuilderXSuite :: ProofGenTStd () [PredRuleDeBr] PropDeBr Text IO ()
+testBuilderXSuite :: ProofGenTStd () [PredRuleDeBr] PropDeBr Text ()IO ()
 testBuilderXSuite = do
     remarkM "--- Starting New builderX Test Suite ---"
 
@@ -467,7 +468,7 @@ testBuilderXSuite = do
     return ()
 
 
-testCompositionImplementation :: ProofGenTStd () [PredRuleDeBr] PropDeBr Text IO ()
+testCompositionImplementation :: ProofGenTStd () [PredRuleDeBr] PropDeBr Text () IO ()
 testCompositionImplementation = do
     remarkM "--- Testing Composition Implementation (with Tupl [dom, cod, graph] assumption) ---"
 
@@ -520,7 +521,7 @@ testCompositionImplementation = do
     remarkM "--- Composition Implementation Test Complete ---"
     return ()
 
-testShorthandRendering :: ProofGenTStd () [PredRuleDeBr] PropDeBr Text IO ()
+testShorthandRendering :: ProofGenTStd () [PredRuleDeBr] PropDeBr Text ()IO ()
 testShorthandRendering = do
     remarkM "--- Testing Shorthand Rendering (Post Function Triple Change) ---"
 
@@ -668,7 +669,7 @@ testShorthandRendering = do
 
 
 
-testProjectShorthandParsing :: ProofGenTStd () [PredRuleDeBr] PropDeBr Text IO ()
+testProjectShorthandParsing :: ProofGenTStd () [PredRuleDeBr] PropDeBr Text () IO ()
 testProjectShorthandParsing = do
     remarkM "--- Testing Project Shorthand Parsing (via Rendering) ---"
 
@@ -756,7 +757,7 @@ testProjectShorthandParsing = do
 
 
 -- Test function for the shorthand rendering of Cartesian Product (A × B)
-testCrossProductRendering :: ProofGenTStd () [PredRuleDeBr] PropDeBr Text IO ()
+testCrossProductRendering :: ProofGenTStd () [PredRuleDeBr] PropDeBr Text () IO ()
 testCrossProductRendering = do
     remarkM "--- Testing Cross Product Shorthand Rendering (A × B) ---"
 
@@ -809,7 +810,7 @@ testCrossProductRendering = do
 
 
 -- Test function for the shorthand rendering of FUNCS(A,B)
-testFuncsSetRendering :: ProofGenTStd () [PredRuleDeBr] PropDeBr Text IO ()
+testFuncsSetRendering :: ProofGenTStd () [PredRuleDeBr] PropDeBr Text () IO ()
 testFuncsSetRendering = do
     remarkM "--- Testing FUNCS(A,B) Shorthand Rendering ---"
 
@@ -852,7 +853,7 @@ testFuncsSetRendering = do
     return ()
 
 -- Test function for the shorthand rendering of Binary Union (A ∪ B)
-testBinaryUnionRendering :: ProofGenTStd () [PredRuleDeBr] PropDeBr Text IO ()
+testBinaryUnionRendering :: ProofGenTStd () [PredRuleDeBr] PropDeBr Text () IO ()
 testBinaryUnionRendering = do
     remarkM "--- Testing Binary Union Shorthand Rendering (A ∪ B) ---"
 
@@ -889,7 +890,7 @@ testBinaryUnionRendering = do
 
 
 -- Test function for the shorthand rendering of Binary Intersection (A ∩ B)
-testIntersectionRendering :: ProofGenTStd () [PredRuleDeBr] PropDeBr Text IO ()
+testIntersectionRendering :: ProofGenTStd () [PredRuleDeBr] PropDeBr Text () IO ()
 testIntersectionRendering = do
     remarkM "--- Testing Binary Intersection Shorthand Rendering (A ∩ B) ---"
 
@@ -925,7 +926,7 @@ testIntersectionRendering = do
     return ()
 
 -- Test function for the shorthand rendering of Big Union (∪S)
-testBigUnionRendering :: ProofGenTStd () [PredRuleDeBr] PropDeBr Text IO ()
+testBigUnionRendering :: ProofGenTStd () [PredRuleDeBr] PropDeBr Text () IO ()
 testBigUnionRendering = do
     remarkM "--- Testing Big Union Shorthand Rendering (∪S) ---"
     let setS = Constant "S"
@@ -949,7 +950,7 @@ testBigUnionRendering = do
     return ()
 
 -- Test function for the shorthand rendering of Big Intersection (∩S)
-testBigIntersectionRendering :: ProofGenTStd () [PredRuleDeBr] PropDeBr Text IO ()
+testBigIntersectionRendering :: ProofGenTStd () [PredRuleDeBr] PropDeBr Text () IO ()
 testBigIntersectionRendering = do
     remarkM "--- Testing Big Intersection Shorthand Rendering (∩S) ---"
     let setS = Constant "S"
@@ -973,7 +974,7 @@ testBigIntersectionRendering = do
     return ()
 
 -- Test function for the shorthand rendering of Roster Notation {a, b, ...}
-testRosterRendering :: ProofGenTStd () [PredRuleDeBr] PropDeBr Text IO ()
+testRosterRendering :: ProofGenTStd () [PredRuleDeBr] PropDeBr Text ()IO ()
 testRosterRendering = do
     remarkM "--- Testing Roster Notation Shorthand Rendering {..} ---"
 
@@ -1045,7 +1046,7 @@ testRosterRendering = do
 
 
 -- Test function for the shorthand rendering of Set Difference (A \\ B)
-testSetDifferenceRendering :: ProofGenTStd () [PredRuleDeBr] PropDeBr Text IO ()
+testSetDifferenceRendering :: ProofGenTStd () [PredRuleDeBr] PropDeBr Text ()IO ()
 testSetDifferenceRendering = do
     remarkM "--- Testing Set Difference Shorthand Rendering (A \\\\ B) ---"
 
@@ -1081,7 +1082,7 @@ testSetDifferenceRendering = do
     return ()
 
 -- Test function for the shorthand rendering of Power Set P(A)
-testPowerSetRendering :: ProofGenTStd () [PredRuleDeBr] PropDeBr Text IO ()
+testPowerSetRendering :: ProofGenTStd () [PredRuleDeBr] PropDeBr Text ()IO ()
 testPowerSetRendering = do
     remarkM "--- Testing Power Set Shorthand Rendering (P(A)) ---"
 
@@ -1113,7 +1114,7 @@ testPowerSetRendering = do
     return ()
 
 
-testPairAndTupleRendering :: ProofGenTStd () [PredRuleDeBr] PropDeBr Text IO ()
+testPairAndTupleRendering :: ProofGenTStd () [PredRuleDeBr] PropDeBr Text ()IO ()
 testPairAndTupleRendering = do
     remarkM "--- Testing Pair and Tuple Rendering (Kuratowski) ---"
 
@@ -1239,7 +1240,7 @@ testPairAndTupleRendering = do
     return ()
 
 
-testAxiomOfChoice :: ProofGenTStd () [ZFCRuleDeBr] PropDeBr Text IO ()
+testAxiomOfChoice :: ProofGenTStd () [ZFCRuleDeBr] PropDeBr Text () IO ()
 testAxiomOfChoice = do
     -- Test for Axiom of Choice
     (acAx, acAxIdx) <- axiomOfChoiceM
@@ -1470,14 +1471,14 @@ main = do
     (putStrLn . unpack . showPropDeBrStepsBase) cFSR -- Print results
 
     print "TEST BINARY UNION EXISTS SCHEMA-------------------------------------"
-    (a,b,c,d) <- checkTheoremM (binaryUnionExistsSchema::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text IO ()))
+    (a,b,c,d) <- checkTheoremM (binaryUnionExistsSchema::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text () IO ()))
     (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
 
 
     print "SPEC TO BUILDER THEOREM-------------------------------------"
     let p_template = Constant "C" :+: X 0 :==: (X 1 :+: X 2)
     let source_set_template = X 1 .\/. X 2
-    (a,b,c,d) <- checkTheoremM (builderSchema 0 [1,2] source_set_template p_template::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text IO ()))
+    (a,b,c,d) <- checkTheoremM (builderSchema 0 [1,2] source_set_template p_template::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text () IO ()))
     (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
 
     -- error "STOPPING HERE"
@@ -1485,21 +1486,21 @@ main = do
     print "SPEC TO BUILDER THEOREM 2-------------------------------------"
     let p_template = Constant "C" :==: X 0
     let source_set_template = Constant "S"
-    (a,b,c,d) <- checkTheoremM (builderSchema 0 [] source_set_template p_template::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text IO ()))
+    (a,b,c,d) <- checkTheoremM (builderSchema 0 [] source_set_template p_template::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text () IO ()))
     (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
     
 
 
     print "TEST BINARY INTERSECTION EXISTS SCHEMA-------------------------------------"
-    (a,b,c,d) <- checkTheoremM (binaryIntersectionExistsSchema::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text IO ()))
+    (a,b,c,d) <- checkTheoremM (binaryIntersectionExistsSchema::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text ()IO ()))
     (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
 
     print "TEST BINARY CROSSPRODDEFEQUIV SCHEMA-------------------------------------"
-    (a,b,c,d) <- checkTheoremM (crossProductDefEquivSchema::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text IO ()))
+    (a,b,c,d) <- checkTheoremM (crossProductDefEquivSchema::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text () IO ()))
     (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
 
     print "TEST CROSSPROD EXISTS SCHEMA ---------------------------"
-    (a,b,c,d) <- checkTheoremM (crossProductExistsSchema::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text IO ()))
+    (a,b,c,d) <- checkTheoremM (crossProductExistsSchema::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text ()IO ()))
     (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
 
     print "TEST BUILDER SUBSET THEOREM-------------------------------------"
@@ -1507,24 +1508,24 @@ main = do
     let source_set_template = X 1 .\/. X 2
     (a,b,c,d) <- checkTheoremM 
          (builderSubsetTheoremSchema [1,2] 0 source_set_template p_template 
-              ::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text IO ()))
+              ::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text ()IO ()))
     (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
 
     print "TEST BUILDER SOURCE PARTITION THEOREM--------------------"
     let p_template = Constant "C" :+: X 0 :==: (X 1 :+: X 2)
     let source_set_template = X 1 .\/. X 2
     (a,b,c,d) <- checkTheoremM (builderSrcPartitionSchema [1,2] 0 source_set_template p_template 
-            ::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text IO ()))
+            ::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text ()IO ()))
     (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
 
 
 
     print "TEST UNION WITH EMPTY SET THEOREM-------------------------------------"
-    (a,b,c,d) <- checkTheoremM (unionWithEmptySetSchema::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text IO ()))
+    (a,b,c,d) <- checkTheoremM (unionWithEmptySetSchema::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text ()IO ()))
     (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
 
     print "DISJOINT SUBSET IS EMPTY THEOREM-------------------------------------"
-    (a,b,c,d) <- checkTheoremM (disjointSubsetIsEmptySchema::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text IO ()))
+    (a,b,c,d) <- checkTheoremM (disjointSubsetIsEmptySchema::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text () IO ()))
     (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
 
 
@@ -1532,7 +1533,7 @@ main = do
     let p_template = Constant "C" :+: X 0 :==: (X 1 :+: X 2)
     let source_set_template = X 1 .\/. X 2
     (a,b,c,d) <- checkTheoremM (specRedundancySchema [1,2] 0 source_set_template p_template
-                       ::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text IO ()))
+                       ::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text ()IO ()))
     (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
 
 
@@ -1540,7 +1541,7 @@ main = do
     let p_template = X 0 .==. X 0
     let source_set_template = Constant "SourceSet"
     (a,b,c,d) <- checkTheoremM (specRedundancySchema [] 0 source_set_template p_template
-                                   ::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text IO ()))
+                                   ::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text ()IO ()))
     (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
 
 
@@ -1549,7 +1550,7 @@ main = do
     let p_template = Constant "C" .+. X 0 .==. (X 1 .+. X 2)
     let source_set_template = X 1 .\/. X 2
     (a,b,c,d) <- checkTheoremM (specAntiRedundancySchema [1,2] 0 source_set_template p_template
-                   :: (TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text IO ()))
+                   :: (TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text () IO ()))
     (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
 
 
@@ -1558,7 +1559,7 @@ main = do
     let p_template = X 0 .==. X 0
     let source_set_template = Constant "SourceSet"
     (a,b,c,d) <- checkTheoremM (specAntiRedundancySchema [] 0 source_set_template p_template
-                       :: (TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text IO ()))
+                       :: (TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text () IO ()))
     (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
 
 
@@ -1567,7 +1568,7 @@ main = do
 
 
 
-testprog::ProofGenTStd () [PredRuleDeBr] PropDeBr Text IO ()
+testprog::ProofGenTStd () [PredRuleDeBr] PropDeBr Text ()IO ()
 testprog = do
       let z1 = aX 0 ((X 0 `In` Constant "N") :&&: (X 0 :<=: Integ 10) :->: (X 0 :<=: Integ 0))
       showZ1 <- showPropM z1
@@ -1603,7 +1604,7 @@ testprog = do
       absurdM absurdImp
       return ()
 
-testprog2::ProofGenTStd () [PredRuleDeBr] PropDeBr Text IO ()
+testprog2::ProofGenTStd () [PredRuleDeBr] PropDeBr Text ()IO ()
 testprog2 = do
     let p = eX 0 (X 0 `In` Constant "N")
     let q = eX 0 (X 0 .<=. Integ 10)
@@ -1617,7 +1618,7 @@ testprog2 = do
     return ()
 
 
-testprog3::ProofGenTStd () [PredRuleDeBr] PropDeBr Text IO ()
+testprog3::ProofGenTStd () [PredRuleDeBr] PropDeBr Text () IO ()
 testprog3 = do
     let a = eX 0 (X 0 `nIn` Constant "N")
     fakeConstM "N" ()
@@ -1627,7 +1628,7 @@ testprog3 = do
     remarkM $ showS <> " is the sentence. It was proven in line " <> (pack . show) idx
     return ()
 
-testprog4::ProofGenTStd () [PredRuleDeBr] PropDeBr Text IO ()
+testprog4::ProofGenTStd () [PredRuleDeBr] PropDeBr Text () IO ()
 testprog4 = do
     let a = aX 0 (X 0 `nIn` Constant "N")
     fakeConstM "N" ()
@@ -1638,7 +1639,7 @@ testprog4 = do
     return ()
 
 
-testprog5::ProofGenTStd () [PredRuleDeBr] PropDeBr Text IO ()
+testprog5::ProofGenTStd () [PredRuleDeBr] PropDeBr Text () IO ()
 testprog5 = do
     let a = eXBang 99 (Neg (X 99 `In` Constant "N"))
     fakeConstM "N" ()
@@ -1650,7 +1651,7 @@ testprog5 = do
     return ()
 
 
-theoremProg::(MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) => ProofGenTStd () [PredRuleDeBr] PropDeBr Text m ()
+theoremProg::(MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) => ProofGenTStd () [PredRuleDeBr] PropDeBr Text ()m ()
 theoremProg = do
     let z1 = aX 0 ((X 0 `In` Constant "N") :&&: (X 0 :<=: Integ 10) :->: (X 0 :<=: Integ 0))
     let z2 = aX 0 ((X 0 `In` Constant "N") :&&: (X 0 :<=: Integ 0) :->: (X 0 :==: Integ  0))

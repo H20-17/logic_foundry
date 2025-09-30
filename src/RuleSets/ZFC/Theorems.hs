@@ -109,7 +109,8 @@ import RuleSets.PredLogic.Core hiding
    MetaRuleError(..),
    HelperConstraints(..),
    SentConstraints(..),
-   MonadSent)
+   MonadSent,
+   aX, eX, hX, eXBang, multiAx)
 import qualified RuleSets.PredLogic.Core as PREDL
 import RuleSets.ZFC.Core
 import RuleSets.BaseLogic.Helpers hiding
@@ -117,7 +118,7 @@ import RuleSets.BaseLogic.Helpers hiding
 import RuleSets.PredLogic.Helpers hiding
      (MetaRuleError(..),
      runProofByUGM,
-     multiUGM)
+     multiUGM, multiAXM, multiEXM, eXM, aXM, hXM)
 import RuleSets.PropLogic.Helpers hiding
      (MetaRuleError(..))
 import RuleSets.ZFC.Helpers hiding
@@ -222,7 +223,7 @@ proveBuilderTheoremM :: HelperConstraints sE s eL m r t =>
     [Int] ->        -- outer_idxs
     t ->            -- source_set_template
     (t->s) ->            -- p_template
-    ProofGenTStd () r s Text m ()
+    ProofGenTStd () r s Text () m ()
 proveBuilderTheoremM outer_idxs source_set_template p_pred = do
     runProofBySubArgM $ do
 
@@ -244,7 +245,7 @@ builderSchema :: HelperConstraints sE s eL m r t =>
     [Int] ->        -- outer_idxs
     t ->            -- source_set_template
     s ->            -- p_template
-    TheoremSchemaMT () r s Text m ()
+    TheoremSchemaMT () r s Text () m ()
 builderSchema spec_idx outer_idxs source_set_template p_template = 
     let
         dom_tmplt_consts = extractConstsTerm source_set_template
@@ -284,7 +285,7 @@ builderInstantiateM :: HelperConstraints sE s eL m r t =>
     Int ->          -- spec_var_X_idx
     t ->            -- source_set_template
     s ->            -- p_template
-    ProofGenTStd () r s Text m (s,[Int], (t,t,s))
+    ProofGenTStd () r s Text () m (s,[Int], (t,t,s))
 builderInstantiateM substitutions spec_var_X_idx source_set_template p_template =
     runProofBySubArgM $ do
         -- Extract the indices and terms from the substitution pairs.
@@ -456,7 +457,7 @@ binaryUnionExistsTheorem =
 -- | Note that 'union_equiv_theorem' is a required lemma.
 
 proveBinaryUnionExistsM :: HelperConstraints sE s eL m r t =>
-    ProofGenTStd () r s Text m ()
+    ProofGenTStd () r s Text () m ()
 proveBinaryUnionExistsM = do
     -- Universally generalize over A and B.
     multiUGM 2 $ do
@@ -510,7 +511,7 @@ proveBinaryUnionExistsM = do
 -- | The schema stipulates that:
 -- | "union_equiv_theorem" is a required lemma.
 binaryUnionExistsSchema ::  HelperConstraints sE s eL m r t => 
-     TheoremSchemaMT () r s Text m ()
+     TheoremSchemaMT () r s Text () m ()
 binaryUnionExistsSchema =       
     TheoremSchemaMT {
         lemmasM = [unionEquivTheorem],
@@ -525,7 +526,7 @@ binaryUnionExistsSchema =
 -- | For this helper to work, the theorem defined by 'binaryUnionExistsTheorem' must be proven
 -- | beforehand, which is likely done in the global context.
 binaryUnionInstantiateM ::  HelperConstraints sE s eL m r t =>
-    t -> t -> ProofGenTStd () r s Text m (s, [Int], t)
+    t -> t -> ProofGenTStd () r s Text () m (s, [Int], t)
 binaryUnionInstantiateM setA setB = do
     runProofBySubArgM $ do
         -- This helper relies on isSet(setA) and isSet(setB) being proven in the outer context.
@@ -601,7 +602,7 @@ binaryIntersectionExistsTheorem =
 -- | The resulting set S = {x ∈ A | x ∈ B} is precisely the intersection A ∩ B.
 -- | The `builderInstantiateM` helper encapsulates this application of the axiom.
 proveBinaryIntersectionExistsM :: HelperConstraints sE s eL m r t =>
-    ProofGenTStd () r s Text m ()
+    ProofGenTStd () r s Text () m ()
 proveBinaryIntersectionExistsM = do
     -- The theorem is universally quantified over two sets, A and B.
     multiUGM 2 $ do
@@ -652,7 +653,7 @@ proveBinaryIntersectionExistsM = do
 -- | This theorem has no other high-level theorems as lemmas; it is proven
 -- | directly from the Axiom of Specification (via the builderInstantiateM helper).
 binaryIntersectionExistsSchema :: HelperConstraints sE s eL m r t =>
-     TheoremSchemaMT () r s Text m ()
+     TheoremSchemaMT () r s Text () m ()
 binaryIntersectionExistsSchema =
     let
         a_param_idx = 0
@@ -676,7 +677,7 @@ binaryIntersectionExistsSchema =
 -- | For this helper to work, the theorem defined by 'binaryIntersectionExistsTheorem' must be proven
 -- | beforehand (e.g., in the global context by running its schema).
 binaryIntersectionInstantiateM ::  HelperConstraints sE s eL m r t =>
-    t -> t -> ProofGenTStd () r s Text m (s, [Int], t)
+    t -> t -> ProofGenTStd () r s Text () m (s, [Int], t)
 binaryIntersectionInstantiateM setA setB = do
     runProofBySubArgM $ do
         -- This helper relies on isSet(setA) and isSet(setB) being proven in the outer context.
@@ -714,7 +715,7 @@ binaryIntersectionInstantiateM setA setB = do
 -- | proven in the current proof context.
 -- | It also relies on the theorem `binaryUnionExistsTheorem` being proven beforehand.
 proveUnionIsSetM :: HelperConstraints sE s eL m r t =>
-    t -> t -> ProofGenTStd () r s Text m (s, [Int])
+    t -> t -> ProofGenTStd () r s Text () m (s, [Int])
 proveUnionIsSetM setA setB = do
     (resultProp,idx,_) <- runProofBySubArgM $ do
         (prop_of_union, _, unionObj) <- binaryUnionInstantiateM setA setB
@@ -758,7 +759,7 @@ unionWithEmptySetTheorem =
 -- | 'binaryUnionExists' theorem. To prove A = B, we must show:
 -- |   isSet(A) ∧ isSet(B) ∧ ∀y(y ∈ A ↔ y ∈ B)
 proveUnionWithEmptySetM :: HelperConstraints sE s eL m r t =>
-    ProofGenTStd () r s Text m ()
+    ProofGenTStd () r s Text () m ()
 proveUnionWithEmptySetM = do
     -- Prove the theorem: ∀x (isSet x → x ∪ ∅ = x)
     runProofByUGM  $ do
@@ -846,7 +847,7 @@ proveUnionWithEmptySetM = do
 -- | The schema that houses the proof for 'unionWithEmptySetTheorem'.
 -- | It declares its dependencies on other theorems.
 unionWithEmptySetSchema :: HelperConstraints sE s eL m r t =>
-     TheoremSchemaMT () r s Text m ()
+     TheoremSchemaMT () r s Text () m ()
 unionWithEmptySetSchema =
     let
         -- The lemmas required for this proof.
@@ -884,7 +885,7 @@ disjointSubsetIsEmptyTheorem = aX 0 (aX 1 (isSet (x 0) .&&. (x 0 ./\. x 1) .==. 
 -- | 9. Therefore, our assumption must be false, so ¬∃x(x ∈ b), which is ∀x(¬(x ∈ b)).
 -- | 10. With ∀x(x ∈ b ↔ x ∈ ∅) proven, the Axiom of Extensionality gives b = ∅.
 proveDisjointSubsetIsEmptyM :: HelperConstraints sE s eL m r t =>
-    ProofGenTStd () r s Text m ()
+    ProofGenTStd () r s Text ()m ()
 proveDisjointSubsetIsEmptyM = do
     -- Prove: ∀a ∀b (isSet(a) ∧ a ∩ b = ∅ ∧ b ⊆ a → b=∅)
     multiUGM 2 $ do
@@ -972,7 +973,7 @@ proveDisjointSubsetIsEmptyM = do
 -- | The schema that houses the proof for 'disjointSubsetIsEmptyTheorem'.
 -- | It declares its dependencies on other theorems.
 disjointSubsetIsEmptySchema :: HelperConstraints sE s eL m r t =>
-     TheoremSchemaMT () r s Text m ()
+     TheoremSchemaMT () r s Text () m ()
 disjointSubsetIsEmptySchema =
     let
         -- The lemmas required for this proof.
@@ -1030,7 +1031,7 @@ proveBuilderIsSubsetOfDomMFree :: HelperConstraints sE s eL m r t =>
     Int -> -- spec_var_idx 
     t ->   -- sourceSet: The ObjDeBr for the set B, i.e., {x ∈ dom | P(x)}
     s -> -- p_tmplt
-    ProofGenTStd () r s Text m (s,[Int],())
+    ProofGenTStd () r s Text () m (s,[Int],())
 proveBuilderIsSubsetOfDomMFree spec_var_idx sourceSet p_tmplt =
     -- runProofBySubArgM will prove the last statement from its 'do' block (the subset proposition)
     -- and return (proven_subset_prop, index_of_this_subargument, ()).
@@ -1109,7 +1110,7 @@ proveBuilderSubsetTheoremM :: HelperConstraints sE s eL m r t =>
     Int ->      -- spec_var_X_idx
     t ->  -- source_set_template
     s -> -- p_template
-    ProofGenTStd () r s Text m ()
+    ProofGenTStd () r s Text ()m ()
 proveBuilderSubsetTheoremM outerTemplateIdxs spec_var_X_idx source_set_template p_template = do
     -- Step 1: Universally generalize over all parameters.
     -- The number of quantifiers is determined by the length of 'outerTemplateIdxs'.
@@ -1152,7 +1153,7 @@ builderSubsetTheoremSchema :: HelperConstraints sE s eL m r t =>
     Int ->      -- spec_var_X_idx
     t ->  -- source_set_template
     s -> -- p_template
-    TheoremSchemaMT () r s Text m ()
+    TheoremSchemaMT () r s Text () m ()
 builderSubsetTheoremSchema outerTemplateIdxs spec_var_X_idx source_set_template p_template =
     let
       source_set_tmplt_consts = extractConstsTerm source_set_template
@@ -1245,7 +1246,7 @@ proveBuilderSrcPartitionUnionMFree :: HelperConstraints sE s eL m r t =>
     Int ->      -- spec_var_idx: The 'x' in {x ∈ S | P(x)}
     t ->  -- sourceSet: The set S
     s -> -- p_tmplt: The predicate P(x), which uses X spec_var_idx for x.
-    ProofGenTStd () r s Text m (s,[Int],())
+    ProofGenTStd () r s Text ()m (s,[Int],())
 proveBuilderSrcPartitionUnionMFree spec_var_idx sourceSet p_tmplt =
               -- partition_equiv_theorem_free =
     runProofBySubArgM $ do
@@ -1359,7 +1360,7 @@ proveBuilderSrcPartitionIntersectionEmptyMFree ::  HelperConstraints sE s eL m r
     Int ->      -- spec_var_idx: The 'x' in {x ∈ S | P(x)}
     t ->  -- sourceSet: The set S
     s -> -- p_tmplt: The predicate P(x), which uses X spec_var_idx for x.
-    ProofGenTStd () r s Text m (s,[Int],())
+    ProofGenTStd () r s Text ()m (s,[Int],())
 proveBuilderSrcPartitionIntersectionEmptyMFree spec_var_idx sourceSet p_tmplt
            =
     runProofBySubArgM $ do
@@ -1469,7 +1470,7 @@ proveBuilderSrcPartitionTheoremM :: HelperConstraints sE s eL m r t =>
     Int ->      -- spec_var_idx: The 'x' in {x ∈ S | P(x)}.
     t ->  -- source_set_template: The source set S, which may contain X_k parameters.
     s -> -- p_template: The predicate P(x), which may contain X_k parameters.
-    ProofGenTStd () r s Text m ()
+    ProofGenTStd () r s Text ()m ()
 proveBuilderSrcPartitionTheoremM outerTemplateIdxs spec_var_idx source_set_template p_template = do
     -- Step 1: Universally generalize over all parameters.
     multiUGM (length outerTemplateIdxs) $ do
@@ -1528,7 +1529,7 @@ builderSrcPartitionSchema :: HelperConstraints sE s eL m r t =>
     Int ->      -- spec_var_idx
     t ->  -- source_set_template
     s -> -- p_template
-    TheoremSchemaMT () r s Text m ()
+    TheoremSchemaMT () r s Text () m ()
 builderSrcPartitionSchema outerTemplateIdxs spec_var_idx source_set_template p_template =
     let
         -- The main theorem being proven by this schema.
@@ -1620,7 +1621,7 @@ proveSpecRedundancyMFree :: HelperConstraints sE s eL m r t =>
     t ->  -- sourceSet: The instantiated source set S
     s -> -- p_tmplt: The instantiated predicate P(x)
     -- PropDeBr -> -- def_prop_B: The proven defining property of the builder set
-    ProofGenTStd () r s Text m (s,[Int])
+    ProofGenTStd () r s Text ()m (s,[Int])
 proveSpecRedundancyMFree spec_var_idx sourceSet p_tmplt 
          -- def_prop_B 
          = do
@@ -1697,7 +1698,7 @@ proveSpecRedundancyTheoremM :: HelperConstraints sE s eL m r t  =>
     Int ->      -- spec_var_X_idx
     t ->  -- source_set_template
     s -> -- p_template
-    ProofGenTStd () r s Text m ()
+    ProofGenTStd () r s Text () m ()
 proveSpecRedundancyTheoremM outerTemplateIdxs spec_var_idx source_set_template p_template = do
     -- Step 1: Universally generalize over all parameters specified in outerTemplateIdxs.
     multiUGM (length outerTemplateIdxs) $ do
@@ -1741,7 +1742,7 @@ specRedundancySchema :: HelperConstraints sE s eL m r t=>
     Int ->      -- spec_var_X_idx
     t ->  -- source_set_template
     s -> -- p_template
-    TheoremSchemaMT () r s Text m ()
+    TheoremSchemaMT () r s Text () m ()
 specRedundancySchema outerTemplateIdxs spec_var_idx source_set_template p_template =
     let
         -- The main theorem being proven by this schema.
@@ -1822,7 +1823,7 @@ proveSpecAntiRedundancyMFree :: HelperConstraints sE s eL m r t =>
     Int ->      -- spec_var_idx: The 'x' in {x ∈ S | P(x)}
     t ->  -- sourceSet: The instantiated source set S
     s -> -- p_tmplt: The instantiated predicate P(x)
-    ProofGenTStd () r s Text m (s,[Int])
+    ProofGenTStd () r s Text ()m (s,[Int])
 proveSpecAntiRedundancyMFree spec_var_idx sourceSet p_tmplt 
          -- def_prop_B 
          = do
@@ -1923,7 +1924,7 @@ proveSpecAntiRedundancyTheoremM :: HelperConstraints sE s eL m r t  =>
     Int ->      -- spec_var_X_idx
     t ->  -- source_set_template
     s -> -- p_template
-    ProofGenTStd () r s Text m ()
+    ProofGenTStd () r s Text () m ()
 proveSpecAntiRedundancyTheoremM outerTemplateIdxs spec_var_idx source_set_template p_template = do
     -- Step 1: Universally generalize over all parameters specified in outerTemplateIdxs.
     multiUGM (length outerTemplateIdxs) $ do
@@ -1970,7 +1971,7 @@ specAntiRedundancySchema :: HelperConstraints sE s eL m r t =>
     Int ->      -- spec_var_X_idx
     t ->  -- source_set_template
     s -> -- p_template
-    TheoremSchemaMT () r s Text m ()
+    TheoremSchemaMT () r s Text ()m ()
 specAntiRedundancySchema outerTemplateIdxs spec_var_idx source_set_template p_template =
     let
         -- The main theorem being proven by this schema.
@@ -2070,7 +2071,7 @@ tupleEqTheorem tuple_len =
 -- | @param template_sent The template sentence `P(xᵢ₁, xᵢ₂, ...)` where i_k ∈ indices.
 -- | @return The proven proposition `P(u₁,...,uₙ)`.
 tupleSubstM :: (HelperConstraints sE s eL m r1 t)  =>
-    [Int] -> s -> s -> ProofGenTStd () r1 s Text m (s, [Int])
+    [Int] -> s -> s -> ProofGenTStd () r1 s Text () m (s, [Int])
 tupleSubstM indices tuple_eq_sent template_sent = do
     (substituted,idx,_) <- runProofBySubArgM $ do
         let n = length indices
@@ -2221,7 +2222,7 @@ crossProductDefEquivTheorem =
 
 -- | Proves "crossProductDefEquivTheorem".
 proveCrossProductDefEquivM :: (HelperConstraints sE s eL m r t)  =>
-    ProofGenTStd () r s Text m ()
+    ProofGenTStd () r s Text () m ()
 proveCrossProductDefEquivM = do
     -- Universally generalize over A and B
     multiUGM 2 $ do
@@ -2336,7 +2337,7 @@ proveCrossProductDefEquivM = do
 -- | The schema stipulates that:
 -- | "binaryUnionExistsTheorem" is a required lemma.
 crossProductDefEquivSchema :: (HelperConstraints sE s eL m r t) => 
-     TheoremSchemaMT () r s Text m ()
+     TheoremSchemaMT () r s Text () m ()
 crossProductDefEquivSchema = 
     let
         z_idx = 0
@@ -2407,7 +2408,7 @@ crossProductExistsTheorem =
 -- | Proves the theorem: 'crossProductExistsTheorem'.
 -- | 'crossProductDefEquivTheorem' is a required lemma for this proof.
 proveCrossProductExistsM :: (HelperConstraints sE s eL m r t) =>
-    ProofGenTStd () r s Text m ()
+    ProofGenTStd () r s Text () m ()
 proveCrossProductExistsM = do
     -- The theorem is universally quantified over two sets, A and B.
     -- We use multiUGM to handle the two ∀ quantifiers.
@@ -2464,7 +2465,7 @@ proveCrossProductExistsM = do
 -- | The schema stipulates that:
 -- | "crossProductDefEquivTheorem" is a required lemma.
 crossProductExistsSchema :: HelperConstraints sE s eL m r t => 
-     TheoremSchemaMT () r s Text m ()
+     TheoremSchemaMT () r s Text () m ()
 crossProductExistsSchema = 
     let
         builderTheoremInst = runIndexTracker [] $ do
@@ -2491,7 +2492,7 @@ crossProductExistsSchema =
 -- | For this helper to work, the theorem defined by 'crossProductExistsTheorem' must be proven
 -- | beforehand, which will likely be done in the global context.
 crossProductInstantiateM ::  HelperConstraints sE s eL m r t =>
-    t -> t -> ProofGenTStd () r s Text m (s, [Int], t)
+    t -> t -> ProofGenTStd () r s Text ()m (s, [Int], t)
 crossProductInstantiateM setA setB = do
     runProofBySubArgM $ do
         -- This helper relies on isSet(setA) and isSet(setB) being proven in the outer context.
@@ -2625,7 +2626,7 @@ applyWellFoundednessM :: HelperConstraints sE s eL m r t =>
     t ->  -- subsetS
     t ->  -- domainD
     t ->  -- relationR
-    ProofGenTStd () r s Text m ((s, [Int]), (s, [Int]), t)
+    ProofGenTStd () r s Text ()m ((s, [Int]), (s, [Int]), t)
 applyWellFoundednessM subsetS domainD relationR = do
     let builderSubsetTmFree = subsetS `subset` domainD
     let absurd_asm = subsetS ./=. emptySet
@@ -2683,7 +2684,7 @@ deriveInductiveContradictionM :: HelperConstraints sE s eL m r t =>
     t ->  -- rel_obj
     s -> -- induction_premise
     s -> -- spec_prop
-    ProofGenTStd () r s Text m (s, [Int], ())
+    ProofGenTStd () r s Text () m (s, [Int], ())
 deriveInductiveContradictionM counterexamples dom rel_obj induction_premise spec_prop 
            =
     runProofBySubArgM $ do
@@ -2805,7 +2806,7 @@ strongInductionTheorem outerTemplateIdxs idx dom_template p_template =
         theorem_body
 
 strongInductionTheoremProgFree::HelperConstraints sE s eL m r t => 
-               Int -> t -> s -> ProofGenTStd () r s Text m (s,[Int])
+               Int -> t -> s -> ProofGenTStd () r s Text ()m (s,[Int])
 strongInductionTheoremProgFree idx dom p_pred = do
     
     rel_idx <- newIndex
@@ -2860,7 +2861,7 @@ strongInductionTheoremProgFree idx dom p_pred = do
 
 
 strongInductionTheoremProg:: HelperConstraints sE s eL m r t => 
-               [Int] -> Int -> t -> s -> ProofGenTStd () r s Text m ()
+               [Int] -> Int -> t -> s -> ProofGenTStd () r s Text ()m ()
 strongInductionTheoremProg outerTemplateIdxs idx dom_template p_template = do
     -- we do not need to do setBaseIndex idx : outerTemplateIdxs
     -- because the outerTemplate indexes play no role when newIndex is called througout this function.
@@ -2918,7 +2919,7 @@ strongInductionTheoremProg outerTemplateIdxs idx dom_template p_template = do
 
 
 strongInductionTheoremMSchema :: HelperConstraints sE s eL m r t => 
-     [Int] -> Int -> t -> s -> TheoremSchemaMT () r s Text m ()
+     [Int] -> Int -> t -> s -> TheoremSchemaMT () r s Text () m ()
 strongInductionTheoremMSchema outerTemplateIdxs spec_var_idx dom p_template= 
     let
       dom_tmplt_consts = extractConstsTerm dom

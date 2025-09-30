@@ -880,3 +880,4 @@ type SentConstraints s t tType o q = (LogicSent s t tType o q, LogicTerm t)
 
 
 type MonadSent s t tType o q m = (SentConstraints s t tType o q,  MonadState (Sum Int) m)
+
