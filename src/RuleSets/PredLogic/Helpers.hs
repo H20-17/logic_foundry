@@ -80,7 +80,7 @@ import IndexTracker
 
 
 standardRuleM :: HelperConstraints m s tType o t sE eL r q
-       => r -> ProofGenTStd tType r s o m (s,[Int])
+       => r -> ProofGenTStd tType r s o q m (s,[Int])
 standardRuleM rule = do
     -- function is unsafe and used for rules that generate one or more sentence.
     -- probably should not be externally facing.
@@ -91,14 +91,14 @@ standardRuleM rule = do
 
 
 uiM, egM :: HelperConstraints m s tType o t sE eL r q
-                   => t -> s -> ProofGenTStd tType r s o m (s,[Int])
+                   => t -> s -> ProofGenTStd tType r s o q m (s,[Int])
 uiM term sent = standardRuleM (ui term sent)
 egM term sent = standardRuleM (eg term sent)
 
 
 
 eiM :: HelperConstraints m s tType o t sE eL r q
-                   => s -> o -> ProofGenTStd tType r s o m (s,[Int],t)
+                   => s -> o -> ProofGenTStd tType r s o q m (s,[Int],t)
 eiM sent const = do
                    (instantiated, idx) <- standardRuleM (ei sent const)
                    return (instantiated,idx,const2Term const)
@@ -106,7 +106,7 @@ eiM sent const = do
 
 
 eNegIntroM, aNegIntroM, eqSymM :: HelperConstraints m s tType o t sE eL r q
-                   => s -> ProofGenTStd tType r s o m (s,[Int])
+                   => s -> ProofGenTStd tType r s o q m (s,[Int])
 eNegIntroM sent = standardRuleM (eNegIntro sent)
 
 aNegIntroM sent = standardRuleM (aNegIntro sent)
@@ -115,7 +115,7 @@ eqSymM eqSent = standardRuleM (eqSym eqSent)
 
 
 eiHilbertM :: HelperConstraints m s tType o t sE eL r q
-                   => s -> ProofGenTStd tType r s o m (s,[Int],t)
+                   => s -> ProofGenTStd tType r s o q m (s,[Int],t)
 
 eiHilbertM sent = do
          (instantiated, idx) <- standardRuleM (eiHilbert sent)
@@ -126,7 +126,7 @@ eiHilbertM sent = do
 
 
 eqTransM :: HelperConstraints m s tType o t sE eL r q
-           => s -> s -> ProofGenTStd tType r s o m (s,[Int])
+           => s -> s -> ProofGenTStd tType r s o q m (s,[Int])
 eqTransM eqSent1 eqSent2 = standardRuleM (eqTrans eqSent1 eqSent2)
 
 -- | Given a template sentence and a list of equalities, this function iteratively
@@ -142,7 +142,7 @@ eqTransM eqSent1 eqSent2 = standardRuleM (eqTrans eqSent1 eqSent2)
 eqSubstMultiM :: HelperConstraints m s tType o t sE eL r q
               => [(Int, s)]  -- ^ List of (index, equality) pairs for substitution.
               -> s           -- ^ The template sentence.
-              -> ProofGenTStd tType r s o m (s, [Int])
+              -> ProofGenTStd tType r s o q m (s, [Int])
 eqSubstMultiM substitutions templateSent = do
     -- This function requires parsers for the left and right sides of an equality.
     -- We'll assume a `parseEq :: s -> Maybe (t, t)` function exists in the environment.
@@ -202,16 +202,16 @@ eqSubstMultiM substitutions templateSent = do
 
 
 eqSubstM :: HelperConstraints m s tType o t sE eL r q
-           => Int -> s -> s -> ProofGenTStd tType r s o m (s,[Int])
+           => Int -> s -> s -> ProofGenTStd tType r s o q m (s,[Int])
 eqSubstM idx templateSent eqSent = standardRuleM (eqSubst idx templateSent eqSent)
 
 eqReflM :: HelperConstraints m s tType o t sE eL r q
-          => t -> ProofGenTStd tType r s o m (s,[Int])
+          => t -> ProofGenTStd tType r s o q m (s,[Int])
 eqReflM term = standardRuleM (eqRefl term)
 
 
 reverseANegIntroM, reverseENegIntroM :: HelperConstraints m s tType o t sE eL r q
-                   => s -> ProofGenTStd tType r s o m (s,[Int])
+                   => s -> ProofGenTStd tType r s o q m (s,[Int])
 
 
 
@@ -261,8 +261,8 @@ reverseENegIntroM forallXNotPx = do
 
 
 runProofByUGM :: HelperConstraints m s tType o t sE eL r1 q
-                 =>  q -> ProofGenTStd tType r1 s o m x
-                            -> ProofGenTStd tType r1 s o m (s, [Int])
+                 =>  q -> ProofGenTStd tType r1 s o q m x
+                            -> ProofGenTStd tType r1 s o q m (s, [Int])
 runProofByUGM tt prog =  do
         state <- getProofState
         context <- ask
@@ -272,20 +272,20 @@ runProofByUGM tt prog =  do
         let newStepIdxPrefix = stepIdxPrefix context ++ [stepCount state]
         let newContext = PrfStdContext newFrVarTypStack newStepIdxPrefix newContextFrames
         let newState = PrfStdState mempty mempty 1
-        let preambleSteps = [PrfStdStepFreevar (length frVarTypeStack) tt]
+        let preambleSteps = [PrfStdStepFreevar (length frVarTypeStack) (qTypeToTType tt)]
         vIdx <- get
         (extraData,generalizable,subproof, newSteps) 
                  <- lift $ runSubproofM newContext state newState preambleSteps (Last Nothing) prog vIdx
-        let resultSent = aX  tt (Prelude.length frVarTypeStack) generalizable
+        let resultSent = aX tt (Prelude.length frVarTypeStack) generalizable
         mayMonadifyRes <- monadifyProofStd $ proofByUG resultSent subproof
         idx <- maybe (error "No theorem returned by monadifyProofStd on ug schema. This shouldn't happen") (return . snd) mayMonadifyRes       
         return (resultSent,idx)
 
 multiUGM :: HelperConstraints m s tType o t sE eL r1 q =>
-    [qType] ->                             -- ^ List of types for UG variables (outermost first).
-    ProofGenTStd tType r1 s o m x ->       -- ^ The core program. Its monadic return 'x' is discarded.
+    [q] ->                             -- ^ List of types for UG variables (outermost first).
+    ProofGenTStd tType r1 s o q m x ->       -- ^ The core program. Its monadic return 'x' is discarded.
                                            --   It must set 'Last s' with the prop to be generalized.
-    ProofGenTStd tType r1 s o m (s, [Int])  -- ^ Returns (final_generalized_prop, its_index).
+    ProofGenTStd tType r1 s o q m (s, [Int])  -- ^ Returns (final_generalized_prop, its_index).
 multiUGM typeList programCore =
     case typeList of
         [] ->
@@ -316,7 +316,7 @@ multiUGM typeList programCore =
 
 extractConstsSentM :: HelperConstraints m  s tType o t sE eL r1 q
                  =>   s
-                            -> ProofGenTStd tType r1 s o m (Map o tType)
+                            -> ProofGenTStd tType r1 s o q m (Map o tType)
 
 extractConstsSentM sentence = do
     state <- getProofState
@@ -349,8 +349,8 @@ constDictTest envDict = Data.Map.foldrWithKey f Nothing
 
 
 runTheoremM :: HelperConstraints m s tType o t sE eL r1 q
-                 =>   TheoremSchemaMT tType r1 s o m x ->
-                               ProofGenTStd tType r1 s o m (s, [Int], x)
+                 =>   TheoremSchemaMT tType r1 s o q m x ->
+                               ProofGenTStd tType r1 s o q m (s, [Int], x)
 runTheoremM (TheoremSchemaMT constDict lemmas prog idxs) =  do
         state <- getProofState
         context <- ask
@@ -361,8 +361,8 @@ runTheoremM (TheoremSchemaMT constDict lemmas prog idxs) =  do
 
 
 runTmSilentM :: HelperConstraints m s tType o t sE eL r1 q
-                 =>   TheoremAlgSchema tType r1 s o x ->
-                               ProofGenTStd tType r1 s o m (s, [Int], x)
+                 =>   TheoremAlgSchema tType r1 s o q x ->
+                               ProofGenTStd tType r1 s o q m (s, [Int], x)
 -- runTmSilentM f (TheoremSchemaMT constDict lemmas prog) =  do
 runTmSilentM (TheoremSchemaMT constDict lemmas prog idxs) =  do
         state <- getProofState
@@ -387,7 +387,7 @@ runTmSilentM (TheoremSchemaMT constDict lemmas prog idxs) =  do
 multiUIM ::  HelperConstraints m s tType o t sE eL r1 q =>
     s ->      -- initialProposition: The proposition to start with.
     [t] ->    -- instantiationTerms: List of terms to instantiate with, in order.
-    ProofGenTStd tType r1 s o m (s,[Int])
+    ProofGenTStd tType r1 s o q m (s,[Int])
 multiUIM initialProposition instantiationTerms =
     case instantiationTerms of
         [] ->

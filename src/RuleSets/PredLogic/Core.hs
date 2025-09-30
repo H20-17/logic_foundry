@@ -873,6 +873,7 @@ type HelperConstraints m s tType o t sE eL r q = (
             , ShowableTerm s t
             , Typeable t
             , Show t
+            , QuantifiableTerm q tType
             ) 
             
 type SentConstraints s t tType o q = (LogicSent s t tType o q, LogicTerm t)
