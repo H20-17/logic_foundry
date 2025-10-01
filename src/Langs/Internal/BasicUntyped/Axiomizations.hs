@@ -173,6 +173,9 @@ instance PREDL.LogicSent PropDeBr ObjDeBr () Text () where
     eXBang _ = eXBang
     tmpltPToFuncP :: Int -> PropDeBr -> (ObjDeBr -> PropDeBr)
     tmpltPToFuncP idx template obj = propDeBrSubX idx obj template
+    createForall :: () -> Int -> PropDeBr -> PropDeBr
+    createForall () idx prop = Forall (propDeBrApplyUG prop idx (boundDepthPropDeBr prop))
+
 
 instance PREDL.LogicTerm ObjDeBr where
     termSubX :: Int -> ObjDeBr -> ObjDeBr -> ObjDeBr
