@@ -33,6 +33,7 @@ module RuleSets.ZFC.Theorems
     strongInductionTheoremMSchema,
     builderTheorem,
     builderSchema
+    
 
 ) where
 
@@ -69,7 +70,8 @@ import Internal.StdPattern
       showTermM,
       ProofGenTStd,
       TypeableTerm(extractConstsTerm),
-      TypedSent(extractConstsSent) )
+      TypedSent(extractConstsSent),
+      getFreeVars )
 
 import RuleSets.BaseLogic.Core hiding 
    (LogicRuleClass,
@@ -234,6 +236,7 @@ proveBuilderTheoremM outer_idxs source_set_template p_pred = do
         (closedSpecAxiom, _) <- specificationMNew outer_idxs source_set_template p_pred
         multiUGM quant_depth $ do
             freeVarsRev <- getTopFreeVars quant_depth
+            -- freeVarsRev <- getFreeVars
             let freeVars = reverse freeVarsRev
             (freeSpecAxiom,_) <- multiUIM closedSpecAxiom freeVars
             eiHilbertM freeSpecAxiom

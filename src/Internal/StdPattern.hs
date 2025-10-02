@@ -14,6 +14,7 @@ module Internal.StdPattern(
     LogicConst(..),
     newConstM,
     getFreeVarCount,
+    getFreeVars,
     showTermM, showSentM,
     ShowableSent(..),
     ShowableTerm(..),
@@ -310,7 +311,25 @@ getTopFreeVars n =  do
         return (fmap free2Term topVars)
 
 
+getFreeVars :: (Monoid r1, ProofStd s eL1 r1 o tType q, Monad m,
+                       Show eL1, Typeable eL1,
+                    Show s, Typeable s,
+                       MonadThrow m, TypedSent o tType sE s, Show sE, Typeable sE,
+                       StdPrfPrintMonad s o tType m, TypeableTerm t Text tType sE q)
+                 =>  ProofGenTStd tType r1 s o q m [t]
+getFreeVars = do
+        context <- ask
+        let frVarTypeStack = freeVarTypeStack context
+        let stackHeight = length frVarTypeStack
+        let topIdx = stackHeight - 1
 
+        let allVars = [topIdx - i | i <- [0..stackHeight-1]]
+        return (fmap free2Term allVars)
+
+-- The types on the context freevar type stack should come out in this order (in theory): t2,t1,t0
+-- where t0 is the first free variable introduced, t1 the second and so on. Everytime we enter a new
+-- universal generalization context, we push a new type onto the stack.
+    
 
 
 getFreeVarCount :: (Monoid r1, ProofStd s eL1 r1 o tType q, Monad m,
