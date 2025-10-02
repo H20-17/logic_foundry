@@ -787,6 +787,7 @@ class (PL.LogicSent s tType) => LogicSent s t tType o q | s ->tType, s ->t, s->o
     (./=.) :: t -> t -> s
     eXBang :: q -> Int -> s -> s
     tmpltPToFuncP :: Int -> s -> (t->s)
+    createForall :: q -> Int -> s -> s
     
 
 infix 4 .==.

@@ -276,7 +276,7 @@ runProofByUGM tt prog =  do
         vIdx <- get
         (extraData,generalizable,subproof, newSteps) 
                  <- lift $ runSubproofM newContext state newState preambleSteps (Last Nothing) prog vIdx
-        let resultSent = aX tt (Prelude.length frVarTypeStack) generalizable
+        let resultSent = createForall tt (Prelude.length frVarTypeStack) generalizable
         mayMonadifyRes <- monadifyProofStd $ proofByUG resultSent subproof
         idx <- maybe (error "No theorem returned by monadifyProofStd on ug schema. This shouldn't happen") (return . snd) mayMonadifyRes       
         return (resultSent,idx)
