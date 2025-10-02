@@ -235,8 +235,7 @@ proveBuilderTheoremM outer_idxs source_set_template p_pred = do
         let quant_depth = length outer_idxs
         (closedSpecAxiom, _) <- specificationMNew outer_idxs source_set_template p_pred
         multiUGM quant_depth $ do
-            freeVarsRev <- getTopFreeVars quant_depth
-            -- freeVarsRev <- getFreeVars
+            freeVarsRev <- getFreeVars
             let freeVars = reverse freeVarsRev
             (freeSpecAxiom,_) <- multiUIM closedSpecAxiom freeVars
             eiHilbertM freeSpecAxiom
