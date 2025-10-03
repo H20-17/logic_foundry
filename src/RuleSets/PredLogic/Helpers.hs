@@ -5,7 +5,6 @@ module RuleSets.PredLogic.Helpers
 (
     uiM, eiM, reverseANegIntroM, reverseENegIntroM,eNegIntroM, aNegIntroM,
     eiHilbertM, egM,
-    runProofByUGM,
     MetaRuleError(..),
     eqReflM, eqSymM, eqTransM, eqSubstM,
     extractConstsSentM,
@@ -260,26 +259,6 @@ reverseENegIntroM forallXNotPx = do
 
 
 
-runProofByUGM :: HelperConstraints m s tType o t sE eL r1 q
-                 =>  q -> ProofGenTStd tType r1 s o q m x
-                            -> ProofGenTStd tType r1 s o q m (s, [Int])
-runProofByUGM tt prog =  do
-        state <- getProofState
-        context <- ask
-        let frVarTypeStack = freeVarTypeStack context
-        let newFrVarTypStack = tt : frVarTypeStack
-        let newContextFrames = contextFrames context <> [False]
-        let newStepIdxPrefix = stepIdxPrefix context ++ [stepCount state]
-        let newContext = PrfStdContext newFrVarTypStack newStepIdxPrefix newContextFrames
-        let newState = PrfStdState mempty mempty 1
-        let preambleSteps = [PrfStdStepFreevar (length frVarTypeStack) (qTypeToTType tt)]
-        vIdx <- get
-        (extraData,generalizable,subproof, newSteps) 
-                 <- lift $ runSubproofM newContext state newState preambleSteps (Last Nothing) prog vIdx
-        let resultSent = createForall tt (Prelude.length frVarTypeStack) generalizable
-        mayMonadifyRes <- monadifyProofStd $ proofByUG resultSent subproof
-        idx <- maybe (error "No theorem returned by monadifyProofStd on ug schema. This shouldn't happen") (return . snd) mayMonadifyRes       
-        return (resultSent,idx)
 
 multiUGM :: HelperConstraints m s tType o t sE eL r1 q =>
     [q] ->                             -- ^ List of types for UG variables (outermost first).
@@ -351,10 +330,10 @@ constDictTest envDict = Data.Map.foldrWithKey f Nothing
 runTheoremM :: HelperConstraints m s tType o t sE eL r1 q
                  =>   TheoremSchemaMT tType r1 s o q m x ->
                                ProofGenTStd tType r1 s o q m (s, [Int], x)
-runTheoremM (TheoremSchemaMT constDict lemmas prog idxs) =  do
+runTheoremM (TheoremSchemaMT constDict lemmas prog idxs qTypes) =  do
         state <- getProofState
         context <- ask
-        (tm, proof, extra, newSteps) <- lift $ checkTheoremMOpen (Just (state,context)) (TheoremSchemaMT constDict lemmas prog idxs)
+        (tm, proof, extra, newSteps) <- lift $ checkTheoremMOpen (Just (state,context)) (TheoremSchemaMT constDict lemmas prog idxs qTypes)
         mayMonadifyRes <- monadifyProofStd (theoremSchema $ TheoremSchema constDict lemmas tm proof)
         idx <- maybe (error "No theorem returned by monadifyProofStd on theorem schema. This shouldn't happen") (return . snd) mayMonadifyRes
         return (tm, idx, extra)
@@ -364,14 +343,14 @@ runTmSilentM :: HelperConstraints m s tType o t sE eL r1 q
                  =>   TheoremAlgSchema tType r1 s o q x ->
                                ProofGenTStd tType r1 s o q m (s, [Int], x)
 -- runTmSilentM f (TheoremSchemaMT constDict lemmas prog) =  do
-runTmSilentM (TheoremSchemaMT constDict lemmas prog idxs) =  do
+runTmSilentM (TheoremSchemaMT constDict lemmas prog idxs qTypes) =  do
         state <- getProofState
         context <- ask
         let eitherResult = checkTheoremMOpen 
                      (Just (state,context)) 
-                     (TheoremSchemaMT constDict lemmas prog idxs)
+                     (TheoremSchemaMT constDict lemmas prog idxs qTypes)
         (tm, proof, extra, newSteps) <- either throwM return eitherResult
-        mayMonadifyRes <- monadifyProofStd (theoremAlgSchema $ TheoremSchemaMT constDict lemmas newProg idxs)
+        mayMonadifyRes <- monadifyProofStd (theoremAlgSchema $ TheoremSchemaMT constDict lemmas newProg idxs qTypes)
         idx <- maybe (error "No theorem returned by monadifyProofStd on theorem schema. This shouldn't happen") (return . snd) mayMonadifyRes
         return (tm, idx, extra)
     where

@@ -18,7 +18,8 @@ module RuleSets.PredLogic.Core
     checkTheoremMOpen,
     HelperConstraints(..),
     SentConstraints,
-    MonadSent
+    MonadSent,
+    runProofByUGM
 ) where
 
 
@@ -629,14 +630,15 @@ data TheoremSchemaMT tType r s o q m x where
                        constDictM :: [(o,tType)],
                        lemmasM :: [s],
                        proofM :: ProofGenTStd tType r s o q m x,
-                       protectedXVars :: [Int]
+                       protectedXVars :: [Int],
+                       contextVarTypes :: [q]
 
                      } -> TheoremSchemaMT tType r s o q m x
 
 
 instance (Show s, Show o, Show tType) => Show (TheoremSchemaMT tType r s o q m x) where
     show :: (Show s, Show o, Show tType) => TheoremSchemaMT tType r s o q m x -> String
-    show (TheoremSchemaMT constDict ls prog idxs) =
+    show (TheoremSchemaMT constDict ls prog idxs qTypes) =
         "TheoremSchemaMT " <> show ls <> " <<Monadic subproof>> " <> show constDict
 
 
@@ -668,13 +670,36 @@ instance (
 
 type TheoremAlgSchema tType r s o q x = TheoremSchemaMT tType r s o q (Either SomeException) x
 
+runProofByUGM :: HelperConstraints m s tType o t sE eL r1 q
+                 =>  q -> ProofGenTStd tType r1 s o q m x
+                            -> ProofGenTStd tType r1 s o q m (s, [Int])
+runProofByUGM tt prog =  do
+        state <- getProofState
+        context <- ask
+        let frVarTypeStack = freeVarTypeStack context
+        let newFrVarTypStack = tt : frVarTypeStack
+        let newContextFrames = contextFrames context <> [False]
+        let newStepIdxPrefix = stepIdxPrefix context ++ [stepCount state]
+        let newContext = PrfStdContext newFrVarTypStack newStepIdxPrefix newContextFrames
+        let newState = PrfStdState mempty mempty 1
+        let preambleSteps = [PrfStdStepFreevar (length frVarTypeStack) (qTypeToTType tt)]
+        vIdx <- get
+        (extraData,generalizable,subproof, newSteps) 
+                 <- lift $ runSubproofM newContext state newState preambleSteps (Last Nothing) prog vIdx
+        let resultSent = createForall tt (Prelude.length frVarTypeStack) generalizable
+        mayMonadifyRes <- monadifyProofStd $ proofByUG resultSent subproof
+        idx <- maybe (error "No theorem returned by monadifyProofStd on ug schema. This shouldn't happen") (return . snd) mayMonadifyRes       
+        return (resultSent,idx)
+
+
+
 checkTheoremMOpen :: (Show s, Typeable s, Monoid r1, ProofStd s eL1 r1 o tType q, Monad m, MonadThrow m,
                       TypedSent o tType sE s, Show sE, Typeable sE, Typeable tType, Show tType,
                       Show eL1, Typeable eL1,
                       Typeable o, Show o, StdPrfPrintMonad s o tType m )
                  =>  Maybe (PrfStdState s o tType,PrfStdContext q) ->  TheoremSchemaMT tType r1 s o q m x
                               -> m (s, r1, x, [PrfStdStep s o tType])
-checkTheoremMOpen mayPrStateCxt (TheoremSchemaMT constdict lemmas prog idxs) =  do
+checkTheoremMOpen mayPrStateCxt (TheoremSchemaMT constdict lemmas prog idxs qTypes) =  do
     let eitherConstDictMap = assignSequentialMap 0 constdict
     (newStepCountA, newConsts) <- either (throwM . BigExceptSchemaConstDup) return eitherConstDictMap
     let (newStepCountB, newProven) = assignSequentialSet newStepCountA lemmas
@@ -751,9 +776,9 @@ expandTheoremM :: (Monoid r1, ProofStd s eL1 r1 o tType q,
                      Show eL1, Typeable eL1,
                      Typeable tType, Show tType, Typeable o, Show o, StdPrfPrintMonad s o tType (Either SomeException))
                             => TheoremAlgSchema tType r1 s o q () -> Either  SomeException (TheoremSchema s r1 o tType)
-expandTheoremM ((TheoremSchemaMT constdict lemmas proofprog idxs):: TheoremAlgSchema tType r1 s o q ()) =
+expandTheoremM ((TheoremSchemaMT constdict lemmas proofprog idxs qTypes):: TheoremAlgSchema tType r1 s o q ()) =
       do
-          (tm,r1,(),_) <- checkTheoremMOpen Nothing (TheoremSchemaMT constdict lemmas proofprog idxs)
+          (tm,r1,(),_) <- checkTheoremMOpen Nothing (TheoremSchemaMT constdict lemmas proofprog idxs qTypes)
           return $ TheoremSchema constdict lemmas tm r1
 
 

@@ -112,7 +112,7 @@ import RuleSets.PredLogic.Core hiding
    HelperConstraints(..),
    SentConstraints(..),
    MonadSent,
-   aX, eX, hX, eXBang, multiAx)
+   aX, eX, hX, eXBang, multiAx, runProofByUGM)
 import qualified RuleSets.PredLogic.Core as PREDL
 import RuleSets.ZFC.Core
 import RuleSets.BaseLogic.Helpers hiding
@@ -260,7 +260,8 @@ builderSchema spec_idx outer_idxs source_set_template p_template =
             lemmasM = [],
             proofM = proveBuilderTheoremM outer_idxs source_set_template p_pred,
             constDictM = typed_consts,
-            protectedXVars = outer_idxs
+            protectedXVars = outer_idxs,
+            contextVarTypes = []
 
         }
    
@@ -519,7 +520,8 @@ binaryUnionExistsSchema =
         lemmasM = [unionEquivTheorem],
         proofM = proveBinaryUnionExistsM,
         constDictM = [],
-        protectedXVars = []
+        protectedXVars = [],
+        contextVarTypes = []
     }
 
 
@@ -671,6 +673,7 @@ binaryIntersectionExistsSchema =
             , lemmasM = [builderTheorem spec_var_idx outer_idxs source_set_template p_template]
             , proofM = proveBinaryIntersectionExistsM 
             , protectedXVars = []
+            , contextVarTypes = []
         }  
 
 
@@ -861,7 +864,8 @@ unionWithEmptySetSchema =
             lemmasM = lemmas_needed,
             proofM = proveUnionWithEmptySetM,
             constDictM = [], -- No specific object constants needed
-            protectedXVars = []
+            protectedXVars = [],
+            contextVarTypes = []
         }
 
 --------END UNION WITH EMPTY SET
@@ -987,7 +991,8 @@ disjointSubsetIsEmptySchema =
             lemmasM = lemmas_needed,
             proofM = proveDisjointSubsetIsEmptyM,
             constDictM = [], -- No specific object constants needed
-            protectedXVars = []
+            protectedXVars = [],
+            contextVarTypes = []
         }
 
 --------END DISJOINT SUBSET IS EMPTY THEOREM
@@ -1164,9 +1169,14 @@ builderSubsetTheoremSchema outerTemplateIdxs spec_var_X_idx source_set_template 
       typed_consts = Prelude.map (, ()) (Data.Set.toList all_consts)
       protectedIdxs = spec_var_X_idx : outerTemplateIdxs
     in   
-      TheoremSchemaMT typed_consts [builderTheorem spec_var_X_idx outerTemplateIdxs source_set_template p_template] 
-          (proveBuilderSubsetTheoremM outerTemplateIdxs 
-             spec_var_X_idx source_set_template p_template) protectedIdxs
+      TheoremSchemaMT { 
+        constDictM = typed_consts,
+        lemmasM = [builderTheorem spec_var_X_idx outerTemplateIdxs source_set_template p_template], 
+        proofM = (proveBuilderSubsetTheoremM outerTemplateIdxs 
+                   spec_var_X_idx source_set_template p_template),
+        protectedXVars = protectedIdxs,
+        contextVarTypes = []
+      }
 
 ----- END BUILDER SUBSET THEOREM
 
@@ -1765,7 +1775,8 @@ specRedundancySchema outerTemplateIdxs spec_var_idx source_set_template p_templa
                        builderTheorem spec_var_idx outerTemplateIdxs source_set_template (neg p_template)],
             proofM = proof_program,
             constDictM = typed_consts,
-            protectedXVars = spec_var_idx : outerTemplateIdxs
+            protectedXVars = spec_var_idx : outerTemplateIdxs,
+            contextVarTypes = []
         }
 
 
@@ -1998,7 +2009,8 @@ specAntiRedundancySchema outerTemplateIdxs spec_var_idx source_set_template p_te
                        disjointSubsetIsEmptyTheorem],
             proofM = proof_program,
             constDictM = typed_consts,
-            protectedXVars = spec_var_idx : outerTemplateIdxs
+            protectedXVars = spec_var_idx : outerTemplateIdxs,
+            contextVarTypes = []
         }
 
 
@@ -2348,13 +2360,16 @@ crossProductDefEquivSchema =
         predicate_P_tmplt = runIndexTracker [z_idx, setA_idx, setB_idx] (predicateP (x setA_idx) (x setB_idx) (x z_idx))
         universeSet_tmplt = powerSet (powerSet (x setA_idx .\/. x setB_idx))
     in
-        TheoremSchemaMT [] 
-                    [binaryUnionExistsTheorem
-                    , tupleEqTheorem 2
-                    , pairInUniverseTheorem
-                    , builderTheorem z_idx [setA_idx,setB_idx] universeSet_tmplt predicate_P_tmplt] 
-                    proveCrossProductDefEquivM
-                    []
+        TheoremSchemaMT {
+                    constDictM = [], 
+                    lemmasM = [binaryUnionExistsTheorem
+                            , tupleEqTheorem 2
+                            , pairInUniverseTheorem
+                            , builderTheorem z_idx [setA_idx,setB_idx] universeSet_tmplt predicate_P_tmplt],
+                    proofM = proveCrossProductDefEquivM,
+                    protectedXVars = [],
+                    contextVarTypes = []
+        }
 
 
 
@@ -2480,13 +2495,17 @@ crossProductExistsSchema =
             dropIndices 3
             return resultProp
     in
-        TheoremSchemaMT []
-        [ 
-          binaryUnionExistsTheorem
-        , crossProductDefEquivTheorem
-        , builderTheoremInst
-        ] 
-        proveCrossProductExistsM []
+        TheoremSchemaMT {
+            constDictM = [],
+            lemmasM = [ 
+                        binaryUnionExistsTheorem
+                        , crossProductDefEquivTheorem
+                        , builderTheoremInst
+                        ], 
+            proofM = proveCrossProductExistsM,
+            protectedXVars = [],
+            contextVarTypes = []
+        }
 
 
 -- | Helper to instantiate the cross product existence theorem and return the
@@ -2940,7 +2959,8 @@ strongInductionTheoremMSchema outerTemplateIdxs spec_var_idx dom p_template=
                 , builderTheorem spec_var_idx outerTemplateIdxs dom (neg p_template)
                 ], 
             proofM = strongInductionTheoremProg outerTemplateIdxs spec_var_idx dom p_template,
-            protectedXVars = protectedIdxs
+            protectedXVars = protectedIdxs,
+            contextVarTypes = []
         }
 
 

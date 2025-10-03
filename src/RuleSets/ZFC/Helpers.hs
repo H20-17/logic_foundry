@@ -116,7 +116,8 @@ import RuleSets.PredLogic.Core hiding
    HelperConstraints(..),
    SentConstraints(..),
    MonadSent,
-   aX, eX, hX, eXBang, multiAx)
+   aX, eX, hX, eXBang, multiAx,
+   runProofByUGM)
 import qualified RuleSets.PredLogic.Core as PREDL
 import qualified RuleSets.PredLogic.Helpers as PREDL
 import GHC.Num (integerMul)
