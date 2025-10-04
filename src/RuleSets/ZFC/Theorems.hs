@@ -1172,8 +1172,8 @@ builderSubsetTheoremSchema outerTemplateIdxs spec_var_X_idx source_set_template 
       TheoremSchemaMT { 
         constDictM = typed_consts,
         lemmasM = [builderTheorem spec_var_X_idx outerTemplateIdxs source_set_template p_template], 
-        proofM = (proveBuilderSubsetTheoremM outerTemplateIdxs 
-                   spec_var_X_idx source_set_template p_template),
+        proofM = proveBuilderSubsetTheoremM outerTemplateIdxs 
+                   spec_var_X_idx source_set_template p_template,
         protectedXVars = protectedIdxs,
         contextVarTypes = []
       }
