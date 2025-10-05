@@ -19,7 +19,8 @@ module RuleSets.PredLogic.Core
     HelperConstraints(..),
     SentConstraints,
     MonadSent,
-    runProofByUGM
+    runProofByUGMWorker,
+    multiUGMWorker
 ) where
 
 
@@ -268,7 +269,8 @@ runProofAtomic :: (LogicSent s t tType o q,
                 ProofStd s (LogicError s sE o t tType ) [LogicRule s sE o t tType q] o tType q,
                Show sE, Typeable sE, Show s, Typeable s, TypeableTerm t o tType sE q, TypedSent o tType sE s,
                Typeable o, Show o,Typeable tType, Show tType, Show t, Typeable t,
-               StdPrfPrintMonad s o tType (Either SomeException), Eq t, QuantifiableTerm q tType) =>
+               StdPrfPrintMonad s o tType (Either SomeException), Eq t, QuantifiableTerm q tType, ShowableTerm s t, LogicTerm t,
+               ShowableSent s) =>
                             LogicRule s sE o t tType q ->
                             PrfStdContext q ->
                             PrfStdState s o tType ->
@@ -446,7 +448,8 @@ instance (LogicSent s t tType o q, Show sE, Typeable sE, Show s, Typeable s, Typ
              TypeableTerm t o tType sE q, Typeable o, Show o, Typeable tType, Show tType,
              Monoid (PrfStdState s o tType), Show t, Typeable t,
              StdPrfPrintMonad s o tType (Either SomeException),
-             Monoid (PrfStdContext q), Eq t, QuantifiableTerm q tType) 
+             Monoid (PrfStdContext q), Eq t, QuantifiableTerm q tType, ShowableTerm s t, LogicTerm t,
+             ShowableSent s) 
           => Proof (LogicError s sE o t tType ) 
              [LogicRule s sE o t tType q] 
              (PrfStdState s o tType) 
@@ -483,9 +486,6 @@ instance (LogicSent s t tType o q, Show sE, Typeable sE, Show s, Typeable s, Typ
                     where
                         newStepCount = stepCount newState + 1
                         newLineIndex = stepIdxPrefix context <> [stepCount oldState + newStepCount-1]
-
-
-
 
 
 
@@ -671,10 +671,14 @@ instance (
 
 type TheoremAlgSchema tType r s o q x = TheoremSchemaMT tType r s o q (Either SomeException) x
 
-runProofByUGM :: HelperConstraints m s tType o t sE eL r1 q
+
+
+
+
+runProofByUGMWorker :: HelperConstraints m s tType o t sE eL r1 q
                  =>  q -> ProofGenTStd tType r1 s o q m x
-                            -> ProofGenTStd tType r1 s o q m (s, [Int])
-runProofByUGM tt prog =  do
+                            -> ProofGenTStd tType r1 s o q m (s, [Int], x)
+runProofByUGMWorker tt prog =  do
         state <- getProofState
         context <- ask
         let frVarTypeStack = freeVarTypeStack context
@@ -690,15 +694,19 @@ runProofByUGM tt prog =  do
         let resultSent = createForall tt (Prelude.length frVarTypeStack) generalizable
         mayMonadifyRes <- monadifyProofStd $ proofByUG resultSent subproof
         idx <- maybe (error "No theorem returned by monadifyProofStd on ug schema. This shouldn't happen") (return . snd) mayMonadifyRes       
-        return (resultSent,idx)
+        return (resultSent,idx, extraData)
 
 
-multiUGM :: HelperConstraints m s tType o t sE eL r1 q =>
+
+
+
+
+multiUGMWorker :: HelperConstraints m s tType o t sE eL r1 q =>
     [q] ->                             -- ^ List of types for UG variables (outermost first).
     ProofGenTStd tType r1 s o q m x ->       -- ^ The core program. Its monadic return 'x' is discarded.
                                            --   It must set 'Last s' with the prop to be generalized.
-    ProofGenTStd tType r1 s o q m (s, [Int])  -- ^ Returns (final_generalized_prop, its_index).
-multiUGM typeList programCore =
+    ProofGenTStd tType r1 s o q m (s, [Int],x)  -- ^ Returns (final_generalized_prop, its_index).
+multiUGMWorker typeList programCore =
     case typeList of
         [] ->
             -- Base case: No UGs to apply.
@@ -707,7 +715,7 @@ multiUGM typeList programCore =
             -- wrap it in a PRF_BY_SUBARG step, and return (consequent, index_of_that_step).
             do 
                (arg_result_prop, idx, extraData) <- runProofBySubArgM programCore
-               return (arg_result_prop, idx)
+               return (arg_result_prop, idx,extraData)
 
         (outermost_ug_var_type : remaining_ug_types) ->
             -- Recursive step:
@@ -715,7 +723,9 @@ multiUGM typeList programCore =
             --    This inner program is 'multiUGM' applied to the rest of the types and the original core program.
             --    Its result will be (partially_generalized_prop, its_index_from_inner_multiUGM).
             let 
-                inner_action_yielding_proven_s_idx = multiUGM remaining_ug_types programCore
+                inner_action_yielding_proven_s_idx = do 
+                    (_,_,extraData) <- multiUGMWorker remaining_ug_types programCore
+                    return extraData
             in
             -- 2. 'runProofByUGM' expects its 'prog' argument to be of type '... m x_prog'.
             --    Here, 'inner_action_yielding_proven_s_idx' is our 'prog', and its 'x_prog' is '(s, [Int])'.
@@ -723,11 +733,17 @@ multiUGM typeList programCore =
             --    set to the 's' part of the result of 'inner_action_yielding_proven_s_idx'.
             --    This 's' (the partially generalized proposition) is what 'runProofByUGM' will then generalize.
             --    'runProofByUGM' itself returns (final_ug_prop, final_ug_idx), matching our required type.
-            runProofByUGM outermost_ug_var_type inner_action_yielding_proven_s_idx
+               do 
+                   runProofByUGMWorker outermost_ug_var_type inner_action_yielding_proven_s_idx
 
 
 
-checkTheoremMOpen :: HelperConstraints m s tType o t sE eL r1 q 
+
+
+
+
+
+checkTheoremMOpen :: (HelperConstraints m s tType o t sE eL r1 q) 
                  =>  Maybe (PrfStdState s o tType,PrfStdContext q) ->  TheoremSchemaMT tType r1 s o q m x
                               -> m (s, r1, x, [PrfStdStep s o tType])
 checkTheoremMOpen mayPrStateCxt (TheoremSchemaMT constdict lemmas prog idxs qTypes) =  do
@@ -742,7 +758,7 @@ checkTheoremMOpen mayPrStateCxt (TheoremSchemaMT constdict lemmas prog idxs qTyp
     let mayPreambleLastProp = if Prelude.null lemmas then Last Nothing else (Last . Just . last) lemmas
     let maxIndex = if null idxs then 0 else maximum idxs + 1
     let outerProg = do
-            (x,_) <-multiUGM qTypes prog
+            (_,_,x) <-multiUGMWorker qTypes prog
             return x
 
     (extra,tm,proof,newSteps) 
@@ -779,10 +795,7 @@ checkTheoremMOpen mayPrStateCxt (TheoremSchemaMT constdict lemmas prog idxs qTyp
   
 
 
-checkTheoremM :: (Show s, Typeable s, Monoid r1, ProofStd s eL1 r1 o tType q, Monad m, MonadThrow m,
-                      TypedSent o tType sE s, Show sE, Typeable sE, Typeable tType, Show tType,
-                      Show eL1, Typeable eL1,
-                      Typeable o, Show o, StdPrfPrintMonad s o tType m )
+checkTheoremM :: (HelperConstraints m s tType o t sE eL r1 q)
                  =>  TheoremSchemaMT tType r1 s o q m x
                               -> m (s, r1, x, [PrfStdStep s o tType])
 checkTheoremM = checkTheoremMOpen Nothing
@@ -792,9 +805,7 @@ checkTheoremM = checkTheoremMOpen Nothing
    
 
 
-establishTmSilentM :: (Monoid r1, ProofStd s eL1 r1 o tType q,
-                     Show s, Typeable s, Ord o, TypedSent o tType sE s, Show sE, Typeable sE, Typeable tType, Show tType, Typeable o,
-                     Show o, Show eL1, Typeable eL1, StdPrfPrintMonad s o tType (Either SomeException))
+establishTmSilentM :: (HelperConstraints (Either SomeException) s tType o t sE eL r1 q)
                             =>  TheoremAlgSchema tType r1 s o q () -> 
                                 PrfStdContext q ->
                                 PrfStdState s o tType -> 
@@ -806,10 +817,7 @@ establishTmSilentM (schema :: TheoremAlgSchema tType r1 s o q ()) context state 
 
 
 
-expandTheoremM :: (Monoid r1, ProofStd s eL1 r1 o tType q,
-                     Show s, Typeable s, TypedSent o tType sE s, Show sE, Typeable sE,
-                     Show eL1, Typeable eL1,
-                     Typeable tType, Show tType, Typeable o, Show o, StdPrfPrintMonad s o tType (Either SomeException))
+expandTheoremM :: (HelperConstraints (Either SomeException) s tType o t sE eL r1 q)
                             => TheoremAlgSchema tType r1 s o q () -> Either  SomeException (TheoremSchema s r1 o tType)
 expandTheoremM ((TheoremSchemaMT constdict lemmas proofprog idxs qTypes):: TheoremAlgSchema tType r1 s o q ()) =
       do
@@ -935,6 +943,9 @@ type HelperConstraints m s tType o t sE eL r q = (
             , Typeable t
             , Show t
             , QuantifiableTerm q tType
+            , BASE.LogicRuleClass r s o tType sE
+            , StdPrfPrintMonad
+                      s o tType (Either SomeException)
             ) 
             
 type SentConstraints s t tType o q = (LogicSent s t tType o q, LogicTerm t)

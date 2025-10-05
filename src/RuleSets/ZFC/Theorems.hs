@@ -1574,7 +1574,8 @@ builderSrcPartitionSchema outerTemplateIdxs spec_var_idx source_set_template p_t
             lemmasM = [lemma1, lemma2, lemma3, lemma4, lemma5, lemma6, lemma7],
             proofM = proof_program,
             constDictM = typed_consts,
-            protectedXVars = spec_var_idx : outerTemplateIdxs
+            protectedXVars = spec_var_idx : outerTemplateIdxs,
+            contextVarTypes = []
         }
 
 ----- END BUILDER SRC PARTITION

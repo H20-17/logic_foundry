@@ -11,7 +11,8 @@ module RuleSets.PredLogic.Helpers
     runTheoremM, runTmSilentM,multiUIM,
     eqSubstMultiM,
     getXVar, getXVars,
-    aXM, multiAXM, eXM, multiEXM, hXM
+    aXM, multiAXM, eXM, multiEXM, hXM,
+    runProofByUGM, multiUGM
 ) where
 
 
@@ -425,3 +426,22 @@ multiEXM quantTypes inner = case quantTypes of
     [] -> inner
     [singleType] -> eXM singleType inner
     (firstType:restTypes) -> eXM firstType (multiEXM restTypes inner)
+
+
+
+runProofByUGM :: HelperConstraints m s tType o t sE eL r1 q
+                 =>  q -> ProofGenTStd tType r1 s o q m x
+                            -> ProofGenTStd tType r1 s o q m (s, [Int])
+runProofByUGM tt prog =  do
+   (result_prop, idx, _) <- runProofByUGMWorker tt prog
+   return (result_prop, idx)
+
+
+multiUGM :: HelperConstraints m s tType o t sE eL r1 q =>
+    [q] ->                             -- ^ List of types for UG variables (outermost first).
+    ProofGenTStd tType r1 s o q m x ->       -- ^ The core program. Its monadic return 'x' is discarded.
+                                           --   It must set 'Last s' with the prop to be generalized.
+    ProofGenTStd tType r1 s o q m (s, [Int])  -- ^ Returns (final_generalized_prop, its_index).
+multiUGM typeList programCore = do
+      (result_prop, idx, _) <- multiUGMWorker typeList programCore
+      return (result_prop, idx)
