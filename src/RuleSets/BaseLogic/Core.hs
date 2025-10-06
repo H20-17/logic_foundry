@@ -59,7 +59,7 @@ runProofAtomic :: (Ord s, TypedSent o tType sE s,Typeable s, Show s, Typeable o,
                     Typeable tType, Show tType, StdPrfPrintMonad s o tType (Either SomeException)
                     
                      ) =>
-               LogicRule tType s sE o q ->  PrfStdContext q -> PrfStdState s o tType
+               LogicRule tType s sE o q -> PrfStdContext q s -> PrfStdState s o tType
                 -> Either (LogicError s sE o) (Maybe s, Maybe (o,tType), PrfStdStep s o tType)
 runProofAtomic rule context state =
     case rule of
@@ -97,11 +97,11 @@ runProofAtomic rule context state =
 instance ( Show s, Typeable s, Ord o, TypedSent o tType sE s,
           Typeable o, Show o, Typeable tType, Show tType, Monoid (PrfStdState s o tType),
           StdPrfPrintMonad s o tType (Either SomeException),
-          Monoid (PrfStdContext q))
+          Monoid (PrfStdContext q s))
              => Proof (LogicError s sE o)
                  [LogicRule tType s sE o q] 
                  (PrfStdState s o tType) 
-                 (PrfStdContext q)
+                 (PrfStdContext q s)
                  [PrfStdStep s o tType]
                  s
                     where
@@ -109,7 +109,7 @@ instance ( Show s, Typeable s, Ord o, TypedSent o tType sE s,
                Ord o, TypedSent o tType sE s, Typeable o, Show o, Typeable tType,
                Show tType, Monoid (PrfStdState s o tType)) =>
                  [LogicRule tType s sE o q] ->
-                 PrfStdContext q  -> PrfStdState s o tType
+                 PrfStdContext q s -> PrfStdState s o tType
                         -> Either (LogicError s sE o) (PrfStdState s o tType, [PrfStdStep s o tType],Last s) 
 
   runProofOpen rs context oldState = foldM f (PrfStdState mempty mempty 0,[], Last Nothing) rs
@@ -185,7 +185,7 @@ data SubproofError senttype sanityerrtype logcicerrtype where
 
 runProofBySubArg :: (ProofStd s eL1 r1 o tType q,  TypedSent o tType sE s) => 
                        ProofBySubArgSchema s r1 ->  
-                        PrfStdContext q -> 
+                        PrfStdContext q s -> 
                         PrfStdState s o tType ->
                         Either (SubproofError s sE eL1) (PrfStdStep s o tType)
 runProofBySubArg (ProofBySubArgSchema consequent subproof) context state  =
@@ -195,7 +195,8 @@ runProofBySubArg (ProofBySubArgSchema consequent subproof) context state  =
          let alreadyProven = provenSents state
          let newStepIdxPrefix = stepIdxPrefix context ++ [stepCount state]
          let newContextFrames = contextFrames context <> [False]
-         let newContext = PrfStdContext frVarTypeStack newStepIdxPrefix newContextFrames
+         let newLemmas = contextLemmas context
+         let newContext = PrfStdContext frVarTypeStack newStepIdxPrefix newContextFrames newLemmas
          let newState = PrfStdState mempty mempty 0
          let preambleSteps = []
          let eitherTestResult = testSubproof newContext state newState preambleSteps (Last Nothing) consequent subproof
@@ -213,5 +214,5 @@ class SubproofRule r s where
 type HelperConstraints r s o tType sE eL q m = (Monad m, Ord o, Show sE, Typeable sE, Show s, Typeable s,
        MonadThrow m, Show o, Typeable o, Show tType, Typeable tType, TypedSent o tType sE s,
        Monoid (PrfStdState s o tType), StdPrfPrintMonad s o tType m, ShowableSent s,
-       StdPrfPrintMonad s o tType (Either SomeException), Monoid (PrfStdContext tType), LogicRuleClass r s o tType sE, ProofStd s eL r o tType q,
+       StdPrfPrintMonad s o tType (Either SomeException), Monoid (PrfStdContext q s), LogicRuleClass r s o tType sE, ProofStd s eL r o tType q,
        Monoid r, Show eL, Typeable eL, SubproofRule r s)

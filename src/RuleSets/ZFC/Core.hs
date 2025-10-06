@@ -494,7 +494,7 @@ runProofAtomic :: (
                             Eq t, LogicTerm t, QuantifiableTerm () (),
                             PREDL.LogicTerm t, ShowableTerm s t) =>
                             LogicRule s sE t  ->
-                            PrfStdContext () ->
+                            PrfStdContext () s ->
                             PrfStdState s Text () ->
                             Either (LogicError s sE t) (Maybe s,Maybe (Text,()),PrfStdStep s Text ())
 runProofAtomic rule context state  = 
@@ -773,20 +773,20 @@ instance (Show sE, Typeable sE, Show s, Typeable s, TypedSent Text () sE s,
              TypeableTerm t Text () sE (), 
              Monoid (PrfStdState s Text ()), Show t, Typeable t,
              StdPrfPrintMonad s Text () (Either SomeException),
-             Monoid (PrfStdContext ()),
+             Monoid (PrfStdContext () s),
              PREDL.LogicSent s t () Text (),
              LogicSent s t, Eq t, LogicTerm t,
              QuantifiableTerm () (), ShowableSent s, PREDL.LogicTerm t, ShowableTerm s t) 
           => Proof (LogicError s sE t) 
              [LogicRule s sE t] 
              (PrfStdState s Text ()) 
-             (PrfStdContext ())
+             (PrfStdContext () s)
              [PrfStdStep s Text ()]
                s 
                  where
 
     runProofOpen :: [LogicRule s sE t ]
-                     -> PrfStdContext () 
+                     -> PrfStdContext () s
                      -> PrfStdState s Text ()
                      -> Either (LogicError s sE t) (PrfStdState s Text (),[PrfStdStep s Text ()], Last s)
     runProofOpen rs context oldState = foldM f (PrfStdState mempty mempty 0,[], Last Nothing) rs

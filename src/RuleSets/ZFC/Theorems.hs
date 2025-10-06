@@ -129,6 +129,7 @@ import Text.XHtml (target)
 import Control.Exception (throw)
 import Data.Type.Equality (outer)
 import IndexTracker 
+import Foreign (free)
 
 
 
@@ -222,23 +223,16 @@ builderTheorem idx outer_idxs t p_template =
 
 
 proveBuilderTheoremM :: HelperConstraints sE s eL m r t =>
-    [Int] ->        -- outer_idxs
-    t ->            -- source_set_template
-    (t->s) ->            -- p_template
+    ([t] -> t) ->            -- source_set_template
+    ([t] ->t->s) ->            -- p_template
     ProofGenTStd () r s Text () m ()
-proveBuilderTheoremM outer_idxs source_set_template p_pred = do
-    runProofBySubArgM $ do
-
-        -- Step 1: Get the closed, universally quantified Axiom of Specification.
-        -- 'specificationM' quantifies over the parameters specified in 'outerTemplateIdxs'.
-
-        let quant_depth = length outer_idxs
-        (closedSpecAxiom, _) <- specificationMNew outer_idxs source_set_template p_pred
-        multiUGM quant_depth $ do
-            freeVarsRev <- getFreeVars
-            let freeVars = reverse freeVarsRev
-            (freeSpecAxiom,_) <- multiUIM closedSpecAxiom freeVars
-            eiHilbertM freeSpecAxiom
+proveBuilderTheoremM source_set_template p_pred = do
+    freeVarsRev <- getFreeVars
+    let freeVars = reverse freeVarsRev
+    let contextVarCount = length freeVars
+    (closedSpecAxiom, _) <- specificationMNew contextVarCount source_set_template p_pred
+    (freeSpecAxiom,_) <- multiUIM closedSpecAxiom freeVars
+    eiHilbertM freeSpecAxiom
     return ()
              
 
@@ -254,14 +248,17 @@ builderSchema spec_idx outer_idxs source_set_template p_template =
         p_tmplt_consts = extractConstsSent p_template
         all_consts = dom_tmplt_consts `Set.union` p_tmplt_consts
         typed_consts = Prelude.map (, ()) (Data.Set.toList all_consts) 
-        p_pred = tmpltPToFuncP spec_idx p_template
+        source_set_func context_vars =
+            termSubXs (zip outer_idxs context_vars) source_set_template 
+        p_pred_func context_vars spec_var =
+            sentSubXs ((spec_idx, spec_var):zip outer_idxs context_vars) p_template
     in
         TheoremSchemaMT {
             lemmasM = [],
-            proofM = proveBuilderTheoremM outer_idxs source_set_template p_pred,
+            proofM = proveBuilderTheoremM source_set_func p_pred_func,
             constDictM = typed_consts,
-            protectedXVars = outer_idxs,
-            contextVarTypes = []
+            protectedXVars = [],
+            contextVarTypes = Prelude.map (const ()) outer_idxs
 
         }
    

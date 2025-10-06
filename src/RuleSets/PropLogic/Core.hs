@@ -156,7 +156,7 @@ data LogicRule tType s sE o q where
 runProofAtomic :: (ProofStd s (LogicError s sE o tType) [LogicRule tType s sE o q] o tType q,
                LogicSent s tType, Show sE, Typeable sE, Show s, Typeable s, Ord o, TypedSent o tType sE s,
                Show o, Typeable o, Typeable tType, Show tType, StdPrfPrintMonad s o tType (Either SomeException)) =>
-                            LogicRule tType s sE o q -> PrfStdContext q -> PrfStdState s o tType 
+                            LogicRule tType s sE o q -> PrfStdContext q s -> PrfStdState s o tType 
                                       -> Either (LogicError s sE o tType) (Maybe s,Maybe (o,tType),PrfStdStep s o tType)
 runProofAtomic rule context state = 
       case rule of
@@ -360,11 +360,11 @@ runProofAtomic rule context state =
 instance (LogicSent s tType, Show sE, Typeable sE, Show s, Typeable s, Ord o, TypedSent o tType sE s,
           Typeable o, Show o, Typeable tType, Show tType, Monoid (PrfStdState s o tType),
           StdPrfPrintMonad s o tType (Either SomeException),
-          Monoid (PrfStdContext q))
+          Monoid (PrfStdContext q s))
              => Proof (LogicError s sE o tType)
                  [LogicRule tType s sE o q] 
                  (PrfStdState s o tType) 
-                 (PrfStdContext q)
+                 (PrfStdContext q s)
                  [PrfStdStep s o tType]
                  s
                     where
@@ -372,7 +372,7 @@ instance (LogicSent s tType, Show sE, Typeable sE, Show s, Typeable s, Ord o, Ty
                Ord o, TypedSent o tType sE s, Typeable o, Show o, Typeable tType,
                Show tType, Monoid (PrfStdState s o tType)) =>
                  [LogicRule tType s sE o q] -> 
-                 PrfStdContext q  -> PrfStdState s o tType
+                 PrfStdContext q s -> PrfStdState s o tType
                         -> Either (LogicError s sE o tType) (PrfStdState s o tType, [PrfStdStep s o tType],Last s) 
   runProofOpen rs context oldState = foldM f (PrfStdState mempty mempty 0,[], Last Nothing) rs
        where
@@ -515,7 +515,7 @@ mpM, exclMidM, simpLM, simpRM, absurdM, doubleNegElimM, deMorganConjM,
        (Monad m, LogicSent s tType, Ord o, Show sE, Typeable sE, Show s, Typeable s,
        MonadThrow m, Show o, Typeable o, Show tType, Typeable tType, TypedSent o tType sE s,
        Monoid (PrfStdState s o tType), StdPrfPrintMonad s o tType m,
-       StdPrfPrintMonad s o tType (Either SomeException), Monoid (PrfStdContext tType),
+       StdPrfPrintMonad s o tType (Either SomeException), Monoid (PrfStdContext q s),
        LogicRuleClass r s tType sE o, Monoid r,
        ProofStd s eL r o tType q, Typeable eL, Show eL )
           => s -> ProofGenTStd tType r s o q m (s,[Int])
@@ -524,7 +524,7 @@ adjM, disjIntroLM, disjIntroRM,  bicondIntroM  ::
        (Monad m, LogicSent s tType, Ord o, Show sE, Typeable sE, Show s, Typeable s,
        MonadThrow m, Show o, Typeable o, Show tType, Typeable tType, TypedSent o tType sE s,
        Monoid (PrfStdState s o tType), StdPrfPrintMonad s o tType m,
-       StdPrfPrintMonad s o tType (Either SomeException), Monoid (PrfStdContext tType),
+       StdPrfPrintMonad s o tType (Either SomeException), Monoid (PrfStdContext q s),
        LogicRuleClass r s tType sE o, Monoid r,
        ProofStd s eL r o tType q, Typeable eL, Show eL )
           => s -> s -> ProofGenTStd tType r s o q m (s,[Int])
@@ -533,7 +533,7 @@ disjElimM ::
        (Monad m, LogicSent s tType, Ord o, Show sE, Typeable sE, Show s, Typeable s,
        MonadThrow m, Show o, Typeable o, Show tType, Typeable tType, TypedSent o tType sE s,
        Monoid (PrfStdState s o tType), StdPrfPrintMonad s o tType m,
-       StdPrfPrintMonad s o tType (Either SomeException), Monoid (PrfStdContext tType),
+       StdPrfPrintMonad s o tType (Either SomeException), Monoid (PrfStdContext q s),
        LogicRuleClass r s tType sE o, Monoid r,
        ProofStd s eL r o tType q, Typeable eL, Show eL )
           => s -> s -> s -> ProofGenTStd tType r s o q m (s,[Int])
@@ -584,7 +584,7 @@ data SubproofError senttype sanityerrtype logcicerrtype where
 
 runProofByAsm :: (ProofStd s eL1 r1 o tType q, LogicSent s tType, TypedSent o tType sE s) => 
                        ProofByAsmSchema s r1 ->  
-                        PrfStdContext q -> 
+                        PrfStdContext q s-> 
                         PrfStdState s o tType ->
                         Either (SubproofError s sE eL1) (s,PrfStdStep s o tType)
 runProofByAsm (ProofByAsmSchema assumption consequent subproof) context state  =
@@ -597,7 +597,8 @@ runProofByAsm (ProofByAsmSchema assumption consequent subproof) context state  =
          let newStepIdxPrefix = stepIdxPrefix context ++ [stepCount state]
          let newSents = Data.Map.insert assumption (newStepIdxPrefix ++ [0]) mempty
          let newContextFrames = contextFrames context <> [False]
-         let newContext = PrfStdContext frVarTypeStack newStepIdxPrefix newContextFrames
+         let newLemmas = contextLemmas context
+         let newContext = PrfStdContext frVarTypeStack newStepIdxPrefix newContextFrames newLemmas
          let newState = PrfStdState newSents mempty 1
          let preambleSteps = [PrfStdStepStep assumption "ASM" []]
          let mayPreambleLastProp = (Last . Just) assumption
