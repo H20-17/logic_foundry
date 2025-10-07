@@ -704,7 +704,16 @@ propDeBrSubXs subs prop =
 
 
 
-
+--objDeBrSwapVsWithXs :: Int -> Int -> PropDeBr -> PropDeBr
+--objDeBrSwapVsWithXs vIdx xIdx obj = 
+--    let 
+--        accumFunc currentObj 
+--
+--    objDeBrRosterNormalize $
+--    propDeBrRosterNormalize $
+--    foldl (\currentObj (idx, substitutionTerm) ->
+--             objDeBrSubXWorker vIdx xIdx (swapXtoXIntObj substitutionTerm) currentProp
+--          ) prop subs
 
 
 

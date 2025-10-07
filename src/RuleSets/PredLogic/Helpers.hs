@@ -445,3 +445,12 @@ multiUGM :: HelperConstraints m s tType o t sE eL r1 q =>
 multiUGM typeList programCore = do
       (result_prop, idx, _) <- multiUGMWorker typeList programCore
       return (result_prop, idx)
+
+--vs2XsM :: HelperConstraints m s tType o t sE eL r1 q =>
+--    Int -> s -> m s
+--vs2XsM numVars sent = do
+--    vList <- getTopFreeVars numVars
+--    case vList of
+--        [] -> return sent
+--        [singleVar] -> vs2XM singleVar sent
+
