@@ -704,50 +704,6 @@ propDeBrSubXs subs prop =
 
 
 
---objDeBrSwapVsWithXs :: Int -> Int -> PropDeBr -> PropDeBr
---objDeBrSwapVsWithXs vIdx xIdx obj = 
---    let 
---        accumFunc currentObj 
---
---    objDeBrRosterNormalize $
---    propDeBrRosterNormalize $
---    foldl (\currentObj (idx, substitutionTerm) ->
---             objDeBrSubXWorker vIdx xIdx (swapXtoXIntObj substitutionTerm) currentProp
---          ) prop subs
-
-
-propDeBrXIntInside :: PropDeBr -> Int -> Bool
-propDeBrXIntInside prop idx = case prop of
-    Neg p -> propDeBrXIntInside p idx
-    (p1 :&&: p2) -> propDeBrXIntInside p1 idx || propDeBrXIntInside p2 idx
-    (p1 :||: p2) -> propDeBrXIntInside p1 idx || propDeBrXIntInside p2 idx
-    (p1 :->: p2) -> propDeBrXIntInside p1 idx || propDeBrXIntInside p2 idx
-    (p1 :<->: p2) -> propDeBrXIntInside p1 idx || propDeBrXIntInside p2 idx
-    (o1 :==: o2) -> objDeBrXIntInside o1 idx || objDeBrXIntInside o2 idx
-    In o1 o2 -> objDeBrXIntInside o1 idx || objDeBrXIntInside o2 idx
-    Forall p -> propDeBrXIntInside p idx
-    Exists p -> propDeBrXIntInside p idx
-    (o1 :<=: o2) -> objDeBrXIntInside o1 idx || objDeBrXIntInside o2 idx
-    F -> False
-
-
-
-objDeBrXIntInside :: ObjDeBr -> Int -> Bool
-objDeBrXIntInside obj idx = case obj of
-    Integ num -> False
-    Constant const -> False
-    Hilbert p -> propDeBrXIntInside p idx
-    Bound i -> idx == i
-    V i -> False
-    X i -> False
-    XInternal i -> idx == i
-    (o1 :+: o2) -> objDeBrXIntInside o1 idx || objDeBrXIntInside o2 idx
-    Intneg o1     -> objDeBrXIntInside o1 idx
-    (o1 :*: o2) -> objDeBrXIntInside o1 idx || objDeBrXIntInside o2 idx
-    IntSet -> False
-    EmptySet -> False
-
-
 
 
 

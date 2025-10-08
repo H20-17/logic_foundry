@@ -12,7 +12,10 @@ module RuleSets.PredLogic.Helpers
     eqSubstMultiM,
     getXVar, getXVars,
     aXM, multiAXM, eXM, multiEXM, hXM,
-    runProofByUGM, multiUGM
+    runProofByUGM, multiUGM,
+    createTermTmplt,
+    lambda_term,
+    lambda_sent
 ) where
 
 
@@ -446,11 +449,28 @@ multiUGM typeList programCore = do
       (result_prop, idx, _) <- multiUGMWorker typeList programCore
       return (result_prop, idx)
 
---vs2XsM :: HelperConstraints m s tType o t sE eL r1 q =>
---    Int -> s -> m s
---vs2XsM numVars sent = do
---    vList <- getTopFreeVars numVars
---    case vList of
---        [] -> return sent
---        [singleVar] -> vs2XM singleVar sent
 
+createTermTmplt :: SentConstraints s t tType o q => 
+        [(t,Int)] -> t -> t
+createTermTmplt subs originTerm = 
+    let
+        accumFunc (targetTerm,idx) accumTerm =
+            termSwapForX targetTerm idx originTerm
+    in foldr accumFunc originTerm subs
+               
+
+lambda_term :: SentConstraints s t tType o q => 
+    [Int] -> t -> [t] -> t
+lambda_term target_idxs template replacements = 
+    let
+        subs = zip target_idxs replacements
+    in
+        termSubXs subs template
+
+lambda_sent :: SentConstraints s t tType o q => 
+    [Int] -> s -> [t] -> s
+lambda_sent target_idxs template replacements = 
+    let
+        subs = zip target_idxs replacements
+    in
+        sentSubXs subs template

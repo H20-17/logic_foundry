@@ -182,6 +182,8 @@ instance PREDL.LogicTerm ObjDeBr where
     termSubX = objDeBrSubX
     termSubXs :: [(Int, ObjDeBr)] -> ObjDeBr -> ObjDeBr
     termSubXs = objDeBrSubXs
+    termSwapForX :: ObjDeBr -> Int -> ObjDeBr -> ObjDeBr
+    termSwapForX = objDeBrSwapObjWithX
     x :: Int -> ObjDeBr
     x = X
     termMaxXidx :: ObjDeBr -> Maybe Int

@@ -226,13 +226,16 @@ proveBuilderTheoremM :: HelperConstraints sE s eL m r t =>
     ([t] -> t) ->            -- source_set_template
     ([t] ->t->s) ->            -- p_template
     ProofGenTStd () r s Text () m ()
-proveBuilderTheoremM source_set_template p_pred = do
+proveBuilderTheoremM source_set_pred p_pred = do
     freeVarsRev <- getFreeVars
     let freeVars = reverse freeVarsRev
-    let contextVarCount = length freeVars
-    (closedSpecAxiom, _) <- specificationMNew contextVarCount source_set_template p_pred
+    let freeVarCount = length freeVars
+    (closedSpecAxiom, _) <- specificationMNew freeVarCount source_set_pred p_pred
     (freeSpecAxiom,_) <- multiUIM closedSpecAxiom freeVars
-    eiHilbertM freeSpecAxiom
+    (tm,_,h_obj) <- eiHilbertM freeSpecAxiom
+    templateIdxs <- newIndices freeVarCount
+    let subs = zip freeVars templateIdxs
+    let lambdaTempltate = createTermTmplt subs h_obj 
     return ()
              
 
@@ -248,10 +251,11 @@ builderSchema spec_idx outer_idxs source_set_template p_template =
         p_tmplt_consts = extractConstsSent p_template
         all_consts = dom_tmplt_consts `Set.union` p_tmplt_consts
         typed_consts = Prelude.map (, ()) (Data.Set.toList all_consts) 
-        source_set_func context_vars =
-            termSubXs (zip outer_idxs context_vars) source_set_template 
-        p_pred_func context_vars spec_var =
-            sentSubXs ((spec_idx, spec_var):zip outer_idxs context_vars) p_template
+        source_set_func = lambda_term outer_idxs source_set_template
+            -- termSubXs (zip outer_idxs context_vars) source_set_template 
+        p_pred_func_pre = lambda_sent outer_idxs p_template
+        p_pred_func context_terms spec_term 
+           = lambda_sent [spec_idx] (p_pred_func_pre context_terms) [spec_term]
     in
         TheoremSchemaMT {
             lemmasM = [],

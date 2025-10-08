@@ -866,6 +866,7 @@ infix 4 ./=.
 class LogicTerm t where
     termSubX :: Int -> t -> t -> t
     termSubXs :: [(Int, t)] -> t -> t
+    termSwapForX :: t -> Int -> t -> t
     x :: Int -> t
     termMaxXidx :: t -> Maybe Int
 

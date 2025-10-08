@@ -1,6 +1,7 @@
 module IndexTracker (
     IndexTracker,
     newIndex,
+    newIndices,
     dropIndices,
     runIndexTracker
 
@@ -20,6 +21,14 @@ newIndex = do
     currentIndex <- get
     put (currentIndex + Sum 1)
     return $ getSum currentIndex
+
+
+newIndices :: (MonadState (Sum Int) m) => Int -> m [Int]
+newIndices n = do
+    currentIndex <- get
+    put (currentIndex + Sum n)
+    let currentIndexInt = getSum currentIndex
+    return $ [currentIndexInt .. currentIndexInt + n - 1]
 
 dropIndices :: (MonadState (Sum Int) m) => Int -> m ()
 dropIndices n = do
