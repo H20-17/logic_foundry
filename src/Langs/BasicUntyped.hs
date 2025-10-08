@@ -52,8 +52,6 @@ module Langs.BasicUntyped (
     natSetObj,
     parseSetBuilder,
     parseForallChain,
-    objDeBrSwapFreeVarsToX,
-    propDeBrSwapFreeVarsToX,
     parseImplication,
     parsePair,
     parseIn,
@@ -61,7 +59,8 @@ module Langs.BasicUntyped (
     parseBiconditional,
     isRelationOn,
     propMaxXIdx,
-    objMaxXIdx
+    objMaxXIdx,
+    objDeBrSwapObjWithX
 ) where
 
 

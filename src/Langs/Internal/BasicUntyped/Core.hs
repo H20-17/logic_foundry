@@ -49,8 +49,6 @@ module Langs.Internal.BasicUntyped.Core (
     parseEmptySet,
     --eXInt,
     --aXInt,
-    objDeBrSwapFreeVarsToX,
-    propDeBrSwapFreeVarsToX,
     parseXInternal,
     propDeBrExtractConsts,
     extractElemsFromDisjunction,
@@ -62,7 +60,8 @@ module Langs.Internal.BasicUntyped.Core (
     propMaxXIdx,
     objMaxXIdx,
     objDeBrRosterNormalize,
-    propDeBrRosterNormalize
+    propDeBrRosterNormalize,
+    objDeBrSwapObjWithX
 
 ) where
 import Control.Monad ( unless, guard,msum )
@@ -95,6 +94,7 @@ import Data.Maybe (isJust)
 import Data.Tuple (swap)
 import qualified Data.Set as Set
 import Debug.Trace(trace, traceShow, traceShowId,traceM)
+import Distribution.Simple.Program (needProgram)
 
 
 
@@ -714,6 +714,138 @@ propDeBrSubXs subs prop =
 --    foldl (\currentObj (idx, substitutionTerm) ->
 --             objDeBrSubXWorker vIdx xIdx (swapXtoXIntObj substitutionTerm) currentProp
 --          ) prop subs
+
+
+propDeBrXIntInside :: PropDeBr -> Int -> Bool
+propDeBrXIntInside prop idx = case prop of
+    Neg p -> propDeBrXIntInside p idx
+    (p1 :&&: p2) -> propDeBrXIntInside p1 idx || propDeBrXIntInside p2 idx
+    (p1 :||: p2) -> propDeBrXIntInside p1 idx || propDeBrXIntInside p2 idx
+    (p1 :->: p2) -> propDeBrXIntInside p1 idx || propDeBrXIntInside p2 idx
+    (p1 :<->: p2) -> propDeBrXIntInside p1 idx || propDeBrXIntInside p2 idx
+    (o1 :==: o2) -> objDeBrXIntInside o1 idx || objDeBrXIntInside o2 idx
+    In o1 o2 -> objDeBrXIntInside o1 idx || objDeBrXIntInside o2 idx
+    Forall p -> propDeBrXIntInside p idx
+    Exists p -> propDeBrXIntInside p idx
+    (o1 :<=: o2) -> objDeBrXIntInside o1 idx || objDeBrXIntInside o2 idx
+    F -> False
+
+
+
+objDeBrXIntInside :: ObjDeBr -> Int -> Bool
+objDeBrXIntInside obj idx = case obj of
+    Integ num -> False
+    Constant const -> False
+    Hilbert p -> propDeBrXIntInside p idx
+    Bound i -> idx == i
+    V i -> False
+    X i -> False
+    XInternal i -> idx == i
+    (o1 :+: o2) -> objDeBrXIntInside o1 idx || objDeBrXIntInside o2 idx
+    Intneg o1     -> objDeBrXIntInside o1 idx
+    (o1 :*: o2) -> objDeBrXIntInside o1 idx || objDeBrXIntInside o2 idx
+    IntSet -> False
+    EmptySet -> False
+
+
+
+
+
+
+objDeBrSwapObjWithXWorker :: ObjDeBr -> Int -> ObjDeBr -> (ObjDeBr,Bool)
+objDeBrSwapObjWithXWorker targetObj replacementIdx originObj =
+    if originObj == targetObj then
+            (X replacementIdx,True)
+        else
+            case originObj of
+                Integ num -> (Integ num, False)
+                Constant name -> (Constant name, False)
+                Hilbert p ->
+                    case propDeBrSwapObjWithXWorker targetObj replacementIdx p of
+                        (pSwapped,True) -> (Hilbert $ swapBoundIndexProp originBoundDepth newBoundDepth pSwapped, True)
+                            where
+                                originBoundDepth = boundDepthObjDeBr originObj
+                                targetBoundDepth = boundDepthObjDeBr targetObj
+                                newBoundDepth = targetBoundDepth - originBoundDepth
+                        _ -> (Hilbert p,False)
+                Bound idx -> (Bound idx, False)
+                V idx -> (V idx, False)
+                X idx -> (X idx, False)
+                XInternal idx -> (X idx, False)
+                (o1 :+: o2) -> (o1Swapped :+: o2Swapped, targetInO1 || targetInO2)
+                    where
+                        (o1Swapped, targetInO1) = objDeBrSwapObjWithXWorker targetObj replacementIdx o1
+                        (o2Swapped, targetInO2) = objDeBrSwapObjWithXWorker targetObj replacementIdx o2
+                Intneg o -> (Intneg oSwapped, targetInO)
+                    where
+                        (oSwapped, targetInO) = objDeBrSwapObjWithXWorker targetObj replacementIdx o
+                (o1 :*: o2) -> (o1Swapped :*: o2Swapped, targetInO1 || targetInO2)
+                    where
+                        (o1Swapped, targetInO1) = objDeBrSwapObjWithXWorker targetObj replacementIdx o1
+                        (o2Swapped, targetInO2) = objDeBrSwapObjWithXWorker targetObj replacementIdx o2
+                IntSet -> (IntSet, False)
+                EmptySet -> (EmptySet, False)
+
+propDeBrSwapObjWithXWorker :: ObjDeBr -> Int -> PropDeBr -> (PropDeBr,Bool)
+propDeBrSwapObjWithXWorker targetObj replacementIdx originProp = case originProp of
+    Neg p -> (Neg pSwapped, targetInP)
+                    where
+                        (pSwapped, targetInP) = propDeBrSwapObjWithXWorker targetObj replacementIdx p          
+    (p1 :&&: p2) -> (p1Swapped :&&: p2Swapped, targetInP1 || targetInP2)
+                    where
+                        (p1Swapped, targetInP1) = propDeBrSwapObjWithXWorker targetObj replacementIdx p1
+                        (p2Swapped, targetInP2) = propDeBrSwapObjWithXWorker targetObj replacementIdx p2            
+    (p1 :||: p2) -> (p1Swapped :||: p2Swapped, targetInP1 || targetInP2)
+                    where
+                        (p1Swapped, targetInP1) = propDeBrSwapObjWithXWorker targetObj replacementIdx p1
+                        (p2Swapped, targetInP2) = propDeBrSwapObjWithXWorker targetObj replacementIdx p2        
+    (p1 :->: p2) -> (p1Swapped :->: p2Swapped, targetInP1 || targetInP2)
+                    where
+                        (p1Swapped, targetInP1) = propDeBrSwapObjWithXWorker targetObj replacementIdx p1
+                        (p2Swapped, targetInP2) = propDeBrSwapObjWithXWorker targetObj replacementIdx p2        
+    (o1 :==: o2) -> (o1Swapped :==: o2Swapped, targetInO1 || targetInO2)
+                    where
+                        (o1Swapped, targetInO1) = objDeBrSwapObjWithXWorker targetObj replacementIdx o1
+                        (o2Swapped, targetInO2) = objDeBrSwapObjWithXWorker targetObj replacementIdx o2
+    In o1 o2 -> (o1Swapped `In` o2Swapped, targetInO1 || targetInO2)
+                    where
+                        (o1Swapped, targetInO1) = objDeBrSwapObjWithXWorker targetObj replacementIdx o1
+                        (o2Swapped, targetInO2) = objDeBrSwapObjWithXWorker targetObj replacementIdx o2
+    Forall p -> 
+        case propDeBrSwapObjWithXWorker targetObj replacementIdx p of
+            (pSwapped,True) -> (Forall $ swapBoundIndexProp originBoundDepth newBoundDepth pSwapped, True)
+                where
+                    originBoundDepth = boundDepthPropDeBr originProp
+                    targetBoundDepth = boundDepthObjDeBr targetObj
+                    newBoundDepth = targetBoundDepth - originBoundDepth
+            _ -> (Forall p,False)
+    Exists p -> 
+        case propDeBrSwapObjWithXWorker targetObj replacementIdx p of
+            (pSwapped,True) -> (Exists $ swapBoundIndexProp originBoundDepth newBoundDepth pSwapped, True)
+                where
+                    originBoundDepth = boundDepthPropDeBr originProp
+                    targetBoundDepth = boundDepthObjDeBr targetObj
+                    newBoundDepth = targetBoundDepth - originBoundDepth
+            _ -> (Exists p,False)
+    (o1 :<=: o2) -> (o1Swapped :==: o2Swapped, targetInO1 || targetInO2)
+                    where
+                        (o1Swapped, targetInO1) = objDeBrSwapObjWithXWorker targetObj replacementIdx o1
+                        (o2Swapped, targetInO2) = objDeBrSwapObjWithXWorker targetObj replacementIdx o2
+    F -> (F,False)
+
+
+objDeBrSwapObjWithX :: ObjDeBr -> Int -> ObjDeBr -> ObjDeBr
+objDeBrSwapObjWithX targetObj replacementIdx originObj =
+    objDeBrRosterNormalize swapped 
+      where
+        (swapped,_) = objDeBrSwapObjWithXWorker targetObj replacementIdx originObj
+
+
+
+
+-- objDeBrSwapObjWithXWorker :: ObjDeBr -> Int -> ObjDeBr -> ObjDeBr
+-- objDeBrSwapObjWithXWorker substitution targetIdx template = 
+       
 
 
 
