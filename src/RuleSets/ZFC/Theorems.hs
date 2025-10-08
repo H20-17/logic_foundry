@@ -225,7 +225,7 @@ builderTheorem idx outer_idxs t p_template =
 proveBuilderTheoremM :: HelperConstraints sE s eL m r t =>
     ([t] -> t) ->            -- source_set_template
     ([t] ->t->s) ->            -- p_template
-    ProofGenTStd () r s Text () m ()
+    ProofGenTStd () r s Text () m ([t] -> t)
 proveBuilderTheoremM source_set_pred p_pred = do
     freeVarsRev <- getFreeVars
     let freeVars = reverse freeVarsRev
@@ -235,8 +235,9 @@ proveBuilderTheoremM source_set_pred p_pred = do
     (tm,_,h_obj) <- eiHilbertM freeSpecAxiom
     templateIdxs <- newIndices freeVarCount
     let subs = zip freeVars templateIdxs
-    let lambdaTempltate = createTermTmplt subs h_obj 
-    return ()
+    let lambdaTemplate = createTermTmplt subs h_obj
+    let returnObj = lambda_term templateIdxs lambdaTemplate
+    return returnObj
              
 
 builderSchema :: HelperConstraints sE s eL m r t =>
@@ -244,7 +245,7 @@ builderSchema :: HelperConstraints sE s eL m r t =>
     [Int] ->        -- outer_idxs
     t ->            -- source_set_template
     s ->            -- p_template
-    TheoremSchemaMT () r s Text () m ()
+    TheoremSchemaMT () r s Text () m ([t] -> t)
 builderSchema spec_idx outer_idxs source_set_template p_template = 
     let
         dom_tmplt_consts = extractConstsTerm source_set_template

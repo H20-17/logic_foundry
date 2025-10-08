@@ -1478,7 +1478,7 @@ main = do
     print "SPEC TO BUILDER THEOREM-------------------------------------"
     let p_template = Constant "C" :+: X 0 :==: (X 1 :+: X 2)
     let source_set_template = X 1 .\/. X 2
-    (a,b,c,d) <- checkTheoremM (builderSchema 0 [1,2] source_set_template p_template::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text () IO ()))
+    (a,b,c,d) <- checkTheoremM (builderSchema 0 [1,2] source_set_template p_template::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text () IO ([ObjDeBr] -> ObjDeBr)))
     (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
 
     -- error "STOPPING HERE"
@@ -1486,7 +1486,7 @@ main = do
     print "SPEC TO BUILDER THEOREM 2-------------------------------------"
     let p_template = Constant "C" :==: X 0
     let source_set_template = Constant "S"
-    (a,b,c,d) <- checkTheoremM (builderSchema 0 [] source_set_template p_template::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text () IO ()))
+    (a,b,c,d) <- checkTheoremM (builderSchema 0 [] source_set_template p_template::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text () IO ([ObjDeBr] -> ObjDeBr)))
     (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
     
 
