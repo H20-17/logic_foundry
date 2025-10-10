@@ -1470,9 +1470,9 @@ main = do
     (aFSR, bFSR, cFSR, dFSR) <- runProofGeneratorT testFuncsSetRendering
     (putStrLn . unpack . showPropDeBrStepsBase) cFSR -- Print results
 
-    print "TEST BINARY UNION EXISTS SCHEMA-------------------------------------"
-    (a,b,c,d) <- checkTheoremM (binaryUnionExistsSchema::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text () IO ()))
-    (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
+--    print "TEST BINARY UNION EXISTS SCHEMA-------------------------------------"
+--    (a,b,c,d) <- checkTheoremM (binaryUnionExistsSchema::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text () IO ()))
+--    (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
 
 
     print "SPEC TO BUILDER THEOREM-------------------------------------"
@@ -1480,6 +1480,8 @@ main = do
     let source_set_template = X 1 .\/. X 2
     (a,b,c,d) <- checkTheoremM (builderSchema 0 [1,2] source_set_template p_template::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text () IO ([ObjDeBr] -> ObjDeBr)))
     (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
+
+
 
     -- error "STOPPING HERE"
 
@@ -1491,80 +1493,80 @@ main = do
     
 
 
-    print "TEST BINARY INTERSECTION EXISTS SCHEMA-------------------------------------"
-    (a,b,c,d) <- checkTheoremM (binaryIntersectionExistsSchema::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text ()IO ()))
-    (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
+--    print "TEST BINARY INTERSECTION EXISTS SCHEMA-------------------------------------"
+--    (a,b,c,d) <- checkTheoremM (binaryIntersectionExistsSchema::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text ()IO ()))
+--    (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
 
-    print "TEST BINARY CROSSPRODDEFEQUIV SCHEMA-------------------------------------"
-    (a,b,c,d) <- checkTheoremM (crossProductDefEquivSchema::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text () IO ()))
-    (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
+--    print "TEST BINARY CROSSPRODDEFEQUIV SCHEMA-------------------------------------"
+--    (a,b,c,d) <- checkTheoremM (crossProductDefEquivSchema::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text () IO ()))
+--    (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
 
-    print "TEST CROSSPROD EXISTS SCHEMA ---------------------------"
-    (a,b,c,d) <- checkTheoremM (crossProductExistsSchema::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text ()IO ()))
-    (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
+--    print "TEST CROSSPROD EXISTS SCHEMA ---------------------------"
+--    (a,b,c,d) <- checkTheoremM (crossProductExistsSchema::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text ()IO ()))
+--    (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
 
-    print "TEST BUILDER SUBSET THEOREM-------------------------------------"
-    let p_template = Constant "C" :+: X 0 :==: (X 1 :+: X 2)
-    let source_set_template = X 1 .\/. X 2
-    (a,b,c,d) <- checkTheoremM 
-         (builderSubsetTheoremSchema [1,2] 0 source_set_template p_template 
-              ::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text ()IO ()))
-    (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
+--    print "TEST BUILDER SUBSET THEOREM-------------------------------------"
+--    let p_template = Constant "C" :+: X 0 :==: (X 1 :+: X 2)
+--    let source_set_template = X 1 .\/. X 2
+--    (a,b,c,d) <- checkTheoremM 
+--         (builderSubsetTheoremSchema [1,2] 0 source_set_template p_template 
+--              ::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text ()IO ()))
+--    (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
 
-    print "TEST BUILDER SOURCE PARTITION THEOREM--------------------"
-    let p_template = Constant "C" :+: X 0 :==: (X 1 :+: X 2)
-    let source_set_template = X 1 .\/. X 2
-    (a,b,c,d) <- checkTheoremM (builderSrcPartitionSchema [1,2] 0 source_set_template p_template 
-            ::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text ()IO ()))
-    (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
-
-
-
-    print "TEST UNION WITH EMPTY SET THEOREM-------------------------------------"
-    (a,b,c,d) <- checkTheoremM (unionWithEmptySetSchema::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text ()IO ()))
-    (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
-
-    print "DISJOINT SUBSET IS EMPTY THEOREM-------------------------------------"
-    (a,b,c,d) <- checkTheoremM (disjointSubsetIsEmptySchema::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text () IO ()))
-    (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
-
-
-    print "SPEC REDUNDANCY THEOREM-------------------------------------"
-    let p_template = Constant "C" :+: X 0 :==: (X 1 :+: X 2)
-    let source_set_template = X 1 .\/. X 2
-    (a,b,c,d) <- checkTheoremM (specRedundancySchema [1,2] 0 source_set_template p_template
-                       ::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text ()IO ()))
-    (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
-
-
-    print "SPEC REDUNDANCY THEOREM TEST 2-------------------------------------"
-    let p_template = X 0 .==. X 0
-    let source_set_template = Constant "SourceSet"
-    (a,b,c,d) <- checkTheoremM (specRedundancySchema [] 0 source_set_template p_template
-                                   ::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text ()IO ()))
-    (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
+--    print "TEST BUILDER SOURCE PARTITION THEOREM--------------------"
+--    let p_template = Constant "C" :+: X 0 :==: (X 1 :+: X 2)
+--    let source_set_template = X 1 .\/. X 2
+--    (a,b,c,d) <- checkTheoremM (builderSrcPartitionSchema [1,2] 0 source_set_template p_template 
+--            ::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text ()IO ()))
+--    (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
 
 
 
-    print "SPEC ANTI-REDUNDANCY THEOREM-------------------------------------"
-    let p_template = Constant "C" .+. X 0 .==. (X 1 .+. X 2)
-    let source_set_template = X 1 .\/. X 2
-    (a,b,c,d) <- checkTheoremM (specAntiRedundancySchema [1,2] 0 source_set_template p_template
-                   :: (TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text () IO ()))
-    (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
+--    print "TEST UNION WITH EMPTY SET THEOREM-------------------------------------"
+--    (a,b,c,d) <- checkTheoremM (unionWithEmptySetSchema::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text ()IO ()))
+--    (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
+
+--    print "DISJOINT SUBSET IS EMPTY THEOREM-------------------------------------"
+--    (a,b,c,d) <- checkTheoremM (disjointSubsetIsEmptySchema::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text () IO ()))
+--    (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
+
+
+--    print "SPEC REDUNDANCY THEOREM-------------------------------------"
+--    let p_template = Constant "C" :+: X 0 :==: (X 1 :+: X 2)
+--    let source_set_template = X 1 .\/. X 2
+--    (a,b,c,d) <- checkTheoremM (specRedundancySchema [1,2] 0 source_set_template p_template
+--                       ::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text ()IO ()))
+--    (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
+
+
+--    print "SPEC REDUNDANCY THEOREM TEST 2-------------------------------------"
+--    let p_template = X 0 .==. X 0
+--    let source_set_template = Constant "SourceSet"
+--    (a,b,c,d) <- checkTheoremM (specRedundancySchema [] 0 source_set_template p_template
+--                                   ::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text ()IO ()))
+--    (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
 
 
 
-    print "SPEC ANTI-REDUNDANCY THEOREM TEST 2-------------------------------------"
-    let p_template = X 0 .==. X 0
-    let source_set_template = Constant "SourceSet"
-    (a,b,c,d) <- checkTheoremM (specAntiRedundancySchema [] 0 source_set_template p_template
-                       :: (TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text () IO ()))
-    (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
+--    print "SPEC ANTI-REDUNDANCY THEOREM-------------------------------------"
+--    let p_template = Constant "C" .+. X 0 .==. (X 1 .+. X 2)
+--    let source_set_template = X 1 .\/. X 2
+--    (a,b,c,d) <- checkTheoremM (specAntiRedundancySchema [1,2] 0 source_set_template p_template
+--                   :: (TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text () IO ()))
+--    (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
+
+
+
+--    print "SPEC ANTI-REDUNDANCY THEOREM TEST 2-------------------------------------"
+--    let p_template = X 0 .==. X 0
+--    let source_set_template = Constant "SourceSet"
+--    (a,b,c,d) <- checkTheoremM (specAntiRedundancySchema [] 0 source_set_template p_template
+--                       :: (TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text () IO ()))
+--    (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
 
 
  
-    return ()
+--    return ()
 
 
 

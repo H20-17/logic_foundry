@@ -43,7 +43,8 @@ module RuleSets.ZFC.Helpers
     MetaRuleError(..),
     builderXM,
     specificationMNew,
-    aX, eX, hX, eXBang, multiAx, multiAXM, multiEXM, eXM, aXM, hXM
+    aX, eX, hX, eXBang, multiAx, multiAXM, multiEXM, eXM, aXM, hXM,
+    lambdaSpec
 
 
 ) where
@@ -334,6 +335,18 @@ aXM inner = PREDL.aXM () inner
 
 hXM :: MonadSent s t m => m s -> m t
 hXM inner = PREDL.hXM () inner
+
+
+lambdaSpec :: SentConstraints s t  =>
+    [Int] -> Int -> t -> s -> ([t]->t,[t] -> t -> s)
+lambdaSpec contextIdxs specIdx source_template p_template =
+    let 
+        source_template_f = lambdaTermMulti contextIdxs source_template
+        pred_pre = lambdaSentMulti contextIdxs p_template
+        pred contextObjs specObj = lambdaSent specIdx (pred_pre contextObjs) specObj
+    in
+        (source_template_f, pred)
+
 
 data MetaRuleError s where
    MetaRuleErrNotClosed :: s -> MetaRuleError s
