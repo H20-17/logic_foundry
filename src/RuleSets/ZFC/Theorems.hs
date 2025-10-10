@@ -236,7 +236,7 @@ proveBuilderTheoremM source_set_pred p_pred = do
     templateIdxs <- newIndices freeVarCount
     let subs = zip freeVars templateIdxs
     let lambdaTemplate = createTermTmplt subs h_obj
-    let returnObj = lambda_term templateIdxs lambdaTemplate
+    let returnObj = lambdaTermMulti templateIdxs lambdaTemplate
     return returnObj
              
 
@@ -252,11 +252,8 @@ builderSchema spec_idx outer_idxs source_set_template p_template =
         p_tmplt_consts = extractConstsSent p_template
         all_consts = dom_tmplt_consts `Set.union` p_tmplt_consts
         typed_consts = Prelude.map (, ()) (Data.Set.toList all_consts) 
-        source_set_func = lambda_term outer_idxs source_set_template
-            -- termSubXs (zip outer_idxs context_vars) source_set_template 
-        p_pred_func_pre = lambda_sent outer_idxs p_template
-        p_pred_func context_terms spec_term 
-           = lambda_sent [spec_idx] (p_pred_func_pre context_terms) [spec_term]
+        source_set_func = lambdaTermMulti outer_idxs source_set_template
+        p_pred_func = lambdaSpec outer_idxs spec_idx p_template
     in
         TheoremSchemaMT {
             lemmasM = [],

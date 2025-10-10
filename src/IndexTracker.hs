@@ -28,7 +28,7 @@ newIndices n = do
     currentIndex <- get
     put (currentIndex + Sum n)
     let currentIndexInt = getSum currentIndex
-    return $ [currentIndexInt .. currentIndexInt + n - 1]
+    return [currentIndexInt .. currentIndexInt + n - 1]
 
 dropIndices :: (MonadState (Sum Int) m) => Int -> m ()
 dropIndices n = do

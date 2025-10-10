@@ -152,15 +152,19 @@ specificationM outerIdxs idx t s = standardRuleM (specification outerIdxs idx t 
 specificationMNew :: HelperConstraints sE s eL m r t
        => Int -> ([t] -> t) -> ([t] -> t -> s) -> ProofGenTStd () r s Text () m (s,[Int])
 specificationMNew context_var_count t p_pred = do
-    let outerIdxs = [0..context_var_count-1]
+    outerIdxs <- newIndices context_var_count
     unless (context_var_count >= 0) (error "specificationMNew: context_var_count must be nonnegative")
     let context_vars = Prelude.map x outerIdxs
     -- Add a new index for the specification variable
     let t_template = t context_vars
-    let p_template = p_pred context_vars
-    let spec_var_idx = context_var_count
+    
+    spec_var_idx <- newIndex
     let spec_var = x spec_var_idx
-    standardRuleM (specification outerIdxs spec_var_idx t_template (p_template spec_var))
+    let p_template = p_pred context_vars spec_var
+    result <- standardRuleM (specification outerIdxs spec_var_idx t_template p_template)
+    dropIndices 1
+    dropIndices context_var_count
+    return result
 
 
 

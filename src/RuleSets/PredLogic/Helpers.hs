@@ -14,8 +14,11 @@ module RuleSets.PredLogic.Helpers
     aXM, multiAXM, eXM, multiEXM, hXM,
     runProofByUGM, multiUGM,
     createTermTmplt,
-    lambda_term,
-    lambda_sent
+    lambdaTerm,
+    lambdaSent,
+    lambdaTermMulti,
+    lambdaSentMulti,
+    lambdaSpec
 ) where
 
 
@@ -459,18 +462,39 @@ createTermTmplt subs originTerm =
     in foldr accumFunc originTerm subs
                
 
-lambda_term :: SentConstraints s t tType o q => 
+lambdaTermMulti :: SentConstraints s t tType o q => 
     [Int] -> t -> [t] -> t
-lambda_term target_idxs template replacements = 
+lambdaTermMulti target_idxs template replacements = 
     let
         subs = zip target_idxs replacements
     in
         termSubXs subs template
 
-lambda_sent :: SentConstraints s t tType o q => 
+lambdaTerm :: SentConstraints s t tType o q => 
+    Int -> t -> t -> t
+lambdaTerm target_idx template replacement = 
+    termSubX target_idx replacement template
+
+
+lambdaSentMulti :: SentConstraints s t tType o q => 
     [Int] -> s -> [t] -> s
-lambda_sent target_idxs template replacements = 
+lambdaSentMulti target_idxs template replacements = 
     let
         subs = zip target_idxs replacements
     in
         sentSubXs subs template
+
+lambdaSent :: SentConstraints s t tType o q => 
+    Int -> s -> t -> s
+lambdaSent target_idx template replacement = 
+    sentSubX target_idx replacement template
+
+
+lambdaSpec :: SentConstraints s t tType o q =>
+    [Int] -> Int -> s -> [t] -> t -> s
+lambdaSpec contextIdxs specIdx p_template contextObjs specObj =
+    let 
+        pred_pre = lambdaSentMulti contextIdxs p_template
+        pred_pre_applied = pred_pre contextObjs
+    in
+        lambdaSent specIdx pred_pre_applied specObj
