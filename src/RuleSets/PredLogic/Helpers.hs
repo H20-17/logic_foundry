@@ -491,10 +491,11 @@ lambdaSent target_idx template replacement =
 
 
 lambdaSpec :: SentConstraints s t tType o q =>
-    [Int] -> Int -> s -> [t] -> t -> s
-lambdaSpec contextIdxs specIdx p_template contextObjs specObj =
+    [Int] -> Int -> t -> s -> ([t]->t,[t] -> t -> s)
+lambdaSpec contextIdxs specIdx source_template p_template =
     let 
+        source_template_f = lambdaTermMulti contextIdxs source_template
         pred_pre = lambdaSentMulti contextIdxs p_template
-        pred_pre_applied = pred_pre contextObjs
+        pred contextObjs specObj = lambdaSent specIdx (pred_pre contextObjs) specObj
     in
-        lambdaSent specIdx pred_pre_applied specObj
+        (source_template_f, pred)

@@ -252,8 +252,8 @@ builderSchema spec_idx outer_idxs source_set_template p_template =
         p_tmplt_consts = extractConstsSent p_template
         all_consts = dom_tmplt_consts `Set.union` p_tmplt_consts
         typed_consts = Prelude.map (, ()) (Data.Set.toList all_consts) 
-        source_set_func = lambdaTermMulti outer_idxs source_set_template
-        p_pred_func = lambdaSpec outer_idxs spec_idx p_template
+        (source_set_func,p_pred_func) = 
+             lambdaSpec outer_idxs spec_idx source_set_template p_template
     in
         TheoremSchemaMT {
             lemmasM = [],
