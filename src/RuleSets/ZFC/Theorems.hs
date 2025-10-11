@@ -155,8 +155,8 @@ builderTheoremWorker :: (MonadSent s t m)  =>
     m s -- the theorem
 builderTheoremWorker param_n t p_pred = do
     multiAXM param_n $ do
-        paramVarsRev <- getXVars param_n
-        let paramVars = reverse paramVarsRev
+        paramVars <- getXVars param_n
+        -- let paramVars = reverse paramVarsRev
         let t_tmplt = t paramVars
         let p_tmplt_pred = p_pred paramVars
         builderSet <- builderXM t_tmplt p_tmplt_pred
@@ -244,15 +244,15 @@ proveBuilderTheoremM :: HelperConstraints sE s eL m r t =>
     ([t] ->t->s) ->            -- p_template
     ProofGenTStd () r s Text () m ([t] -> t)
 proveBuilderTheoremM source_set_pred p_pred = do
-    freeVarsRev <- getFreeVars
-    let freeVars = reverse freeVarsRev
+    freeVars <- getFreeVars
+    -- let freeVars = reverse freeVarsRev
     let freeVarCount = length freeVars
     (closedSpecAxiom, _) <- specificationMNew freeVarCount source_set_pred p_pred
     (freeSpecAxiom,_) <- multiUIM closedSpecAxiom freeVars
     (tm,_,h_obj) <- eiHilbertM freeSpecAxiom
     templateIdxs <- newIndices freeVarCount
     let subs = zip freeVars templateIdxs
-    let lambdaTemplate = createTermTmpltMulti subs h_obj
+    let lambdaTemplate = createTermTmplt subs h_obj
     let returnObj = lambdaTermMulti templateIdxs lambdaTemplate
 
     let tm = builderTheorem freeVarCount source_set_pred p_pred

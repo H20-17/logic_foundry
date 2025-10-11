@@ -14,7 +14,6 @@ module RuleSets.PredLogic.Helpers
     aXM, multiAXM, eXM, multiEXM, hXM,
     runProofByUGM, multiUGM,
     createTermTmplt,
-    createTermTmpltMulti,
     lambdaTerm,
     lambdaSent,
     lambdaTermMulti,
@@ -269,6 +268,7 @@ reverseENegIntroM forallXNotPx = do
 
 
 
+
 extractConstsSentM :: HelperConstraints m  s tType o t sE eL r1 q
                  =>   s
                             -> ProofGenTStd tType r1 s o q m (Map o tType)
@@ -381,12 +381,18 @@ multiUIM initialProposition instantiationTerms =
 
 
 getXVar :: MonadSent s t tType o q m => m t
-getXVar = gets (x . (\x -> x - 1) . getSum)
+getXVar = do
+    topIdx <- getSum <$> get
+    return $ x (topIdx - 1)
+    --       gets (x . (\x -> x - 1) . getSum)
 
 getXVars :: MonadSent s t tType o q m => Int -> m [t]
 getXVars n = do
     topIdx <- getSum <$> get
     return [x (topIdx - i - 1) | i <- [0..(n-1)]]
+
+-- n starts out as 2 and ..... we have added to things to the stack... stack started out as 0, now is 2....
+-- i draws frp, [0..1].......... sp we get x (2-0-1) which is x 1, and we get x (2-1-1) which is x 0
 
 
 aXM :: MonadSent s t tType o q m => q -> m s -> m s
@@ -435,169 +441,32 @@ multiEXM quantTypes inner = case quantTypes of
 
 
 
-
-
-
 runProofByUGM :: HelperConstraints m s tType o t sE eL r1 q
-                 =>  q -> ProofGenTStd tType r1 s o q m t
-                            -> ProofGenTStd tType r1 s o q m (s, [Int], t -> t)
+                 =>  q -> ProofGenTStd tType r1 s o q m x
+                            -> ProofGenTStd tType r1 s o q m (s, [Int])
 runProofByUGM tt prog =  do
-        state <- getProofState
-        context <- ask
-        let frVarTypeStack = freeVarTypeStack context
-        let newFrVarTypStack = tt : frVarTypeStack
-        let newContextFrames = contextFrames context <> [False]
-        let newStepIdxPrefix = stepIdxPrefix context ++ [stepCount state]
-        let newLemmas = contextLemmas context
-        let newContext = PrfStdContext newFrVarTypStack newStepIdxPrefix newContextFrames newLemmas
-        let newState = PrfStdState mempty mempty 1
-        let preambleSteps = [PrfStdStepFreevar (length frVarTypeStack) (qTypeToTType tt)]
-        vIdx <- get
-        let transformedProg = do
-            resultData <- prog
-            topFreeVar <- getTopFreeVar
-            tmpltIdx <- newIndex
-            let resultTmplt = createTermTmplt topFreeVar tmpltIdx resultData
-            let result = lambdaTerm tmpltIdx resultTmplt
-            return result
-        (extraData,generalizable,subproof, newSteps) 
-                 <- lift $ runSubproofM newContext state newState preambleSteps (Last Nothing) transformedProg vIdx
-        let resultSent = createForall tt (Prelude.length frVarTypeStack) generalizable
-        mayMonadifyRes <- monadifyProofStd $ proofByUG resultSent subproof
-        idx <- maybe (error "No theorem returned by monadifyProofStd on ug schema. This shouldn't happen") (return . snd) mayMonadifyRes
-        return (resultSent,idx, extraData)
-
-
-runProofByUGMRawResult :: HelperConstraints m s tType o t sE eL r1 q
-                 =>  q -> ProofGenTStd tType r1 s o q m ([t] -> t)
-                            -> ProofGenTStd tType r1 s o q m (s, [Int], ([t] -> t))
-runProofByUGMRawResult tt prog =  do
-        state <- getProofState
-        context <- ask
-        let frVarTypeStack = freeVarTypeStack context
-        let newFrVarTypStack = tt : frVarTypeStack
-        let newContextFrames = contextFrames context <> [False]
-        let newStepIdxPrefix = stepIdxPrefix context ++ [stepCount state]
-        let newLemmas = contextLemmas context
-        let newContext = PrfStdContext newFrVarTypStack newStepIdxPrefix newContextFrames newLemmas
-        let newState = PrfStdState mempty mempty 1
-        let preambleSteps = [PrfStdStepFreevar (length frVarTypeStack) (qTypeToTType tt)]
-        vIdx <- get
-        (extraData,generalizable,subproof, newSteps) 
-                 <- lift $ runSubproofM newContext state newState preambleSteps (Last Nothing) prog vIdx
-        let resultSent = createForall tt (Prelude.length frVarTypeStack) generalizable
-        mayMonadifyRes <- monadifyProofStd $ proofByUG resultSent subproof
-        idx <- maybe (error "No theorem returned by monadifyProofStd on ug schema. This shouldn't happen") (return . snd) mayMonadifyRes
-        return (resultSent,idx, extraData)
-
-
-
--- multiUGM :: HelperConstraints m s tType o t sE eL r1 q =>
---    [q] ->                             -- ^ List of types for UG variables (outermost first).
---    ProofGenTStd tType r1 s o q m x ->       -- ^ The core program. Its monadic return 'x' is discarded.
---                                           --   It must set 'Last s' with the prop to be generalized.
---    ProofGenTStd tType r1 s o q m (s, [Int])  -- ^ Returns (final_generalized_prop, its_index).
--- multiUGM typeList programCore = do
---      (result_prop, idx, _) <- multiUGMWorker typeList programCore
---      return (result_prop, idx)
-
-
-multiUGMBase :: HelperConstraints m s tType o t sE eL r1 q
-                 =>  Int -> q -> ProofGenTStd tType r1 s o q m t
-                            -> ProofGenTStd tType r1 s o q m (s, [Int],[t] -> t)
-multiUGMBase freeVarCount tt prog =  do
-        state <- getProofState
-        context <- ask
-        let frVarTypeStack = freeVarTypeStack context
-        let newFrVarTypStack = tt : frVarTypeStack
-        let newContextFrames = contextFrames context <> [False]
-        let newStepIdxPrefix = stepIdxPrefix context ++ [stepCount state]
-        let newLemmas = contextLemmas context
-        let newContext = PrfStdContext newFrVarTypStack newStepIdxPrefix newContextFrames newLemmas
-        let newState = PrfStdState mempty mempty 1
-        let preambleSteps = [PrfStdStepFreevar (length frVarTypeStack) (qTypeToTType tt)]
-        vIdx <- get
-        let transformedProg = do
-            resultData <- prog
-            topFreeVars <- getTopFreeVars freeVarCount
-            tmpltIdxs <- newIndices freeVarCount
-            let subs = zip topFreeVars tmpltIdxs
-            let resultTmplt = createTermTmpltMulti subs resultData
-            let result = lambdaTermMulti tmpltIdxs resultTmplt
-            return result
-        (extraData,generalizable,subproof, newSteps) 
-                 <- lift $ runSubproofM newContext state newState preambleSteps (Last Nothing) transformedProg vIdx
-        let resultSent = createForall tt (Prelude.length frVarTypeStack) generalizable
-        mayMonadifyRes <- monadifyProofStd $ proofByUG resultSent subproof
-        idx <- maybe (error "No theorem returned by monadifyProofStd on ug schema. This shouldn't happen") (return . snd) mayMonadifyRes
-        return (resultSent,idx, extraData)
-
-
-
-
-        
-
-multiUGMWorker2 :: HelperConstraints m s tType o t sE eL r1 q =>
-    Int ->
-    [q] ->                             -- ^ List of types for UG variables (outermost first).
-    ProofGenTStd tType r1 s o q m t ->       -- ^ The core program. Its monadic return 'x' is discarded.
-                                           --   It must set 'Last s' with the prop to be generalized.
-    ProofGenTStd tType r1 s o q m (s, [Int],[t] -> t)  -- ^ Returns (final_generalized_prop, its_index).
-multiUGMWorker2 origTypeListLen typeList programCore =
-    case typeList of
-        [] -> error "empty case of multiUGMWorker shouldn't happen"
-        [var_type] -> multiUGMBase (length typeList) var_type programCore
-        (outermost_ug_var_type : another : remaining_ug_types) ->
-            -- Recursive step:
-            -- 1. Define the inner program that needs to be wrapped by the current UG.
-            --    This inner program is 'multiUGM' applied to the rest of the types and the original core program.
-            --    Its result will be (partially_generalized_prop, its_index_from_inner_multiUGM).
-            let 
-                inner_action_yielding_proven_s_idx = do 
-                    (_,_,extraData) <- multiUGMWorker2 origTypeListLen remaining_ug_types programCore
-                    return extraData
-            in
-            -- 2. 'runProofByUGM' expects its 'prog' argument to be of type '... m x_prog'.
-            --    Here, 'inner_action_yielding_proven_s_idx' is our 'prog', and its 'x_prog' is '(s, [Int])'.
-            --    This is fine; 'runProofByUGM' will execute it. The 'Last s' writer state will be
-            --    set to the 's' part of the result of 'inner_action_yielding_proven_s_idx'.
-            --    This 's' (the partially generalized proposition) is what 'runProofByUGM' will then generalize.
-            --    'runProofByUGM' itself returns (final_ug_prop, final_ug_idx), matching our required type.
-               do 
-                   runProofByUGMRawResult outermost_ug_var_type inner_action_yielding_proven_s_idx
-
+   (result_prop, idx, _) <- runProofByUGMWorker tt prog
+   return (result_prop, idx)
 
 
 multiUGM :: HelperConstraints m s tType o t sE eL r1 q =>
     [q] ->                             -- ^ List of types for UG variables (outermost first).
-    ProofGenTStd tType r1 s o q m t ->       -- ^ The core program. Its monadic return 'x' is discarded.
+    ProofGenTStd tType r1 s o q m x ->       -- ^ The core program. Its monadic return 'x' is discarded.
                                            --   It must set 'Last s' with the prop to be generalized.
-    ProofGenTStd tType r1 s o q m (s, [Int],[t] -> t)  -- ^ Returns (final_generalized_prop, its_index).
-multiUGM typeList programCore =
-    if null typeList then
-            runProofBySubArgM $ do
-                extraData <- programCore
-                return (const extraData)
-        else
-            multiUGMWorker2 (length typeList) typeList programCore
+    ProofGenTStd tType r1 s o q m (s, [Int])  -- ^ Returns (final_generalized_prop, its_index).
+multiUGM typeList programCore = do
+      (result_prop, idx, _) <- multiUGMWorker typeList programCore
+      return (result_prop, idx)
 
 
-
-
-createTermTmpltMulti :: SentConstraints s t tType o q => 
+createTermTmplt :: SentConstraints s t tType o q => 
         [(t,Int)] -> t -> t
-createTermTmpltMulti subs originTerm = 
+createTermTmplt subs originTerm = 
     let
         accumFunc (targetTerm,idx) accumTerm =
             termSwapForX targetTerm idx originTerm
     in foldr accumFunc originTerm subs
                
-
-createTermTmplt :: SentConstraints s t tType o q => 
-         t -> Int -> t -> t
-createTermTmplt targetTerm subIndex originTerm =
-    termSwapForX targetTerm subIndex originTerm
-
 
 lambdaTermMulti :: SentConstraints s t tType o q => 
     [Int] -> t -> [t] -> t
