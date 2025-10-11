@@ -155,7 +155,8 @@ builderTheoremWorker :: (MonadSent s t m)  =>
     m s -- the theorem
 builderTheoremWorker param_n t p_pred = do
     multiAXM param_n $ do
-        paramVars <- getXVars param_n
+        paramVarsRev <- getXVars param_n
+        let paramVars = reverse paramVarsRev
         let t_tmplt = t paramVars
         let p_tmplt_pred = p_pred paramVars
         builderSet <- builderXM t_tmplt p_tmplt_pred
@@ -166,7 +167,40 @@ builderTheoremWorker param_n t p_pred = do
         return $ isSet builderSet .&&. builder_props
 
 
+--        spec_var_idx <- newIndex-
+--        source_set_idx <- newIndex
+--        let spec_var = x spec_var_idx
+--        let source_set = x source_set_idx
+--        let core_prop_template =
+--             (spec_var `memberOf` source_set)
+--                             .<->.
+--                             (p_tmplt_pred spec_var .&&. (spec_var `memberOf` t_tmplt))
+--        let lambda1 = lambdaSent source_set_idx core_prop_template
+--        let core_prop_f spec_var source_set = lambdaSent spec_var_idx (lambda1 source_set) spec_var 
+--        dropIndices 2
 
+
+        --let core_prop_template spec_var source_set =
+        --     (spec_var `memberOf` source_set)
+        --                     .<->.
+        --                     (p_tmplt_pred spec_var .&&. (spec_var `memberOf` t_tmplt))
+
+--        let quantifiedOverX source_set = aXM $ do
+--            specVar <- getXVar
+---            let core_prop = core_prop_f specVar source_set
+--            return core_prop
+--
+--        let full_condition_on source_set = do
+--            quantified_over_x <- quantifiedOverX source_set
+--            let condition_on_isSet = isSet source_set
+--            return $ condition_on_isSet .&&. quantified_over_x
+
+
+
+--        hilbert_obj <- hXM $ do
+--            specVar <- getXVar
+--            full_condition_on specVar
+--        full_condition_on hilbert_obj
 
 
 
@@ -197,6 +231,11 @@ builderTheorem :: SentConstraints s t =>
     s -- the theorem
 builderTheorem param_n t p =
     runIndexTracker [] (builderTheoremWorker param_n t p)
+--    in
+--
+--        multiAx outer_idxs inner_props
+
+
 
 
 
@@ -205,21 +244,20 @@ proveBuilderTheoremM :: HelperConstraints sE s eL m r t =>
     ([t] ->t->s) ->            -- p_template
     ProofGenTStd () r s Text () m ([t] -> t)
 proveBuilderTheoremM source_set_pred p_pred = do
-    freeVars <- getFreeVars
-    -- let freeVars = reverse freeVarsRev
+    freeVarsRev <- getFreeVars
+    let freeVars = reverse freeVarsRev
     let freeVarCount = length freeVars
     (closedSpecAxiom, _) <- specificationMNew freeVarCount source_set_pred p_pred
     (freeSpecAxiom,_) <- multiUIM closedSpecAxiom freeVars
     (tm,_,h_obj) <- eiHilbertM freeSpecAxiom
-    
-    let test_tm = builderTheorem freeVarCount source_set_pred p_pred
-    txt <- showSentM test_tm
-    remarkM txt
-
     templateIdxs <- newIndices freeVarCount
     let subs = zip freeVars templateIdxs
     let lambdaTemplate = createTermTmpltMulti subs h_obj
     let returnObj = lambdaTermMulti templateIdxs lambdaTemplate
+
+    let tm = builderTheorem freeVarCount source_set_pred p_pred
+    txt <- showSentM tm
+    remarkM txt
 
     return returnObj
              

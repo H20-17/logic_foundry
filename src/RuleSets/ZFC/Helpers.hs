@@ -298,7 +298,6 @@ builderXM ::  MonadSent s t m =>
     m t -- the properties of the builderset and the builder set object      
 builderXM t p_pred = do
     idx <- newIndex
-    -- error $ show idx
     let  setObj = builderX idx t (p_pred (x idx))
     dropIndices 1
     return setObj
@@ -343,8 +342,8 @@ lambdaSpec :: SentConstraints s t  =>
 lambdaSpec contextIdxs specIdx source_template p_template =
     let 
         source_template_f = lambdaTermMulti contextIdxs source_template
-        pred contextObjs specObj = lambdaSentMulti (specIdx:contextIdxs) p_template (specObj : contextObjs)
-
+        pred_pre = lambdaSentMulti contextIdxs p_template
+        pred contextObjs specObj = lambdaSent specIdx (pred_pre contextObjs) specObj
     in
         (source_template_f, pred)
 
