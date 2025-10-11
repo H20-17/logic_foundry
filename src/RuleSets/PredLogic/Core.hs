@@ -674,10 +674,9 @@ type TheoremAlgSchema tType r s o q x = TheoremSchemaMT tType r s o q (Either So
 
 
 
-
 runProofByUGMWorker :: HelperConstraints m s tType o t sE eL r1 q
                  =>  q -> ProofGenTStd tType r1 s o q m x
-                            -> ProofGenTStd tType r1 s o q m (s, [Int], x)
+                            -> ProofGenTStd tType r1 s o q m (s, [Int], t -> x)
 runProofByUGMWorker tt prog =  do
         state <- getProofState
         context <- ask
@@ -690,11 +689,18 @@ runProofByUGMWorker tt prog =  do
         let newState = PrfStdState mempty mempty 1
         let preambleSteps = [PrfStdStepFreevar (length frVarTypeStack) (qTypeToTType tt)]
         vIdx <- get
+        let transformedProg = do
+            resultData <- prog
+            topFreeVar <- getTopFreeVar
+            tmpltIndex <- newIndex
+            let resultTmplt = createTermTmplt topFreeVar newIndex resultData
+            return $ lambdaTerm tmpltIdx resultTmplt
         (extraData,generalizable,subproof, newSteps) 
-                 <- lift $ runSubproofM newContext state newState preambleSteps (Last Nothing) prog vIdx
+                 <- lift $ do
+                       runSubproofM newContext state newState preambleSteps (Last Nothing) prog vIdx
         let resultSent = createForall tt (Prelude.length frVarTypeStack) generalizable
         mayMonadifyRes <- monadifyProofStd $ proofByUG resultSent subproof
-        idx <- maybe (error "No theorem returned by monadifyProofStd on ug schema. This shouldn't happen") (return . snd) mayMonadifyRes       
+        idx <- maybe (error "No theorem returned by monadifyProofStd on ug schema. This shouldn't happen") (return . snd) mayMonadifyRes
         return (resultSent,idx, extraData)
 
 

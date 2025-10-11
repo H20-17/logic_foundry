@@ -288,7 +288,7 @@ getTopFreeVar :: (Monoid r1, ProofStd s eL1 r1 o tType q, Monad m,
                        Show eL1, Typeable eL1,
                     Show s, Typeable s,
                        MonadThrow m, TypedSent o tType sE s, Show sE, Typeable sE,
-                       StdPrfPrintMonad s o tType m, TypeableTerm t Text tType sE q)
+                       StdPrfPrintMonad s o tType m, TypeableTerm t o tType sE q)
                  =>  ProofGenTStd tType r1 s o q m t
 getTopFreeVar =  do
         context <- ask
@@ -301,7 +301,7 @@ getTopFreeVars :: (Monoid r1, ProofStd s eL1 r1 o tType q, Monad m,
                        Show eL1, Typeable eL1,
                     Show s, Typeable s,
                        MonadThrow m, TypedSent o tType sE s, Show sE, Typeable sE,
-                       StdPrfPrintMonad s o tType m, TypeableTerm t Text tType sE q)
+                       StdPrfPrintMonad s o tType m, TypeableTerm t o tType sE q)
                  =>  Int -> ProofGenTStd tType r1 s o q m [t]
 getTopFreeVars n =  do
         context <- ask

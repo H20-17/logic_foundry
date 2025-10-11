@@ -218,7 +218,7 @@ proveBuilderTheoremM source_set_pred p_pred = do
 
     templateIdxs <- newIndices freeVarCount
     let subs = zip freeVars templateIdxs
-    let lambdaTemplate = createTermTmplt subs h_obj
+    let lambdaTemplate = createTermTmpltMulti subs h_obj
     let returnObj = lambdaTermMulti templateIdxs lambdaTemplate
 
     return returnObj
