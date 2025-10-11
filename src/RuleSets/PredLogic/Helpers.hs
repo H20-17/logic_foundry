@@ -380,12 +380,18 @@ multiUIM initialProposition instantiationTerms =
 
 
 getXVar :: MonadSent s t tType o q m => m t
-getXVar = gets (x . (\x -> x - 1) . getSum)
+getXVar = do
+    topIdx <- getSum <$> get
+    return $ x (topIdx - 1)
+    --       gets (x . (\x -> x - 1) . getSum)
 
 getXVars :: MonadSent s t tType o q m => Int -> m [t]
 getXVars n = do
     topIdx <- getSum <$> get
     return [x (topIdx - i - 1) | i <- [0..(n-1)]]
+
+-- n starts out as 2 and ..... we have added to things to the stack... stack started out as 0, now is 2....
+-- i draws frp, [0..1].......... sp we get x (2-0-1) which is x 1, and we get x (2-1-1) which is x 0
 
 
 aXM :: MonadSent s t tType o q m => q -> m s -> m s
