@@ -8,7 +8,8 @@ module RuleSets.ZFC.Core
     LogicTerm(..),
     HelperConstraints(..),
     SentConstraints(..),
-    MonadSent
+    MonadSent,
+    specAxInstance
 ) where
 
 
@@ -34,6 +35,8 @@ import Control.Monad.Reader ( MonadReader(ask) )
 import Control.Monad.State ( MonadState(get) )
 import Control.Monad.Writer ( MonadWriter(tell) )
 import Data.Maybe ( isNothing )
+import IndexTracker
+
 
 import Kernel
 import Internal.StdPattern
@@ -81,6 +84,7 @@ import RuleSets.PredLogic.Core hiding
    HelperConstraints(..),
    SentConstraints(..))
 import qualified RuleSets.PredLogic.Core as PREDL
+import qualified RuleSets.PredLogic.Helpers as PREDL
 import GHC.Num (integerMul)
 import Data.Monoid (Sum (..))
 
@@ -127,7 +131,6 @@ infixl 9 .@.
 infixr 8 .:.
 
 class (PREDL.LogicSent s t () Text ()) => LogicSent s t | s ->t, t->s where
-   specAxiom :: [Int] -> Int -> t -> s -> s
    replaceAxiom :: [Int] -> Int -> Int -> t -> s -> s
    parseMemberOf :: s -> Maybe (t, t)
    memberOf :: t -> t -> s
@@ -482,6 +485,46 @@ findFirstDuplicate xs = fst $ foldl' check (Nothing, Set.empty) xs
       | otherwise         = (Nothing, Set.insert x seen) -- Add to seen se
 
 
+-- | Worker employed by builderTheorem
+specAxInstanceWorker :: (MonadSent s t m)  =>
+    Int ->    -- param_n: The number of outer paramaters
+    ([t] -> t) ->  -- t: The set, expressed a a function on the paramaters
+    ([t] -> t -> s) -> -- p_pred
+
+    m s -- the theorem
+specAxInstanceWorker param_n t p_pred = do
+    PREDL.multiAXM (replicate param_n ()) $ do
+        paramVars <- PREDL.getXVars param_n
+        -- let paramVars = reverse paramVarsRev
+        let t_tmplt = t paramVars
+        let p_tmplt_pred = p_pred paramVars
+        PREDL.eXM () $ do
+            builderSet <- PREDL.getXVar
+
+            builder_props <- PREDL.aXM () $ do
+                specVar <- PREDL.getXVar
+                return $ specVar `memberOf` builderSet
+                          .<->. (p_tmplt_pred specVar .&&. (specVar `memberOf` t_tmplt))
+            return $ isSet builderSet .&&. builder_props
+
+specAxInstance :: SentConstraints s t =>
+    Int ->    -- param_n: The number of outer paramaters
+    ([t] -> t) ->  -- t: The set, expressed a a function on the paramaters
+    ([t] -> t -> s) -> -- p
+    s -- the theorem
+specAxInstance param_n t p =
+    runIndexTracker [] (specAxInstanceWorker param_n t p)
+
+
+lambdaSpec :: SentConstraints s t  =>
+    [Int] -> Int -> t -> s -> ([t]->t,[t] -> t -> s)
+lambdaSpec contextIdxs specIdx source_template p_template =
+    let 
+        source_template_f = PREDL.lambdaTermMulti contextIdxs source_template
+        pred contextObjs specObj = PREDL.lambdaSentMulti (specIdx:contextIdxs) p_template (specObj : contextObjs)
+
+    in
+        (source_template_f, pred)
 
 
 runProofAtomic :: (
@@ -544,14 +587,10 @@ runProofAtomic rule context state  =
                      (checkSanity tmpltVarTypeDictForS [] constDict s) -- Use [] for varStack
 
                -- Build the axiom instance using the helper.
-               let specAx = specAxiom outerIdxs idx t s -- Placeholder: Replace with updated helper call
+               let (src_set_tmplt,p_pred) = lambdaSpec outerIdxs idx t s
+               let specAx = specAxInstance (length outerIdxs) src_set_tmplt p_pred
 
-               -- Build the axiom instance using the helper.
-               -- CRITICAL ASSUMPTION: The *updated* specAxiom helper (likely in Langs/BasicUntyped.hs)
-               -- must now consume ALL template variables
-               -- (X idx and all X i where i is in outerIdxs), and return a fully closed proposition.
-               let specAx = specAxiom outerIdxs idx t s -- Placeholder: Replace with updated helper call
-                                                 -- e.g., ZFC.specAxiom outerIdxs idx t s
+
 
                -- **No final sanity check on specAx needed here if assumptions hold**
                -- Create the proof step

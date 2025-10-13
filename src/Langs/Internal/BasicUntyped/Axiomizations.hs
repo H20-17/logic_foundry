@@ -277,53 +277,6 @@ instance ZFC.LogicTerm ObjDeBr where
 
 instance ZFC.LogicSent PropDeBr ObjDeBr where
 
-    specAxiom :: [Int] -> Int -> ObjDeBr -> PropDeBr -> PropDeBr
-    specAxiom outerIdxs idx t p_template =
-        let
-            outerIdxsMax = if null outerIdxs then -1 else maximum outerIdxs
-            new_idx_base = max outerIdxsMax idx + 1
-            internalTIdx = new_idx_base -- Placeholder index for the source set 't'
-            internalBIdx = new_idx_base + 1 -- Placeholder index for the specified set 'B' (which will be XInternal internalBIdx)
-
-            -- The core relationship: x ∈ B ↔ (P(x) ∧ x ∈ t)
-            -- X idx represents 'x' (the element variable)
-            -- XInternal internalBIdx represents 'B' (the set being specified)
-            -- XInternal internalTIdx represents 't' (the source set)
-            -- p_template represents P(x)
-            core_prop_template :: PropDeBr
-            core_prop_template = (X idx `In` X internalBIdx)
-                             :<->:
-                             (p_template :&&: (X idx `In` X internalTIdx))
-
-            -- Universally quantify over x: ∀x (x ∈ B ↔ (P(x) ∧ x ∈ t))
-            quantified_over_x :: PropDeBr
-            quantified_over_x = aX idx core_prop_template
-
-            -- Condition that B must be a set: isSet(B)
-            -- isSet is defined in Shorthands as Neg (B `In` IntSet)
-            condition_B_isSet :: PropDeBr
-            condition_B_isSet = isSet (X internalBIdx) -- Using the isSet shorthand
-
-            -- Combine the conditions for B: isSet(B) ∧ ∀x(...)
-            full_condition_for_B :: PropDeBr
-            full_condition_for_B = condition_B_isSet :&&: quantified_over_x
-
-            -- Existentially quantify over B: ∃B (isSet(B) ∧ ∀x(...))
-            -- eXInt binds XInternal internalBIdx
-            quantified_over_B :: PropDeBr
-            quantified_over_B = eX internalBIdx full_condition_for_B
-
-            -- Substitute the actual source set 't' (for XInternal internalTIdx)
-            -- This results in: ∃B (isSet(B) ∧ ∀x (x ∈ B ↔ (P(x) ∧ x ∈ t_actual)))
-            axiom_body_with_t :: PropDeBr
-            axiom_body_with_t = propDeBrSubX internalTIdx t quantified_over_B
-
-            -- Close over any outer template variables (parameters in P(x) or t)
-            closed_axiom :: PropDeBr
-            closed_axiom = multiAx outerIdxs axiom_body_with_t
-        in
-            closed_axiom
-
     replaceAxiom :: [Int] -> Int -> Int -> ObjDeBr -> PropDeBr -> PropDeBr
     replaceAxiom outerIdxs x_from_T_idx y_image_idx t p_xy_template =
         -- p_xy_template is the user's predicate P(X x_from_T_idx, X y_image_idx)

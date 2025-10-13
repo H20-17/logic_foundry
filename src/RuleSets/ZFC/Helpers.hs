@@ -275,14 +275,14 @@ powerSetInstantiateM x = do
 
 runProofByUGM :: HelperConstraints sE s eL m r t
                  =>  ProofGenTStd () r s Text () m x
-                            -> ProofGenTStd () r s Text () m (s, [Int])
+                            -> ProofGenTStd () r s Text () m (s, [Int],x)
 runProofByUGM = PREDL.runProofByUGM ()
 
 multiUGM :: HelperConstraints sE s eL m r t =>
     Int ->                             -- ^ Number of UG's
     ProofGenTStd () r s Text () m x ->       -- ^ The core program. Its monadic return 'x' is discarded.
                                            --   It must set 'Last s' with the prop to be generalized.
-    ProofGenTStd () r s Text () m (s, [Int])  -- ^ Returns (final_generalized_prop, its_index).
+    ProofGenTStd () r s Text () m (s, [Int],x)  -- ^ Returns (final_generalized_prop, its_index).
 multiUGM n = PREDL.multiUGM (replicate n ()) 
 
 
@@ -346,6 +346,37 @@ lambdaSpec contextIdxs specIdx source_template p_template =
 
     in
         (source_template_f, pred)
+
+
+-- | Worker employed by builderTheorem
+specAxInstanceWorker :: (MonadSent s t m)  =>
+    Int ->    -- param_n: The number of outer paramaters
+    ([t] -> t) ->  -- t: The set, expressed a a function on the paramaters
+    ([t] -> t -> s) -> -- p_pred
+
+    m s -- the theorem
+specAxInstanceWorker param_n t p_pred = do
+    multiAXM param_n $ do
+        paramVars <- getXVars param_n
+        -- let paramVars = reverse paramVarsRev
+        let t_tmplt = t paramVars
+        let p_tmplt_pred = p_pred paramVars
+        eXM $ do
+            builderSet <- getXVar
+
+            builder_props <- aXM $ do
+                specVar <- getXVar
+                return $ specVar `memberOf` builderSet
+                          .<->. (p_tmplt_pred specVar .&&. (specVar `memberOf` t_tmplt))
+            return $ isSet builderSet .&&. builder_props
+
+specAxInstance :: SentConstraints s t =>
+    Int ->    -- param_n: The number of outer paramaters
+    ([t] -> t) ->  -- t: The set, expressed a a function on the paramaters
+    ([t] -> t -> s) -> -- p
+    s -- the theorem
+specAxInstance param_n t p =
+    runIndexTracker [] (specAxInstanceWorker param_n t p)
 
 
 data MetaRuleError s where

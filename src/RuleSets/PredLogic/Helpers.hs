@@ -441,22 +441,96 @@ multiEXM quantTypes inner = case quantTypes of
 
 
 
+--runProofByUGM :: HelperConstraints m s tType o t sE eL r1 q
+--                 =>  q -> ProofGenTStd tType r1 s o q m x
+--                            -> ProofGenTStd tType r1 s o q m (s, [Int])
+--runProofByUGM tt prog =  do
+--   (result_prop, idx, _) <- runProofByUGMWorker tt prog
+--   return (result_prop, idx)
+
+
+-- multiUGM :: HelperConstraints m s tType o t sE eL r1 q =>
+--    [q] ->                             -- ^ List of types for UG variables (outermost first).
+--    ProofGenTStd tType r1 s o q m x ->       -- ^ The core program. Its monadic return 'x' is discarded.
+--                                           --   It must set 'Last s' with the prop to be generalized.
+--    ProofGenTStd tType r1 s o q m (s, [Int])  -- ^ Returns (final_generalized_prop, its_index).
+--multiUGM typeList programCore = do
+--      (result_prop, idx, _) <- multiUGMWorker typeList programCore
+--      return (result_prop, idx)
+
+
+
 runProofByUGM :: HelperConstraints m s tType o t sE eL r1 q
                  =>  q -> ProofGenTStd tType r1 s o q m x
-                            -> ProofGenTStd tType r1 s o q m (s, [Int])
+                            -> ProofGenTStd tType r1 s o q m (s, [Int], x)
 runProofByUGM tt prog =  do
-   (result_prop, idx, _) <- runProofByUGMWorker tt prog
-   return (result_prop, idx)
+        state <- getProofState
+        context <- ask
+        let frVarTypeStack = freeVarTypeStack context
+        let newFrVarTypStack = tt : frVarTypeStack
+        let newContextFrames = contextFrames context <> [False]
+        let newStepIdxPrefix = stepIdxPrefix context ++ [stepCount state]
+        let newLemmas = contextLemmas context
+        let newContext = PrfStdContext newFrVarTypStack newStepIdxPrefix newContextFrames newLemmas
+        let newState = PrfStdState mempty mempty 1
+        let preambleSteps = [PrfStdStepFreevar (length frVarTypeStack) (qTypeToTType tt)]
+        vIdx <- get
+        (extraData,generalizable,subproof, newSteps) 
+                 <- lift $ runSubproofM newContext state newState preambleSteps (Last Nothing) prog vIdx
+        let resultSent = createForall tt (Prelude.length frVarTypeStack) generalizable
+        mayMonadifyRes <- monadifyProofStd $ proofByUG resultSent subproof
+        idx <- maybe (error "No theorem returned by monadifyProofStd on ug schema. This shouldn't happen") (return . snd) mayMonadifyRes       
+        return (resultSent,idx, extraData)
+
+
+
+
 
 
 multiUGM :: HelperConstraints m s tType o t sE eL r1 q =>
     [q] ->                             -- ^ List of types for UG variables (outermost first).
     ProofGenTStd tType r1 s o q m x ->       -- ^ The core program. Its monadic return 'x' is discarded.
                                            --   It must set 'Last s' with the prop to be generalized.
-    ProofGenTStd tType r1 s o q m (s, [Int])  -- ^ Returns (final_generalized_prop, its_index).
-multiUGM typeList programCore = do
-      (result_prop, idx, _) <- multiUGMWorker typeList programCore
-      return (result_prop, idx)
+    ProofGenTStd tType r1 s o q m (s, [Int],x)  -- ^ Returns (final_generalized_prop, its_index).
+multiUGM typeList programCore =
+    case typeList of
+        [] ->
+            -- Edge case: No UGs to apply.
+            -- Run 'programCore'. 'REM.runProofBySubArgM' will execute it,
+            -- take its 'Last s' (the proposition proven by programCore) as the consequent,
+            -- wrap it in a PRF_BY_SUBARG step, and return (consequent, index_of_that_step).
+            do 
+               (arg_result_prop, idx, extraData) <- runProofBySubArgM programCore
+               return (arg_result_prop, idx,extraData)
+        [single_ug_var_type] -> -- Base case: RunproofbyUG<.
+            -- Run 'programCore'. 'REM.runProofBySubArgM' will execute it,
+            -- take its 'Last s' (the proposition proven by programCore) as the consequent,
+            -- wrap it in a PRF_BY_SUBARG step, and return (consequent, index_of_that_step).
+            do 
+               (arg_result_prop, idx, extraData) <- runProofByUGM single_ug_var_type programCore
+               return (arg_result_prop, idx,extraData)
+        (outermost_ug_var_type : penultimate_ug_var_type : remaining_ug_types) ->
+            -- Recursive step:
+            -- 1. Define the inner program that needs to be wrapped by the current UG.
+            --    This inner program is 'multiUGM' applied to the rest of the types and the original core program.
+            --    Its result will be (partially_generalized_prop, its_index_from_inner_multiUGM).
+            let 
+                inner_action_yielding_proven_s_idx = do 
+                    (_,_,extraData) <- multiUGM (penultimate_ug_var_type : remaining_ug_types) programCore
+                    return extraData
+            in
+            -- 2. 'runProofByUGM' expects its 'prog' argument to be of type '... m x_prog'.
+            --    Here, 'inner_action_yielding_proven_s_idx' is our 'prog', and its 'x_prog' is '(s, [Int])'.
+            --    This is fine; 'runProofByUGM' will execute it. The 'Last s' writer state will be
+            --    set to the 's' part of the result of 'inner_action_yielding_proven_s_idx'.
+            --    This 's' (the partially generalized proposition) is what 'runProofByUGM' will then generalize.
+            --    'runProofByUGM' itself returns (final_ug_prop, final_ug_idx), matching our required type.
+               do 
+                   runProofByUGM outermost_ug_var_type inner_action_yielding_proven_s_idx
+
+
+
+
 
 
 createTermTmplt :: SentConstraints s t tType o q => 

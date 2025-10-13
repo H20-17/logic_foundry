@@ -18,9 +18,7 @@ module RuleSets.PredLogic.Core
     checkTheoremMOpen,
     HelperConstraints(..),
     SentConstraints,
-    MonadSent,
-    runProofByUGMWorker,
-    multiUGMWorker
+    MonadSent
 ) where
 
 
@@ -259,7 +257,6 @@ instance LogicRuleClass [LogicRule s sE o t tType q] s t tType sE o where
      eqSubst :: Int -> s -> s -> [LogicRule s sE o t tType q]
      eqSubst idx s1 s2 = [EqSubst idx s1 s2]
      
-
 
 
 
@@ -755,12 +752,9 @@ checkTheoremMOpen mayPrStateCxt (TheoremSchemaMT constdict lemmas prog idxs qTyp
     let newState = PrfStdState newProven newConsts newStepCountB
     let mayPreambleLastProp = if Prelude.null lemmas then Last Nothing else (Last . Just . last) lemmas
     let maxIndex = if null idxs then 0 else maximum idxs + 1
-    let outerProg = do
-            (_,_,x) <-multiUGMWorker qTypes prog
-            return x
-
+    
     (extra,tm,proof,newSteps) 
-               <- runSubproofM newContext mempty newState preambleSteps mayPreambleLastProp outerProg (Sum maxIndex)
+               <- runSubproofM newContext mempty newState preambleSteps mayPreambleLastProp prog (Sum maxIndex)
     return (tm,proof,extra,newSteps) 
        where
             conststeps = Prelude.foldr h1 [] constdict

@@ -1659,7 +1659,7 @@ theoremProg = do
     let z2 = aX 0 ((X 0 `In` Constant "N") :&&: (X 0 :<=: Integ 0) :->: (X 0 :==: Integ  0))
     let asm = (V 0 `In` Constant "N") :&&: (V 0 :<=: Integ 10)
     let asm2 = (V 0 `In` Constant "N") :&&: (V 0 :<=: Integ 10)
-    (generalized, _) <- PRED.runProofByUGM () $ do
+    (generalized, _, _ ) <- PRED.runProofByUGM () $ do
           runProofByAsmM asm2 do
               newFreeVar <- getTopFreeVar
               (s1,_) <- uiM newFreeVar z1
