@@ -130,6 +130,7 @@ import Control.Exception (throw)
 import Data.Type.Equality (outer)
 import IndexTracker 
 import Foreign (free)
+import Distribution.PackageDescription.Configuration (freeVars)
 
 
 
@@ -198,8 +199,24 @@ builderTheorem param_n t p =
 --        multiAx outer_idxs inner_props
 
 
+proveBuilderTheoremMFree :: HelperConstraints sE s eL m r t =>
+    t ->            -- source_set_template
+    (t->s) ->            -- p_template
+    ProofGenTStd () r s Text () m ([t] -> t)
+proveBuilderTheoremMFree source_set_pred p_pred = do
 
 
+        
+        let freeSpecAxiom = specAxInstance 0 (const source_set_pred) (const p_pred)
+        (tm,_,h_obj) <- eiHilbertM freeSpecAxiom
+        freeVars <- getFreeVars
+        let freeVarCount = length freeVars
+        templateIdxs <- newIndices freeVarCount
+        let subs = zip freeVars templateIdxs
+        let lambdaTemplate = createTermTmplt subs h_obj
+        let returnObj = lambdaTermMulti templateIdxs lambdaTemplate
+        return returnObj
+             
 
 proveBuilderTheoremM :: HelperConstraints sE s eL m r t =>
     Int ->
@@ -207,27 +224,23 @@ proveBuilderTheoremM :: HelperConstraints sE s eL m r t =>
     ([t] ->t->s) ->            -- p_template
     ProofGenTStd () r s Text () m ([t] -> t)
 proveBuilderTheoremM contextDepth source_set_pred p_pred = do
-    (_,_,returnFunc) <- multiUGM contextDepth $ do 
-
-
-        freeVars <- getFreeVars
-        -- let freeVars = reverse freeVarsRev
-        let freeVarCount = length freeVars
-        (closedSpecAxiom, _) <- specificationMNew freeVarCount source_set_pred p_pred
-        (freeSpecAxiom,_) <- multiUIM closedSpecAxiom freeVars
-        (tm,_,h_obj) <- eiHilbertM freeSpecAxiom
-        templateIdxs <- newIndices freeVarCount
-        let subs = zip freeVars templateIdxs
-        let lambdaTemplate = createTermTmplt subs h_obj
-        let returnObj = lambdaTermMulti templateIdxs lambdaTemplate
-
-        let tm = builderTheorem freeVarCount source_set_pred p_pred
-        txt <- showSentM tm
+    (closedSpecAxiom, _) <- specificationMNew contextDepth source_set_pred p_pred
+    (_,_,returnFunc) <- multiUGM contextDepth $ do
+        freeVars <- getFreeVars       
+        (freeSpecAx,_) <- multiUIM closedSpecAxiom (reverse freeVars)
+        txt <- showSentM freeSpecAx
         remarkM txt
 
-        return returnObj
+        let source_set_pred_free = source_set_pred freeVars
+        let p_pred_free = p_pred freeVars
+        proveBuilderTheoremMFree source_set_pred_free p_pred_free
+
+    let tm = builderTheorem contextDepth source_set_pred p_pred
+    txt <- showSentM tm
+    remarkM txt
+
+
     return returnFunc
-             
 
 builderSchema :: HelperConstraints sE s eL m r t =>
     Int ->          -- spec_idx
