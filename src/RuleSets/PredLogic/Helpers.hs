@@ -380,13 +380,13 @@ multiUIM initialProposition instantiationTerms =
                 return (result_prop, idx)
 
 
-getXVar :: MonadSent s t tType o q m => m t
+getXVar :: MonadSent s t tType o q sE m => m t
 getXVar = do
     topIdx <- getSum <$> get
     return $ x (topIdx - 1)
     --       gets (x . (\x -> x - 1) . getSum)
 
-getXVars :: MonadSent s t tType o q m => Int -> m [t]
+getXVars :: MonadSent s t tType o q sE m => Int -> m [t]
 getXVars n = do
     topIdx <- getSum <$> get
     return [x (topIdx - i - 1) | i <- [0..(n-1)]]
@@ -395,7 +395,7 @@ getXVars n = do
 -- i draws frp, [0..1].......... sp we get x (2-0-1) which is x 1, and we get x (2-1-1) which is x 0
 
 
-aXM :: MonadSent s t tType o q m => q -> m s -> m s
+aXM :: MonadSent s t tType o q sE m => q -> m s -> m s
 aXM quantType inner = do
     x_idx <- newIndex
     innerSent <-inner
@@ -403,7 +403,7 @@ aXM quantType inner = do
     dropIndices 1
     return returnSent
 
-multiAXM :: MonadSent s t tType o q m => [q] -> m s -> m s
+multiAXM :: MonadSent s t tType o q sE m => [q] -> m s -> m s
 -- | Applies the universal quantifier ('∀') `quantDepth` times to the result
 -- | of the inner monadic action.
 multiAXM quantTypes inner =
@@ -412,7 +412,7 @@ multiAXM quantTypes inner =
         [singleType] -> aXM singleType inner
         (firstType:restTypes) -> aXM firstType (multiAXM restTypes inner)
 
-eXM :: MonadSent s t tType o q m => q -> m s -> m s
+eXM :: MonadSent s t tType o q sE m => q -> m s -> m s
 eXM quantType inner = do
     x_idx <- newIndex
     innerSent <-inner
@@ -421,7 +421,7 @@ eXM quantType inner = do
     return returnSent
 
 
-hXM :: MonadSent s t tType o q m => q -> m s -> m t
+hXM :: MonadSent s t tType o q sE m => q -> m s -> m t
 hXM quantType inner = do
     x_idx <- newIndex
     innerSent <-inner
@@ -433,7 +433,7 @@ hXM quantType inner = do
 
 -- | Applies the existential quantifier ('∃') `quantDepth` times to the result
 -- | of the inner monadic action.
-multiEXM :: MonadSent s t tType o q m => [q] -> m s -> m s
+multiEXM :: MonadSent s t tType o q sE m => [q] -> m s -> m s
 multiEXM quantTypes inner = case quantTypes of
     [] -> inner
     [singleType] -> eXM singleType inner
@@ -533,7 +533,7 @@ multiUGM typeList programCore =
 
 
 
-createTermTmplt :: SentConstraints s t tType o q => 
+createTermTmplt :: SentConstraints s t tType o q sE => 
         [(t,Int)] -> t -> t
 createTermTmplt subs originTerm = 
     let
@@ -542,7 +542,7 @@ createTermTmplt subs originTerm =
     in foldr accumFunc originTerm subs
                
 
-lambdaTermMulti :: SentConstraints s t tType o q => 
+lambdaTermMulti :: SentConstraints s t tType o q sE => 
     [Int] -> t -> [t] -> t
 lambdaTermMulti target_idxs template replacements = 
     let
@@ -550,13 +550,13 @@ lambdaTermMulti target_idxs template replacements =
     in
         termSubXs subs template
 
-lambdaTerm :: SentConstraints s t tType o q => 
+lambdaTerm :: SentConstraints s t tType o q sE => 
     Int -> t -> t -> t
 lambdaTerm target_idx template replacement = 
     termSubX target_idx replacement template
 
 
-lambdaSentMulti :: SentConstraints s t tType o q => 
+lambdaSentMulti :: SentConstraints s t tType o q sE => 
     [Int] -> s -> [t] -> s
 lambdaSentMulti target_idxs template replacements = 
     let
@@ -564,9 +564,26 @@ lambdaSentMulti target_idxs template replacements =
     in
         sentSubXs subs template
 
-lambdaSent :: SentConstraints s t tType o q => 
+lambdaSent :: SentConstraints s t tType o q sE => 
     Int -> s -> t -> s
 lambdaSent target_idx template replacement = 
     sentSubX target_idx replacement template
 
 
+extractConstsFromLambdaTerm :: SentConstraints s t tType o q sE =>
+    Int -> ([t] -> t) -> Set o
+extractConstsFromLambdaTerm paramCount term_f = 
+    runIndexTracker [] $ do
+        indices <- newIndices paramCount
+        let paramVars = Prelude.map x indices
+        let term_tmplt = term_f paramVars
+        return $ extractConstsTerm term_tmplt
+
+extractConstsFromLambdaSent :: SentConstraints s t tType o q sE =>
+    Int -> ([t] -> s) -> Set o
+extractConstsFromLambdaSent paramCount term_f = 
+    runIndexTracker [] $ do
+        indices <- newIndices paramCount
+        let paramVars = Prelude.map x indices
+        let term_tmplt = term_f paramVars
+        return $ extractConstsSent term_tmplt

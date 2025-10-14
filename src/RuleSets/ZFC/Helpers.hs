@@ -290,7 +290,7 @@ multiUGM n = PREDL.multiUGM (replicate n ())
 -- | after builderInstantiateM has been called
 -- | Reproduces some of the work of builderInstantiateM but allows
 -- | us to pass less information to functions as a consequence.
-builderXM ::  MonadSent s t m => 
+builderXM ::  MonadSent s t sE m => 
     t ->  -- t: The instantiated set, with all of the original outer context
                 --    variables instantiated
     (t -> s) -> -- p_pred: the original p_template expressed as a function (ObjDeBr -> PropDeBr),
@@ -319,25 +319,25 @@ multiAx :: LogicSent s t => [Int] -> s -> s
 multiAx idxs s = PREDL.multiAx (Prelude.map ((),) idxs) s
 
 
-multiAXM :: MonadSent s t m => Int -> m s -> m s
+multiAXM :: MonadSent s t sE m => Int -> m s -> m s
 multiAXM quantDepth inner = PREDL.multiAXM (replicate quantDepth ()) inner
 
-multiEXM :: MonadSent s t m => Int -> m s -> m s
+multiEXM :: MonadSent s t sE m => Int -> m s -> m s
 multiEXM quantDepth inner = PREDL.multiEXM (replicate quantDepth ()) inner
 
 
-eXM :: MonadSent s t m => m s -> m s
+eXM :: MonadSent s t sE m => m s -> m s
 eXM inner = PREDL.eXM () inner
 
-aXM :: MonadSent s t m => m s -> m s
+aXM :: MonadSent s t sE m => m s -> m s
 aXM inner = PREDL.aXM () inner
 
 
-hXM :: MonadSent s t m => m s -> m t
+hXM :: MonadSent s t sE m => m s -> m t
 hXM inner = PREDL.hXM () inner
 
 
-lambdaSpec :: SentConstraints s t  =>
+lambdaSpec :: SentConstraints s t sE =>
     [Int] -> Int -> t -> s -> ([t]->t,[t] -> t -> s)
 lambdaSpec contextIdxs specIdx source_template p_template =
     let 
@@ -349,7 +349,7 @@ lambdaSpec contextIdxs specIdx source_template p_template =
 
 
 -- | Worker employed by builderTheorem
-specAxInstanceWorker :: (MonadSent s t m)  =>
+specAxInstanceWorker :: (MonadSent s t sE m)  =>
     Int ->    -- param_n: The number of outer paramaters
     ([t] -> t) ->  -- t: The set, expressed a a function on the paramaters
     ([t] -> t -> s) -> -- p_pred
@@ -370,7 +370,7 @@ specAxInstanceWorker param_n t p_pred = do
                           .<->. (p_tmplt_pred specVar .&&. (specVar `memberOf` t_tmplt))
             return $ isSet builderSet .&&. builder_props
 
-specAxInstance :: SentConstraints s t =>
+specAxInstance :: SentConstraints s t sE =>
     Int ->    -- param_n: The number of outer paramaters
     ([t] -> t) ->  -- t: The set, expressed a a function on the paramaters
     ([t] -> t -> s) -> -- p

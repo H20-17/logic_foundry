@@ -486,7 +486,7 @@ findFirstDuplicate xs = fst $ foldl' check (Nothing, Set.empty) xs
 
 
 -- | Worker employed by builderTheorem
-specAxInstanceWorker :: (MonadSent s t m)  =>
+specAxInstanceWorker :: (MonadSent s t sE m)  =>
     Int ->    -- param_n: The number of outer paramaters
     ([t] -> t) ->  -- t: The set, expressed a a function on the paramaters
     ([t] -> t -> s) -> -- p_pred
@@ -507,7 +507,7 @@ specAxInstanceWorker param_n t p_pred = do
                           .<->. (p_tmplt_pred specVar .&&. (specVar `memberOf` t_tmplt))
             return $ isSet builderSet .&&. builder_props
 
-specAxInstance :: SentConstraints s t =>
+specAxInstance :: SentConstraints s t sE =>
     Int ->    -- param_n: The number of outer paramaters
     ([t] -> t) ->  -- t: The set, expressed a a function on the paramaters
     ([t] -> t -> s) -> -- p
@@ -516,7 +516,7 @@ specAxInstance param_n t p =
     runIndexTracker [] (specAxInstanceWorker param_n t p)
 
 
-lambdaSpec :: SentConstraints s t  =>
+lambdaSpec :: SentConstraints s t sE =>
     [Int] -> Int -> t -> s -> ([t]->t,[t] -> t -> s)
 lambdaSpec contextIdxs specIdx source_template p_template =
     let 
@@ -902,10 +902,10 @@ type HelperConstraints sE s eL m r t =
     LogicSent s t, LogicTerm t
     )
 
-type SentConstraints s t  
+type SentConstraints s t sE
    = (
-    PREDL.SentConstraints s t () Text (), 
+    PREDL.SentConstraints s t () Text () sE, 
     LogicSent s t, RuleSets.ZFC.Core.LogicTerm t)
 
-type MonadSent s t m = (SentConstraints s t,  MonadState (Sum Int) m)
+type MonadSent s t sE m = (SentConstraints s t sE,  MonadState (Sum Int) m)
 -- , PREDL.MonadSent s t () Text m)

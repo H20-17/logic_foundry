@@ -148,7 +148,7 @@ import Distribution.PackageDescription.Configuration (freeVars)
 
 
 -- | Worker employed by builderTheorem
-builderTheoremWorker :: (MonadSent s t m)  =>
+builderTheoremWorker :: (MonadSent s t sE m)  =>
     Int ->    -- param_n: The number of outer paramaters
     ([t] -> t) ->  -- t: The set, expressed a a function on the paramaters
     ([t] -> t -> s) -> -- p_pred
@@ -187,7 +187,7 @@ builderTheoremWorker param_n t p_pred = do
 -- |    isSet(B(Params...)) ∧
 -- |    ∀x (x ∈ B(Params...) ↔ (x ∈ Source(Params...) ∧ Predicate(x, Params...)))
 -- | This function composes said theorem.
-builderTheorem :: SentConstraints s t =>
+builderTheorem :: SentConstraints s t sE =>
     Int ->    -- param_n: The number of outer paramaters
     ([t] -> t) ->  -- t: The set, expressed a a function on the paramaters
     ([t] -> t -> s) -> -- p
