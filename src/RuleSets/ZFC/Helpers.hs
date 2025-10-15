@@ -45,7 +45,8 @@ module RuleSets.ZFC.Helpers
     specificationMNew,
     aX, eX, hX, eXBang, multiAx, multiAXM, multiEXM, eXM, aXM, hXM,
     lambdaSpec,
-    theoremSchemaMT
+    theoremSchemaMT,
+    extractConstsFromLambdaSpec
 
 
 ) where
@@ -396,6 +397,25 @@ theoremSchemaMT lemmas proof consts =
             , protectedXVars = []
             , contextVarTypes = []
         }
+
+
+
+extractConstsFromLambdaSpec :: SentConstraints s t sE =>
+     Int -> ([t] -> t) -> ([t] -> t -> s) -> Set Text
+extractConstsFromLambdaSpec paramCount term_f pred =
+    runIndexTracker [] $ do
+        indices <- newIndices paramCount
+        let paramVars = Prelude.map x indices
+        let src_set_tmplt = term_f paramVars
+        let src_set_consts = extractConstsTerm src_set_tmplt
+        specVarIdx <- newIndex
+        let specVar = x specVarIdx
+        let pred_tmplt = pred paramVars specVar
+        let pred_consts = extractConstsSent pred_tmplt
+        dropIndices 1
+        dropIndices paramCount
+        return $ src_set_consts `Set.union` pred_consts
+
 
 data MetaRuleError s where
    MetaRuleErrNotClosed :: s -> MetaRuleError s

@@ -577,13 +577,16 @@ extractConstsFromLambdaTerm paramCount term_f =
         indices <- newIndices paramCount
         let paramVars = Prelude.map x indices
         let term_tmplt = term_f paramVars
+        dropIndices paramCount
         return $ extractConstsTerm term_tmplt
 
-extractConstsFromLambdaSent :: SentConstraints s t tType o q sE =>
-    Int -> ([t] -> s) -> Set o
-extractConstsFromLambdaSent paramCount term_f = 
+extractConstsFromLambda :: SentConstraints s t tType o q sE =>
+    Int -> ([t] -> t) -> Set o
+extractConstsFromLambda paramCount term_f = 
     runIndexTracker [] $ do
         indices <- newIndices paramCount
         let paramVars = Prelude.map x indices
         let term_tmplt = term_f paramVars
-        return $ extractConstsSent term_tmplt
+        let result = extractConstsTerm term_tmplt
+        dropIndices paramCount
+        return result
