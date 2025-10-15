@@ -253,19 +253,15 @@ builderSchema spec_idx outer_idxs source_set_template p_template =
     let
         dom_tmplt_consts = extractConstsTerm source_set_template
         p_tmplt_consts = extractConstsSent p_template
-        all_consts = dom_tmplt_consts `Set.union` p_tmplt_consts
-        typed_consts = Prelude.map (, ()) (Data.Set.toList all_consts) 
+        all_constsSet = dom_tmplt_consts `Set.union` p_tmplt_consts
+        all_consts = toList all_constsSet
         (source_set_func,p_pred_func) = 
              lambdaSpec outer_idxs spec_idx source_set_template p_template
     in
-        TheoremSchemaMT {
-            lemmasM = [],
-            proofM = proveBuilderTheoremM (length outer_idxs) source_set_func p_pred_func,
-            constDictM = typed_consts,
-            protectedXVars = [],
-            contextVarTypes = [] -- Prelude.map (const ()) outer_idxs
+        theoremSchemaMT []
+           (proveBuilderTheoremM (length outer_idxs) source_set_func p_pred_func)
+            all_consts
 
-        }
    
 
 

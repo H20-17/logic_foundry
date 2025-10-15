@@ -44,7 +44,8 @@ module RuleSets.ZFC.Helpers
     builderXM,
     specificationMNew,
     aX, eX, hX, eXBang, multiAx, multiAXM, multiEXM, eXM, aXM, hXM,
-    lambdaSpec
+    lambdaSpec,
+    theoremSchemaMT
 
 
 ) where
@@ -378,6 +379,23 @@ specAxInstance :: SentConstraints s t sE =>
 specAxInstance param_n t p =
     runIndexTracker [] (specAxInstanceWorker param_n t p)
 
+
+
+
+theoremSchemaMT :: HelperConstraints sE s eL m r t =>
+    [s] -> ProofGenTStd () r s Text () m x -> [Text] -> 
+             TheoremSchemaMT () r s Text () m x
+theoremSchemaMT lemmas proof consts =
+    let 
+        constDict = Prelude.map (,()) consts
+    in
+        TheoremSchemaMT {
+              constDictM = constDict
+            , lemmasM = lemmas
+            , proofM = proof
+            , protectedXVars = []
+            , contextVarTypes = []
+        }
 
 data MetaRuleError s where
    MetaRuleErrNotClosed :: s -> MetaRuleError s
