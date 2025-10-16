@@ -1,5 +1,6 @@
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE TypeApplications #-}
 
 module RuleSets.PredLogic.Helpers
 (
@@ -35,7 +36,7 @@ import Control.Monad.Except ( MonadError(throwError) )
 import Control.Monad.Catch
     ( SomeException, MonadThrow(..), Exception )
 import GHC.Stack.Types ( HasCallStack )
-import Data.Data (Typeable)
+import Data.Data (Typeable, Proxy (Proxy))
 import GHC.Generics (Associativity (NotAssociative, RightAssociative, LeftAssociative))
 import Control.Arrow ( left )
 import Control.Monad.Trans ( MonadTrans(lift) )
@@ -43,6 +44,8 @@ import Control.Monad.Reader ( MonadReader(ask) )
 import Control.Monad.State ( MonadState(get),gets )
 import Control.Monad.Writer ( MonadWriter(tell) )
 import Data.Maybe ( isNothing, mapMaybe )
+import qualified Data.Vector.Fixed as V
+
 
 import Kernel
 import Internal.StdPattern
@@ -542,11 +545,11 @@ createTermTmplt subs originTerm =
     in foldr accumFunc originTerm subs
                
 
-lambdaTermMulti :: SentConstraints s t tType o q sE => 
-    [Int] -> t -> [t] -> t
+lambdaTermMulti :: (SentConstraints s t tType o q sE, V.Vector v Int,  V.Vector v t) => 
+    v Int -> t -> v t -> t
 lambdaTermMulti target_idxs template replacements = 
     let
-        subs = zip target_idxs replacements
+        subs = zip (V.toList target_idxs) (V.toList replacements)
     in
         termSubXs subs template
 
@@ -556,11 +559,11 @@ lambdaTerm target_idx template replacement =
     termSubX target_idx replacement template
 
 
-lambdaSentMulti :: SentConstraints s t tType o q sE => 
-    [Int] -> s -> [t] -> s
+lambdaSentMulti :: (SentConstraints s t tType o q sE,V.Vector v Int,  V.Vector v t) => 
+    v Int -> s -> v t -> s
 lambdaSentMulti target_idxs template replacements = 
     let
-        subs = zip target_idxs replacements
+        subs = zip (V.toList target_idxs) (V.toList replacements)
     in
         sentSubXs subs template
 
@@ -570,20 +573,22 @@ lambdaSent target_idx template replacement =
     sentSubX target_idx replacement template
 
 
-extractConstsFromLambdaTerm :: SentConstraints s t tType o q sE =>
-    Int -> ([t] -> t) -> Set o
-extractConstsFromLambdaTerm paramCount term_f = 
+extractConstsFromLambdaTerm :: (SentConstraints s t tType o q sE,V.Vector v t) =>
+    (v t -> t) -> Set o
+extractConstsFromLambdaTerm (term_f::v t -> t) = 
     runIndexTracker [] $ do
+        let paramCount = length (Proxy @(v t))
         indices <- newIndices paramCount
-        let paramVars = Prelude.map x indices
+        let paramVars = V.fromList $ Prelude.map x indices
         let term_tmplt = term_f paramVars
         return $ extractConstsTerm term_tmplt
 
-extractConstsFromLambdaSent :: SentConstraints s t tType o q sE =>
-    Int -> ([t] -> s) -> Set o
-extractConstsFromLambdaSent paramCount term_f = 
+extractConstsFromLambdaSent :: (SentConstraints s t tType o q sE, V.Vector v t) =>
+    (v t -> s) -> Set o
+extractConstsFromLambdaSent (term_f::v t -> s) = 
     runIndexTracker [] $ do
+        let paramCount = length (Proxy @(v t))
         indices <- newIndices paramCount
-        let paramVars = Prelude.map x indices
+        let paramVars = V.fromList $ Prelude.map x indices
         let term_tmplt = term_f paramVars
         return $ extractConstsSent term_tmplt

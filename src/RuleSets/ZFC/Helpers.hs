@@ -1,5 +1,6 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE TypeApplications #-}
 module RuleSets.ZFC.Helpers
 (
     specificationM,
@@ -45,7 +46,9 @@ module RuleSets.ZFC.Helpers
     specificationMNew,
     aX, eX, hX, eXBang, multiAx, multiAXM, multiEXM, eXM, aXM, hXM,
     lambdaSpec,
-    theoremSchemaMT
+    theoremSchemaMT,
+    specAxInstance
+    
 
 
 ) where
@@ -65,7 +68,7 @@ import Control.Monad.Except ( MonadError(throwError) )
 import Control.Monad.Catch
     ( SomeException, MonadThrow(..), Exception )
 import GHC.Stack.Types ( HasCallStack )
-import Data.Data (Typeable)
+import Data.Data (Typeable, Proxy (Proxy))
 import GHC.Generics (Associativity (NotAssociative, RightAssociative, LeftAssociative))
 import Control.Arrow ( left )
 import Control.Monad.Trans ( MonadTrans(lift) )
@@ -134,6 +137,8 @@ import RuleSets.PropLogic.Helpers hiding
      (MetaRuleError(..))
 
 import IndexTracker
+import qualified Data.Vector.Fixed as V
+
 
 
 standardRuleM :: HelperConstraints sE s eL m r t
@@ -151,21 +156,23 @@ specificationM :: HelperConstraints sE s eL m r t
 specificationM outerIdxs idx t s = standardRuleM (specification outerIdxs idx t s)
 
 
-specificationMNew :: HelperConstraints sE s eL m r t
-       => Int -> ([t] -> t) -> ([t] -> t -> s) -> ProofGenTStd () r s Text () m (s,[Int])
-specificationMNew context_var_count t p_pred = do
-    outerIdxs <- newIndices context_var_count
-    unless (context_var_count >= 0) (error "specificationMNew: context_var_count must be nonnegative")
+specificationMNew :: (HelperConstraints sE s eL m r t, V.Vector v t)
+       => (v t -> t) -> (v t -> t -> s) -> ProofGenTStd () r s Text () m (s,[Int])
+specificationMNew (t::(v t -> t)) p_pred = do
+    let param_n = length (Proxy @(v t))
+    outerIdxs <- newIndices param_n
+    unless (param_n >= 0) (error "specificationMNew: context_var_count must be nonnegative")
     let context_vars = Prelude.map x outerIdxs
     -- Add a new index for the specification variable
-    let t_template = t context_vars
+    let context_vars_v = V.fromList context_vars
+    let t_template = t context_vars_v
     
     spec_var_idx <- newIndex
     let spec_var = x spec_var_idx
-    let p_template = p_pred context_vars spec_var
+    let p_template = p_pred context_vars_v spec_var
     result <- standardRuleM (specification outerIdxs spec_var_idx t_template p_template)
     dropIndices 1
-    dropIndices context_var_count
+    dropIndices param_n
     return result
 
 
@@ -338,27 +345,19 @@ hXM :: MonadSent s t sE m => m s -> m t
 hXM inner = PREDL.hXM () inner
 
 
-lambdaSpec :: SentConstraints s t sE =>
-    [Int] -> Int -> t -> s -> ([t]->t,[t] -> t -> s)
-lambdaSpec contextIdxs specIdx source_template p_template =
-    let 
-        source_template_f = lambdaTermMulti contextIdxs source_template
-        pred contextObjs specObj = lambdaSentMulti (specIdx:contextIdxs) p_template (specObj : contextObjs)
-
-    in
-        (source_template_f, pred)
 
 
 -- | Worker employed by builderTheorem
-specAxInstanceWorker :: (MonadSent s t sE m)  =>
-    Int ->    -- param_n: The number of outer paramaters
-    ([t] -> t) ->  -- t: The set, expressed a a function on the paramaters
-    ([t] -> t -> s) -> -- p_pred
+specAxInstanceWorker :: (MonadSent s t sE m, V.Vector v t)  =>
+    (v t -> t) ->  -- t: The set, expressed a a function on the paramaters
+    (v t -> t -> s) -> -- p_pred
 
     m s -- the theorem
-specAxInstanceWorker param_n t p_pred = do
+specAxInstanceWorker t (p_pred::v t -> t -> s) = do
+    let param_n = length (Proxy @(v t))
     multiAXM param_n $ do
-        paramVars <- getXVars param_n
+        paramVarsList <- getXVars param_n
+        let paramVars = V.fromList paramVarsList
         -- let paramVars = reverse paramVarsRev
         let t_tmplt = t paramVars
         let p_tmplt_pred = p_pred paramVars
@@ -371,13 +370,26 @@ specAxInstanceWorker param_n t p_pred = do
                           .<->. (p_tmplt_pred specVar .&&. (specVar `memberOf` t_tmplt))
             return $ isSet builderSet .&&. builder_props
 
-specAxInstance :: SentConstraints s t sE =>
-    Int ->    -- param_n: The number of outer paramaters
-    ([t] -> t) ->  -- t: The set, expressed a a function on the paramaters
-    ([t] -> t -> s) -> -- p
+specAxInstance :: (SentConstraints s t sE, V.Vector v t) =>
+    (v t -> t) ->  -- t: The set, expressed a a function on the paramaters
+    (v t -> t -> s) -> -- p
     s -- the theorem
-specAxInstance param_n t p =
-    runIndexTracker [] (specAxInstanceWorker param_n t p)
+specAxInstance (t::(v t -> t)) p =
+    runIndexTracker [] (specAxInstanceWorker t p)
+
+
+
+lambdaSpec :: (SentConstraints s t sE,V.Vector v t,V.Vector v Int) =>
+    v Int -> Int -> t -> s -> (v t->t,v t -> t -> s)
+lambdaSpec contextIdxs specIdx (source_template::t) p_template =
+    let 
+        source_template_f = PREDL.lambdaTermMulti contextIdxs source_template
+        subs replacements = zip (V.toList contextIdxs) (V.toList replacements)
+        pred replacements specObj = sentSubXs ((specIdx, specObj): subs replacements) p_template
+
+    in
+        (source_template_f, pred)
+
 
 
 

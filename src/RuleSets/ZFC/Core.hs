@@ -8,8 +8,7 @@ module RuleSets.ZFC.Core
     LogicTerm(..),
     HelperConstraints(..),
     SentConstraints(..),
-    MonadSent,
-    specAxInstance
+    MonadSent
 ) where
 
 
@@ -87,7 +86,7 @@ import qualified RuleSets.PredLogic.Core as PREDL
 import qualified RuleSets.PredLogic.Helpers as PREDL
 import GHC.Num (integerMul)
 import Data.Monoid (Sum (..))
-
+import qualified Data.Vector.Fixed as V
 
 
 
@@ -515,16 +514,36 @@ specAxInstance :: SentConstraints s t sE =>
 specAxInstance param_n t p =
     runIndexTracker [] (specAxInstanceWorker param_n t p)
 
+lambdaSentMulti :: SentConstraints s t sE => 
+    [Int] -> s -> [t] -> s
+lambdaSentMulti target_idxs template replacements = 
+    let
+        subs = zip target_idxs replacements
+    in
+        sentSubXs subs template
+
+lambdaTermMulti :: SentConstraints s t sE => 
+    [Int] -> t -> [t] -> t
+lambdaTermMulti target_idxs template replacements = 
+    let
+        subs = zip target_idxs replacements
+    in
+        PREDL.termSubXs subs template
+
 
 lambdaSpec :: SentConstraints s t sE =>
     [Int] -> Int -> t -> s -> ([t]->t,[t] -> t -> s)
 lambdaSpec contextIdxs specIdx source_template p_template =
     let 
-        source_template_f = PREDL.lambdaTermMulti contextIdxs source_template
-        pred contextObjs specObj = PREDL.lambdaSentMulti (specIdx:contextIdxs) p_template (specObj : contextObjs)
+        source_template_f = lambdaTermMulti contextIdxs source_template
+        pred contextObjs specObj = lambdaSentMulti (specIdx:contextIdxs) p_template (specObj : contextObjs)
 
     in
         (source_template_f, pred)
+
+
+
+
 
 
 runProofAtomic :: (

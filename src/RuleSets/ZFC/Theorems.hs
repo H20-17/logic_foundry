@@ -1,5 +1,6 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE TypeApplications #-}
 module RuleSets.ZFC.Theorems
 (
 --    unionEquivTheorem,
@@ -52,7 +53,7 @@ import Control.Monad.Except ( MonadError(throwError) )
 import Control.Monad.Catch
     ( SomeException, MonadThrow(..), Exception )
 import GHC.Stack.Types ( HasCallStack )
-import Data.Data (Typeable)
+import Data.Data (Typeable, Proxy (Proxy))
 import GHC.Generics (Associativity (NotAssociative, RightAssociative, LeftAssociative))
 import Control.Arrow ( left )
 import Control.Monad.Trans ( MonadTrans(lift) )
@@ -131,8 +132,8 @@ import Data.Type.Equality (outer)
 import IndexTracker 
 import Foreign (free)
 import Distribution.PackageDescription.Configuration (freeVars)
-
-
+import qualified Data.Vector.Fixed as V
+import qualified Data.Vector.Fixed.Cont as C
 
 ---NEW IDEA
 
@@ -148,18 +149,17 @@ import Distribution.PackageDescription.Configuration (freeVars)
 
 
 -- | Worker employed by builderTheorem
-builderTheoremWorker :: (MonadSent s t sE m)  =>
-    Int ->    -- param_n: The number of outer paramaters
-    ([t] -> t) ->  -- t: The set, expressed a a function on the paramaters
-    ([t] -> t -> s) -> -- p_pred
-
+builderTheoremWorker :: (MonadSent s t sE m, V.Vector v t)  =>
+    (v t -> t) ->  -- t: The set, expressed a a function on the paramaters
+    (v t -> t -> s) -> -- p_pred
     m s -- the theorem
-builderTheoremWorker param_n t p_pred = do
+builderTheoremWorker (t::(v t -> t)) p_pred = do
+    let param_n = length (Proxy @(v t))
     multiAXM param_n $ do
         paramVars <- getXVars param_n
-        -- let paramVars = reverse paramVarsRev
-        let t_tmplt = t paramVars
-        let p_tmplt_pred = p_pred paramVars
+        let paramVars_v = V.fromList paramVars
+        let t_tmplt = t paramVars_v
+        let p_tmplt_pred = p_pred paramVars_v
         builderSet <- builderXM t_tmplt p_tmplt_pred
         builder_props <- aXM $ do
             specVar <- getXVar
@@ -187,56 +187,53 @@ builderTheoremWorker param_n t p_pred = do
 -- |    isSet(B(Params...)) ∧
 -- |    ∀x (x ∈ B(Params...) ↔ (x ∈ Source(Params...) ∧ Predicate(x, Params...)))
 -- | This function composes said theorem.
-builderTheorem :: SentConstraints s t sE =>
-    Int ->    -- param_n: The number of outer paramaters
-    ([t] -> t) ->  -- t: The set, expressed a a function on the paramaters
-    ([t] -> t -> s) -> -- p
+builderTheorem :: (SentConstraints s t sE, V.Vector v t) =>
+    (v t -> t) ->  -- t: The set, expressed a a function on the paramaters
+    (v t -> t -> s) -> -- p
     s -- the theorem
-builderTheorem param_n t p =
-    runIndexTracker [] (builderTheoremWorker param_n t p)
+builderTheorem t p =
+    runIndexTracker [] (builderTheoremWorker t p)
 --    in
 --
 --        multiAx outer_idxs inner_props
 
 
-proveBuilderTheoremMFree :: HelperConstraints sE s eL m r t =>
-    t ->            -- source_set_template
+proveBuilderTheoremMFree :: (HelperConstraints sE s eL m r t, V.Vector v t, V.Vector v Int) =>
+    t ->            -- source_set
     (t->s) ->            -- p_template
-    ProofGenTStd () r s Text () m ([t] -> t)
-proveBuilderTheoremMFree source_set_pred p_pred = do
-
-
-        
-        let freeSpecAxiom = specAxInstance 0 (const source_set_pred) (const p_pred)
+    ProofGenTStd () r s Text () m (v t -> t)
+proveBuilderTheoremMFree source_set (p_pred::(t->s)) = do        
+        let freeSpecAxiom = specAxInstance ((const source_set)::(V.Empty t -> t)) ((const p_pred)
+                                            ::(V.Empty t -> t -> s))
         (tm,_,h_obj) <- eiHilbertM freeSpecAxiom
         freeVars <- getFreeVars
         let freeVarCount = length freeVars
         templateIdxs <- newIndices freeVarCount
         let subs = zip freeVars templateIdxs
         let lambdaTemplate = createTermTmplt subs h_obj
-        let returnObj = lambdaTermMulti templateIdxs lambdaTemplate
+        let returnObj = lambdaTermMulti (V.fromList templateIdxs) lambdaTemplate
         dropIndices freeVarCount
         return returnObj
              
 
-proveBuilderTheoremM :: HelperConstraints sE s eL m r t =>
-    Int ->
-    ([t] -> t) ->            -- source_set_template
-    ([t] ->t->s) ->            -- p_template
-    ProofGenTStd () r s Text () m ([t] -> t)
-proveBuilderTheoremM contextDepth source_set_pred p_pred = do
-    (closedSpecAxiom, _) <- specificationMNew contextDepth source_set_pred p_pred
+proveBuilderTheoremM :: (HelperConstraints sE s eL m r t, V.Vector v t, V.Vector v Int) =>
+    (v t -> t) ->            -- source_set_template
+    (v t ->t->s) ->            -- p_template
+    ProofGenTStd () r s Text () m (v t -> t)
+proveBuilderTheoremM (source_set_pred::(v t -> t )) p_pred = do
+    (closedSpecAxiom, _) <- specificationMNew source_set_pred p_pred
+    let contextDepth = length (Proxy @(v t))
     (_,_,returnFunc) <- multiUGM contextDepth $ do
         freeVars <- getFreeVars       
         (freeSpecAx,_) <- multiUIM closedSpecAxiom (reverse freeVars)
         txt <- showSentM freeSpecAx
         remarkM txt
-
-        let source_set_pred_free = source_set_pred freeVars
-        let p_pred_free = p_pred freeVars
+        let freeVars_v = V.fromList freeVars
+        let source_set_pred_free = source_set_pred freeVars_v
+        let p_pred_free = p_pred freeVars_v
         proveBuilderTheoremMFree source_set_pred_free p_pred_free
 
-    let tm = builderTheorem contextDepth source_set_pred p_pred
+    let tm = builderTheorem source_set_pred p_pred
     txt <- showSentM tm
     remarkM txt
 
