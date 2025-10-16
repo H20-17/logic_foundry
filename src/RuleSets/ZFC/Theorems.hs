@@ -242,21 +242,15 @@ proveBuilderTheoremM (source_set_pred::(v t -> t )) p_pred = do
 
 builderSchema :: HelperConstraints sE s eL m r t =>
     Int ->          -- spec_idx
-    [Int] ->        -- outer_idxs
-    t ->            -- source_set_template
-    s ->            -- p_template
+    ([t] -> t)  ->         -- source_set_template
+    ([t] -> t -> s) ->            -- p_template
     TheoremSchemaMT () r s Text () m ([t] -> t)
-builderSchema spec_idx outer_idxs source_set_template p_template = 
+builderSchema paramCount source_set_f p_pred = 
     let
-        dom_tmplt_consts = extractConstsTerm source_set_template
-        p_tmplt_consts = extractConstsSent p_template
-        all_constsSet = dom_tmplt_consts `Set.union` p_tmplt_consts
-        all_consts = toList all_constsSet
-        (source_set_func,p_pred_func) = 
-             lambdaSpec outer_idxs spec_idx source_set_template p_template
+        all_consts = Set.toList $ extractConstsFromLambdaSpec paramCount  source_set_f p_pred
     in
         theoremSchemaMT []
-           (proveBuilderTheoremM (length outer_idxs) source_set_func p_pred_func)
+           (proveBuilderTheoremM paramCount source_set_f p_pred)
             all_consts
 
    

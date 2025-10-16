@@ -581,6 +581,7 @@ extractConstsFromLambdaTerm (term_f::v t -> t) =
         indices <- newIndices paramCount
         let paramVars = V.fromList $ Prelude.map x indices
         let term_tmplt = term_f paramVars
+        dropIndices paramCount
         return $ extractConstsTerm term_tmplt
 
 extractConstsFromLambdaSent :: (SentConstraints s t tType o q sE, V.Vector v t) =>
@@ -591,4 +592,6 @@ extractConstsFromLambdaSent (term_f::v t -> s) =
         indices <- newIndices paramCount
         let paramVars = V.fromList $ Prelude.map x indices
         let term_tmplt = term_f paramVars
-        return $ extractConstsSent term_tmplt
+        let result = extractConstsTerm term_tmplt
+        dropIndices paramCount
+        return result
