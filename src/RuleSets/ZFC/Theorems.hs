@@ -203,7 +203,7 @@ proveBuilderTheoremMFree :: (HelperConstraints sE s eL m r t, V.Vector v t, V.Ve
     (t->s) ->            -- p_template
     ProofGenTStd () r s Text () m (v t -> t)
 proveBuilderTheoremMFree source_set (p_pred::(t->s)) = do        
-        let freeSpecAxiom = specAxInstance (const source_set::(V.Empty t -> t)) (const p_pred
+        let freeSpecAxiom = specAxInstance (const source_set) (const p_pred
                                             ::(V.Empty t -> t -> s))
         (tm,_,h_obj) <- eiHilbertM freeSpecAxiom
         freeVars <- getFreeVars
