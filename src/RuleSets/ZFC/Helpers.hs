@@ -47,7 +47,8 @@ module RuleSets.ZFC.Helpers
     aX, eX, hX, eXBang, multiAx, multiAXM, multiEXM, eXM, aXM, hXM,
     lambdaSpec,
     theoremSchemaMT,
-    specAxInstance
+    specAxInstance,
+    extractConstsFromLambdaSpec
     
 
 
@@ -411,17 +412,19 @@ theoremSchemaMT lemmas proof consts =
 
 
 
-extractConstsFromLambdaSpec :: SentConstraints s t sE =>
-     Int -> ([t] -> t) -> ([t] -> t -> s) -> Set Text
-extractConstsFromLambdaSpec paramCount term_f pred =
+extractConstsFromLambdaSpec :: (SentConstraints s t sE, V.Vector v t) =>
+     (v t -> t) -> (v t -> t -> s) -> Set Text
+extractConstsFromLambdaSpec (term_f::(v t -> t)) pred =
     runIndexTracker [] $ do
+        let paramCount = length (Proxy @(v t))
         indices <- newIndices paramCount
         let paramVars = Prelude.map x indices
-        let src_set_tmplt = term_f paramVars
+        let paramVars_v = V.fromList paramVars
+        let src_set_tmplt = term_f paramVars_v
         let src_set_consts = extractConstsTerm src_set_tmplt
         specVarIdx <- newIndex
         let specVar = x specVarIdx
-        let pred_tmplt = pred paramVars specVar
+        let pred_tmplt = pred paramVars_v specVar
         let pred_consts = extractConstsSent pred_tmplt
         dropIndices 1
         dropIndices paramCount

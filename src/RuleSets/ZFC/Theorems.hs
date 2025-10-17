@@ -133,7 +133,7 @@ import IndexTracker
 import Foreign (free)
 import Distribution.PackageDescription.Configuration (freeVars)
 import qualified Data.Vector.Fixed as V
-import qualified Data.Vector.Fixed.Cont as C
+
 
 ---NEW IDEA
 
@@ -240,17 +240,16 @@ proveBuilderTheoremM (source_set_pred::(v t -> t )) p_pred = do
 
     return returnFunc
 
-builderSchema :: HelperConstraints sE s eL m r t =>
-    Int ->          -- spec_idx
-    ([t] -> t)  ->         -- source_set_template
-    ([t] -> t -> s) ->            -- p_template
-    TheoremSchemaMT () r s Text () m ([t] -> t)
-builderSchema paramCount source_set_f p_pred = 
+builderSchema :: (HelperConstraints sE s eL m r t, V.Vector v t, V.Vector v Int) =>
+    (v t -> t)  ->         -- source_set_template
+    (v t -> t -> s) ->            -- p_template
+    TheoremSchemaMT () r s Text () m (v t -> t)
+builderSchema source_set_f p_pred = 
     let
-        all_consts = Set.toList $ extractConstsFromLambdaSpec paramCount  source_set_f p_pred
+        all_consts = Set.toList $ extractConstsFromLambdaSpec source_set_f p_pred
     in
         theoremSchemaMT []
-           (proveBuilderTheoremM paramCount source_set_f p_pred)
+           (proveBuilderTheoremM source_set_f p_pred)
             all_consts
 
    

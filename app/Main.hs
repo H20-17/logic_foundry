@@ -1478,21 +1478,22 @@ main = do
     print "SPEC TO BUILDER THEOREM-------------------------------------"
     let p_template = Constant "C" :+: X 0 :==: (X 1 :+: X 2)
     let source_set_template = X 1 .\/. X 2
-    let (source_set_func,p_pred_func) = lambdaSpec [1,2] 0 source_set_template p_template
-
-    (a,b,c,d) <- checkTheoremM (builderSchema 2 source_set_func p_pred_func ::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text () IO ([ObjDeBr] -> ObjDeBr)))
-    (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
+    let (source_set_func,p_pred_func) = lambdaSpec (1,2) 0 source_set_template p_template
+    return ()
+    --(a,b,c,d) <- checkTheoremM (builderSchema source_set_func p_pred_func   ) 
+     -- ::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text () IO ((ObjDeBr,ObjDeBr) -> ObjDeBr)))
+    --(putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
 
 
 
     -- error "STOPPING HERE"
 
-    print "SPEC TO BUILDER THEOREM 2-------------------------------------"
-    let p_template = Constant "C" :==: X 0
-    let source_set_template = Constant "S"
-    let (source_set_func,p_pred_func) = lambdaSpec [] 0 source_set_template p_template
-    (a,b,c,d) <- checkTheoremM (builderSchema 0 source_set_func p_pred_func::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text () IO ([ObjDeBr] -> ObjDeBr)))
-    (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
+    --print "SPEC TO BUILDER THEOREM 2-------------------------------------"
+    --let p_template = Constant "C" :==: X 0
+    --let source_set_template = Constant "S"
+    --let (source_set_func,p_pred_func) = lambdaSpec [] 0 source_set_template p_template
+    --(a,b,c,d) <- checkTheoremM (builderSchema source_set_func p_pred_func::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text () IO ([ObjDeBr] -> ObjDeBr)))
+    --(putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
     
 
 
