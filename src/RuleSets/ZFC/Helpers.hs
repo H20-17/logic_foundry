@@ -139,7 +139,7 @@ import RuleSets.PropLogic.Helpers hiding
 
 import IndexTracker
 import qualified Data.Vector.Fixed as V
-
+import qualified Data.Vector.Fixed.Cont as C
 
 
 standardRuleM :: HelperConstraints sE s eL m r t

@@ -2,6 +2,7 @@
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE DoAndIfThenElse #-}
 {-# LANGUAGE TupleSections #-}
+{-# LANGUAGE DataKinds #-}
 
 
 module Main where
@@ -78,6 +79,9 @@ import RuleSets.PropLogic.Helpers
 import RuleSets.PredLogic.Helpers hiding
    (runProofByUGM)
 import RuleSets.ZFC.Theorems
+import qualified Data.Vector.Fixed as V
+import qualified Data.Vector.Fixed.Cont as C
+
 
 testTheoremMSchema :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) => TheoremSchemaMT () [PredRuleDeBr] PropDeBr Text () m ()
 testTheoremMSchema = TheoremSchemaMT  [("N",())] [z1,z2] theoremProg [] []
@@ -1478,23 +1482,27 @@ main = do
     print "SPEC TO BUILDER THEOREM-------------------------------------"
     let p_template = Constant "C" :+: X 0 :==: (X 1 :+: X 2)
     let source_set_template = X 1 .\/. X 2
-    let (source_set_func,p_pred_func) = lambdaSpec (1,2) 0 source_set_template p_template
-    return ()
-    --(a,b,c,d) <- checkTheoremM (builderSchema source_set_func p_pred_func   ) 
-     -- ::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text () IO ((ObjDeBr,ObjDeBr) -> ObjDeBr)))
-    --(putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
+    -- let onetwovec=C.cvec (1,2)
+    let (source_set_func,p_pred_func) = lambdaSpec (C.cvec (1,2)) 0 source_set_template p_template
+    let schema = builderSchema source_set_func p_pred_func ::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text () IO (C.ContVec C.N2 ObjDeBr -> ObjDeBr))
+    --let (source_set_func,p_pred_func) = lambdaSpec (1,2) 0 source_set_template p_template
+    -- let schema = builderSchema source_set_func p_pred_func::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text () IO ((ObjDeBr,ObjDeBr) -> ObjDeBr))
+    (a,b,c,d) <- checkTheoremM schema
+    --(a,b,c,d) <- checkTheoremM (builderSchema source_set_func p_pred_func    
+    --           ::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text () IO ((ObjDeBr,ObjDeBr) -> ObjDeBr)))
+    (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
 
 
 
     -- error "STOPPING HERE"
 
-    --print "SPEC TO BUILDER THEOREM 2-------------------------------------"
-    --let p_template = Constant "C" :==: X 0
-    --let source_set_template = Constant "S"
-    --let (source_set_func,p_pred_func) = lambdaSpec [] 0 source_set_template p_template
-    --(a,b,c,d) <- checkTheoremM (builderSchema source_set_func p_pred_func::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text () IO ([ObjDeBr] -> ObjDeBr)))
-    --(putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
-    
+    print "SPEC TO BUILDER THEOREM 2-------------------------------------"
+    let p_template = Constant "C" :==: X 0
+    let source_set_template = Constant "S"
+    let (source_set_func,p_pred_func) = lambdaSpec (C.cvec V.Empty) 0 source_set_template p_template
+    let schema = builderSchema source_set_func p_pred_func ::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text () IO (C.ContVec C.Z ObjDeBr -> ObjDeBr))
+    (a,b,c,d) <- checkTheoremM schema
+    (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
 
 
 --    print "TEST BINARY INTERSECTION EXISTS SCHEMA-------------------------------------"
