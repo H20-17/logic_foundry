@@ -1482,10 +1482,10 @@ main = do
     let p_template = Constant "C" :+: X 0 :==: (X 1 :+: X 2)
     let source_set_template = X 1 .\/. X 2
     -- let onetwovec=V.mk2 1 2 -- ::(V.ContVec V.N2 Int)
-    let source_set_func x = x V.! 0 .\/. x V.! 1
-    let p_pred_func x y = Constant "C" .+. y .==. x V.! 0 .+. x V.! 1
+    let source_set_func (a,b) = a .\/. b
+    let p_pred_func (a,b) y = Constant "C" .+. y .==. a .+. b
     -- let (source_set_func_old,p_pred_func_old) = lambdaSpec onetwovec 0 source_set_template p_template
-    let schema = builderSchema source_set_func p_pred_func ::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text () IO (B.Vec2 ObjDeBr -> ObjDeBr))
+    let schema = builderSchema source_set_func p_pred_func ::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text () IO ((ObjDeBr, ObjDeBr) -> ObjDeBr))
     --let (source_set_func,p_pred_func) = lambdaSpec (1,2) 0 source_set_template p_template
     -- let schema = builderSchema source_set_func p_pred_func::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text () IO ((ObjDeBr,ObjDeBr) -> ObjDeBr))
     (a,b,c,d) <- checkTheoremM schema

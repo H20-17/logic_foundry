@@ -18,7 +18,8 @@ module RuleSets.PredLogic.Helpers
     lambdaTerm,
     lambdaSent,
     lambdaTermMulti,
-    lambdaSentMulti
+    lambdaSentMulti,
+    lambdaTermMultiM
 ) where
 
 
@@ -559,6 +560,22 @@ lambdaTerm target_idx template replacement =
     termSubX target_idx replacement template
 
 
+lambdaTermMultiM :: (MonadSent s t tType o q sE m, V.Vector v t) =>
+    v t -> t ->  m (v t -> t)
+lambdaTermMultiM (targetTerms::v t) sourceTerm = do
+    let param_n = length (Proxy @(v t))
+    templateIdxs <- newIndices param_n
+    let subs = zip (V.toList targetTerms) templateIdxs
+    let lambdaTemplate = createTermTmplt subs sourceTerm
+    let returnFunc argVec =
+          let
+              args = V.toList argVec
+              subs = zip templateIdxs args
+          in
+              termSubXs subs lambdaTemplate
+    dropIndices param_n
+    return returnFunc 
+
 lambdaSentMulti :: (SentConstraints s t tType o q sE,V.Vector v Int,  V.Vector v t) => 
     v Int -> s -> v t -> s
 lambdaSentMulti target_idxs template replacements = 
@@ -571,6 +588,9 @@ lambdaSent :: SentConstraints s t tType o q sE =>
     Int -> s -> t -> s
 lambdaSent target_idx template replacement = 
     sentSubX target_idx replacement template
+
+
+
 
 
 extractConstsFromLambdaTerm :: (SentConstraints s t tType o q sE,V.Vector v t) =>

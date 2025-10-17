@@ -198,7 +198,7 @@ builderTheorem t p =
 --        multiAx outer_idxs inner_props
 
 
-proveBuilderTheoremMFree :: (HelperConstraints sE s eL m r t, V.Vector v t, V.Vector v Int) =>
+proveBuilderTheoremMFree :: (HelperConstraints sE s eL m r t, V.Vector v t) =>
     t ->            -- source_set
     (t->s) ->            -- p_template
     ProofGenTStd () r s Text () m (v t -> t)
@@ -207,16 +207,18 @@ proveBuilderTheoremMFree source_set (p_pred::(t->s)) = do
                                             ::(V.Empty t -> t -> s))
         (tm,_,h_obj) <- eiHilbertM freeSpecAxiom
         freeVars <- getFreeVars
-        let freeVarCount = length freeVars
-        templateIdxs <- newIndices freeVarCount
-        let subs = zip freeVars templateIdxs
-        let lambdaTemplate = createTermTmplt subs h_obj
-        let returnObj = lambdaTermMulti (V.fromList templateIdxs) lambdaTemplate
-        dropIndices freeVarCount
-        return returnObj
+        let freeVars_v = V.fromList freeVars
+        lambdaTermMultiM freeVars_v h_obj
+        --let freeVarCount = length freeVars
+        --templateIdxs <- newIndices freeVarCount
+        --let subs = zip freeVars templateIdxs
+        --let lambdaTemplate = createTermTmplt subs h_obj
+        --let returnObj = lambdaTermMulti (V.fromList templateIdxs) lambdaTemplate
+        --dropIndices freeVarCount
+
              
 
-proveBuilderTheoremM :: (HelperConstraints sE s eL m r t, V.Vector v t, V.Vector v Int) =>
+proveBuilderTheoremM :: (HelperConstraints sE s eL m r t, V.Vector v t) =>
     (v t -> t) ->            -- source_set_template
     (v t ->t->s) ->            -- p_template
     ProofGenTStd () r s Text () m (v t -> t)
@@ -240,7 +242,7 @@ proveBuilderTheoremM (source_set_pred::(v t -> t )) p_pred = do
 
     return returnFunc
 
-builderSchema :: (HelperConstraints sE s eL m r t, V.Vector v t, V.Vector v Int) =>
+builderSchema :: (HelperConstraints sE s eL m r t, V.Vector v t) =>
     (v t -> t)  ->         -- source_set_template
     (v t -> t -> s) ->            -- p_template
     TheoremSchemaMT () r s Text () m (v t -> t)
