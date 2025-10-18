@@ -209,13 +209,6 @@ proveBuilderTheoremMFree source_set (p_pred::(t->s)) = do
         freeVars <- getFreeVars
         let freeVars_v = V.fromList freeVars
         lambdaTermMultiM freeVars_v h_obj
-        --let freeVarCount = length freeVars
-        --templateIdxs <- newIndices freeVarCount
-        --let subs = zip freeVars templateIdxs
-        --let lambdaTemplate = createTermTmplt subs h_obj
-        --let returnObj = lambdaTermMulti (V.fromList templateIdxs) lambdaTemplate
-        --dropIndices freeVarCount
-
              
 
 proveBuilderTheoremM :: (HelperConstraints sE s eL m r t, V.Vector v t) =>
