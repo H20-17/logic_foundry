@@ -160,7 +160,8 @@ builderTheoremWorker (t::(v t -> t)) p_pred = do
         let paramVars_v = V.fromList paramVars
         let t_tmplt = t paramVars_v
         let p_tmplt_pred = p_pred paramVars_v
-        builderSet <- builderXM t_tmplt p_tmplt_pred
+        builderSet <- builderXM t_tmplt $
+            p_tmplt_pred <$> getXVar
         builder_props <- aXM $ do
             specVar <- getXVar
             return $ specVar `memberOf` builderSet

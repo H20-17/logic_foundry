@@ -81,6 +81,7 @@ import RuleSets.PredLogic.Helpers hiding
 import RuleSets.ZFC.Theorems
 import qualified Data.Vector.Fixed as V
 import Data.Vector.Fixed.Boxed as B
+import IndexTracker
 
 testTheoremMSchema :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) => TheoremSchemaMT () [PredRuleDeBr] PropDeBr Text () m ()
 testTheoremMSchema = TheoremSchemaMT  [("N",())] [z1,z2] theoremProg [] []
@@ -1479,9 +1480,28 @@ main = do
 
 
     print "SPEC TO BUILDER THEOREM-------------------------------------"
-    let source_set_func (a,b) = a .\/. b
-    let p_pred_func (a,b) y = Constant "C" .+. y .==. a .+. b
-    let schema = builderSchema source_set_func p_pred_func ::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text () IO ((ObjDeBr, ObjDeBr) -> ObjDeBr))
+
+    let (source_set_func,p_pred_func) = 
+            runIndexTracker [] $ do
+                aIdx <- newIndex
+                bIdx <- newIndex
+                let a = x aIdx
+                let b = x bIdx
+                let src_set_tmplt = a .\/. b
+                yIdx <- newIndex
+                let y = x yIdx
+                let pred_tmplt = Constant "C" .+. y .==. a .+. b
+                let (src_set_func, p_pred_func) = lambdaSpec (V.mk2 aIdx bIdx) yIdx src_set_tmplt pred_tmplt
+
+                dropIndices 1
+                dropIndices 1
+                dropIndices 1
+                return (source_set_func, p_pred_func)
+
+
+ 
+
+    let schema = builderSchema source_set_func p_pred_func ::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text () IO (B.Vec2 ObjDeBr -> ObjDeBr))
     (a,b,c,d) <- checkTheoremM schema
     (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
 

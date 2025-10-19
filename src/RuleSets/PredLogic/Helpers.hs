@@ -554,6 +554,17 @@ lambdaTermMulti target_idxs template replacements =
     in
         termSubXs subs template
 
+
+lambdaTermMultiNew :: (SentConstraints s t tType o q sE, V.Vector v t) => 
+    [Int] -> t -> v t -> t
+lambdaTermMultiNew target_idxs template replacements = 
+    let
+        subs = zip target_idxs (V.toList replacements)
+    in
+        termSubXs subs template
+
+
+
 lambdaTerm :: SentConstraints s t tType o q sE => 
     Int -> t -> t -> t
 lambdaTerm target_idx template replacement = 
@@ -583,6 +594,16 @@ lambdaSentMulti target_idxs template replacements =
         subs = zip (V.toList target_idxs) (V.toList replacements)
     in
         sentSubXs subs template
+
+
+lambdaSentMultiNew :: (SentConstraints s t tType o q sE,V.Vector v t) => 
+    [Int] -> s -> v t -> s
+lambdaSentMultiNew target_idxs template replacements = 
+    let
+        subs = zip target_idxs (V.toList replacements)
+    in
+        sentSubXs subs template
+
 
 lambdaSent :: SentConstraints s t tType o q sE => 
     Int -> s -> t -> s

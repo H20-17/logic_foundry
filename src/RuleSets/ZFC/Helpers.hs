@@ -302,12 +302,13 @@ multiUGM n = PREDL.multiUGM (replicate n ())
 builderXM ::  MonadSent s t sE m => 
     t ->  -- t: The instantiated set, with all of the original outer context
                 --    variables instantiated
-    (t -> s) -> -- p_pred: the original p_template expressed as a function (ObjDeBr -> PropDeBr),
+    m s -> -- p_pred: the original p_template expressed as a function (ObjDeBr -> PropDeBr),
                 -- the application of which will contain instantiated free variables.
     m t -- the properties of the builderset and the builder set object      
-builderXM t p_pred = do
+builderXM t pred_prog= do
     idx <- newIndex
-    let  setObj = builderX idx t (p_pred (x idx))
+    pred_tmplt <- pred_prog
+    let  setObj = builderX idx t pred_tmplt
     dropIndices 1
     return setObj
 
@@ -380,7 +381,19 @@ specAxInstance (t::(v t -> t)) p =
 
 
 
-lambdaSpec :: (SentConstraints s t sE,V.Vector v t,V.Vector v Int) =>
+--lambdaSpecNew :: (SentConstraints s t sE,V.Vector v t) =>
+--    [Int] -> Int -> t -> s -> (v t->t,v t -> t -> s)
+--lambdaSpecNew contextIdxs specIdx (source_template::t) p_template =
+--    let 
+--        source_template_f = PREDL.lambdaTermMultiNew contextIdxs source_template
+--        subs replacements = zip contextIdxs (V.toList replacements)
+--        pred replacements specObj = sentSubXs ((specIdx, specObj): subs replacements) p_template
+--
+--    in
+--        (source_template_f, pred)
+
+
+lambdaSpec :: (SentConstraints s t sE,V.Vector v t, V.Vector v Int) =>
     v Int -> Int -> t -> s -> (v t->t,v t -> t -> s)
 lambdaSpec contextIdxs specIdx (source_template::t) p_template =
     let 
@@ -390,9 +403,6 @@ lambdaSpec contextIdxs specIdx (source_template::t) p_template =
 
     in
         (source_template_f, pred)
-
-
-
 
 
 theoremSchemaMT :: HelperConstraints sE s eL m r t =>
