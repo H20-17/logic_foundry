@@ -1515,8 +1515,17 @@ main = do
     --let nullvec=V.mk0
     let source_set_func _ = Constant "S"
     let p_pred_func _ y =  Constant "C" .==. y
-    --let (source_set_func,p_pred_func) = lambdaSpec nullvec 0 source_set_template p_template
-    let schema = builderSchema source_set_func p_pred_func ::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text () IO (V.Empty ObjDeBr -> ObjDeBr))
+    let (source_set_func,p_pred_func) =
+            runIndexTracker [] $ do
+                let src_set_tmplt = Constant "S"
+                yIdx <- newIndex
+                let y = x yIdx
+                let p_pred_tmplt = Constant "C" .==. y
+                let (src_set_func, p_pred_func) = lambdaSpec V.mk0 yIdx src_set_tmplt p_pred_tmplt
+                dropIndices 1
+                return (source_set_func, p_pred_func)
+        
+    let schema = builderSchema source_set_func p_pred_func ::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text () IO (B.Vec 0 ObjDeBr -> ObjDeBr))
     (a,b,c,d) <- checkTheoremM schema
     (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
 
