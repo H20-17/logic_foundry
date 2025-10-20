@@ -144,6 +144,22 @@ import qualified Data.Vector.Fixed as V
 
 
 
+builderObjLambdaM ::  (MonadSent s t sE m, V.Vector v t) =>
+    (v t -> t) ->  -- t: The set, expressed a a function on the paramaters
+    (v t -> t -> s) -> -- p_pred
+    m (v t -> t) -- the builder object, expressed as a function from the paramaters
+builderObjLambdaM (source_set_f::(v t -> t)) pred_f = do
+    let param_n = length (Proxy @(v t))
+    paramIdxs <- newIndices param_n
+    let xVec = V.fromList (Prelude.map x paramIdxs)
+    let source_set = source_set_f xVec
+    let pred = pred_f xVec
+    builderSet <- builderXM source_set $ do
+        pred <$> getXVar
+    result <- lambdaTermMultiM xVec builderSet
+    dropIndices param_n
+    return result
+
 
 
 
@@ -190,7 +206,7 @@ builderTheoremWorker (t::(v t -> t)) p_pred = do
 -- | This function composes said theorem.
 builderTheorem :: (SentConstraints s t sE, V.Vector v t) =>
     (v t -> t) ->  -- t: The set, expressed a a function on the paramaters
-    (v t -> t -> s) -> -- p
+    (v t -> t -> s) -> -- the predicate, expressed as a function on the paramaters
     s -- the theorem
 builderTheorem t p =
     runIndexTracker [] (builderTheoremWorker t p)
@@ -199,17 +215,16 @@ builderTheorem t p =
 --        multiAx outer_idxs inner_props
 
 
-proveBuilderTheoremMFree :: (HelperConstraints sE s eL m r t, V.Vector v t) =>
+proveBuilderTheoremMFree :: (HelperConstraints sE s eL m r t) =>
     t ->            -- source_set
     (t->s) ->            -- p_template
-    ProofGenTStd () r s Text () m (v t -> t)
+    ProofGenTStd () r s Text () m (s,[Int])
 proveBuilderTheoremMFree source_set (p_pred::(t->s)) = do        
         let freeSpecAxiom = specAxInstance (const source_set) (const p_pred
                                             ::(V.Empty t -> t -> s))
-        (tm,_,h_obj) <- eiHilbertM freeSpecAxiom
-        freeVars <- getFreeVars
-        let freeVars_v = V.fromList freeVars
-        lambdaTermMultiM freeVars_v h_obj
+        (tm,idx,h_obj) <- eiHilbertM freeSpecAxiom
+        return (tm, idx)
+
              
 
 proveBuilderTheoremM :: (HelperConstraints sE s eL m r t, V.Vector v t) =>
@@ -219,7 +234,7 @@ proveBuilderTheoremM :: (HelperConstraints sE s eL m r t, V.Vector v t) =>
 proveBuilderTheoremM (source_set_pred::(v t -> t )) p_pred = do
     (closedSpecAxiom, _) <- specificationMNew source_set_pred p_pred
     let contextDepth = length (Proxy @(v t))
-    (_,_,returnFunc) <- multiUGM contextDepth $ do
+    multiUGM contextDepth $ do
         freeVars <- getFreeVars       
         (freeSpecAx,_) <- multiUIM closedSpecAxiom (reverse freeVars)
         txt <- showSentM freeSpecAx
@@ -232,13 +247,11 @@ proveBuilderTheoremM (source_set_pred::(v t -> t )) p_pred = do
     let tm = builderTheorem source_set_pred p_pred
     txt <- showSentM tm
     remarkM txt
-
-
-    return returnFunc
+    builderObjLambdaM source_set_pred p_pred
 
 builderSchema :: (HelperConstraints sE s eL m r t, V.Vector v t) =>
-    (v t -> t)  ->         -- source_set_template
-    (v t -> t -> s) ->            -- p_template
+    (v t -> t)  ->         -- source_set expressed as a function on paramaters
+    (v t -> t -> s) ->            -- predicate, expressed as a function on paramaters
     TheoremSchemaMT () r s Text () m (v t -> t)
 builderSchema source_set_f p_pred = 
     let
@@ -251,68 +264,40 @@ builderSchema source_set_f p_pred =
    
 
 
----- | A helper that instantiates a theorem composed by specToBuilderTheorem.
----- |
----- | @param substitutions      A list of pairs, where each pair contains an `Int` index for
----- |                           a template variable `X k` and the `ObjDeBr` term to substitute for it.
----- | @param spec_var_X_idx     The `Int` index for the `X` variable that is the variable of specification
----- |                           (the 'x' in {x ∈ T | P(x)}).
----- | @param source_set_template The source set `T`, which may contain `X k` parameters.
----- | @param p_template         The predicate `P`, which uses `X spec_var_X_idx` for the specification
----- |                           variable and may contain `X k` parameters.
----- | @return A tuple containing the proven defining property of the new set, its proof index,
----- |         and a tuple of type (ObjDeBr, ObjDeBr, PropDeBr) which is the newly built set,
----- |         the instantiated source set, and the instantiated p_template.
----- | For this helper to work, with outer_idxs defined as the set of indexes used in the 'substitutions' paramater,
----- | the theorem composed by
----- |    'specBuilderTheorem spec_var_X_idx outer_idxs source_set_template p_template'
----- | must already be established in the proof.
---builderInstantiateM :: HelperConstraints sE s eL m r t =>
---    [(Int, t)] ->   -- substitutions
---    Int ->          -- spec_var_X_idx
---    t ->            -- source_set_template
---    s ->            -- p_template
---    ProofGenTStd () r s Text () m (s,[Int], (t,t,s))
---builderInstantiateM substitutions spec_var_X_idx source_set_template p_template =
---    runProofBySubArgM $ do
---        -- Extract the indices and terms from the substitution pairs.
---        let outerTemplateIdxs = Prelude.map fst substitutions
---        let instantiationTerms = Prelude.map snd substitutions
-
---        let closedBuilderTm = builderTheorem spec_var_X_idx outerTemplateIdxs source_set_template p_template
---        
-
---        -- Use multiUIM to instantiate the theorem with the provided terms.
---        (builder_prop, _) <- multiUIM closedBuilderTm instantiationTerms
-
-
---        let instantiated_source_set = termSubXs substitutions source_set_template
---        let instantiated_p_template = sentSubXs substitutions p_template
---         
---        let built_obj = builderX spec_var_X_idx instantiated_source_set instantiated_p_template
---        -- The runProofBySubArgM wrapper requires the 'do' block to return the 'extraData'
---        -- that the caller of builderInstantiateM will receive.
---        return (built_obj, instantiated_source_set, instantiated_p_template)
+-- | A helper that instantiates a theorem composed by builderTheorem.
+-- |
+-- | @param substitutions      A list of pairs, where each pair contains an `Int` index for
+-- |                           a template variable `X k` and the `ObjDeBr` term to substitute for it.
+-- | @param spec_var_X_idx     The `Int` index for the `X` variable that is the variable of specification
+-- |                           (the 'x' in {x ∈ T | P(x)}).
+-- | @param source_set_template The source set `T`, which may contain `X k` parameters.
+-- | @param p_template         The predicate `P`, which uses `X spec_var_X_idx` for the specification
+-- |                           variable and may contain `X k` parameters.
+-- | @return A tuple containing the proven defining property of the new set, its proof index,
+-- |         and a tuple of type (ObjDeBr, ObjDeBr, PropDeBr) which is the newly built set,
+-- |         the instantiated source set, and the instantiated p_template.
+-- | For this helper to work, with outer_idxs defined as the set of indexes used in the 'substitutions' paramater,
+-- | the theorem composed by
+-- |    'specBuilderTheorem spec_var_X_idx outer_idxs source_set_template p_template'
+-- | must already be established in the proof.
+builderInstantiateM :: (HelperConstraints sE s eL m r t,V.Vector v t) =>
+     (v t -> t)  ->         -- source_set expressed as a function on paramaters
+     (v t -> t -> s) ->            -- predicate, expressed as a function on paramaters
+     (v t -> t) -> -- function giving us a builder set.
+     v t ->  -- arguments to apply to the paramaters
+    ProofGenTStd () r s Text () m ((s,t),[Int])
+builderInstantiateM source_set_f pred_f builder_f args = do
+    (subArgRes, idx, obj) <- runProofBySubArgM $ do
+        -- here we assume that an instnace of the builder theorem has already been proven
+        let closedBuilderTm = builderTheorem source_set_f pred_f
+        let uiArgList = V.toList args 
+        (tmInstantiated,idx) <- multiUIM closedBuilderTm (reverse uiArgList)
+        obj_f <- builderObjLambdaM source_set_f pred_f
+        let instantiated_obj = obj_f args
+        return instantiated_obj
+    return ((subArgRes,obj), idx)
 
 
-
----- | Gives us properties of a builder set, as well as the builder set object,
----- | after builderInstantiateM has been called
----- | Reproduces some of the work of builderInstantiateM but allows
----- | us to pass less information to functions as a consequence.
---builderPropsFree :: SentConstraints s t => 
---    Int ->      -- idx: The 'x' in {x ∈ S | P(x)}
---    t ->  -- t: The instantiated set, with all of the original outer context
---                --    variables instantiated
---    s -> -- p_template: the original p_template with all outer context variables
---                -- instantiated with free variables
---    (s, t) -- the properties of the builderset and the builder set object      
---builderPropsFree idx t p_template =
---    let
---        props = builderTheorem idx [] t p_template
---        setObj = builderX idx t p_template
---    in
---        (props, setObj)
 
 ---- | Gives us properties of a builder set, as well as the builder set object,
 ---- | after builderInstantiateM has been called
