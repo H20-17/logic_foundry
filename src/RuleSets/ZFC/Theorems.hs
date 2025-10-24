@@ -144,26 +144,6 @@ import qualified Data.Vector.Fixed as V
 
 
 
-builderObjLambdaM ::  (MonadSent s t sE m, V.Vector v t) =>
-    (v t -> t) ->  -- t: The set, expressed a a function on the paramaters
-    (v t -> t -> s) -> -- p_pred
-    m (v t -> t) -- the builder object, expressed as a function from the paramaters
-builderObjLambdaM (source_set_f::(v t -> t)) pred_f = do
-    let param_n = length (Proxy @(v t))
-    paramIdxs <- newIndices param_n
-    let xVec = V.fromList (Prelude.map x paramIdxs)
-    let source_set = source_set_f xVec
-    let pred = pred_f xVec
-    builderSet <- builderXM source_set $ do
-        pred <$> getXVar
-    result <- lambdaTermMultiM xVec builderSet
-    dropIndices param_n
-    return result
-
-
-
-
-
 -- | Worker employed by builderTheorem
 builderTheoremWorker :: (MonadSent s t sE m, V.Vector v t)  =>
     (v t -> t) ->  -- t: The set, expressed a a function on the paramaters
@@ -209,21 +189,23 @@ builderTheorem :: (SentConstraints s t sE, V.Vector v t) =>
     (v t -> t -> s) -> -- the predicate, expressed as a function on the paramaters
     s -- the theorem
 builderTheorem t p =
-    runIndexTracker [] (builderTheoremWorker t p)
+    runIndexTracker (builderTheoremWorker t p)
 --    in
 --
 --        multiAx outer_idxs inner_props
 
 
-proveBuilderTheoremMFree :: (HelperConstraints sE s eL m r t) =>
+proveBuilderTheoremMFree :: (HelperConstraints sE s eL m r t, V.Vector v t) =>
     t ->            -- source_set
     (t->s) ->            -- p_template
-    ProofGenTStd () r s Text () m (s,[Int])
+    ProofGenTStd () r s Text () m (v t -> t)
 proveBuilderTheoremMFree source_set (p_pred::(t->s)) = do        
         let freeSpecAxiom = specAxInstance (const source_set) (const p_pred
                                             ::(V.Empty t -> t -> s))
-        (tm,idx,h_obj) <- eiHilbertM freeSpecAxiom
-        return (tm, idx)
+        (tm,_,h_obj) <- eiHilbertM freeSpecAxiom
+        freeVars <- getFreeVars
+        let freeVars_v = V.fromList freeVars
+        lambdaTermMultiM freeVars_v h_obj
 
              
 
@@ -234,7 +216,7 @@ proveBuilderTheoremM :: (HelperConstraints sE s eL m r t, V.Vector v t) =>
 proveBuilderTheoremM (source_set_pred::(v t -> t )) p_pred = do
     (closedSpecAxiom, _) <- specificationMNew source_set_pred p_pred
     let contextDepth = length (Proxy @(v t))
-    multiUGM contextDepth $ do
+    (_,_,returnFunc) <- multiUGM contextDepth $ do
         freeVars <- getFreeVars       
         (freeSpecAx,_) <- multiUIM closedSpecAxiom (reverse freeVars)
         txt <- showSentM freeSpecAx
@@ -247,7 +229,7 @@ proveBuilderTheoremM (source_set_pred::(v t -> t )) p_pred = do
     let tm = builderTheorem source_set_pred p_pred
     txt <- showSentM tm
     remarkM txt
-    builderObjLambdaM source_set_pred p_pred
+    return returnFunc
 
 builderSchema :: (HelperConstraints sE s eL m r t, V.Vector v t) =>
     (v t -> t)  ->         -- source_set expressed as a function on paramaters
@@ -280,22 +262,21 @@ builderSchema source_set_f p_pred =
 -- | the theorem composed by
 -- |    'specBuilderTheorem spec_var_X_idx outer_idxs source_set_template p_template'
 -- | must already be established in the proof.
-builderInstantiateM :: (HelperConstraints sE s eL m r t,V.Vector v t) =>
-     (v t -> t)  ->         -- source_set expressed as a function on paramaters
-     (v t -> t -> s) ->            -- predicate, expressed as a function on paramaters
-     (v t -> t) -> -- function giving us a builder set.
-     v t ->  -- arguments to apply to the paramaters
-    ProofGenTStd () r s Text () m ((s,t),[Int])
-builderInstantiateM source_set_f pred_f builder_f args = do
-    (subArgRes, idx, obj) <- runProofBySubArgM $ do
-        -- here we assume that an instnace of the builder theorem has already been proven
-        let closedBuilderTm = builderTheorem source_set_f pred_f
-        let uiArgList = V.toList args 
-        (tmInstantiated,idx) <- multiUIM closedBuilderTm (reverse uiArgList)
-        obj_f <- builderObjLambdaM source_set_f pred_f
-        let instantiated_obj = obj_f args
-        return instantiated_obj
-    return ((subArgRes,obj), idx)
+-- builderInstantiateM :: (HelperConstraints sE s eL m r t,V.Vector v t) =>
+--     (v t -> t)  ->         -- source_set expressed as a function on paramaters
+--     (v t -> t -> s) ->            -- predicate, expressed as a function on paramaters
+--     (v t -> t) -> -- function giving us a builder set.
+--     v t ->  -- arguments to apply to the paramaters
+--    ProofGenTStd () r s Text () m ((s,t),[Int])
+-- builderInstantiateM source_set_f pred_f builder_f args = do
+--    (subArgRes, idx, obj) <- runProofBySubArgM $ do
+--        -- prove builder theorem inline here
+--        (closedBuilderTm,_,lambdaFunc) <- runTheoremM $ builderSchema source_set_f pred_f
+--        let uiArgList = V.toList args 
+--        (tmInstantiated,idx) <- multiUIM closedBuilderTm (reverse uiArgList)
+--        let instantiated_obj = lambdaFunc args
+--        return instantiated_obj
+--    return ((subArgRes,obj), idx)
 
 
 

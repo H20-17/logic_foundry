@@ -570,7 +570,7 @@ checkTheoremOpen mayPrStateCxt (TheoremSchema constdict lemmas theorem subproof)
        let (newStepCountB, newProven) = assignSequentialSet newStepCountA lemmas
        let constdictPure = Data.Map.map fst newConsts
        maybe (return ()) throwError (maybe (g1 constdictPure) (g2 constdictPure) mayPrStateCxt)
-       let newContext = PrfStdContext [] [] (maybe []  ((<>[True]) . contextFrames . snd) mayPrStateCxt) lemmas
+       let newContext = PrfStdContext [] [] (maybe []  ((<>[True]) . contextFrames . snd) mayPrStateCxt)
        let newState = PrfStdState newProven newConsts newStepCountB
        let preambleSteps = conststeps <> lemmasteps
        let mayPreambleLastProp = if Prelude.null lemmas then Last Nothing else (Last . Just . last) lemmas  
@@ -589,7 +589,7 @@ checkTheoremOpen mayPrStateCxt (TheoremSchema constdict lemmas theorem subproof)
                  q (Just (state,_)) = Data.Map.lookup lemma (provenSents state) 
 
          g2 constdictPure (PrfStdState alreadyProven alreadyDefinedConsts stepCount, 
-                 PrfStdContext freeVarTypeStack stepIdfPrefix contextDepth lemmas) 
+                 PrfStdContext freeVarTypeStack stepIdfPrefix contextDepth) 
                = fmap constDictErr (constDictTest (fmap fst alreadyDefinedConsts) constdictPure)
                                                <|> Prelude.foldr f1 Nothing lemmas
            where
@@ -679,8 +679,7 @@ runProofByUGMWorker tt prog =  do
         let newFrVarTypStack = tt : frVarTypeStack
         let newContextFrames = contextFrames context <> [False]
         let newStepIdxPrefix = stepIdxPrefix context ++ [stepCount state]
-        let newLemmas = contextLemmas context
-        let newContext = PrfStdContext newFrVarTypStack newStepIdxPrefix newContextFrames newLemmas
+        let newContext = PrfStdContext newFrVarTypStack newStepIdxPrefix newContextFrames
         let newState = PrfStdState mempty mempty 1
         let preambleSteps = [PrfStdStepFreevar (length frVarTypeStack) (qTypeToTType tt)]
         vIdx <- get
@@ -747,7 +746,7 @@ checkTheoremMOpen mayPrStateCxt (TheoremSchemaMT constdict lemmas prog idxs qTyp
     let (newStepCountB, newProven) = assignSequentialSet newStepCountA lemmas
     let constdictPure = Data.Map.map fst newConsts
     maybe (maybe (return ()) throwM (g1 constdictPure)) (maybe (return ()) throwM . g2 constdictPure) mayPrStateCxt
-    let newContext = PrfStdContext [] [] (maybe []  ((<>[True]) . contextFrames . snd) mayPrStateCxt) lemmas
+    let newContext = PrfStdContext [] [] (maybe []  ((<>[True]) . contextFrames . snd) mayPrStateCxt)
     let preambleSteps = conststeps <> lemmasteps
     let newState = PrfStdState newProven newConsts newStepCountB
     let mayPreambleLastProp = if Prelude.null lemmas then Last Nothing else (Last . Just . last) lemmas
@@ -768,7 +767,7 @@ checkTheoremMOpen mayPrStateCxt (TheoremSchemaMT constdict lemmas prog idxs qTyp
                  q Nothing = Nothing
                  q (Just (state,_)) = Data.Map.lookup lemma (provenSents state) 
 
-            g2 constdictPure (PrfStdState alreadyProven alreadyDefinedConsts stepCount, PrfStdContext freeVarTypeStack stepIdfPrefix contextDepth lemmas) 
+            g2 constdictPure (PrfStdState alreadyProven alreadyDefinedConsts stepCount, PrfStdContext freeVarTypeStack stepIdfPrefix contextDepth) 
                  = fmap constDictErr (constDictTest (fmap fst alreadyDefinedConsts) constdictPure)
                                                <|> Prelude.foldr f1 Nothing lemmas
              where
@@ -884,9 +883,8 @@ runProofByUG (ProofByUGSchema generalization subproof) context state =
          (f,tType) <- maybe ((throwError . ProofByUGErrGenNotForall) generalization) return mayParse
          let newVarstack = tType : varstack
          let newStepIdxPrefix = stepIdxPrefix context ++ [stepCount state]
-         let newLemmas = contextLemmas context
          let newContextFrames = contextFrames context <> [False]
-         let newContext = PrfStdContext newVarstack newStepIdxPrefix newContextFrames newLemmas
+         let newContext = PrfStdContext newVarstack newStepIdxPrefix newContextFrames
          let newState = PrfStdState mempty mempty 1
          let newFreeTerm = free2Term $ length varstack
          let generalizable = f newFreeTerm

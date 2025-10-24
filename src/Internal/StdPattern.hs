@@ -63,11 +63,7 @@ data PrfStdContext q s where
     PrfStdContext :: {
         freeVarTypeStack :: [q],
         stepIdxPrefix :: [Int],
-        contextFrames :: [Bool],
-        -- Because theorems are self-contained, it makes sense to use a thick box frame for a theorem, and a thin frame from every other
-        -- type of context. When contextFrames !! i is False this means use a thin box frame. Otherwise, if True that means that the context
-        -- is the outermost context of a theorem so we should use a thick box frame.
-        contextLemmas :: [s]
+        contextFrames :: [Bool]
     } -> PrfStdContext q s
     deriving Show
 
@@ -85,12 +81,12 @@ data PrfStdState s o tType where
 
 instance Semigroup (PrfStdContext q s) where
      (<>) :: PrfStdContext q s -> PrfStdContext q s -> PrfStdContext q s
-     (<>) (PrfStdContext v1 prf1 frames1 lemmas1) (PrfStdContext v2 prf2 frames2 lemmas2) =
-            PrfStdContext (v1 <> v2) (prf1 <> prf2) (frames1 <> frames2) (lemmas1 <> lemmas2)
+     (<>) (PrfStdContext v1 prf1 frames1) (PrfStdContext v2 prf2 frames2) =
+            PrfStdContext (v1 <> v2) (prf1 <> prf2) (frames1 <> frames2)
 
 instance Monoid (PrfStdContext q s) where
     mempty :: PrfStdContext q s 
-    mempty = PrfStdContext [] [] [] []
+    mempty = PrfStdContext [] [] []
 
 
 instance (Ord s, Ord o) => Semigroup (PrfStdState s o tType ) where
@@ -261,7 +257,7 @@ monadifyProofStd :: (MonadThrow m, ProofStd s eL r o tType q, Monoid r,
                     Show eL, Typeable eL, StdPrfPrintMonad s o tType m, Ord s)
            => r -> ProofGenTStd tType r s o q m (Maybe (s,[Int]))
 monadifyProofStd p = do
-     PrfStdContext fvStack idx contextFrames lemmas <- ask
+     PrfStdContext fvStack idx contextFrames <- ask
      state <- getProofState
      (addedState,steps, mayLastProp) <- monadifyProof p
      printSteps contextFrames idx (stepCount state) (provenSents state) steps

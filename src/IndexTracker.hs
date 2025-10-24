@@ -38,10 +38,9 @@ dropIndices n = do
 
 
 
-runIndexTracker :: [Int] -> IndexTracker a -> a
-runIndexTracker protectedIdxs tracker =
-    let initialIndex = if null protectedIdxs then 0 else maximum protectedIdxs + 1
-    in evalState tracker (Sum initialIndex)
+runIndexTracker :: IndexTracker a -> a
+runIndexTracker tracker =
+        evalState tracker (Sum 0)
 
 
 

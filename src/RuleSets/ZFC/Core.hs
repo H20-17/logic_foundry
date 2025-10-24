@@ -512,7 +512,7 @@ specAxInstance :: SentConstraints s t sE =>
     ([t] -> t -> s) -> -- p
     s -- the theorem
 specAxInstance param_n t p =
-    runIndexTracker [] (specAxInstanceWorker param_n t p)
+    runIndexTracker (specAxInstanceWorker param_n t p)
 
 lambdaSentMulti :: SentConstraints s t sE => 
     [Int] -> s -> [t] -> s

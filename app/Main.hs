@@ -1482,7 +1482,7 @@ main = do
     print "SPEC TO BUILDER THEOREM-------------------------------------"
 
     let (source_set_func,p_pred_func) = 
-            runIndexTracker [] $ do
+            runIndexTracker $ do
                 aIdx <- newIndex
                 bIdx <- newIndex
                 let a = x aIdx
@@ -1516,7 +1516,7 @@ main = do
     let source_set_func _ = Constant "S"
     let p_pred_func _ y =  Constant "C" .==. y
     let (source_set_func,p_pred_func) =
-            runIndexTracker [] $ do
+            runIndexTracker $ do
                 let src_set_tmplt = Constant "S"
                 yIdx <- newIndex
                 let y = x yIdx

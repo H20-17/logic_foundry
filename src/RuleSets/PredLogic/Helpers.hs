@@ -474,8 +474,7 @@ runProofByUGM tt prog =  do
         let newFrVarTypStack = tt : frVarTypeStack
         let newContextFrames = contextFrames context <> [False]
         let newStepIdxPrefix = stepIdxPrefix context ++ [stepCount state]
-        let newLemmas = contextLemmas context
-        let newContext = PrfStdContext newFrVarTypStack newStepIdxPrefix newContextFrames newLemmas
+        let newContext = PrfStdContext newFrVarTypStack newStepIdxPrefix newContextFrames
         let newState = PrfStdState mempty mempty 1
         let preambleSteps = [PrfStdStepFreevar (length frVarTypeStack) (qTypeToTType tt)]
         vIdx <- get
@@ -617,7 +616,7 @@ lambdaSent target_idx template replacement =
 extractConstsFromLambdaTerm :: (SentConstraints s t tType o q sE,V.Vector v t) =>
     (v t -> t) -> Set o
 extractConstsFromLambdaTerm (term_f::v t -> t) = 
-    runIndexTracker [] $ do
+    runIndexTracker $ do
         let paramCount = length (Proxy @(v t))
         indices <- newIndices paramCount
         let paramVars = V.fromList $ Prelude.map x indices
@@ -628,7 +627,7 @@ extractConstsFromLambdaTerm (term_f::v t -> t) =
 extractConstsFromLambdaSent :: (SentConstraints s t tType o q sE, V.Vector v t) =>
     (v t -> s) -> Set o
 extractConstsFromLambdaSent (term_f::v t -> s) = 
-    runIndexTracker [] $ do
+    runIndexTracker $ do
         let paramCount = length (Proxy @(v t))
         indices <- newIndices paramCount
         let paramVars = V.fromList $ Prelude.map x indices

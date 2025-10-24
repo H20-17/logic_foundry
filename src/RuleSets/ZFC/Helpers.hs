@@ -377,7 +377,7 @@ specAxInstance :: (SentConstraints s t sE, V.Vector v t) =>
     (v t -> t -> s) -> -- p
     s -- the theorem
 specAxInstance (t::(v t -> t)) p =
-    runIndexTracker [] (specAxInstanceWorker t p)
+    runIndexTracker (specAxInstanceWorker t p)
 
 
 
@@ -425,7 +425,7 @@ theoremSchemaMT lemmas proof consts =
 extractConstsFromLambdaSpec :: (SentConstraints s t sE, V.Vector v t) =>
      (v t -> t) -> (v t -> t -> s) -> Set Text
 extractConstsFromLambdaSpec (term_f::(v t -> t)) pred =
-    runIndexTracker [] $ do
+    runIndexTracker $ do
         let paramCount = length (Proxy @(v t))
         indices <- newIndices paramCount
         let paramVars = Prelude.map x indices
