@@ -732,16 +732,21 @@ instance StdPrfPrintMonad PropDeBr Text () (Either SomeException) where
   printSteps :: [Bool] -> [Int] -> Int ->  Map PropDeBr [Int] -> [PrfStdStep PropDeBr Text ()] -> Either SomeException ()
   printSteps _ _ _ _ _ = return ()
 
+
+
+
+
+
 showPropDeBrStepsPre :: [Bool] -> [Int] -> Int -> Bool -> Map PropDeBr [Int] -> [PrfStdStepPredDeBr] -> Text
 showPropDeBrStepsPre contextFrames index startLine notFromMonad dictMap steps = 
 
     resultText runResult
     where
-       lastLineN = startLine + length steps
-       runResult = runRWS (mapM_ showPropDeBrStep steps) context state
-       resultText (a,b,c) = c
-       context = PropDeBrStepContext contextFrames index notFromMonad lastLineN
-       state = PropDeBrStepState dictMap startLine
+        lastLineN = startLine + length steps
+        runResult = runRWS (mapM_ showPropDeBrStep steps) context state
+        resultText (a,b,c) = c
+        context = PropDeBrStepContext contextFrames index notFromMonad lastLineN
+        state = PropDeBrStepState dictMap startLine
 
 showPropDeBrSteps :: [Bool] -> [Int] -> Int -> Bool -> Map PropDeBr [Int] -> [PrfStdStepPredDeBr] -> Text
 showPropDeBrSteps contextFrames index startLine notFromMonad dictMap steps = 

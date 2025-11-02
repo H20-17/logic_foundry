@@ -3,6 +3,7 @@
 {-# LANGUAGE DoAndIfThenElse #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE TypeApplications #-}
 
 
 module Main where
@@ -82,6 +83,7 @@ import RuleSets.ZFC.Theorems
 import qualified Data.Vector.Fixed as V
 import Data.Vector.Fixed.Boxed as B
 import IndexTracker
+import Data.Data (Proxy (Proxy))
 
 testTheoremMSchema :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) => TheoremSchemaMT () [PredRuleDeBr] PropDeBr Text () m ()
 testTheoremMSchema = TheoremSchemaMT  [("N",())] [z1,z2] theoremProg [] []
@@ -1474,9 +1476,9 @@ main = do
     (aFSR, bFSR, cFSR, dFSR) <- runProofGeneratorT testFuncsSetRendering
     (putStrLn . unpack . showPropDeBrStepsBase) cFSR -- Print results
 
---    print "TEST BINARY UNION EXISTS SCHEMA-------------------------------------"
---    (a,b,c,d) <- checkTheoremM (binaryUnionExistsSchema::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text () IO ()))
---    (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
+    print "TEST BINARY UNION EXISTS SCHEMA-------------------------------------"
+    (a,b,c,d) <- checkTheoremM (binaryUnionExistsSchema::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text () IO ()))
+    (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
 
 
     print "SPEC TO BUILDER THEOREM-------------------------------------"
@@ -1630,10 +1632,10 @@ testprog = do
                  (s4,_) <- uiM newFreeVar z2
                  mpM s4
               return ()
-          return ()
+          return undefined
       runTheoremM  testTheoremMSchema
       runTmSilentM  testTheoremMSchema
-      (absurdImp,_) <- runProofByAsmM z2 do
+      (absurdImp,_,_) <- runProofByAsmM z2 do
         (notZ1,_) <- fakePropM [](Neg z1)
         (falseness,_) <- contraFM z1
         showF <- showPropM falseness
@@ -1716,6 +1718,7 @@ theoremProg = do
               -- (lift . print . show) line_idx
               (s5,_) <- mpM s4
               simpLM asm
+          return undefined
     return ()
 --              return (s5,())
 

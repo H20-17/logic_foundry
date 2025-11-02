@@ -48,7 +48,8 @@ module RuleSets.ZFC.Helpers
     lambdaSpec,
     theoremSchemaMT,
     specAxInstance,
-    extractConstsFromLambdaSpec
+    extractConstsFromLambdaSpec,
+    builderXMP
     
 
 
@@ -283,15 +284,15 @@ powerSetInstantiateM x = do
 
 
 runProofByUGM :: HelperConstraints sE s eL m r t
-                 =>  ProofGenTStd () r s Text () m x
-                            -> ProofGenTStd () r s Text () m (s, [Int],x)
+                 =>  ProofGenTStd () r s Text () m t
+                            -> ProofGenTStd () r s Text () m (s, [Int],t -> t)
 runProofByUGM = PREDL.runProofByUGM ()
 
 multiUGM :: HelperConstraints sE s eL m r t =>
     Int ->                             -- ^ Number of UG's
-    ProofGenTStd () r s Text () m x ->       -- ^ The core program. Its monadic return 'x' is discarded.
+    ProofGenTStd () r s Text () m t ->       -- ^ The core program. Its monadic return 'x' is discarded.
                                            --   It must set 'Last s' with the prop to be generalized.
-    ProofGenTStd () r s Text () m (s, [Int],x)  -- ^ Returns (final_generalized_prop, its_index).
+    ProofGenTStd () r s Text () m (s, [Int],[t] -> t)  -- ^ Returns (final_generalized_prop, its_index).
 multiUGM n = PREDL.multiUGM (replicate n ()) 
 
 
@@ -311,6 +312,26 @@ builderXM t pred_prog= do
     let  setObj = builderX idx t pred_tmplt
     dropIndices 1
     return setObj
+
+
+
+-- | Gives us properties of a builder set, as well as the builder set object,
+-- | after builderInstantiateM has been called
+-- | Reproduces some of the work of builderInstantiateM but allows
+-- | us to pass less information to functions as a consequence.
+builderXMP ::  (MonadSent s t sE m) =>
+    t ->  -- t: The instantiated set, with all of the original outer context
+                --    variables instantiated
+    (t -> s) -> -- p_pred: the original p_template expressed as a function (ObjDeBr -> PropDeBr),
+                -- the application of which will contain instantiated free variables.
+    m t -- the properties of the builderset and the builder set object      
+builderXMP t p = do
+
+    builderXM t $ do
+        xVar <- getXVar
+
+        return $ p xVar
+
 
 
 aX :: LogicSent s t => Int -> s -> s

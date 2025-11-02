@@ -3,11 +3,11 @@
 {-# LANGUAGE TypeApplications #-}
 module RuleSets.ZFC.Theorems
 (
---    unionEquivTheorem,
---    binaryUnionExistsTheorem,
---    binaryUnionExistsSchema,
+    unionEquivTheorem,
+    binaryUnionExistsTheorem,
+    binaryUnionExistsSchema,
 --    binaryIntersectionExistsTheorem,
---    binaryUnionInstantiateM,
+    binaryUnionInstantiateM,
 --    proveUnionIsSetM,
 --    unionWithEmptySetSchema,
 --    unionWithEmptySetTheorem,
@@ -156,8 +156,7 @@ builderTheoremWorker (t::(v t -> t)) p_pred = do
         let paramVars_v = V.fromList paramVars
         let t_tmplt = t paramVars_v
         let p_tmplt_pred = p_pred paramVars_v
-        builderSet <- builderXM t_tmplt $
-            p_tmplt_pred <$> getXVar
+        builderSet <- builderXMP t_tmplt p_tmplt_pred
         builder_props <- aXM $ do
             specVar <- getXVar
             return $ specVar `memberOf` builderSet
@@ -195,17 +194,15 @@ builderTheorem t p =
 --        multiAx outer_idxs inner_props
 
 
-proveBuilderTheoremMFree :: (HelperConstraints sE s eL m r t, V.Vector v t) =>
+proveBuilderTheoremMFree :: (HelperConstraints sE s eL m r t) =>
     t ->            -- source_set
     (t->s) ->            -- p_template
-    ProofGenTStd () r s Text () m (v t -> t)
+    ProofGenTStd () r s Text () m t
 proveBuilderTheoremMFree source_set (p_pred::(t->s)) = do        
         let freeSpecAxiom = specAxInstance (const source_set) (const p_pred
                                             ::(V.Empty t -> t -> s))
         (tm,_,h_obj) <- eiHilbertM freeSpecAxiom
-        freeVars <- getFreeVars
-        let freeVars_v = V.fromList freeVars
-        lambdaTermMultiM freeVars_v h_obj
+        return h_obj
 
              
 
@@ -216,7 +213,7 @@ proveBuilderTheoremM :: (HelperConstraints sE s eL m r t, V.Vector v t) =>
 proveBuilderTheoremM (source_set_pred::(v t -> t )) p_pred = do
     (closedSpecAxiom, _) <- specificationMNew source_set_pred p_pred
     let contextDepth = length (Proxy @(v t))
-    (_,_,returnFunc) <- multiUGM contextDepth $ do
+    (_,_,returnFuncListForm) <- multiUGM contextDepth $ do
         freeVars <- getFreeVars       
         (freeSpecAx,_) <- multiUIM closedSpecAxiom (reverse freeVars)
         txt <- showSentM freeSpecAx
@@ -229,6 +226,7 @@ proveBuilderTheoremM (source_set_pred::(v t -> t )) p_pred = do
     let tm = builderTheorem source_set_pred p_pred
     txt <- showSentM tm
     remarkM txt
+    let returnFunc = returnFuncListForm . V.toList
     return returnFunc
 
 builderSchema :: (HelperConstraints sE s eL m r t, V.Vector v t) =>
@@ -246,37 +244,22 @@ builderSchema source_set_f p_pred =
    
 
 
--- | A helper that instantiates a theorem composed by builderTheorem.
--- |
--- | @param substitutions      A list of pairs, where each pair contains an `Int` index for
--- |                           a template variable `X k` and the `ObjDeBr` term to substitute for it.
--- | @param spec_var_X_idx     The `Int` index for the `X` variable that is the variable of specification
--- |                           (the 'x' in {x ∈ T | P(x)}).
--- | @param source_set_template The source set `T`, which may contain `X k` parameters.
--- | @param p_template         The predicate `P`, which uses `X spec_var_X_idx` for the specification
--- |                           variable and may contain `X k` parameters.
--- | @return A tuple containing the proven defining property of the new set, its proof index,
--- |         and a tuple of type (ObjDeBr, ObjDeBr, PropDeBr) which is the newly built set,
--- |         the instantiated source set, and the instantiated p_template.
--- | For this helper to work, with outer_idxs defined as the set of indexes used in the 'substitutions' paramater,
--- | the theorem composed by
--- |    'specBuilderTheorem spec_var_X_idx outer_idxs source_set_template p_template'
--- | must already be established in the proof.
--- builderInstantiateM :: (HelperConstraints sE s eL m r t,V.Vector v t) =>
---     (v t -> t)  ->         -- source_set expressed as a function on paramaters
---     (v t -> t -> s) ->            -- predicate, expressed as a function on paramaters
---     (v t -> t) -> -- function giving us a builder set.
---     v t ->  -- arguments to apply to the paramaters
---    ProofGenTStd () r s Text () m ((s,t),[Int])
--- builderInstantiateM source_set_f pred_f builder_f args = do
---    (subArgRes, idx, obj) <- runProofBySubArgM $ do
---        -- prove builder theorem inline here
---        (closedBuilderTm,_,lambdaFunc) <- runTheoremM $ builderSchema source_set_f pred_f
---        let uiArgList = V.toList args 
---        (tmInstantiated,idx) <- multiUIM closedBuilderTm (reverse uiArgList)
---        let instantiated_obj = lambdaFunc args
---        return instantiated_obj
---    return ((subArgRes,obj), idx)
+
+builderInstantiateM :: (HelperConstraints sE s eL m r t,V.Vector v t) =>
+     (v t -> t)  ->         -- source_set expressed as a function on paramaters
+     (v t -> t -> s) ->            -- predicate, expressed as a function on paramaters
+     v t ->  -- arguments to apply to the paramaters
+    ProofGenTStd () r s Text () m ((s,t),[Int])
+builderInstantiateM source_set_f pred_f args = do
+    (builderProps, proofIdx, instantiatedObj) <- runProofBySubArgM $ do
+        remarkM "hello 1"
+        (tm,idx,builderFunc) <- runTmSilentM $ builderSchema source_set_f pred_f
+        remarkM "hello 2"
+        (builderProps,_) <- multiUIM tm (reverse $ V.toList args)
+        let instantiatedObj = builderFunc args
+        return instantiatedObj
+    return ((builderProps, instantiatedObj), proofIdx)
+
 
 
 
@@ -301,209 +284,270 @@ builderSchema source_set_f p_pred =
 
 ------begin binary union section------
 
---unionEquivTheoremWorker :: MonadSent s t m => m s
---unionEquivTheoremWorker = do
---    multiAXM 2 $ do
---        setAsetBrev <- getXVars 2
---        let setAsetB = reverse setAsetBrev
---        let setA = head setAsetB
---        let setB = setAsetB !! 1
---        prop_from_union_axiom <- eXM $ do
---            setU <- getXVar
---            ax_inner <- aXM $ do
---                tmpl_x_var <- getXVar
---                ex_inner <- eXM $ do
---                    tmpl_Y_var <- getXVar
---                    let inner_prop = (tmpl_Y_var `memberOf` roster [setA, setB]) .&&. (tmpl_x_var `memberOf` tmpl_Y_var)
---                    return inner_prop
---                return (tmpl_x_var `memberOf` setU .<->. ex_inner)
---            return (isSet setU .&&. ax_inner)
---        tmpl_x_idx <- newIndex
---        let canonical_body = (x tmpl_x_idx `memberOf` setA) .||. (x tmpl_x_idx `memberOf` setB)
---        tmpl_S_idx <- newIndex
---        let canonical_prop = eX tmpl_S_idx (isSet (x tmpl_S_idx) .&&.
---                                          aX tmpl_x_idx ((x tmpl_x_idx `memberOf` x tmpl_S_idx) .<->. canonical_body))
---        dropIndices 1 -- drop tmpl_S_idx
---        dropIndices 1 -- drop tmpl_x_idx                                      
---        let thm_antecedent = isSet setA .&&. isSet setB
---        -- let final_prop = multiAx [tmpl_A_idx, tmpl_B_idx] (thm_antecedent .->. (prop_from_union_axiom .<->. canonical_prop))
---        -- dropIndices 2 -- drop tmpl_A_idx tmplB_idx
---        -- return final_prop
---        return (thm_antecedent .->. (prop_from_union_axiom .<->. canonical_prop))
+unionEquivTheoremWorker :: MonadSent s t sE m => m s
+unionEquivTheoremWorker = do
+    multiAXM 2 $ do
+        setAsetBrev <- getXVars 2
+        let setAsetB = reverse setAsetBrev
+        let setA = head setAsetB
+        let setB = setAsetB !! 1
+        prop_from_union_axiom <- eXM $ do
+            setU <- getXVar
+            ax_inner <- aXM $ do
+                tmpl_x_var <- getXVar
+                ex_inner <- eXM $ do
+                    tmpl_Y_var <- getXVar
+                    let inner_prop = (tmpl_Y_var `memberOf` roster [setA, setB]) .&&. (tmpl_x_var `memberOf` tmpl_Y_var)
+                    return inner_prop
+                return (tmpl_x_var `memberOf` setU .<->. ex_inner)
+            return (isSet setU .&&. ax_inner)
+        tmpl_x_idx <- newIndex
+        let canonical_body = (x tmpl_x_idx `memberOf` setA) .||. (x tmpl_x_idx `memberOf` setB)
+        tmpl_S_idx <- newIndex
+        let canonical_prop = eX tmpl_S_idx (isSet (x tmpl_S_idx) .&&.
+                                          aX tmpl_x_idx ((x tmpl_x_idx `memberOf` x tmpl_S_idx) .<->. canonical_body))
+        dropIndices 1 -- drop tmpl_S_idx
+        dropIndices 1 -- drop tmpl_x_idx                                      
+        let thm_antecedent = isSet setA .&&. isSet setB
+        -- let final_prop = multiAx [tmpl_A_idx, tmpl_B_idx] (thm_antecedent .->. (prop_from_union_axiom .<->. canonical_prop))
+        -- dropIndices 2 -- drop tmpl_A_idx tmplB_idx
+        -- return final_prop
+        return (thm_antecedent .->. (prop_from_union_axiom .<->. canonical_prop))
 
 
----- | This is the lemma
----- | ∀A ∀B ( (isSet A ∧ isSet B) → ( (∃U (isSet U ∧ ∀x(x ∈ U ↔ ∃Y(Y ∈ {A,B} ∧ x ∈ Y)))) 
----- |    ↔ (∃S (isSet S ∧ ∀x(x ∈ S ↔ (x ∈ A ∨ x ∈ B)))) ) )
---unionEquivTheorem :: SentConstraints s t => s
---unionEquivTheorem =
---    runIndexTracker [] unionEquivTheoremWorker
+-- | This is the lemma
+-- | ∀A ∀B ( (isSet A ∧ isSet B) → ( (∃U (isSet U ∧ ∀x(x ∈ U ↔ ∃Y(Y ∈ {A,B} ∧ x ∈ Y)))) 
+-- |    ↔ (∃S (isSet S ∧ ∀x(x ∈ S ↔ (x ∈ A ∨ x ∈ B)))) ) )
+unionEquivTheorem :: SentConstraints s t sE => s
+unionEquivTheorem =
+    runIndexTracker unionEquivTheoremWorker
 
 
---binUnionExistsTmWorker :: MonadSent s t m => m s
---binUnionExistsTmWorker = do
---    multiAXM 2 $ do
---        setAsetBrev <- getXVars 2
---        let setAsetB = reverse setAsetBrev
---        let setA = head setAsetB
---        let setB = setAsetB !! 1
+binUnionExistsTmWorker :: MonadSent s t sE m => m s
+binUnionExistsTmWorker = do
+    multiAXM 2 $ do
+        setAsetBrev <- getXVars 2
+        let setAsetB = reverse setAsetBrev
+        let setA = head setAsetB
+        let setB = setAsetB !! 1
 
 
---        -- Quantify over S: ∃S (isSet(S) ∧ ∀x(...))
---        exists_S <- eXM $ do
---            set_s <- getXVar
---            -- Quantify over x: ∀x(x ∈ S ↔ (x ∈ A ∨ x ∈ B))
---            forall_x_bicond <- aXM $ do
---                -- Construct the inner part of the formula: x ∈ S ↔ (x ∈ A ∨ x ∈ B)
---                set_x <- getXVar
---                let x_in_S = set_x `memberOf` set_s
---                let x_in_A = set_x `memberOf` setA
---                let x_in_B = set_x `memberOf` setB
+        -- Quantify over S: ∃S (isSet(S) ∧ ∀x(...))
+        exists_S <- eXM $ do
+            set_s <- getXVar
+            -- Quantify over x: ∀x(x ∈ S ↔ (x ∈ A ∨ x ∈ B))
+            forall_x_bicond <- aXM $ do
+                -- Construct the inner part of the formula: x ∈ S ↔ (x ∈ A ∨ x ∈ B)
+                set_x <- getXVar
+                let x_in_S = set_x `memberOf` set_s
+                let x_in_A = set_x `memberOf` setA
+                let x_in_B = set_x `memberOf` setB
 
---                let x_in_A_or_B = x_in_A .||. x_in_B
---                let biconditional = x_in_S .<->. x_in_A_or_B
---                return biconditional
+                let x_in_A_or_B = x_in_A .||. x_in_B
+                let biconditional = x_in_S .<->. x_in_A_or_B
+                return biconditional
 
---            -- Construct the property of the union set S: isSet(S) ∧ ∀x(...)
---            let isSet_S = isSet (set_s)
---            let property_of_S = isSet_S .&&. forall_x_bicond
---            return property_of_S
-
-
-
-
---        -- Construct the antecedent of the main implication: isSet(A) ∧ isSet(B)
---        let isSet_A = isSet setA
---        let isSet_B = isSet setB
---        let antecedent = isSet_A .&&. isSet_B
-
---        -- Construct the main implication
---        let implication = antecedent .->. exists_S
---        return implication
+            -- Construct the property of the union set S: isSet(S) ∧ ∀x(...)
+            let isSet_S = isSet (set_s)
+            let property_of_S = isSet_S .&&. forall_x_bicond
+            return property_of_S
 
 
 
 
+        -- Construct the antecedent of the main implication: isSet(A) ∧ isSet(B)
+        let isSet_A = isSet setA
+        let isSet_B = isSet setB
+        let antecedent = isSet_A .&&. isSet_B
 
----- | Constructs the PropDeBr term for the closed theorem of binary union existence.
----- | The theorem is: ∀A ∀B ((isSet A ∧ isSet B) → ∃S (isSet S ∧ ∀x(x ∈ S ↔ (x ∈ A ∨ x ∈ B))))
---binaryUnionExistsTheorem :: SentConstraints s t  => s
---binaryUnionExistsTheorem =
---    runIndexTracker [] binUnionExistsTmWorker
-
-
-
-
----- | Proves the theorem defined in 'binaryUnionExistsTheorem'
----- |
----- | Proof Strategy:
----- | 1. Use Universal Generalization for A and B.
----- | 2. Assume the antecedent: isSet(A) ∧ isSet(B).
----- | 3. Use the Axiom of Pairing to prove the existence of the pair set {A, B}.
----- | 4. Use `eiHilbertM` to instantiate this pair set, getting an object `pairSetAB` and a proof of `isSet(pairSetAB)`.
----- | 5. Use the Axiom of Union, instantiating it with `pairSetAB`.
----- | 6. Use Modus Ponens with `isSet(pairSetAB)` to prove `∃U (isSet U ∧ ∀x(x∈U ↔ ∃Y(Y∈{A,B} ∧ x∈Y)))`.
----- |    This U is the union A ∪ B.
----- | 7. The property `∀x(x∈U ↔ ∃Y(Y∈{A,B} ∧ x∈Y))` is logically equivalent to the canonical
----- |    property `∀x(x∈U ↔ (x∈A ∨ x∈B))`. We assert this known equivalence using `fakePropM`.
----- | 8. This results in the desired existential statement for the binary union.
----- | Note that 'union_equiv_theorem' is a required lemma.
-
---proveBinaryUnionExistsM :: HelperConstraints sE s eL m r t =>
---    ProofGenTStd () r s Text () m ()
---proveBinaryUnionExistsM = do
---    -- Universally generalize over A and B.
---    multiUGM 2 $ do
---        -- Inside the UG, we have free variables (V_i) corresponding to A and B.
---        -- We will use these variables to represent the sets A and B.
---        
---        -- Get the top free variables for A and B.
---        v_Av_B <- getTopFreeVars 2
---        let setA = head v_Av_B
---        let setB = v_Av_B!!1
---        -- Prove the implication by assuming the antecedent.
---        runProofByAsmM (isSet setA .&&. isSet setB) $ do
---            -- Now, isSet(A) and isSet(B) are proven assumptions in this context.
-
---            -- Step 1: Use the Axiom of Pairing to prove ∃P. isSet(P) ∧ P = {A,B}.
---            (pairAxiom,_) <- pairingAxiomM
---            (pairAxiom_inst,_) <- multiUIM pairAxiom [setA, setB]
-
-
---            -- Step 2: Instantiate this pair set with a Hilbert term `pairSetAB`.
---            -- `pair_prop` is isSet({A,B}) ∧ ∀z(z∈{A,B} ↔ z=A ∨ z=B).
---            (pair_prop, _, pairSetAB) <- eiHilbertM pairAxiom_inst
---            (isSet_pair_proven, _) <- simpLM pair_prop
-
---            -- Step 3: Use the Axiom of Union on the proven set `pairSetAB`.
---            (unionAxiom,_) <- unionAxiomM
---            (unionAxiom_inst, _) <- uiM pairSetAB unionAxiom
-
---            -- Step 4: Use Modus Ponens with `isSet(pairSetAB)` to derive the existence of the union.
---            -- `exists_U` is ∃U(isSet U ∧ ∀x(x∈U ↔ ∃Y(Y∈{A,B} ∧ x∈Y))).
---            (exists_U, _) <- mpM unionAxiom_inst
---            -- Step 5: Assert a general, CLOSED theorem about the equivalence of the two forms of union.
---            -- Thm: ∀A,B. (isSet A ∧ isSet B) → ( (∃U. from Axiom of Union on {A,B}) ↔ (∃S. with canonical binary union prop) )
---            -- We build the two existential statements as templates first.                      
-
---            -- Step 6: Instantiate the theorem with our specific sets A and B.
---            (instantiated_thm, _) <- multiUIM unionEquivTheorem [setA, setB]
-
---            -- Step 7: Use Modus Ponens with our assumption `isSet A ∧ isSet B`.
---            (proven_biconditional, _) <- mpM instantiated_thm
-
---            -- Step 8: From the equivalence and the proven `exists_U`, derive the target existential.
---            (forward_imp, _) <- bicondElimLM proven_biconditional
-
---            mpM forward_imp -- This proves the target_existential
-
---    return ()
-
-
----- | The schema that houses 'proveBinaryUnionExistsM'.
----- | The schema stipulates that:
----- | "union_equiv_theorem" is a required lemma.
---binaryUnionExistsSchema ::  HelperConstraints sE s eL m r t => 
---     TheoremSchemaMT () r s Text () m ()
---binaryUnionExistsSchema =       
---    TheoremSchemaMT {
---        lemmasM = [unionEquivTheorem],
---        proofM = proveBinaryUnionExistsM,
---        constDictM = [],
---        protectedXVars = [],
---        contextVarTypes = []
---    }
+        -- Construct the main implication
+        let implication = antecedent .->. exists_S
+        return implication
 
 
 
----- | Helper to instantiate the binary union theorem and return the union set.
----- | For this helper to work, the theorem defined by 'binaryUnionExistsTheorem' must be proven
----- | beforehand, which is likely done in the global context.
---binaryUnionInstantiateM ::  HelperConstraints sE s eL m r t =>
---    t -> t -> ProofGenTStd () r s Text () m (s, [Int], t)
---binaryUnionInstantiateM setA setB = do
---    runProofBySubArgM $ do
---        -- This helper relies on isSet(setA) and isSet(setB) being proven in the outer context.
 
---        -- Step 1: Instantiate the 'binaryUnionExistsTheorem' theorem with the specific sets A and B.
---        (instantiated_thm, _) <- multiUIM binaryUnionExistsTheorem [setA, setB]
---        -- The result is the proven proposition: (isSet A ∧ isSet B) → ∃S(...)
 
---        -- Step 3: Prove the antecedent of the instantiated theorem.
---        -- We assume isSet A and isSet B are proven in the parent context.
---        (isSet_A_proven, _) <- repM (isSet setA)
---        (isSet_B_proven, _) <- repM (isSet setB)
---        (antecedent_proven, _) <- adjM isSet_A_proven isSet_B_proven
+-- | Constructs the PropDeBr term for the closed theorem of binary union existence.
+-- | The theorem is: ∀A ∀B ((isSet A ∧ isSet B) → ∃S (isSet S ∧ ∀x(x ∈ S ↔ (x ∈ A ∨ x ∈ B))))
+binaryUnionExistsTheorem :: SentConstraints s t sE => s
+binaryUnionExistsTheorem =
+    runIndexTracker binUnionExistsTmWorker
 
---        -- Step 4: Use Modus Ponens to derive the existential statement.
---        (exists_S_proven, _) <- mpM instantiated_thm
 
---        -- Step 5: Use Existential Instantiation (eiHilbertM) to get the property of the union set.
---        -- The Hilbert term created here, `unionObj`, is definitionally A U B.
---        (prop_of_union, _, unionObj) <- eiHilbertM exists_S_proven
---        -- prop_of_union is: isSet(unionObj) ∧ ∀x(x∈unionObj ↔ (x∈A ∨ x∈B))
---        return unionObj
 
+
+-- | Proves the theorem defined in 'binaryUnionExistsTheorem'
+-- |
+-- | Proof Strategy:
+-- | 1. Use Universal Generalization for A and B.
+-- | 2. Assume the antecedent: isSet(A) ∧ isSet(B).
+-- | 3. Use the Axiom of Pairing to prove the existence of the pair set {A, B}.
+-- | 4. Use `eiHilbertM` to instantiate this pair set, getting an object `pairSetAB` and a proof of `isSet(pairSetAB)`.
+-- | 5. Use the Axiom of Union, instantiating it with `pairSetAB`.
+-- | 6. Use Modus Ponens with `isSet(pairSetAB)` to prove `∃U (isSet U ∧ ∀x(x∈U ↔ ∃Y(Y∈{A,B} ∧ x∈Y)))`.
+-- |    This U is the union A ∪ B.
+-- | 7. The property `∀x(x∈U ↔ ∃Y(Y∈{A,B} ∧ x∈Y))` is logically equivalent to the canonical
+-- |    property `∀x(x∈U ↔ (x∈A ∨ x∈B))`. We assert this known equivalence using `fakePropM`.
+-- | 8. This results in the desired existential statement for the binary union.
+-- | Note that 'union_equiv_theorem' is a required lemma.
+
+proveBinaryUnionExistsM :: HelperConstraints sE s eL m r t =>
+    ProofGenTStd () r s Text () m ()
+proveBinaryUnionExistsM = do
+    -- Universally generalize over A and B.
+    multiUGM 2 $ do
+        -- Inside the UG, we have free variables (V_i) corresponding to A and B.
+        -- We will use these variables to represent the sets A and B.
+        
+        -- Get the top free variables for A and B.
+        v_Av_B <- getTopFreeVars 2
+        let setA = head v_Av_B
+        let setB = v_Av_B!!1
+        -- Prove the implication by assuming the antecedent.
+        runProofByAsmM (isSet setA .&&. isSet setB) $ do
+            -- Now, isSet(A) and isSet(B) are proven assumptions in this context.
+
+            -- Step 1: Use the Axiom of Pairing to prove ∃P. isSet(P) ∧ P = {A,B}.
+            (pairAxiom,_) <- pairingAxiomM
+            (pairAxiom_inst,_) <- multiUIM pairAxiom [setA, setB]
+
+
+            -- Step 2: Instantiate this pair set with a Hilbert term `pairSetAB`.
+            -- `pair_prop` is isSet({A,B}) ∧ ∀z(z∈{A,B} ↔ z=A ∨ z=B).
+            (pair_prop, _, pairSetAB) <- eiHilbertM pairAxiom_inst
+            (isSet_pair_proven, _) <- simpLM pair_prop
+
+            -- Step 3: Use the Axiom of Union on the proven set `pairSetAB`.
+            (unionAxiom,_) <- unionAxiomM
+            (unionAxiom_inst, _) <- uiM pairSetAB unionAxiom
+
+            -- Step 4: Use Modus Ponens with `isSet(pairSetAB)` to derive the existence of the union.
+            -- `exists_U` is ∃U(isSet U ∧ ∀x(x∈U ↔ ∃Y(Y∈{A,B} ∧ x∈Y))).
+            (exists_U, _) <- mpM unionAxiom_inst
+            -- Step 5: Assert a general, CLOSED theorem about the equivalence of the two forms of union.
+            -- Thm: ∀A,B. (isSet A ∧ isSet B) → ( (∃U. from Axiom of Union on {A,B}) ↔ (∃S. with canonical binary union prop) )
+            -- We build the two existential statements as templates first.                      
+
+            -- Step 6: Instantiate the theorem with our specific sets A and B.
+            (instantiated_thm, _) <- multiUIM unionEquivTheorem [setA, setB]
+
+            -- Step 7: Use Modus Ponens with our assumption `isSet A ∧ isSet B`.
+            (proven_biconditional, _) <- mpM instantiated_thm
+
+            -- Step 8: From the equivalence and the proven `exists_U`, derive the target existential.
+            (forward_imp, _) <- bicondElimLM proven_biconditional
+
+            mpM forward_imp -- This proves the target_existential
+        return emptySet
+    return ()
+
+
+
+
+
+
+-- | The schema that houses 'proveBinaryUnionExistsM'.
+-- | The schema stipulates that:
+-- | "union_equiv_theorem" is a required lemma.
+binaryUnionExistsSchema ::  HelperConstraints sE s eL m r t => 
+     TheoremSchemaMT () r s Text () m ()
+binaryUnionExistsSchema =       
+    theoremSchemaMT [unionEquivTheorem] proveBinaryUnionExistsM []
+
+
+binUnionTmWorker :: MonadSent s t sE m => m s
+binUnionTmWorker = do
+    multiAXM 2 $ do
+        setAsetBrev <- getXVars 2
+        let setAsetB = reverse setAsetBrev
+        let setA = head setAsetB
+        let setB = setAsetB !! 1
+
+
+
+        let set_s = setA .\/. setB
+            -- Quantify over x: ∀x(x ∈ S ↔ (x ∈ A ∨ x ∈ B))
+        forall_x_bicond <- aXM $ do
+                -- Construct the inner part of the formula: x ∈ S ↔ (x ∈ A ∨ x ∈ B)
+                set_x <- getXVar
+                let x_in_S = set_x `memberOf` set_s
+                let x_in_A = set_x `memberOf` setA
+                let x_in_B = set_x `memberOf` setB
+
+                let x_in_A_or_B = x_in_A .||. x_in_B
+                let biconditional = x_in_S .<->. x_in_A_or_B
+                return biconditional
+
+            -- Construct the property of the union set S: isSet(S) ∧ ∀x(...)
+        let isSet_S = isSet (set_s)
+        let property_of_S = isSet_S .&&. forall_x_bicond
+
+
+
+
+
+        -- Construct the antecedent of the main implication: isSet(A) ∧ isSet(B)
+        let isSet_A = isSet setA
+        let isSet_B = isSet setB
+        let antecedent = isSet_A .&&. isSet_B
+
+        -- Construct the main implication
+        let implication = antecedent .->. property_of_S
+        return implication
+
+-- | Constructs the PropDeBr term for the closed theorem of binary union existence.
+-- | The theorem is: ∀A ∀B ((isSet A ∧ isSet B) → isSet (A ∪ B) ∧ ∀x(x ∈ (A ∪ B) ↔ (x ∈ A ∨ x ∈ B)))
+binaryUnionTheorem :: (SentConstraints s t sE) => s
+binaryUnionTheorem = 
+    runIndexTracker binUnionTmWorker
+
+
+proveBinaryUnionTheorem :: HelperConstraints sE s eL m r t =>
+    ProofGenTStd () r s Text () m (t -> t -> t)
+
+proveBinaryUnionTheorem = do
+    (_,_,unionFuncRaw) <- multiUGM 2 $ do
+        v_Av_B <- getTopFreeVars 2
+        let setA = head v_Av_B
+        let setB = v_Av_B!!1
+        (_,_,unionObj) <- runProofByAsmM (isSet setA .&&. isSet setB) $ do
+            (existance_stmt, _) <- multiUIM binaryUnionExistsTheorem [setA, setB]
+            mpM existance_stmt
+            (_,_,unionObj) <- eiHilbertM existance_stmt
+            return unionObj
+        return unionObj
+    let unionFunc a b = unionFuncRaw [a,b]
+    return (unionFunc)
+    --UnionFunc should be identical to the (.\/.) operator
+    
+
+binaryUnionSchema :: (HelperConstraints sE s eL m r t) => 
+     TheoremSchemaMT () r s Text () m (t -> t -> t)
+binaryUnionSchema =
+    theoremSchemaMT [binaryUnionExistsTheorem] proveBinaryUnionTheorem []
+
+
+
+-- | Helper to instantiate the binary union theorem and return the union set.
+-- | For this helper to work, the theorem defined by 'binaryUnionExistsTheorem' must be proven
+-- | beforehand, which is likely done in the global context.
+-- | For this function to work in a proof, isSet(setA) and isSet(setB) must be already proven,
+-- | as well as the binary union theorem itself.
+binaryUnionInstantiateM ::  HelperConstraints sE s eL m r t =>
+    t -> t -> ProofGenTStd () r s Text () m (s, [Int], t)
+binaryUnionInstantiateM setA setB = do
+    (unionProps, proofIdx, instantiatedObj) <- runProofBySubArgM $ do
+        repM $ isSet setA
+        repM $ isSet setB
+        repM binaryUnionTheorem
+        (isSetAAndisSetB, _) <- adjM (isSet setA) (isSet setB)
+        -- this is where we make use of our assumptions isSet(setA) and isSet(setB)
+        (unionPropsConditional, _) <- multiUIM binaryUnionTheorem [setB, setA]
+        (unionProps, _) <- mpM unionPropsConditional
+        let instantiatedObj = setA .\/. setB
+        return instantiatedObj
+    return (unionProps, proofIdx, instantiatedObj)
 
 ---- BEGIN BINARY INTERSECTION EXISTS SECTION
 

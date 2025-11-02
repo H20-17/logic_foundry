@@ -170,7 +170,7 @@ imp2DisjM s_imp_ab = do
     (a_or_not_a_proven, _) <- exclMidM a_term
 
     -- 3. Case 1 Subproof: Prove A → (¬A ∨ B)
-    (a_implies_target, _) <- runProofByAsmM a_term $ do
+    (a_implies_target, _, _) <- runProofByAsmM a_term $ do
         -- 'a_term' is assumed.
         -- Use the original proven implication 's_imp_ab' (A → B) and the assumed 'a_term' (A)
         -- to derive 'b_term' (B) by Modus Ponens.
@@ -180,7 +180,7 @@ imp2DisjM s_imp_ab = do
         return () -- Subproof concludes with (¬A ∨ B)
 
     -- 4. Case 2 Subproof: Prove ¬A → (¬A ∨ B)
-    (not_a_implies_target, _) <- runProofByAsmM (neg a_term) $ do
+    (not_a_implies_target, _, _) <- runProofByAsmM (neg a_term) $ do
         -- 'neg a_term' (¬A) is assumed.
         -- From the assumed 'neg a_term' (¬A), introduce the disjunction (¬A ∨ B).
         disjIntroLM (neg a_term) b_term
@@ -240,14 +240,14 @@ disj2ImpM s_notA_or_B_proven = do
                            return (parseNeg not_a_term_parsed)
 
     -- 2. Goal: Prove A → B. Start a subproof assuming A ('a_term_parsed').
-    runProofByAsmM a_term_parsed $ do
+    (resSent,idx,_) <- runProofByAsmM a_term_parsed $ do
         -- Current assumption in this scope: 'a_term_parsed' (A) is proven.
         -- We also have 's_notA_or_B_proven' (¬A ∨ B) from the outer scope.
         -- Goal: Derive 'b_term_parsed' (B).
 
         -- To derive B, we use RAA: assume ¬B ('not_b_to_assume') and derive a contradiction.
         let not_b_to_assume = neg b_term_parsed
-        (not_b_implies_false, _) <- runProofByAsmM not_b_to_assume $ do
+        (not_b_implies_false, _,_) <- runProofByAsmM not_b_to_assume $ do
             -- Current assumptions:
             --   'a_term_parsed' (A) - from parent subproof scope
             --   'not_b_to_assume' (¬B) - current subproof assumption
@@ -256,13 +256,13 @@ disj2ImpM s_notA_or_B_proven = do
             -- We need to show that these three together lead to False.
             -- We'll use Disjunction Elimination on 's_notA_or_B_proven' (¬A ∨ B).
             -- Case 1: Assume ¬A (which is 'not_a_term_parsed')
-            (case1_notA_implies_false, _) <- runProofByAsmM not_a_term_parsed $ do
+            (case1_notA_implies_false, _, _) <- runProofByAsmM not_a_term_parsed $ do
                 -- We have 'a_term_parsed' (A) and 'not_a_term_parsed' (¬A). Contradiction.
                 contraFM a_term_parsed -- Derives False
                 return ()
 
             -- Case 2: Assume B (which is 'b_term_parsed')
-            (case2_B_implies_false, _) <- runProofByAsmM b_term_parsed $ do
+            (case2_B_implies_false, _, _) <- runProofByAsmM b_term_parsed $ do
                 -- We have 'b_term_parsed' (B) and 'not_b_to_assume' (¬B). Contradiction.
                 contraFM b_term_parsed-- Derives False
                 return ()
@@ -283,7 +283,7 @@ disj2ImpM s_notA_or_B_proven = do
     -- The outermost 'runProofByAsmM a_term_parsed ...' will construct and prove:
     --   a_term_parsed → b_final_derived
     -- which is A → B.
-
+    return (resSent,idx)
 
 
 
@@ -317,7 +317,7 @@ negAndNotToOrM provenNegAAndNotB = do
     --   I2: (Neg (Neg B)) -> (Neg A || B)
 
     -- 3. Prove I1: (Neg A) -> (Neg A || B)
-    (neg_a_implies_target, _) <- runProofByAsmM (neg a_term) $ do
+    (neg_a_implies_target, _, _) <- runProofByAsmM (neg a_term) $ do
         -- Assume (Neg A) - this is 'neg a_term', which is proven by assumption here.
         -- We want to derive 'target_disjunction' which is (Neg A || B).
         disjIntroLM (neg a_term) b_term -- Uses the assumed (Neg A) and term B
@@ -325,7 +325,7 @@ negAndNotToOrM provenNegAAndNotB = do
 
     -- 4. Prove I2: (Neg (Neg B)) -> (Neg A || B)
     let not_not_b_assumption_term = neg not_b_term -- This is term Neg(Neg B)
-    (not_not_b_implies_target, _) <- runProofByAsmM not_not_b_assumption_term $ do
+    (not_not_b_implies_target, _, _) <- runProofByAsmM not_not_b_assumption_term $ do
         -- Assume (Neg (Neg B)) - this is 'not_not_b_assumption_term', proven by assumption.
         -- First, derive B using Double Negation Elimination.
         (b_proven_from_dne, _) <- doubleNegElimM not_not_b_assumption_term
@@ -387,7 +387,7 @@ negImpToConjViaEquivM s_input_neg_A_implies_B = do
 
     -- 3. Start the RAA subproof: Assume ¬(A ∧ ¬B) and derive False.
     --    This will prove (¬(A ∧ ¬B) → False).
-    (raa_antecedent_implies_false, _) <- runProofByAsmM assumption_for_raa $ do
+    (raa_antecedent_implies_false, _, _) <- runProofByAsmM assumption_for_raa $ do
         -- Inside this subproof, 'assumption_for_raa' (¬(A ∧ ¬B)) is proven by assumption.
 
         -- 3a. From ¬(A ∧ ¬B), derive (¬A ∨ B) using 'negAndNotToOrM'.
@@ -425,9 +425,9 @@ modusTollensM s = do
     repM s -- We are assuming P → Q is already proven in the context and we reiterate it for emphasis.
     -- Derive ¬P from ¬Q and P → Q (Modus Tollens)
     repM negQ -- We are assuming ¬Q is already proven in the context and we reiterate it for emphasis.
-    (negPImpNegQ,_) <- runProofByAsmM negQ $ do
+    (negPImpNegQ,_,_) <- runProofByAsmM negQ $ do
 
-        (absurdity,_) <- runProofByAsmM p $ do
+        (absurdity,_,_) <- runProofByAsmM p $ do
                 (q,_) <- mpM s
                 -- Use contraFM to derive False from q and negQ    
                 contraFM q
@@ -442,7 +442,7 @@ doubleNegIntroM :: (HelperConstraints r1 s o tType sE eL q m)
     -> ProofGenTStd tType r1 s o q m (s, [Int]) -- Returns the proven ¬¬P and its index
 doubleNegIntroM p = do
     -- Prove ¬P → ⊥ by assuming ¬P and deriving a contradiction with P
-    (negP_imp_False, _) <- runProofByAsmM (neg p) $ do
+    (negP_imp_False, _, _) <- runProofByAsmM (neg p) $ do
         -- Inside this subproof, (neg p) is assumed.
         -- contraFM uses 'p' (proven outside) and 'neg p' (the assumption).
         contraFM p -- Derive False (⊥)
@@ -472,7 +472,7 @@ exFalsoM s_target = do
     (s_target_proven,idx,_) <- runProofBySubArgM $ do
         -- Step 1: Start a subproof assuming the negation of our target.
         -- This will prove (¬P → False).
-        (not_p_implies_false, _) <- runProofByAsmM (neg s_target) $ do
+        (not_p_implies_false, _, _) <- runProofByAsmM (neg s_target) $ do
             -- Inside this subproof, ¬P is an assumption.
             -- We assume 'false' is proven in the outer context and reiterate it.
             repM false
@@ -508,13 +508,13 @@ disjunctiveSyllogismM pOrQ = do
         -- Prove the goal P by using Disjunction Elimination (Proof by Cases) on P ∨ Q.
             
         -- Case 1: Assume P. The goal is to derive P.
-        (p_implies_p, _) <- runProofByAsmM p $ do
+        (p_implies_p, _, _) <- runProofByAsmM p $ do
             -- We assumed P, so we can reiterate it as the conclusion of this subproof.
             repM p
             return ()
 
         -- Case 2: Assume Q. The goal is to derive P.
-        (q_implies_p, _) <- runProofByAsmM q $ do
+        (q_implies_p, _, _) <- runProofByAsmM q $ do
             -- We assumed Q, but we also have ¬Q from the parent assumption.
             -- This is a contradiction.
             (falsity, _) <- contraFM q
@@ -552,7 +552,7 @@ posBicondToNegBicondM s = do
     repM s -- We are assuming P ↔ Q is already proven in the context and we reiterate it for emphasis.
     
     (target,subarg_idx,_) <- runProofBySubArgM $ do
-        (notP_implies_notQ, _) <- runProofByAsmM negP $ do
+        (notP_implies_notQ, _, _) <- runProofByAsmM negP $ do
             -- Assume ¬P.
             -- From P ↔ Q, we can derive Q → P.
             (q_implies_p, _) <- bicondElimRM s
@@ -568,7 +568,7 @@ posBicondToNegBicondM s = do
             -- The subproof concludes ¬Q.
 
         -- Part B: Prove Q → P (symmetric proof)
-        (notQ_implies_notP, _) <- runProofByAsmM negQ $ do
+        (notQ_implies_notP, _, _) <- runProofByAsmM negQ $ do
             -- Assume ¬Q.
             -- From P ↔ Q, we can derive P → Q.
             (p_implies_q, _) <- bicondElimLM s
@@ -601,7 +601,7 @@ negBicondToPosBicondM s = do
     (target,subarg_idx,_) <- runProofBySubArgM $ do
         (posBicondPre,_) <- posBicondToNegBicondM negBicond
         (negNegP_imp_negNegQ,_) <- bicondElimLM posBicondPre
-        (p_implies_q, _) <- runProofByAsmM p $ do
+        (p_implies_q, _,_) <- runProofByAsmM p $ do
             -- Assume P.
 
             (negNegP,_) <- doubleNegIntroM p --prove ¬(¬P).
@@ -613,7 +613,7 @@ negBicondToPosBicondM s = do
 
         -- Part B: Prove Q → P (symmetric proof)
         (negNegQ_imp_negNegP, _) <- bicondElimRM posBicondPre
-        (q_implies_p, _) <- runProofByAsmM q $ do
+        (q_implies_p, _,_) <- runProofByAsmM q $ do
             -- Assume Q.
             (negNegQ,_) <- doubleNegIntroM q --prove ¬(¬Q).
             (negNegPderived, _) <- mpM negNegQ_imp_negNegP
@@ -685,7 +685,7 @@ peelOff k current_s = do
 
 runProofByAsmM :: HelperConstraints r1 s o tType sE eL1 q m
                  =>   s -> ProofGenTStd tType r1 s o q m x
-                            -> ProofGenTStd tType r1 s o q m (s, [Int])
+                            -> ProofGenTStd tType r1 s o q m (s, [Int],x )
 runProofByAsmM asm prog =  do
         state <- getProofState
         context <- ask
@@ -705,7 +705,7 @@ runProofByAsmM asm prog =  do
                  <- lift $ runSubproofM newContext state newState preambleSteps mayPreambleLastProp prog vIdx
         mayMonadifyRes <- monadifyProofStd $ proofByAsm asm consequent subproof
         idx <- maybe (error "No theorem returned by monadifyProofStd on asm schema. This shouldn't happen") (return . snd) mayMonadifyRes
-        return (asm .->. consequent,idx)
+        return (asm .->. consequent,idx,extraData)
 
 
 
