@@ -11,6 +11,7 @@ import Control.Monad.State
 import Control.Monad.Accum (MonadAccum(add))
 import Control.Monad (unless)
 import Data.Monoid (Sum(..), getSum)
+import GHC.Stats (RTSStats(cumulative_par_balanced_copied_bytes))
 
 type IndexTracker o =  State (Sum Int) o
 
@@ -26,9 +27,10 @@ newIndex = do
 newIndices :: (MonadState (Sum Int) m) => Int -> m [Int]
 newIndices n = do
     currentIndex <- get
-    put (currentIndex + Sum n)
     let currentIndexInt = getSum currentIndex
-    return [currentIndexInt .. currentIndexInt + n - 1]
+    put (currentIndex + Sum n)
+    return [currentIndexInt + i | i <- [0 .. n - 1]]
+
 
 dropIndices :: (MonadState (Sum Int) m) => Int -> m ()
 dropIndices n = do
@@ -39,8 +41,10 @@ dropIndices n = do
 
 
 runIndexTracker :: IndexTracker a -> a
-runIndexTracker tracker =
-        evalState tracker (Sum 0)
-
+runIndexTracker tracker = 
+    let 
+         (final_state, _) = runState tracker (Sum 0)
+    in
+         final_state
 
 

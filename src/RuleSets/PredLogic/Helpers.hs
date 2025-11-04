@@ -485,16 +485,21 @@ runProofByUGM tt prog =  do
         let newContext = PrfStdContext newFrVarTypStack newStepIdxPrefix newContextFrames
         let newState = PrfStdState mempty mempty 1
         let preambleSteps = [PrfStdStepFreevar (length frVarTypeStack) (qTypeToTType tt)]
-        vIdx <- get
         let modifiedProg = do
             progData <- prog
+            txt <- showTermM progData
+            remarkM $ "Data returned from program: " <> txt
             topFreeVar <- getTopFreeVar
             newIdx <- newIndex
+            remarkM $ "new index for ug variable: " <> pack (show newIdx)
             let dataFuncTmplt = createTermTmplt [(topFreeVar, newIdx)] progData
+            
+            txt <- showTermM dataFuncTmplt
+            remarkM $ "Creating universal generalization function: " <> txt
             let returnFunc = lambdaTerm newIdx dataFuncTmplt
             dropIndices 1
             return returnFunc
-
+        vIdx <- get
         (extraData,generalizable,subproof, newSteps) 
                  <- lift $ runSubproofM newContext state newState preambleSteps (Last Nothing) modifiedProg vIdx
         let resultSent = createForall tt (Prelude.length frVarTypeStack) generalizable
@@ -528,7 +533,7 @@ multiUGM typeList programCore =
             -- wrap it in a PRF_BY_SUBARG step, and return (consequent, index_of_that_step).
             do 
                (arg_result_prop, idx, dataFunc) <- runProofByUGM single_ug_var_type programCore
-               let returnFunc [arg] = dataFunc arg 
+               let returnFunc args = dataFunc (head args)
                return (arg_result_prop, idx,returnFunc)
         (outermost_ug_var_type : penultimate_ug_var_type : remaining_ug_types) ->
             do
@@ -583,7 +588,7 @@ lambdaTerm target_idx template replacement =
 lambdaTermMultiM :: (MonadSent s t tType o q sE m, V.Vector v t) =>
     v t -> t ->  m (v t -> t)
 lambdaTermMultiM (targetTerms::v t) sourceTerm = do
-    let param_n = length (Proxy @(v t))
+    let param_n = V.length (undefined :: v t)
     templateIdxs <- newIndices param_n
     let subs = zip (V.toList targetTerms) templateIdxs
     let lambdaTemplate = createTermTmplt subs sourceTerm
@@ -595,6 +600,7 @@ lambdaTermMultiM (targetTerms::v t) sourceTerm = do
               termSubXs subs lambdaTemplate
     dropIndices param_n
     return returnFunc 
+
 
 
 
@@ -631,7 +637,7 @@ extractConstsFromLambdaTerm :: (SentConstraints s t tType o q sE,V.Vector v t) =
     (v t -> t) -> Set o
 extractConstsFromLambdaTerm (term_f::v t -> t) = 
     runIndexTracker $ do
-        let paramCount = length (Proxy @(v t))
+        let paramCount = V.length (undefined :: v t)
         indices <- newIndices paramCount
         let paramVars = V.fromList $ Prelude.map x indices
         let term_tmplt = term_f paramVars
@@ -642,7 +648,7 @@ extractConstsFromLambdaSent :: (SentConstraints s t tType o q sE, V.Vector v t) 
     (v t -> s) -> Set o
 extractConstsFromLambdaSent (term_f::v t -> s) = 
     runIndexTracker $ do
-        let paramCount = length (Proxy @(v t))
+        let paramCount = V.length (undefined :: v t)
         indices <- newIndices paramCount
         let paramVars = V.fromList $ Prelude.map x indices
         let term_tmplt = term_f paramVars

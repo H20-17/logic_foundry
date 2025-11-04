@@ -161,7 +161,7 @@ specificationM outerIdxs idx t s = standardRuleM (specification outerIdxs idx t 
 specificationMNew :: (HelperConstraints sE s eL m r t, V.Vector v t)
        => (v t -> t) -> (v t -> t -> s) -> ProofGenTStd () r s Text () m (s,[Int])
 specificationMNew (t::(v t -> t)) p_pred = do
-    let param_n = length (Proxy @(v t))
+    let param_n = V.length (undefined :: v t)
     outerIdxs <- newIndices param_n
     unless (param_n >= 0) (error "specificationMNew: context_var_count must be nonnegative")
     let context_vars = Prelude.map x outerIdxs
@@ -377,7 +377,7 @@ specAxInstanceWorker :: (MonadSent s t sE m, V.Vector v t)  =>
 
     m s -- the theorem
 specAxInstanceWorker t (p_pred::v t -> t -> s) = do
-    let param_n = length (Proxy @(v t))
+    let param_n = V.length (undefined :: v t)
     multiAXM param_n $ do
         paramVarsList <- getXVars param_n
         let paramVars = V.fromList paramVarsList
@@ -443,14 +443,19 @@ theoremSchemaMT lemmas proof consts =
 
 
 
+
 extractConstsFromLambdaSpec :: (SentConstraints s t sE, V.Vector v t) =>
      (v t -> t) -> (v t -> t -> s) -> Set Text
 extractConstsFromLambdaSpec (term_f::(v t -> t)) pred =
     runIndexTracker $ do
-        let paramCount = length (Proxy @(v t))
+
+        let paramCount = V.length (undefined :: v t)
+        -- error $ "paramCount in extractConstsFromLambdaSpec: " ++ show paramCount
         indices <- newIndices paramCount
+
         let paramVars = Prelude.map x indices
         let paramVars_v = V.fromList paramVars
+
         let src_set_tmplt = term_f paramVars_v
         let src_set_consts = extractConstsTerm src_set_tmplt
         specVarIdx <- newIndex
@@ -460,7 +465,6 @@ extractConstsFromLambdaSpec (term_f::(v t -> t)) pred =
         dropIndices 1
         dropIndices paramCount
         return $ src_set_consts `Set.union` pred_consts
-
 
 data MetaRuleError s where
    MetaRuleErrNotClosed :: s -> MetaRuleError s

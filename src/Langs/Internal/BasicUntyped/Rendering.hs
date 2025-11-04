@@ -563,10 +563,16 @@ subscriptCharTable :: [Text]
 subscriptCharTable = ["₀","₁","₂","₃","₄","₅","₆","₇","₈","₉"]
 
 showIndexAsSubscript :: Int -> Text
-showIndexAsSubscript n =  Data.Text.concat (Prelude.map f (show n))
-      where
-          f char = subscriptCharTable!!read [char]
-
+showIndexAsSubscript n = 
+    let
+         absConvertFunc n = Data.Text.concat (Prelude.map f (show n))
+            where
+                 f char = subscriptCharTable!!read [char]
+    in 
+        if n < 0 then
+            "₋" <> absConvertFunc (abs n)
+        else
+            absConvertFunc n
 
 data PropDeBrStepContext where
   PropDeBrStepContext :: {stepContextFrames :: [Bool],

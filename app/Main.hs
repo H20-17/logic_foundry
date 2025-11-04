@@ -6,6 +6,7 @@
 {-# LANGUAGE TypeApplications #-}
 
 
+
 module Main where
 
 import Data.Monoid ( Last(..) )
@@ -82,6 +83,7 @@ import RuleSets.PredLogic.Helpers hiding
 import RuleSets.ZFC.Theorems
 import qualified Data.Vector.Fixed as V
 import Data.Vector.Fixed.Boxed as B
+import Data.Vector.Fixed.Cont as C
 import IndexTracker
 import Data.Data (Proxy (Proxy))
 
@@ -1265,8 +1267,6 @@ testAxiomOfChoice = do
 main :: IO ()
 main = do
 
-
-
     let y0 = (Integ 0 :==: Integ 0) :->: (Integ 99 :==: Integ 99)
     let y1 = Integ 0 :==: Integ 0
     let y2 = (Integ 99 :==: Integ 99) :->: (Integ 1001 :==: Integ 1001)
@@ -1338,17 +1338,17 @@ main = do
     let zb3 = runProof ((fakeConst "N" () <> fakeProp [] z1 <> fakeProp [] z2 <> ui (V 0) z1)::[PredRuleDeBr])
     --either (putStrLn . show) (putStrLn . unpack . showPropDeBrStepsBase . snd)  zb2
     --either (putStrLn . show) (putStrLn . unpack . showPropDeBrStepsBase . snd) zb3
-    (a,b,c,d) <- runProofGeneratorT testprog
-    print "hi wattup 2"
-    let stepTxt= showPropDeBrStepsBase c
-    (putStrLn . unpack) stepTxt
-    print "YOYOYOYOYOYOYOYOYOYO CHECK THEOREM"
-    print "YOYOYOYOYOYOYOYOYOYO CHECK THEOREM"
-    print "YOYOYOYOYOYOYOYOYOYO CHECK THEOREM3"
-    (a,b,c,d) <- checkTheoremM testTheoremMSchema
+    --(a,b,c,d) <- runProofGeneratorT testprog
+    --print "hi wattup 2"
+    --let stepTxt= showPropDeBrStepsBase c
+    --(putStrLn . unpack) stepTxt
+    --print "YOYOYOYOYOYOYOYOYOYO CHECK THEOREM"
+    --print "YOYOYOYOYOYOYOYOYOYO CHECK THEOREM"
+    --print "YOYOYOYOYOYOYOYOYOYO CHECK THEOREM3"
+    --(a,b,c,d) <- checkTheoremM testTheoremMSchema
 --   print "yo"
-    let stepTxt= showPropDeBrStepsBase d
-    (putStrLn . unpack) stepTxt
+    --let stepTxt= showPropDeBrStepsBase d
+    --(putStrLn . unpack) stepTxt
 
     print "TEST ROSTER RENDERING BEGIN-------------------------------------"
     (aRos, bRos, cRos, dRos) <- runProofGeneratorT testRosterRendering
@@ -1476,9 +1476,6 @@ main = do
     (aFSR, bFSR, cFSR, dFSR) <- runProofGeneratorT testFuncsSetRendering
     (putStrLn . unpack . showPropDeBrStepsBase) cFSR -- Print results
 
-    print "TEST BINARY UNION EXISTS SCHEMA-------------------------------------"
-    (a,b,c,d) <- checkTheoremM (binaryUnionExistsSchema::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text () IO ()))
-    (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
 
 
     print "SPEC TO BUILDER THEOREM-------------------------------------"
@@ -1498,23 +1495,15 @@ main = do
                 dropIndices 1
                 dropIndices 1
                 dropIndices 1
-                return (source_set_func, p_pred_func)
+                return (src_set_func, p_pred_func)
 
-
- 
-
-    let schema = builderSchema source_set_func p_pred_func ::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text () IO (B.Vec2 ObjDeBr -> ObjDeBr))
+    let schema = builderSchema (source_set_func::Vec2 ObjDeBr -> ObjDeBr) p_pred_func ::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text () IO (B.Vec2 ObjDeBr -> ObjDeBr))
     (a,b,c,d) <- checkTheoremM schema
     (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
 
 
-
-    -- error "STOPPING HERE"
-
     print "SPEC TO BUILDER THEOREM 2-------------------------------------"
-    --let p_template = Constant "C" :==: X 0
-    --let source_set_template = Constant "S"
-    --let nullvec=V.mk0
+
     let source_set_func _ = Constant "S"
     let p_pred_func _ y =  Constant "C" .==. y
     let (source_set_func,p_pred_func) =
@@ -1525,16 +1514,37 @@ main = do
                 let p_pred_tmplt = Constant "C" .==. y
                 let (src_set_func, p_pred_func) = lambdaSpec V.mk0 yIdx src_set_tmplt p_pred_tmplt
                 dropIndices 1
-                return (source_set_func, p_pred_func)
+                return (src_set_func, p_pred_func)
         
     let schema = builderSchema source_set_func p_pred_func ::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text () IO (B.Vec 0 ObjDeBr -> ObjDeBr))
     (a,b,c,d) <- checkTheoremM schema
     (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
 
+    print "TEST BINARY UNION INSTANTIATION-------------------------------------"
 
---    print "TEST BINARY INTERSECTION EXISTS SCHEMA-------------------------------------"
---    (a,b,c,d) <- checkTheoremM (binaryIntersectionExistsSchema::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text ()IO ()))
---    (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
+
+    runProofGeneratorT ((do
+        fakeConstM "S" ()
+        fakeConstM "C" ()
+        fakePropM [] (isSet (Constant "S"))
+        fakePropM [] (isSet (Constant "C"))
+        fakePropM [] binaryUnionTheorem
+        (x,_,union) <- binaryUnionInstantiateM (Constant "S") (Constant "C")
+        txt <- showTermM union
+        remarkM $ "Binary Union of S and C is: " <> txt
+        return ()
+        
+        )::ProofGenTStd () [ZFCRuleDeBr] PropDeBr Text ()IO ())
+    return ()
+
+    print "TEST BINARY UNION EXISTS SCHEMA-------------------------------------"
+    (a,b,c,d) <- checkTheoremM (binaryUnionExistsSchema::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text () IO ()))
+    (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
+
+
+    print "TEST BINARY INTERSECTION EXISTS SCHEMA-------------------------------------"
+    (a,b,c,d) <- checkTheoremM (binaryIntersectionExistsSchema::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text () IO ()))
+    (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
 
 --    print "TEST BINARY CROSSPRODDEFEQUIV SCHEMA-------------------------------------"
 --    (a,b,c,d) <- checkTheoremM (crossProductDefEquivSchema::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text () IO ()))

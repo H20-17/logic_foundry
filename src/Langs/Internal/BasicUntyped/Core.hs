@@ -722,7 +722,7 @@ objDeBrSwapObjWithXWorker targetObj replacementIdx originObj =
                             where
                                 originBoundDepth = boundDepthObjDeBr originObj
                                 targetBoundDepth = boundDepthObjDeBr targetObj
-                                newBoundDepth = targetBoundDepth - originBoundDepth
+                                newBoundDepth = originBoundDepth - targetBoundDepth
                         _ -> (Hilbert p,False)
                 Bound idx -> (Bound idx, False)
                 V idx -> (V idx, False)
@@ -758,7 +758,13 @@ propDeBrSwapObjWithXWorker targetObj replacementIdx originProp = case originProp
     (p1 :->: p2) -> (p1Swapped :->: p2Swapped, targetInP1 || targetInP2)
                     where
                         (p1Swapped, targetInP1) = propDeBrSwapObjWithXWorker targetObj replacementIdx p1
-                        (p2Swapped, targetInP2) = propDeBrSwapObjWithXWorker targetObj replacementIdx p2        
+                        (p2Swapped, targetInP2) = propDeBrSwapObjWithXWorker targetObj replacementIdx p2
+    (p1 :<->: p2) -> (p1Swapped :<->: p2Swapped, targetInP1 || targetInP2)
+                    where
+                        (p1Swapped, targetInP1) = propDeBrSwapObjWithXWorker targetObj replacementIdx p1
+                        (p2Swapped, targetInP2) = propDeBrSwapObjWithXWorker targetObj replacementIdx p2
+
+
     (o1 :==: o2) -> (o1Swapped :==: o2Swapped, targetInO1 || targetInO2)
                     where
                         (o1Swapped, targetInO1) = objDeBrSwapObjWithXWorker targetObj replacementIdx o1
@@ -773,7 +779,7 @@ propDeBrSwapObjWithXWorker targetObj replacementIdx originProp = case originProp
                 where
                     originBoundDepth = boundDepthPropDeBr originProp
                     targetBoundDepth = boundDepthObjDeBr targetObj
-                    newBoundDepth = targetBoundDepth - originBoundDepth
+                    newBoundDepth = originBoundDepth - targetBoundDepth
             _ -> (Forall p,False)
     Exists p -> 
         case propDeBrSwapObjWithXWorker targetObj replacementIdx p of
@@ -781,7 +787,7 @@ propDeBrSwapObjWithXWorker targetObj replacementIdx originProp = case originProp
                 where
                     originBoundDepth = boundDepthPropDeBr originProp
                     targetBoundDepth = boundDepthObjDeBr targetObj
-                    newBoundDepth = targetBoundDepth - originBoundDepth
+                    newBoundDepth = originBoundDepth - targetBoundDepth
             _ -> (Exists p,False)
     (o1 :<=: o2) -> (o1Swapped :==: o2Swapped, targetInO1 || targetInO2)
                     where

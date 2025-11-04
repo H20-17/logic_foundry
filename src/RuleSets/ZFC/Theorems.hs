@@ -6,8 +6,9 @@ module RuleSets.ZFC.Theorems
     unionEquivTheorem,
     binaryUnionExistsTheorem,
     binaryUnionExistsSchema,
---    binaryIntersectionExistsTheorem,
+    binaryIntersectionExistsTheorem,
     binaryUnionInstantiateM,
+    binaryUnionTheorem,
 --    proveUnionIsSetM,
 --    unionWithEmptySetSchema,
 --    unionWithEmptySetTheorem,
@@ -15,7 +16,7 @@ module RuleSets.ZFC.Theorems
 --    builderSubsetTheorem,
 --    builderSubsetTheoremSchema,
 --    specRedundancySchema,
---    binaryIntersectionExistsSchema,
+    binaryIntersectionExistsSchema,
 --    binaryIntersectionInstantiateM,
 --    disjointSubsetIsEmptyTheorem,
 --    disjointSubsetIsEmptySchema,
@@ -72,7 +73,7 @@ import Internal.StdPattern
       ProofGenTStd,
       TypeableTerm(extractConstsTerm),
       TypedSent(extractConstsSent),
-      getFreeVars )
+      getFreeVars, ShowableTerm (showTerm) )
 
 import RuleSets.BaseLogic.Core hiding 
    (LogicRuleClass,
@@ -133,6 +134,7 @@ import IndexTracker
 import Foreign (free)
 import Distribution.PackageDescription.Configuration (freeVars)
 import qualified Data.Vector.Fixed as V
+import qualified Data.Vector.Fixed.Boxed as B
 
 
 ---NEW IDEA
@@ -150,7 +152,7 @@ builderTheoremWorker :: (MonadSent s t sE m, V.Vector v t)  =>
     (v t -> t -> s) -> -- p_pred
     m s -- the theorem
 builderTheoremWorker (t::(v t -> t)) p_pred = do
-    let param_n = length (Proxy @(v t))
+    let param_n = V.length (undefined::(v t))
     multiAXM param_n $ do
         paramVars <- getXVars param_n
         let paramVars_v = V.fromList paramVars
@@ -189,19 +191,22 @@ builderTheorem :: (SentConstraints s t sE, V.Vector v t) =>
     s -- the theorem
 builderTheorem t p =
     runIndexTracker (builderTheoremWorker t p)
---    in
---
---        multiAx outer_idxs inner_props
+
 
 
 proveBuilderTheoremMFree :: (HelperConstraints sE s eL m r t) =>
     t ->            -- source_set
     (t->s) ->            -- p_template
     ProofGenTStd () r s Text () m t
-proveBuilderTheoremMFree source_set (p_pred::(t->s)) = do        
+proveBuilderTheoremMFree source_set (p_pred::(t->s)) = do      
+          
         let freeSpecAxiom = specAxInstance (const source_set) (const p_pred
                                             ::(V.Empty t -> t -> s))
+        txt <- showSentM freeSpecAxiom
+        remarkM txt
         (tm,_,h_obj) <- eiHilbertM freeSpecAxiom
+        txt <- showTermM h_obj
+        remarkM $ "hilbert_obj: " <> txt
         return h_obj
 
              
@@ -211,8 +216,10 @@ proveBuilderTheoremM :: (HelperConstraints sE s eL m r t, V.Vector v t) =>
     (v t ->t->s) ->            -- p_template
     ProofGenTStd () r s Text () m (v t -> t)
 proveBuilderTheoremM (source_set_pred::(v t -> t )) p_pred = do
+
     (closedSpecAxiom, _) <- specificationMNew source_set_pred p_pred
-    let contextDepth = length (Proxy @(v t))
+
+    let contextDepth = V.length (undefined::(v t))
     (_,_,returnFuncListForm) <- multiUGM contextDepth $ do
         freeVars <- getFreeVars       
         (freeSpecAx,_) <- multiUIM closedSpecAxiom (reverse freeVars)
@@ -229,22 +236,24 @@ proveBuilderTheoremM (source_set_pred::(v t -> t )) p_pred = do
     let returnFunc = returnFuncListForm . V.toList
     return returnFunc
 
+
+
 builderSchema :: (HelperConstraints sE s eL m r t, V.Vector v t) =>
     (v t -> t)  ->         -- source_set expressed as a function on paramaters
     (v t -> t -> s) ->            -- predicate, expressed as a function on paramaters
     TheoremSchemaMT () r s Text () m (v t -> t)
-builderSchema source_set_f p_pred = 
+builderSchema (source_set_f::(v t -> t)) p_pred = 
     let
         all_consts = Set.toList $ extractConstsFromLambdaSpec source_set_f p_pred
     in
         theoremSchemaMT []
            (proveBuilderTheoremM source_set_f p_pred)
-            all_consts
+           all_consts
 
    
 
 
-
+-- | Helper to instantiate a builder set and return its properties and object.
 builderInstantiateM :: (HelperConstraints sE s eL m r t,V.Vector v t) =>
      (v t -> t)  ->         -- source_set expressed as a function on paramaters
      (v t -> t -> s) ->            -- predicate, expressed as a function on paramaters
@@ -253,9 +262,10 @@ builderInstantiateM :: (HelperConstraints sE s eL m r t,V.Vector v t) =>
 builderInstantiateM source_set_f pred_f args = do
     (builderProps, proofIdx, instantiatedObj) <- runProofBySubArgM $ do
         remarkM "hello 1"
-        (tm,idx,builderFunc) <- runTmSilentM $ builderSchema source_set_f pred_f
+        (tm,idx,builderFunc) <- runTheoremM $ builderSchema source_set_f pred_f
         remarkM "hello 2"
-        (builderProps,_) <- multiUIM tm (reverse $ V.toList args)
+        (builderProps,_) <- multiUIM tm (V.toList args)
+        remarkM "hello 3"
         let instantiatedObj = builderFunc args
         return instantiatedObj
     return ((builderProps, instantiatedObj), proofIdx)
@@ -490,7 +500,7 @@ binUnionTmWorker = do
         -- Construct the antecedent of the main implication: isSet(A) ∧ isSet(B)
         let isSet_A = isSet setA
         let isSet_B = isSet setB
-        let antecedent = isSet_A .&&. isSet_B
+        let antecedent = isSet_B .&&. isSet_A
 
         -- Construct the main implication
         let implication = antecedent .->. property_of_S
@@ -512,7 +522,7 @@ proveBinaryUnionTheorem = do
         let setA = head v_Av_B
         let setB = v_Av_B!!1
         (_,_,unionObj) <- runProofByAsmM (isSet setA .&&. isSet setB) $ do
-            (existance_stmt, _) <- multiUIM binaryUnionExistsTheorem [setA, setB]
+            (existance_stmt, _) <- multiUIM binaryUnionExistsTheorem [setB, setA]
             mpM existance_stmt
             (_,_,unionObj) <- eiHilbertM existance_stmt
             return unionObj
@@ -551,124 +561,143 @@ binaryUnionInstantiateM setA setB = do
 
 ---- BEGIN BINARY INTERSECTION EXISTS SECTION
 
----- | Constructs the PropDeBr term for the closed theorem of binary intersection existence.
----- | The theorem is: ∀A ∀B ((isSet A ∧ isSet B) → ∃S (isSet S ∧ ∀x(x ∈ S ↔ (x ∈ A ∧ x ∈ B))))
---binaryIntersectionExistsTheorem :: SentConstraints s t => s
---binaryIntersectionExistsTheorem =
---    let
---        -- Define integer indices for the template variables (X k).
---        a_idx = 0 -- Represents set A
---        b_idx = 1 -- Represents set B
---        s_idx = 2 -- Represents the intersection set S
---        x_idx = 3 -- Represents an element x
+binaryIntersectionExistsTheoremWorker :: MonadSent s t sE m => m s
+binaryIntersectionExistsTheoremWorker = do
+    multiAXM 2 $ do
+        v_Av_B <- getXVars 2
+        let setA = head v_Av_B
+        let setB = v_Av_B !! 1
+        let isSet_A = isSet setA
+        let isSet_B = isSet setB
+        let antecedent = isSet_A .&&. isSet_B
+        exists_S <- eXM $ do
+            set_s <- getXVar
+            forall_x_bicond <- aXM $ do
+                set_x <- getXVar
+                let x_in_S = set_x `memberOf` set_s
+                let x_in_A = set_x `memberOf` setA
+                let x_in_B = set_x `memberOf` setB
+                let x_in_A_and_B = x_in_A .&&. x_in_B
+                let biconditional = x_in_S .<->. x_in_A_and_B
+                return biconditional
+            let isSet_S = isSet set_s
+            let property_of_S = isSet_S .&&. forall_x_bicond
+            return property_of_S
+        let implication = antecedent .->. exists_S
+        return implication
 
---        -- Construct the inner part of the formula: x ∈ S ↔ (x ∈ A ∧ x ∈ B)
---        x_in_S = x x_idx `memberOf` x s_idx
---        x_in_A = x x_idx `memberOf` x a_idx
---        x_in_B = x x_idx `memberOf` x b_idx
---        x_in_A_and_B = x_in_A .&&. x_in_B
---        biconditional = x_in_S .<->. x_in_A_and_B
-
---        -- Quantify over x: ∀x(x ∈ S ↔ (x ∈ A ∧ x ∈ B))
---        forall_x_bicond = aX x_idx biconditional
-
---        -- Construct the property of the set S: isSet(S) ∧ ∀x(...)
---        isSet_S = isSet (x s_idx)
---        property_of_S = isSet_S .&&. forall_x_bicond
-
---        -- Quantify over S: ∃S (isSet(S) ∧ ∀x(...))
---        exists_S = eX s_idx property_of_S
-
---        -- Construct the antecedent of the main implication: isSet(A) ∧ isSet(B)
---        isSet_A = isSet (x a_idx)
---        isSet_B = isSet (x b_idx)
---        antecedent = isSet_A .&&. isSet_B
-
---        -- Construct the main implication
---        implication = antecedent .->. exists_S
-
---    in
---        -- Universally quantify over A and B to create the final closed theorem.
---        multiAx [a_idx, b_idx] implication
+-- | Constructs the closed theorem of binary intersection existence.
+-- | The theorem is: ∀A ∀B ((isSet A ∧ isSet B) → ∃S (isSet S ∧ ∀x(x ∈ S ↔ (x ∈ A ∧ x ∈ B))))
+binaryIntersectionExistsTheorem :: SentConstraints s t sE => s
+binaryIntersectionExistsTheorem =
+    runIndexTracker binaryIntersectionExistsTheoremWorker
 
 
+-- | Proves the theorem defined in 'binaryIntersectionExistsTheorem'.
+-- |
+-- | The proof strategy is to use the Axiom of Specification. For any two sets A and B,
+-- | we can specify a new set S from the source set A using the predicate "is an element of B".
+-- | The resulting set S = {x ∈ A | x ∈ B} is precisely the intersection A ∩ B.
+-- | The `builderInstantiateM` helper encapsulates this application of the axiom.
+proveBinaryIntersectionExistsM :: HelperConstraints sE s eL m r t =>
+    ProofGenTStd () r s Text () m ()
+proveBinaryIntersectionExistsM = do
+    -- The theorem is universally quantified over two sets, A and B.
+    (final_sent,_,_) <- multiUGM 2 $ do
+        -- Inside the UG, free variables v_A and v_B are introduced.
+        v_Av_B <- getTopFreeVars 2
+        let setA = head v_Av_B
+        let setB = v_Av_B !! 1
 
----- | Proves the theorem defined in 'binaryIntersectionExistsTheorem'.
----- |
----- | The proof strategy is to use the Axiom of Specification. For any two sets A and B,
----- | we can specify a new set S from the source set A using the predicate "is an element of B".
----- | The resulting set S = {x ∈ A | x ∈ B} is precisely the intersection A ∩ B.
----- | The `builderInstantiateM` helper encapsulates this application of the axiom.
---proveBinaryIntersectionExistsM :: HelperConstraints sE s eL m r t =>
---    ProofGenTStd () r s Text () m ()
---proveBinaryIntersectionExistsM = do
---    -- The theorem is universally quantified over two sets, A and B.
---    multiUGM 2 $ do
---        -- Inside the UG, free variables v_A and v_B are introduced.
---        v_Av_B <- getTopFreeVars 2
---        let setA = head v_Av_B
---        let setB = v_Av_B !! 1
+        -- Prove the main implication by assuming the antecedent: isSet(A) ∧ isSet(B).
+        (implication,_,intersectionObj) <- runProofByAsmM (isSet setA .&&. isSet setB) $ do
+            -- Within this subproof, isSet(A) and isSet(B) are proven assumptions.
 
---        -- Prove the main implication by assuming the antecedent: isSet(A) ∧ isSet(B).
---        runProofByAsmM (isSet setA .&&. isSet setB) $ do
---            -- Within this subproof, isSet(A) and isSet(B) are proven assumptions.
+            -- Step 1: Define the templates for the Axiom of Specification.
+            -- The source set T will be A. The predicate P(x) will be (x ∈ B).
+            -- The parameters to our templates are A and B.
+            a_param_idx <- newIndex
+            b_param_idx <- newIndex
+            spec_var_idx <- newIndex -- The 'x' in {x ∈ T | P(x)}
 
---            -- Step 1: Define the templates for the Axiom of Specification.
---            -- The source set T will be A. The predicate P(x) will be (x ∈ B).
---            -- The parameters to our templates are A and B.
---            a_param_idx <- newIndex
---            b_param_idx <- newIndex
---            spec_var_idx <- newIndex -- The 'x' in {x ∈ T | P(x)}
+            let source_set_template = x a_param_idx
+            let p_template = x spec_var_idx `memberOf` x b_param_idx
+            let param_vec = V.mk2 a_param_idx b_param_idx::(B.Vec2 Int)
+            let (source_set_func, p_func) = lambdaSpec param_vec spec_var_idx
+                    source_set_template p_template
 
---            let source_set_template = x a_param_idx
---            let p_template = x spec_var_idx `memberOf` x b_param_idx
+            dropIndices 1 -- drop spec_var_idx
+            dropIndices 2 -- drop a_param_idx and b_param_idx
 
---            -- Step 2: Use builderInstantiateM to apply the Axiom of Specification.
---            -- It will construct the set {x ∈ A | x ∈ B} and prove its defining property.
---            -- The instantiation terms [setA, setB] correspond to the template params [X 0, X 1].
---            let substitutions = zip [a_param_idx, b_param_idx] [setA, setB]
---            (defining_prop, _, (intersectionObj,_,_)) <- builderInstantiateM
---                substitutions
---                spec_var_idx                         -- spec_var_X_idx
---                source_set_template                  -- source_set_template (A)
---                p_template                           -- p_template (x ∈ B)
---            -- 'defining_prop' is: isSet(B) ∧ ∀x(x∈B ↔ (x∈A ∧ x∈B)), where B is the new intersectionObj.
---            -- This is exactly the property required for the existential statement.
---            dropIndices 1 -- drop spec_var_idx
---            dropIndices 2  -- drop a_param_idx and b_param_idx
---            -- Step 3: Construct the target existential statement from the theorem definition.
---            let target_existential = eX 0 (isSet (x 0) .&&. aX 1 (x 1 `memberOf` x 0 .<->. 
---                                          (x 1 `memberOf` setB .&&. x 1 `memberOf` setA)))
---            -- target_existential is the statement ∃S (isSet S ∧ ∀x(x ∈ S ↔ (x ∈ A ∧ x ∈ B))))
 
---            -- Step 4: Apply Existential Generalization.
---            -- This works because 'defining_prop' is the instantiated version of the
---            -- property inside the target existential statement.
---            egM intersectionObj target_existential
---    return ()
+            -- Step 2: Use builderInstantiateM to apply the Axiom of Specification.
+            -- It will construct the set {x ∈ A | x ∈ B} and prove its defining property.
+            -- The instantiation terms [setA, setB] correspond to the template params [X 0, X 1].
 
----- | The schema that houses 'proveBinaryIntersectionExistsM'.
----- | This theorem has no other high-level theorems as lemmas; it is proven
----- | directly from the Axiom of Specification (via the builderInstantiateM helper).
---binaryIntersectionExistsSchema :: HelperConstraints sE s eL m r t =>
---     TheoremSchemaMT () r s Text () m ()
---binaryIntersectionExistsSchema =
---    let
---        a_param_idx = 0
---        b_param_idx = 1
---        spec_var_idx = 2 -- The 'x' in {x ∈ T | P(x)}
+            ((defining_prop, intersectionObj),_) <- builderInstantiateM
+                source_set_func p_func (V.mk2 setA setB)
 
---        source_set_template = x a_param_idx
---        p_template = x spec_var_idx `memberOf` x b_param_idx
---        outer_idxs = [a_param_idx,b_param_idx]
---    in
---        TheoremSchemaMT {
---              constDictM = []
---            , lemmasM = [builderTheorem spec_var_idx outer_idxs source_set_template p_template]
---            , proofM = proveBinaryIntersectionExistsM 
---            , protectedXVars = []
---            , contextVarTypes = []
---        }  
+  
+            -- 'defining_prop' is: isSet(B) ∧ ∀x(x∈B ↔ (x∈A ∧ x∈B)), where B is the new intersectionObj.
+            -- This is exactly the property required for the existential statement.
+
+            -- Step 3: Construct the target existential statement from the theorem definition.
+            target_existential <- eXM $ do
+                set_x0 <- getXVar
+                forall_subexp <- aXM $ do
+                    set_x1 <- getXVar
+                    let biconditional = (set_x1 `memberOf` set_x0) .<->.
+                                      ((set_x1 `memberOf` setA) .&&. (set_x1 `memberOf` setB))
+                    return biconditional
+                return $ isSet set_x0 .&&. forall_subexp
+
+            txt <- showSentM defining_prop
+            remarkM $ "Defining property of intersection set: " <> txt
+
+            txt <- showSentM target_existential
+            remarkM $ "Target existential statement: " <> txt
+
+            -- target_existential is the statement ∃S (isSet S ∧ ∀x(x ∈ S ↔ (x ∈ A ∧ x ∈ B))))
+
+            -- Step 4: Apply Existential Generalization.
+            -- This works because 'defining_prop' is the instantiated version of the
+            -- property inside the target existential statement.
+            txt <- showTermM intersectionObj
+            remarkM $ "Intersection object: " <> txt
+            egM intersectionObj target_existential
+
+            remarkM "Got here"
+            return intersectionObj
+        return intersectionObj
+    return ()
+
+-- | The schema that houses 'proveBinaryIntersectionExistsM'.
+-- | This theorem has no other high-level theorems as lemmas; it is proven
+-- | directly from the Axiom of Specification (via the builderInstantiateM helper).
+binaryIntersectionExistsSchema :: HelperConstraints sE s eL m r t =>
+     TheoremSchemaMT () r s Text () m ()
+binaryIntersectionExistsSchema =
+    let
+        (source_set_func, p_func) = runIndexTracker $ do
+            a_param_idx <- newIndex
+            b_param_idx <- newIndex
+            spec_var_idx <- newIndex -- The 'x' in {x ∈ T | P(x)}
+
+            let source_set_template = x a_param_idx
+            let p_template = x spec_var_idx `memberOf` x b_param_idx
+            let param_vec = V.mk2 a_param_idx b_param_idx::(B.Vec2 Int)
+            let (src_set_func, p_func) = lambdaSpec param_vec spec_var_idx
+                    source_set_template p_template
+
+            dropIndices 1 -- drop spec_var_idx
+            dropIndices 2 -- drop a_param_idx and b_param_idx
+            return (src_set_func, p_func)
+    in
+        theoremSchemaMT
+            [builderTheorem source_set_func p_func]
+            proveBinaryIntersectionExistsM
+            []
+
 
 
 
