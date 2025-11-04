@@ -1542,9 +1542,38 @@ main = do
     (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
 
 
+    print "TEST BINARY UNION THEOREM-------------------------------------"
+    (a,b,c,d) <- checkTheoremM (binaryUnionSchema::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text () IO (ObjDeBr->ObjDeBr->ObjDeBr)))
+    (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
+
+
+
     print "TEST BINARY INTERSECTION EXISTS SCHEMA-------------------------------------"
     (a,b,c,d) <- checkTheoremM (binaryIntersectionExistsSchema::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text () IO ()))
     (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
+
+
+    print "TEST BINARY INTERSECTION THEOREM-------------------------------------"
+    (a,b,c,d) <- checkTheoremM (binaryIntersectionSchema::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text () IO (ObjDeBr->ObjDeBr->ObjDeBr)))
+    (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
+
+
+    print "TEST BINARY INTERSECTION INSTANTIATION-------------------------------------"
+
+    runProofGeneratorT ((do
+        fakeConstM "S" ()
+        fakeConstM "C" ()
+        fakePropM [] (isSet (Constant "S"))
+        fakePropM [] (isSet (Constant "C"))
+        fakePropM [] binaryIntersectionTheorem
+        (x,_,intersection) <- binaryIntersectionInstantiateM (Constant "S") (Constant "C")
+        txt <- showTermM intersection
+        remarkM $ "Binary Intersection of S and C is: " <> txt
+        return ()
+        
+        )::ProofGenTStd () [ZFCRuleDeBr] PropDeBr Text ()IO ())
+    return ()
+
 
 --    print "TEST BINARY CROSSPRODDEFEQUIV SCHEMA-------------------------------------"
 --    (a,b,c,d) <- checkTheoremM (crossProductDefEquivSchema::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text () IO ()))

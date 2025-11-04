@@ -9,7 +9,11 @@ module RuleSets.ZFC.Theorems
     binaryIntersectionExistsTheorem,
     binaryUnionInstantiateM,
     binaryUnionTheorem,
---    proveUnionIsSetM,
+    binaryIntersectionTheorem,
+    binaryIntersectionInstantiateM,
+    binaryUnionSchema,
+    binaryIntersectionSchema,
+    --    proveUnionIsSetM,
 --    unionWithEmptySetSchema,
 --    unionWithEmptySetTheorem,
 --    specRedundancyTheorem,
@@ -516,19 +520,21 @@ binaryUnionTheorem =
 proveBinaryUnionTheorem :: HelperConstraints sE s eL m r t =>
     ProofGenTStd () r s Text () m (t -> t -> t)
 
+
 proveBinaryUnionTheorem = do
     (_,_,unionFuncRaw) <- multiUGM 2 $ do
         v_Av_B <- getTopFreeVars 2
         let setA = head v_Av_B
         let setB = v_Av_B!!1
+
         (_,_,unionObj) <- runProofByAsmM (isSet setA .&&. isSet setB) $ do
-            (existance_stmt, _) <- multiUIM binaryUnionExistsTheorem [setB, setA]
-            mpM existance_stmt
-            (_,_,unionObj) <- eiHilbertM existance_stmt
+            (existance_stmt, _) <- multiUIM binaryUnionExistsTheorem [setA, setB]
+            (consequent,_) <-mpM existance_stmt
+            (_,_,unionObj) <- eiHilbertM consequent
             return unionObj
         return unionObj
     let unionFunc a b = unionFuncRaw [a,b]
-    return (unionFunc)
+    return unionFunc
     --UnionFunc should be identical to the (.\/.) operator
     
 
@@ -564,7 +570,8 @@ binaryUnionInstantiateM setA setB = do
 binaryIntersectionExistsTheoremWorker :: MonadSent s t sE m => m s
 binaryIntersectionExistsTheoremWorker = do
     multiAXM 2 $ do
-        v_Av_B <- getXVars 2
+        setAsetBrev <- getXVars 2
+        let v_Av_B = reverse setAsetBrev
         let setA = head v_Av_B
         let setB = v_Av_B !! 1
         let isSet_A = isSet setA
@@ -699,6 +706,97 @@ binaryIntersectionExistsSchema =
             []
 
 
+binIntersectionTmWorker :: MonadSent s t sE m => m s
+binIntersectionTmWorker = do
+    multiAXM 2 $ do
+        setAsetBrev <- getXVars 2
+        let setAsetB = reverse setAsetBrev
+        let setA = head setAsetB
+        let setB = setAsetB !! 1
+
+
+
+        let set_s = setA ./\. setB
+            -- Quantify over x: ∀x(x ∈ S ↔ (x ∈ A ∧ x ∈ B))
+        forall_x_bicond <- aXM $ do
+                -- Construct the inner part of the formula: x ∈ S ↔ (x ∈ A ∧ x ∈ B)
+                set_x <- getXVar
+                let x_in_S = set_x `memberOf` set_s
+                let x_in_A = set_x `memberOf` setA
+                let x_in_B = set_x `memberOf` setB
+
+                let x_in_A_and_B = x_in_A .&&. x_in_B
+                let biconditional = x_in_S .<->. x_in_A_and_B
+                return biconditional
+
+            -- Construct the property of the intersection set S: isSet(S) ∧ ∀x(...)
+        let isSet_S = isSet (set_s)
+        let property_of_S = isSet_S .&&. forall_x_bicond
+
+
+
+
+
+        -- Construct the antecedent of the main implication: isSet(A) ∧ isSet(B)
+        let isSet_A = isSet setA
+        let isSet_B = isSet setB
+        let antecedent = isSet_B .&&. isSet_A
+
+        -- Construct the main implication
+        let implication = antecedent .->. property_of_S
+        return implication
+
+-- | Constructs the PropDeBr term for the closed theorem of binary intersection existence.
+-- | The theorem is: ∀A ∀B ((isSet A ∧ isSet B) → isSet (A ∩ B) ∧ ∀x(x ∈ (A ∩ B) ↔ (x ∈ A ∧ x ∈ B)))
+binaryIntersectionTheorem :: (SentConstraints s t sE) => s
+binaryIntersectionTheorem =
+    runIndexTracker binIntersectionTmWorker
+
+
+proveBinaryIntersectionTheorem :: HelperConstraints sE s eL m r t =>
+    ProofGenTStd () r s Text () m (t -> t -> t)
+
+proveBinaryIntersectionTheorem = do
+    (_,_,intersectionFuncRaw) <- multiUGM 2 $ do
+        v_Av_B <- getTopFreeVars 2
+        let setA = head v_Av_B
+        let setB = v_Av_B!!1
+
+        (_,_,intersectionObj) <- runProofByAsmM (isSet setA .&&. isSet setB) $ do
+            (existance_stmt, _) <- multiUIM binaryIntersectionExistsTheorem [setA, setB]
+            (consequent,_) <-mpM existance_stmt
+            (_,_,intersectionObj) <- eiHilbertM consequent
+            return intersectionObj
+        return intersectionObj
+    let intersectionFunc a b = intersectionFuncRaw [a,b]
+    return intersectionFunc
+    --IntersectionFunc should be identical to the (./\.) operator
+
+
+binaryIntersectionSchema :: (HelperConstraints sE s eL m r t) => 
+     TheoremSchemaMT () r s Text () m (t -> t -> t)
+binaryIntersectionSchema =
+    theoremSchemaMT [binaryIntersectionExistsTheorem] proveBinaryIntersectionTheorem []
+
+-- | Helper to instantiate the binary intersection theorem and return the intersection set.
+-- | For this helper to work, the theorem defined by 'binaryIntersectionExistsTheorem' must be proven
+-- | beforehand, which is likely done in the global context.
+-- | For this function to work in a proof, isSet(setA) and isSet(setB) must be already proven,
+-- | as well as the binary intersection theorem itself.
+binaryIntersectionInstantiateM ::  HelperConstraints sE s eL m r t =>
+    t -> t -> ProofGenTStd () r s Text () m (s, [Int], t)
+binaryIntersectionInstantiateM setA setB = do
+    (intersectionProps, proofIdx, instantiatedObj) <- runProofBySubArgM $ do
+        repM $ isSet setA
+        repM $ isSet setB
+        repM binaryIntersectionTheorem
+        (isSetAAndisSetB, _) <- adjM (isSet setA) (isSet setB)
+        -- this is where we make use of our assumptions isSet(setA) and isSet(setB)
+        (intersectionPropsConditional, _) <- multiUIM binaryIntersectionTheorem [setB, setA]
+        (intersectionProps, _) <- mpM intersectionPropsConditional
+        let instantiatedObj = setA ./\. setB
+        return instantiatedObj
+    return (intersectionProps, proofIdx, instantiatedObj)
 
 
 ---- | Helper to instantiate the binary intersection theorem and return the intersection set object.
