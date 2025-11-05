@@ -799,35 +799,6 @@ binaryIntersectionInstantiateM setA setB = do
     return (intersectionProps, proofIdx, instantiatedObj)
 
 
----- | Helper to instantiate the binary intersection theorem and return the intersection set object.
----- | For this helper to work, the theorem defined by 'binaryIntersectionExistsTheorem' must be proven
----- | beforehand (e.g., in the global context by running its schema).
---binaryIntersectionInstantiateM ::  HelperConstraints sE s eL m r t =>
---    t -> t -> ProofGenTStd () r s Text () m (s, [Int], t)
---binaryIntersectionInstantiateM setA setB = do
---    runProofBySubArgM $ do
---        -- This helper relies on isSet(setA) and isSet(setB) being proven in the outer context.
-
---        -- Step 1: Instantiate the 'binaryIntersectionExistsTheorem' with the specific sets A and B.
---        (instantiated_thm, _) <- multiUIM binaryIntersectionExistsTheorem [setA, setB]
-
---        -- Step 2: Prove the antecedent of the instantiated theorem.
---        (isSet_A_proven, _) <- repM (isSet setA)
---        (isSet_B_proven, _) <- repM (isSet setB)
---        (antecedent_proven, _) <- adjM isSet_A_proven isSet_B_proven
-
---        -- Step 3: Use Modus Ponens to derive the existential statement.
---        (exists_S_proven, _) <- mpM instantiated_thm
-
---        -- Step 4: Use Existential Instantiation (eiHilbertM) to get the property of the intersection set.
---        -- The Hilbert term created here, `intersectionObj`, is definitionally A ∩ B.
---        (prop_of_intersection, _, intersectionObj) <- eiHilbertM exists_S_proven
-
---        return intersectionObj
-
-
-
-
 
 ---- END BINARY INTERSECTION EXISTS SECTION
 
