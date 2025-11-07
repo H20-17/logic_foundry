@@ -543,10 +543,12 @@ data ChkTheoremError senttype sanityerrtype logcicerrtype o tType where
 
 
 assignSequentialSet :: Ord s => Int -> [s] -> (Int, Map s [Int])
-assignSequentialSet base ls = Prelude.foldr (\el (i, m) -> 
-    (i + 1, Data.Map.insert el [length ls + base - i] m)) (base, mempty) ls
-
-
+assignSequentialSet base ls = 
+    let 
+        (count, indexMap) = Prelude.foldr (\el (i, m) -> 
+            (i + 1, Data.Map.insert el [length ls + base - i - 1] m)) (base, mempty) ls
+    in
+        (count, indexMap)
 
 assignSequentialMap :: Ord o => Int -> [(o,tType)] -> Either o (Int,Map o (tType,[Int]))
 assignSequentialMap base ls = Prelude.foldr f (Right (base,mempty)) ls
@@ -824,7 +826,7 @@ data ProofByUGSchema s r where
     deriving (Show)
 
 
-class (PL.LogicSent s tType) => LogicSent s t tType o q | s ->tType, s ->t, s->o, t->s, s->q where
+class (PL.LogicSent s tType) => LogicSent s t tType o q | s ->tType, s ->t, t->s, s->o, s->q where
     parseExists :: s -> Maybe (t->s,q)
     parseHilbert :: t -> Maybe (t->s,q)
     parseEq :: s -> Maybe (t,t)
@@ -919,7 +921,6 @@ constDictTest envDict = Data.Map.foldrWithKey f Nothing
                                                                Nothing -- we good
                                               Nothing -> Just (k,Nothing)
          f k aVal (Just x) = Just x
-
 
 
 type HelperConstraints m s tType o t sE eL r q = ( 

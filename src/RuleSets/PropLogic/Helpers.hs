@@ -7,7 +7,7 @@ module RuleSets.PropLogic.Helpers
     contraFM, absurdM, MetaRuleError(..), disjIntroLM, disjIntroRM, disjElimM, doubleNegElimM,
     deMorganConjM, deMorganDisjM, bicondIntroM, bicondElimLM, bicondElimRM, absorpAndM, absorpOrM, distAndOverOrM, distOrOverAndM,
     peircesLawM, modusTollensM, imp2DisjM, negAndNotToOrM, negImpToConjViaEquivM, negBicondToPosBicondM,
-    disjunctiveSyllogismM, exFalsoM, deconstructAdjM, deconstructMultiAdjM
+    disjunctiveSyllogismM, exFalsoM, deconstructAdjM, deconstructMultiAdjM, commOrM
 ) where
 
 import qualified RuleSets.PropLogic.Core as PROPL
@@ -93,6 +93,57 @@ adjM, disjIntroLM, disjIntroRM,  bicondIntroM  ::
 disjElimM ::
        HelperConstraints r s o tType sE eL q m
           => s -> s -> s -> ProofGenTStd tType r s o q m (s,[Int])
+
+
+-- | Proves 'B ∨ A' from a given proof of 'A ∨ B'.
+-- | This demonstrates the commutativity of disjunction using proof by cases (∨-Elimination).
+-- | This helper assumes 's_a_or_b' (A ∨ B) is already proven in the context.
+commOrM :: HelperConstraints r1 s o tType sE eL q m =>
+            s -- ^ A proven proposition 's_a_or_b' of the form (A ∨ B).
+            -> ProofGenTStd tType r1 s o q m (s, [Int]) -- ^ Returns the proven proposition (B ∨ A) and its proof index.
+commOrM s_a_or_b = do
+    -- 1. Parse the input disjunction s_a_or_b = (A ∨ B) to get terms A and B.
+    (a_term, b_term) <- maybe (throwM $ MetaRuleErrNotDisj s_a_or_b) return (parseDisj s_a_or_b)
+
+    -- Reiterate the proven premise 'A ∨ B'
+    repM s_a_or_b
+
+    -- 2. Case 1: Prove A → (B ∨ A)
+    --    Start a subproof assuming 'a_term' (A).
+    (a_implies_b_or_a, _, _) <- runProofByAsmM a_term $ do
+        -- We have 'a_term' (A) proven by assumption.
+        -- We want to prove 'b_term ∨ a_term' (B ∨ A).
+        -- Use `disjIntroRM` (introduce on right):
+        --   `disjIntroRM b_term a_term` takes term `b_term` and proven `a_term`
+        --   and proves `b_term ∨ a_term`.
+        disjIntroRM b_term a_term
+        return ()
+
+    -- 3. Case 2: Prove B → (B ∨ A)
+    --    Start a subproof assuming 'b_term' (B).
+    (b_implies_b_or_a, _, _) <- runProofByAsmM b_term $ do
+        -- We have 'b_term' (B) proven by assumption.
+        -- We want to prove 'b_term ∨ a_term' (B ∨ A).
+        -- Use `disjIntroLM` (introduce on left):
+        --   `disjIntroLM b_term a_term` takes proven `b_term` and term `a_term`
+        --   and proves `b_term ∨ a_term`.
+        disjIntroLM b_term a_term
+        return ()
+
+    -- 4. Apply Disjunction Elimination.
+    --    We have:
+    --      1. s_a_or_b:          A ∨ B
+    --      2. a_implies_b_or_a:  A → (B ∨ A)
+    --      3. b_implies_b_or_a:  B → (B ∨ A)
+    --    The result will be (B ∨ A).
+    disjElimM s_a_or_b a_implies_b_or_a b_implies_b_or_a
+
+
+
+
+
+
+
 
 mpM s = standardRuleM (mp s)
 exclMidM s = standardRuleM (exclMid s)
