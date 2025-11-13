@@ -416,8 +416,8 @@ proveBinaryUnionExistsM = do
         
         -- Get the top free variables for A and B.
         v_Av_B <- getTopFreeVars 2
-        let setA = head v_Av_B
-        let setB = v_Av_B!!1
+        let setB = head v_Av_B
+        let setA = v_Av_B!!1
         -- Prove the implication by assuming the antecedent.
         runProofByAsmM (isSet setA .&&. isSet setB) $ do
             -- Now, isSet(A) and isSet(B) are proven assumptions in this context.
@@ -453,7 +453,10 @@ proveBinaryUnionExistsM = do
             (forward_imp, _) <- bicondElimLM proven_biconditional
 
             mpM forward_imp -- This proves the target_existential
+        
         return emptySet
+    txt <- showSentM binaryUnionExistsTheorem
+    remarkM txt
     return ()
 
 
@@ -524,8 +527,8 @@ proveBinaryUnionTheorem :: HelperConstraints sE s eL m r t =>
 proveBinaryUnionTheorem = do
     (_,_,unionFuncRaw) <- multiUGM 2 $ do
         v_Av_B <- getTopFreeVars 2
-        let setA = head v_Av_B
-        let setB = v_Av_B!!1
+        let setB = head v_Av_B
+        let setA = v_Av_B!!1
 
         (_,_,unionObj) <- runProofByAsmM (isSet setA .&&. isSet setB) $ do
             (existance_stmt, _) <- multiUIM binaryUnionExistsTheorem [setA, setB]
@@ -613,8 +616,8 @@ proveBinaryIntersectionExistsM = do
     (final_sent,_,_) <- multiUGM 2 $ do
         -- Inside the UG, free variables v_A and v_B are introduced.
         v_Av_B <- getTopFreeVars 2
-        let setA = head v_Av_B
-        let setB = v_Av_B !! 1
+        let setB = head v_Av_B
+        let setA = v_Av_B !! 1
 
         -- Prove the main implication by assuming the antecedent: isSet(A) ∧ isSet(B).
         (implication,_,intersectionObj) <- runProofByAsmM (isSet setA .&&. isSet setB) $ do
@@ -759,8 +762,8 @@ proveBinaryIntersectionTheorem :: HelperConstraints sE s eL m r t =>
 proveBinaryIntersectionTheorem = do
     (_,_,intersectionFuncRaw) <- multiUGM 2 $ do
         v_Av_B <- getTopFreeVars 2
-        let setA = head v_Av_B
-        let setB = v_Av_B!!1
+        let setB = head v_Av_B
+        let setA = v_Av_B!!1
 
         (_,_,intersectionObj) <- runProofByAsmM (isSet setA .&&. isSet setB) $ do
             (existance_stmt, _) <- multiUIM binaryIntersectionExistsTheorem [setA, setB]
@@ -832,8 +835,7 @@ proveUnionIsSetM setA setB = do
 unionWithEmptySetTmWorker :: MonadSent s t sE m => m s
 unionWithEmptySetTmWorker = do
     aXM $ do
-        x_idx <- newIndex
-        let setX = x x_idx
+        setX <- getXVar
         let equality = (setX .\/. emptySet) .==. setX
         let antecedent = isSet setX
         let implication = antecedent .->. equality
@@ -929,19 +931,23 @@ proveUnionWithEmptySetM = do
    
 
                 -- Combine the two directions.
-                bicondIntroM dir1 dir2
+                bicondIntroM dir2 dir1
                 return emptySet
             let z = f emptySet
             txt <- showTermM z
             remarkM $ "Something " <> txt
             -- Step 4: Apply the Axiom of Extensionality.
             (ext_axiom, _) <- extensionalityAxiomM
-            (ext_inst, _) <- multiUIM ext_axiom [v, unionObj]
-            (adj1,_) <- adjM isSet_unionObj_proven forall_bicond
-            (full_antecedent,_) <- adjM (isSet v) adj1
-
+            (ext_inst, _) <- multiUIM ext_axiom [unionObj, v]
+            -- (adj1,_) <- adjM isSet_unionObj_proven forall_bicond
+            -- (full_antecedent,_) <- adjM (isSet v) adj1
+            (adj1,_) <- adjM (isSet v) forall_bicond
+            (full_antecedent,_) <- adjM isSet_unionObj_proven adj1
+            repM ext_inst
             mpM ext_inst
         return emptySet
+    txt <- showSentM unionWithEmptySetTheorem
+    remarkM txt
     return ()
 
 

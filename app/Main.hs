@@ -86,6 +86,8 @@ import Data.Vector.Fixed.Boxed as B
 import Data.Vector.Fixed.Cont as C
 import IndexTracker
 import Data.Data (Proxy (Proxy))
+import Control.Exception(assert)
+
 
 testTheoremMSchema :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) => TheoremSchemaMT () [PredRuleDeBr] PropDeBr Text () m ()
 testTheoremMSchema = TheoremSchemaMT  [("N",())] [z1,z2] theoremProg [] []
@@ -1478,7 +1480,7 @@ main = do
 
 
 
-    print "SPEC TO BUILDER THEOREM-------------------------------------"
+    print "BUILDER THEOREM-------------------------------------"
 
     let (source_set_func,p_pred_func) = 
             runIndexTracker $ do
@@ -1499,10 +1501,13 @@ main = do
 
     let schema = builderSchema (source_set_func::Vec2 ObjDeBr -> ObjDeBr) p_pred_func ::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text () IO (B.Vec2 ObjDeBr -> ObjDeBr))
     (a,b,c,d) <- checkTheoremM schema
+    unless (a == builderTheorem source_set_func p_pred_func) (error "Builder Theorem check failed")
     (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
+     
+    
 
 
-    print "SPEC TO BUILDER THEOREM 2-------------------------------------"
+    print "BUILDER THEOREM 2-------------------------------------"
 
     let source_set_func _ = Constant "S"
     let p_pred_func _ y =  Constant "C" .==. y
@@ -1518,6 +1523,7 @@ main = do
         
     let schema = builderSchema source_set_func p_pred_func ::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text () IO (B.Vec 0 ObjDeBr -> ObjDeBr))
     (a,b,c,d) <- checkTheoremM schema
+    unless (a == builderTheorem source_set_func p_pred_func) (error "Builder Theorem check failed")
     (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
 
 
@@ -1525,11 +1531,13 @@ main = do
 
     print "TEST BINARY UNION EXISTS SCHEMA-------------------------------------"
     (a,b,c,d) <- checkTheoremM (binaryUnionExistsSchema::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text () IO ()))
+    unless (a == binaryUnionExistsTheorem) (error "Binary Union Exists Theorem check failed")
     (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
 
 
     print "TEST BINARY UNION THEOREM-------------------------------------"
     (a,b,c,d) <- checkTheoremM (binaryUnionSchema::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text () IO (ObjDeBr->ObjDeBr->ObjDeBr)))
+    unless (a == binaryUnionTheorem) (error "Binary Union Theorem check failed")
     (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
 
     print "TEST BINARY UNION INSTANTIATION-------------------------------------"
@@ -1550,11 +1558,13 @@ main = do
 
     print "TEST BINARY INTERSECTION EXISTS SCHEMA-------------------------------------"
     (a,b,c,d) <- checkTheoremM (binaryIntersectionExistsSchema::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text () IO ()))
+    unless (a == binaryIntersectionExistsTheorem) (error "Binary Intersection Exists Theorem Check Failed")
     (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
 
 
     print "TEST BINARY INTERSECTION THEOREM-------------------------------------"
     (a,b,c,d) <- checkTheoremM (binaryIntersectionSchema::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text () IO (ObjDeBr->ObjDeBr->ObjDeBr)))
+    unless (a==binaryIntersectionTheorem) (error "Binary Intersection Theorem Check Failed")
     (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
 
 
@@ -1577,11 +1587,13 @@ main = do
 
     print "TEST UNION WITH EMPTY SET THEOREM-------------------------------------"
     (a,b,c,d) <- checkTheoremM (unionWithEmptySetSchema::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text () IO ()))
+    unless (a==unionWithEmptySetTheorem) (error "Union With EmptySet Theorem Check Failed")
     (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
 
 
     print "DISJOINT SUBSET IS EMPTY THEOREM-------------------------------------"
     (a,b,c,d) <- checkTheoremM (disjointSubsetIsEmptySchema::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text () IO ()))
+    unless (a==disjointSubsetIsEmptyTheorem) (error "Disjoin Subset Is Empty Theorem Check Failed")
     (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
 
 
