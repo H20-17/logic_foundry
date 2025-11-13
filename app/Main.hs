@@ -1520,6 +1520,18 @@ main = do
     (a,b,c,d) <- checkTheoremM schema
     (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
 
+
+
+
+    print "TEST BINARY UNION EXISTS SCHEMA-------------------------------------"
+    (a,b,c,d) <- checkTheoremM (binaryUnionExistsSchema::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text () IO ()))
+    (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
+
+
+    print "TEST BINARY UNION THEOREM-------------------------------------"
+    (a,b,c,d) <- checkTheoremM (binaryUnionSchema::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text () IO (ObjDeBr->ObjDeBr->ObjDeBr)))
+    (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
+
     print "TEST BINARY UNION INSTANTIATION-------------------------------------"
 
 
@@ -1535,18 +1547,6 @@ main = do
         return ()
         
         )::ProofGenTStd () [ZFCRuleDeBr] PropDeBr Text ()IO ())
-
-
-    --print "TEST BINARY UNION EXISTS SCHEMA-------------------------------------"
-    --(a,b,c,d) <- checkTheoremM (binaryUnionExistsSchema::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text () IO ()))
-    --(putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
-
-
-    print "TEST BINARY UNION THEOREM-------------------------------------"
-    (a,b,c,d) <- checkTheoremM (binaryUnionSchema::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text () IO (ObjDeBr->ObjDeBr->ObjDeBr)))
-    (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
-
-
 
     print "TEST BINARY INTERSECTION EXISTS SCHEMA-------------------------------------"
     (a,b,c,d) <- checkTheoremM (binaryIntersectionExistsSchema::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text () IO ()))
@@ -1579,6 +1579,12 @@ main = do
     (a,b,c,d) <- checkTheoremM (unionWithEmptySetSchema::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text () IO ()))
     (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
 
+
+    print "DISJOINT SUBSET IS EMPTY THEOREM-------------------------------------"
+    (a,b,c,d) <- checkTheoremM (disjointSubsetIsEmptySchema::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text () IO ()))
+    (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
+
+
     return ()
 --    print "TEST BINARY CROSSPRODDEFEQUIV SCHEMA-------------------------------------"
 --    (a,b,c,d) <- checkTheoremM (crossProductDefEquivSchema::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text () IO ()))
@@ -1607,9 +1613,7 @@ main = do
 
 
 
---    print "DISJOINT SUBSET IS EMPTY THEOREM-------------------------------------"
---    (a,b,c,d) <- checkTheoremM (disjointSubsetIsEmptySchema::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text () IO ()))
---    (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
+
 
 
 --    print "SPEC REDUNDANCY THEOREM-------------------------------------"
