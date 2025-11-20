@@ -3,7 +3,7 @@ module RuleSets.PredLogic.Core
 (
     LogicError(..), LogicRule(..), 
     runProofAtomic, 
-    LogicRuleClass(..), SubproofRule(..), checkTheoremM, establishTmSilentM, expandTheoremM,
+    LogicRuleClass(..), SubproofRule(..),establishTmSilentM, expandTheoremM,
     SubproofMException(..),
     SubproofError(..),
     ProofByUGSchema(..),
@@ -788,10 +788,7 @@ checkTheoremMOpen mayPrStateCxt (TheoremSchemaMT constdict lemmas prog idxs qTyp
   
 
 
-checkTheoremM :: (HelperConstraints m s tType o t sE eL r1 q)
-                 =>  TheoremSchemaMT tType r1 s o q m x
-                              -> m (s, r1, x, [PrfStdStep s o tType])
-checkTheoremM = checkTheoremMOpen Nothing
+
 
 
 

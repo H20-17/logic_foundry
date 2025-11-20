@@ -1504,12 +1504,15 @@ main = do
 
     (putStrLn . show) a
      
+
+    
     let targetTm = builderTheorem source_set_func p_pred_func
     testTheoremM schema (Just targetTm)
     putStrLn "===================="
     putStrLn ""
-
-
+    putStrLn "Testing silent theorem check" 
+    let silent_schema = builderSchema (source_set_func::Vec2 ObjDeBr -> ObjDeBr) p_pred_func ::(TheoremAlgSchema () [ZFCRuleDeBr] PropDeBr Text () (B.Vec2 ObjDeBr -> ObjDeBr))
+    testSilentTheoremM silent_schema (Just targetTm)
     error "Who knows"
 
     print "BUILDER THEOREM 2-------------------------------------"

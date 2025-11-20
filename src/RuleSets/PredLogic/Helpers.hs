@@ -20,7 +20,11 @@ module RuleSets.PredLogic.Helpers
     lambdaTermMulti,
     lambdaSentMulti,
     lambdaTermMultiM,
-    testTheoremM
+    testTheoremM,
+    testTheoremMWithTargetObj,
+    checkTheoremM,
+    checkSilentTheoremM,
+    testSilentTheoremM
 ) where
 
 
@@ -318,6 +322,22 @@ runTheoremM (TheoremSchemaMT constDict lemmas prog idxs qTypes) =  do
         mayMonadifyRes <- monadifyProofStd (theoremSchema $ TheoremSchema constDict lemmas tm proof)
         idx <- maybe (error "No theorem returned by monadifyProofStd on theorem schema. This shouldn't happen") (return . snd) mayMonadifyRes
         return (tm, idx, extra)
+
+
+checkTheoremM :: (HelperConstraints m s tType o t sE eL r1 q)
+                 =>  TheoremSchemaMT tType r1 s o q m x
+                              -> m (s, r1, x, [PrfStdStep s o tType])
+checkTheoremM = checkTheoremMOpen Nothing
+
+
+checkSilentTheoremM :: (HelperConstraints (Either SomeException) s tType o t sE eL r1 q, Monad m, MonadThrow m)
+                 =>  TheoremAlgSchema tType r1 s o q x
+                              -> m (s, x)
+checkSilentTheoremM schema = do
+        let eitherResult = checkTheoremMOpen Nothing schema
+        (tm, proof, extra, newSteps) <- either throwM return eitherResult
+        return (tm, extra)
+
 
 
 runTmSilentM :: HelperConstraints m s tType o t sE eL r1 q
@@ -677,3 +697,40 @@ testTheoremM schema mayTargetTm = do
             let testResult = if targetTm == provenSent then "PASSED" else "FAILED"
             liftIO $ putStrLn $ "Target sentence matches proven sentence: " <> testResult
     return returnData
+
+
+-- | This extends testTheoremM by also checking that the returned data matches a target object.
+-- | The reason why testTheoremM does not do this itself is because extra constraints (Show, Eq) 
+-- | are needed on the return type,
+-- | which may not always be available.
+testTheoremMWithTargetObj :: (HelperConstraints m s tType o t sE eL r1 q, MonadIO m, Show x, Eq x)
+                 =>  TheoremSchemaMT tType r1 s o q m x -> Maybe s -> x
+                              -> m ()
+
+testTheoremMWithTargetObj schema mayTargetTm targetObj = do
+    returnData <- testTheoremM schema mayTargetTm
+    liftIO $ putStrLn $ "Return data: " <> show returnData
+    let testResult = if targetObj == returnData then "PASSED" else "FAILED"
+    liftIO $ putStrLn $ "Return data matches target data: " <> testResult
+
+testSilentTheoremM :: (HelperConstraints (Either SomeException) s tType o t sE eL r1 q, MonadIO m, MonadThrow m)
+                 =>  TheoremAlgSchema tType r1 s o q x -> Maybe s
+                              -> m x
+testSilentTheoremM schema mayTargetTm = do
+    (provenSent, returnData) <- checkSilentTheoremM schema
+    liftIO $ putStrLn $ "Proven sentence: " <> show provenSent
+    case mayTargetTm of
+        Just targetTm -> do
+            liftIO $ putStrLn $ "Target sentence: " <> show targetTm
+            let testResult = if targetTm == provenSent then "PASSED" else "FAILED"
+            liftIO $ putStrLn $ "Target sentence matches proven sentence: " <> testResult
+    return returnData
+
+testSilentTheoremMWithTargetObj :: (HelperConstraints (Either SomeException) s tType o t sE eL r1 q, MonadIO m, Show x, Eq x, MonadThrow m)
+                 =>  TheoremAlgSchema tType r1 s o q x -> Maybe s -> x
+                              -> m ()
+testSilentTheoremMWithTargetObj schema mayTargetTm targetObj = do
+    returnData <- testSilentTheoremM schema mayTargetTm
+    liftIO $ putStrLn $ "Return data: " <> show returnData
+    let testResult = if targetObj == returnData then "PASSED" else "FAILED"
+    liftIO $ putStrLn $ "Return data matches target data: " <> testResult
