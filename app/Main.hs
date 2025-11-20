@@ -1354,134 +1354,132 @@ main = do
 
     print "TEST ROSTER RENDERING BEGIN-------------------------------------"
     (aRos, bRos, cRos, dRos) <- runProofGeneratorT testRosterRendering
-    (putStrLn . unpack . showPropDeBrStepsBase) cRos -- Print results
+    printPropDeBrStepsBase cRos -- Print results
+
 
 
     print "TEST PROG 2 BEGIN-------------------------------------"
     (a,b,c,d) <- runProofGeneratorT testprog2
-    (putStrLn . unpack . showPropDeBrStepsBase) c
+    printPropDeBrStepsBase c
 
     return ()
 
     print "TEST PROG 3 BEGIN-------------------------------------"
     (a,b,c,d) <- runProofGeneratorT testprog3
-    (putStrLn . unpack . showPropDeBrStepsBase) c
+    printPropDeBrStepsBase c
 
     print "TEST PROG 4 BEGIN-------------------------------------"
     (a,b,c,d) <- runProofGeneratorT testprog4
-    (putStrLn . unpack . showPropDeBrStepsBase) c
-    (putStrLn . show) b
+    printPropDeBrStepsBase c
 
-    (putStrLn . show) c
 
 
     print "TEST PROG 5 BEGIN-------------------------------------"
     (a,b,c,d) <- runProofGeneratorT testprog5
-    (putStrLn . unpack . showPropDeBrStepsBase) c
-    (putStrLn . show) b
+    printPropDeBrStepsBase c
+
 
     print "TEST EQUALITY RULES BEGIN-------------------------------------"
     (aEq, bEq, cEq, dEq) <- runProofGeneratorT testEqualityRules
-    (putStrLn . unpack . showPropDeBrStepsBase) cEq
-    return ()
+    printPropDeBrStepsBase cEq
 
     print "TEST NORMALIZATION-------------------------------------"
     (aEq, bEq, cEq, dEq) <- runProofGeneratorT testNormalization
-    (putStrLn . unpack . showPropDeBrStepsBase) cEq
+    printPropDeBrStepsBase cEq
     return ()
 
     print "TEST MORE COMPLEX NESTING BEGIN-------------------------------------"
     (aMC, bMC, cMC, dMC) <- runProofGeneratorT testMoreComplexNesting
-    (putStrLn . unpack . showPropDeBrStepsBase) cMC
+    printPropDeBrStepsBase cMC
 
     print "TEST NON-SEQUENTIAL INDICES BEGIN-------------------------------------"
     (aNS, bNS, cNS, dNS) <- runProofGeneratorT testNonSequentialIndices
-    (putStrLn . unpack . showPropDeBrStepsBase) cNS
+    printPropDeBrStepsBase cNS
 
 
     print "TEST COMPLEX SUBSET NOTATION BEGIN-------------------------------------"
     (aCSub, bCSub, cCSub, dCSub) <- runProofGeneratorT testComplexSubsetNotation
-    (putStrLn . unpack . showPropDeBrStepsBase) cCSub -- Print results
+    printPropDeBrStepsBase cCSub -- Print results
 
     print "TEST STRICT SUBSET NOTATION BEGIN-------------------------------------"
     (aStrict, bStrict, cStrict, dStrict) <- runProofGeneratorT testStrictSubsetNotation
-    (putStrLn . unpack . showPropDeBrStepsBase) cStrict -- Print results
+    printPropDeBrStepsBase cStrict -- Print results
 
 
     print "TEST NOT SUBSET NOTATION BEGIN-------------------------------------"
     (aNSub, bNSub, cNSub, dNSub) <- runProofGeneratorT testNotSubsetNotation
-    (putStrLn . unpack . showPropDeBrStepsBase) cNSub -- Print results
+    printPropDeBrStepsBase cNSub -- Print results
 
     print "TEST builderX BEGIN-------------------------------------"
     (aNSub, bNSub, cNSub, dNSub) <- runProofGeneratorT testBuilderXSuite
-    (putStrLn . unpack . showPropDeBrStepsBase) cNSub -- Print results
+    printPropDeBrStepsBase cNSub -- Print results
 
 
     print "TEST AICLAIMX BEGIN-------------------------------------"
     (aNSub, bNSub, cNSub, dNSub) <- runProofGeneratorT testCompositionImplementation
-    (putStrLn . unpack . showPropDeBrStepsBase) cNSub -- Print results
+    printPropDeBrStepsBase cNSub -- Print results
 
     print "TEST SH BEGIN-------------------------------------"
     (aNSub, bNSub, cNSub, dNSub) <- runProofGeneratorT testShorthandRendering
-    (putStrLn . unpack . showPropDeBrStepsBase) cNSub -- Print results
+    printPropDeBrStepsBase cNSub -- Print results
 
     print "TEST PROJECT SHORTHAND PARSING BEGIN-------------------------------------"
     (aPrj, bPrj, cPrj, dPrj) <- runProofGeneratorT testProjectShorthandParsing
-    (putStrLn . unpack . showPropDeBrStepsBase) cPrj -- Print results
+    printPropDeBrStepsBase cPrj -- Print results
 
 
     print "TEST CROSS PRODUCT PARSING BEGIN-------------------------------------"
     (aXP, bXP, cXP, dXP) <- runProofGeneratorT testCrossProductRendering
-    (putStrLn . unpack . showPropDeBrStepsBase) cXP -- Print results
+    printPropDeBrStepsBase cXP -- Print results
 
 
     print "TEST BINARY UNION RENDERING BEGIN-------------------------------------"
     (aBU, bBU, cBU, dBU) <- runProofGeneratorT testBinaryUnionRendering
-    (putStrLn . unpack . showPropDeBrStepsBase) cBU -- Print results
+    printPropDeBrStepsBase cBU -- Print results
 
 
 
     print "TEST BINARY INTERSECTION RENDERING BEGIN-------------------------------------"
     (aBI, bBI, cBI, dBI) <- runProofGeneratorT testIntersectionRendering
-    (putStrLn . unpack . showPropDeBrStepsBase) cBI -- Print results
+    printPropDeBrStepsBase cBI -- Print results
 
     print "TEST BIG UNION RENDERING BEGIN-------------------------------------"
     (aBU, bBU, cBU, dBU) <- runProofGeneratorT testBigUnionRendering
-    (putStrLn . unpack . showPropDeBrStepsBase) cBU -- Print results
+    printPropDeBrStepsBase cBU -- Print results
 
     print "TEST BIG INTERSECTION RENDERING BEGIN-------------------------------------"
     (aBI, bBI, cBI, dBI) <- runProofGeneratorT testBigIntersectionRendering
-    (putStrLn . unpack . showPropDeBrStepsBase) cBI -- Print results
+    printPropDeBrStepsBase cBI -- Print results
 
    
 
     print "TEST SET DIFFERENCE RENDERING BEGIN-------------------------------------"
     (aDiff, bDiff, cDiff, dDiff) <- runProofGeneratorT testSetDifferenceRendering
-    (putStrLn . unpack . showPropDeBrStepsBase) cDiff -- Print results
+    printPropDeBrStepsBase cDiff -- Print results
 
     print "TEST POWER SET RENDERING BEGIN-------------------------------------"
     (aPow, bPow, cPow, dPow) <- runProofGeneratorT testPowerSetRendering
-    (putStrLn . unpack . showPropDeBrStepsBase) cPow -- Print results
+    printPropDeBrStepsBase cPow -- Print results
 
     -- print "TEST EMPTY SET RENDERING BEGIN-------------------------------------"
     -- (aEmp, bEmp, cEmp, dEmp) <- runProofGeneratorT testEmptySetRendering
-    -- (putStrLn . unpack . showPropDeBrStepsBase) cEmp -- Print results
+    -- printPropDeBrStepsBasecEmp -- Print results
     print "TEST PAIR AND TUPLE RENDERING (KURATOWSKI) BEGIN-------------------------------------"
     (aPT, bPT, cPT, dPT) <- runProofGeneratorT testPairAndTupleRendering
-    (putStrLn . unpack . showPropDeBrStepsBase) cPT -- Print results
+    printPropDeBrStepsBase cPT -- Print results
 
     print "TEST AXIOM OF CHOICE BEGIN-------------------------------------"
     (aAC, bAC, cAC, dAC) <- runProofGeneratorT testAxiomOfChoice
-    (putStrLn . unpack . showPropDeBrStepsBase) cAC -- Print results
+    printPropDeBrStepsBase cAC -- Print results
 
     print "TEST FUNCS(A,B) RENDERING BEGIN-------------------------------------"
     (aFSR, bFSR, cFSR, dFSR) <- runProofGeneratorT testFuncsSetRendering
-    (putStrLn . unpack . showPropDeBrStepsBase) cFSR -- Print results
+    printPropDeBrStepsBase cFSR -- Print results
 
 
-
-    print "BUILDER THEOREM-------------------------------------"
-
+    putStrLn "======================"
+    putStrLn "BUILDER THEOREM TEST 1"
+    putStrLn "----------------------"
     let (source_set_func,p_pred_func) = 
             runIndexTracker $ do
                 aIdx <- newIndex
@@ -1502,10 +1500,17 @@ main = do
     let schema = builderSchema (source_set_func::Vec2 ObjDeBr -> ObjDeBr) p_pred_func ::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text () IO (B.Vec2 ObjDeBr -> ObjDeBr))
     (a,b,c,d) <- checkTheoremM schema
     unless (a == builderTheorem source_set_func p_pred_func) (error "Builder Theorem check failed")
-    (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
-     
-    
+    printPropDeBrStepsBase d -- Print results
 
+    (putStrLn . show) a
+     
+    let targetTm = builderTheorem source_set_func p_pred_func
+    testTheoremM schema (Just targetTm)
+    putStrLn "===================="
+    putStrLn ""
+
+
+    error "Who knows"
 
     print "BUILDER THEOREM 2-------------------------------------"
 
@@ -1524,7 +1529,7 @@ main = do
     let schema = builderSchema source_set_func p_pred_func ::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text () IO (B.Vec 0 ObjDeBr -> ObjDeBr))
     (a,b,c,d) <- checkTheoremM schema
     unless (a == builderTheorem source_set_func p_pred_func) (error "Builder Theorem check failed")
-    (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
+    printPropDeBrStepsBase d -- Print results
 
 
 
@@ -1532,13 +1537,13 @@ main = do
     print "TEST BINARY UNION EXISTS SCHEMA-------------------------------------"
     (a,b,c,d) <- checkTheoremM (binaryUnionExistsSchema::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text () IO ()))
     unless (a == binaryUnionExistsTheorem) (error "Binary Union Exists Theorem check failed")
-    (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
+    printPropDeBrStepsBase d -- Print results
 
 
     print "TEST BINARY UNION THEOREM-------------------------------------"
     (a,b,c,d) <- checkTheoremM (binaryUnionSchema::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text () IO (ObjDeBr->ObjDeBr->ObjDeBr)))
     unless (a == binaryUnionTheorem) (error "Binary Union Theorem check failed")
-    (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
+    printPropDeBrStepsBase d -- Print results
 
     print "TEST BINARY UNION INSTANTIATION-------------------------------------"
 
@@ -1559,13 +1564,13 @@ main = do
     print "TEST BINARY INTERSECTION EXISTS SCHEMA-------------------------------------"
     (a,b,c,d) <- checkTheoremM (binaryIntersectionExistsSchema::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text () IO ()))
     unless (a == binaryIntersectionExistsTheorem) (error "Binary Intersection Exists Theorem Check Failed")
-    (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
+    printPropDeBrStepsBase d -- Print results
 
 
     print "TEST BINARY INTERSECTION THEOREM-------------------------------------"
     (a,b,c,d) <- checkTheoremM (binaryIntersectionSchema::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text () IO (ObjDeBr->ObjDeBr->ObjDeBr)))
     unless (a==binaryIntersectionTheorem) (error "Binary Intersection Theorem Check Failed")
-    (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
+    printPropDeBrStepsBase d -- Print results
 
 
     print "TEST BINARY INTERSECTION INSTANTIATION-------------------------------------"
@@ -1588,23 +1593,23 @@ main = do
     print "TEST UNION WITH EMPTY SET THEOREM-------------------------------------"
     (a,b,c,d) <- checkTheoremM (unionWithEmptySetSchema::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text () IO ()))
     unless (a==unionWithEmptySetTheorem) (error "Union With EmptySet Theorem Check Failed")
-    (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
+    printPropDeBrStepsBase d -- Print results
 
 
     print "DISJOINT SUBSET IS EMPTY THEOREM-------------------------------------"
     (a,b,c,d) <- checkTheoremM (disjointSubsetIsEmptySchema::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text () IO ()))
     unless (a==disjointSubsetIsEmptyTheorem) (error "Disjoin Subset Is Empty Theorem Check Failed")
-    (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
+    printPropDeBrStepsBase d -- Print results
 
 
     return ()
 --    print "TEST BINARY CROSSPRODDEFEQUIV SCHEMA-------------------------------------"
 --    (a,b,c,d) <- checkTheoremM (crossProductDefEquivSchema::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text () IO ()))
---    (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
+--    printPropDeBrStepsBased -- Print results
 
 --    print "TEST CROSSPROD EXISTS SCHEMA ---------------------------"
 --    (a,b,c,d) <- checkTheoremM (crossProductExistsSchema::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text ()IO ()))
---    (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
+--    printPropDeBrStepsBased -- Print results
 
 --    print "TEST BUILDER SUBSET THEOREM-------------------------------------"
 --    let p_template = Constant "C" :+: X 0 :==: (X 1 :+: X 2)
@@ -1612,14 +1617,14 @@ main = do
 --    (a,b,c,d) <- checkTheoremM 
 --         (builderSubsetTheoremSchema [1,2] 0 source_set_template p_template 
 --              ::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text ()IO ()))
---    (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
+--    printPropDeBrStepsBased -- Print results
 
 --    print "TEST BUILDER SOURCE PARTITION THEOREM--------------------"
 --    let p_template = Constant "C" :+: X 0 :==: (X 1 :+: X 2)
 --    let source_set_template = X 1 .\/. X 2
 --    (a,b,c,d) <- checkTheoremM (builderSrcPartitionSchema [1,2] 0 source_set_template p_template 
 --            ::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text ()IO ()))
---    (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
+--    printPropDeBrStepsBased -- Print results
 
 
 
@@ -1633,7 +1638,7 @@ main = do
 --    let source_set_template = X 1 .\/. X 2
 --    (a,b,c,d) <- checkTheoremM (specRedundancySchema [1,2] 0 source_set_template p_template
 --                       ::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text ()IO ()))
---    (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
+--    printPropDeBrStepsBased -- Print results
 
 
 --    print "SPEC REDUNDANCY THEOREM TEST 2-------------------------------------"
@@ -1641,7 +1646,7 @@ main = do
 --    let source_set_template = Constant "SourceSet"
 --    (a,b,c,d) <- checkTheoremM (specRedundancySchema [] 0 source_set_template p_template
 --                                   ::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text ()IO ()))
---    (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
+--    printPropDeBrStepsBased -- Print results
 
 
 
@@ -1650,7 +1655,7 @@ main = do
 --    let source_set_template = X 1 .\/. X 2
 --    (a,b,c,d) <- checkTheoremM (specAntiRedundancySchema [1,2] 0 source_set_template p_template
 --                   :: (TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text () IO ()))
---    (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
+--    printPropDeBrStepsBased -- Print results
 
 
 
@@ -1659,7 +1664,7 @@ main = do
 --    let source_set_template = Constant "SourceSet"
 --    (a,b,c,d) <- checkTheoremM (specAntiRedundancySchema [] 0 source_set_template p_template
 --                       :: (TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text () IO ()))
---    (putStrLn . unpack . showPropDeBrStepsBase) d -- Print results
+--    printPropDeBrStepsBased -- Print results
 
 
  

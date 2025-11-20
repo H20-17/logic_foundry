@@ -19,7 +19,8 @@ module RuleSets.PredLogic.Helpers
     lambdaSent,
     lambdaTermMulti,
     lambdaSentMulti,
-    lambdaTermMultiM
+    lambdaTermMultiM,
+    testTheoremM
 ) where
 
 
@@ -46,7 +47,7 @@ import Control.Monad.State ( MonadState(get),gets )
 import Control.Monad.Writer ( MonadWriter(tell) )
 import Data.Maybe ( isNothing, mapMaybe )
 import qualified Data.Vector.Fixed as V
-
+import Control.Monad.IO.Class(MonadIO,liftIO)
 
 import Kernel
 import Internal.StdPattern
@@ -655,3 +656,24 @@ extractConstsFromLambdaSent (term_f::v t -> s) =
         let result = extractConstsSent term_tmplt
         dropIndices paramCount
         return result
+
+
+testTheoremM :: (HelperConstraints m s tType o t sE eL r1 q, MonadIO m)
+                 =>  TheoremSchemaMT tType r1 s o q m x -> Maybe s
+                              -> m x
+testTheoremM schema mayTargetTm = do
+    liftIO $ putStrLn "LIVE THEOREM OUTPUT"
+    liftIO $ putStrLn "-------------------"
+    (provenSent, proof, returnData, proofSteps) <- checkTheoremM schema
+    liftIO $ putStrLn ""
+    liftIO $ putStrLn "POST HOC THEOREM OUTPUT"
+    liftIO $ putStrLn "-----------------------"
+    printStepsFull proofSteps
+
+    liftIO $ putStrLn $ "Proven sentence: " <> show provenSent
+    case mayTargetTm of
+        Just targetTm -> do
+            liftIO $ putStrLn $ "Target sentence: " <> show targetTm
+            let testResult = if targetTm == provenSent then "PASSED" else "FAILED"
+            liftIO $ putStrLn $ "Target sentence matches proven sentence: " <> testResult
+    return returnData

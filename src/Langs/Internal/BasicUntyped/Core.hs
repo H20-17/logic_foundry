@@ -1,3 +1,4 @@
+{-# LANGUAGE StandaloneDeriving #-}
 module Langs.Internal.BasicUntyped.Core (
     ObjDeBr(..),
     PropDeBr(..),
@@ -111,7 +112,7 @@ data ObjDeBr where
     (:*:) :: ObjDeBr -> ObjDeBr -> ObjDeBr
     IntSet :: ObjDeBr
     EmptySet :: ObjDeBr
-    deriving (Ord, Show, Eq)
+    deriving (Ord, Eq)
 
 infixl 5 :+:
 infixl 6 :*:
@@ -132,7 +133,7 @@ data PropDeBr where
       Exists :: PropDeBr -> PropDeBr
       (:<=:) :: ObjDeBr -> ObjDeBr -> PropDeBr
       F :: PropDeBr
-    deriving (Show, Eq, Ord)
+    deriving (Eq, Ord)
 
 
 infixr 3 :&&:
@@ -451,7 +452,10 @@ data DeBrSe where
     ObjDeBrTemplateVarIdx :: Int -> DeBrSe
     ObjDeBrUnconsumedX :: Int -> DeBrSe
     ObjDeBrRosterNotNormalised :: ObjDeBr -> DeBrSe
-   deriving Show
+--  not using  deriving Show here.
+-- instead using "deriving instance" in Rendering.hs
+-- That solves a dependency issue pertaining to deriving.
+
 
 
 

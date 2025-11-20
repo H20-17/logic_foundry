@@ -18,7 +18,8 @@ module Internal.StdPattern(
     showTermM, showSentM,
     ShowableSent(..),
     ShowableTerm(..),
-    QuantifiableTerm(..)
+    QuantifiableTerm(..),
+    printStepsFull
 
 
 ) where
@@ -54,6 +55,7 @@ import Control.Monad.State ( MonadState(get) )
 import Control.Monad.Writer ( MonadWriter(tell) )
 import Data.Monoid ( Monoid(mempty, mappend),Last(..), Sum(..), getSum )
 import IndexTracker
+import Control.Monad.IO.Class(MonadIO,liftIO)
 
 
 
@@ -126,6 +128,9 @@ data PrfStdStep s o tType where
     PrfStdStepRemark :: Text -> PrfStdStep s o tType
   deriving Show
 
+
+-- class MonadIO m => PrintableStdStep s o tType m where
+--    printSteps :: [PrdStdStep s o tType] -> m ()
 
 
 class (Eq tType, Ord o) => TypeableTerm t o tType sE q | t -> o, t ->tType, t -> sE, t -> q where
@@ -226,9 +231,10 @@ class Monad m => StdPrfPrintMonadFrame m where
     printStartFrame :: [Bool] -> m()
 
 class (Monad m, StdPrfPrintMonadFrame m) => StdPrfPrintMonad s o tType m |  s -> o, s-> tType where
-     printSteps :: [Bool] -> [Int] -> Int -> Map s [Int] -> [PrfStdStep s o tType] -> m ()
+     printSteps :: [Bool] -> [Int] -> Int -> Map s [Int] -> Bool -> [PrfStdStep s o tType] -> m ()
 
-
+printStepsFull :: (StdPrfPrintMonad s o tType m, Ord s) => [PrfStdStep s o tType] -> m ()
+printStepsFull = printSteps [] [] 0 mempty True
 
 
 
@@ -244,8 +250,8 @@ instance (StdPrfPrintMonad s o tType m,
           Monoid r, 
           StdPrfPrintMonadFrame (ProofGenTStd tType r s o q m))
              => StdPrfPrintMonad s o tType (ProofGenTStd tType r s o q m) where
-  printSteps :: [Bool] -> [Int] -> Int -> Map s [Int] -> [PrfStdStep s o tType] -> ProofGenTStd tType r s o q m ()
-  printSteps contextFrames idx stepStart dictMap steps = lift $ printSteps contextFrames idx stepStart dictMap steps
+  printSteps :: [Bool] -> [Int] -> Int -> Map s [Int] -> Bool -> [PrfStdStep s o tType] -> ProofGenTStd tType r s o q m ()
+  printSteps contextFrames idx stepStart dictMap printSubsteps steps = lift $ printSteps contextFrames idx stepStart dictMap printSubsteps steps
 
 
 
@@ -260,7 +266,7 @@ monadifyProofStd p = do
      PrfStdContext fvStack idx contextFrames <- ask
      state <- getProofState
      (addedState,steps, mayLastProp) <- monadifyProof p
-     printSteps contextFrames idx (stepCount state) (provenSents state) steps
+     printSteps contextFrames idx (stepCount state) (provenSents state) False steps
      let stuff = f addedState =<< mayLastProp
      return stuff
    where
@@ -354,7 +360,7 @@ runSubproofM context baseState preambleState preambleSteps mayPreambleLastProp p
 
 
           unless (Prelude.null preambleSteps) 
-                    (printSteps (contextFrames context) (stepIdxPrefix context) 0 (provenSents baseState) preambleSteps)
+                    (printSteps (contextFrames context) (stepIdxPrefix context) 0 (provenSents baseState) False preambleSteps)
           let baseStateZero = PrfStdState (provenSents baseState) (consts baseState) 0
           let startState = baseStateZero <> preambleState
           (extraData,newState,r,newSteps, mayLastProp) <- runProofGeneratorTOpen prog context startState vIdx

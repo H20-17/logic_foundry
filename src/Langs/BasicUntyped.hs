@@ -11,6 +11,7 @@ module Langs.BasicUntyped (
     PredRuleDeBr,
     ZFCRuleDeBr,
     showPropDeBrStepsBase,
+    printPropDeBrStepsBase,
     showPropDeBrStepsBaseM,
     -- eX, hX, aX,
     -- multiAx,
