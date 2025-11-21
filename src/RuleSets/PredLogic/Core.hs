@@ -789,12 +789,6 @@ checkTheoremMOpen mayPrStateCxt (TheoremSchemaMT constdict lemmas prog idxs qTyp
 
 
 
-
-
-
-   
-
-
 establishTmSilentM :: (HelperConstraints (Either SomeException) s tType o t sE eL r1 q)
                             =>  TheoremAlgSchema tType r1 s o q () -> 
                                 PrfStdContext q s ->
