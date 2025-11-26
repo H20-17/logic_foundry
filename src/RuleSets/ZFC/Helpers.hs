@@ -141,7 +141,7 @@ import RuleSets.PropLogic.Helpers hiding
 import IndexTracker
 import qualified Data.Vector.Fixed as V
 import qualified Data.Vector.Fixed.Cont as C
-
+import Control.Monad.Trans.Maybe ( MaybeT(MaybeT, runMaybeT) )
 
 standardRuleM :: HelperConstraints sE s eL m r t
        => r -> ProofGenTStd () r s Text () m (s,[Int])
@@ -427,14 +427,16 @@ lambdaSpec contextIdxs specIdx (source_template::t) p_template =
 
 
 theoremSchemaMT :: HelperConstraints sE s eL m r t =>
+    MaybeT m (s,x) -> 
     [s] -> ProofGenTStd () r s Text () m x -> [Text] -> 
              TheoremSchemaMT () r s Text () m x
-theoremSchemaMT lemmas proof consts =
+theoremSchemaMT mayTargetProg lemmas proof consts =
     let 
         constDict = Prelude.map (,()) consts
     in
         TheoremSchemaMT {
-              constDictM = constDict
+              mayTargetM = mayTargetProg
+            , constDictM = constDict
             , lemmasM = lemmas
             , proofM = proof
             , protectedXVars = []

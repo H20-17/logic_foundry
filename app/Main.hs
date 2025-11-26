@@ -87,14 +87,14 @@ import Data.Vector.Fixed.Cont as C
 import IndexTracker
 import Data.Data (Proxy (Proxy))
 import Control.Exception(assert)
-
+import Control.Monad.Trans.Maybe ( MaybeT(MaybeT, runMaybeT) )
 
 testTheoremMSchema :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) => TheoremSchemaMT () [PredRuleDeBr] PropDeBr Text () m ()
-testTheoremMSchema = TheoremSchemaMT  [("N",())] [z1,z2] theoremProg [] []
+testTheoremMSchema = TheoremSchemaMT mayTargetM [("N",())] [z1,z2] theoremProg [] []
   where
     z1 = aX 99 ((X 99 `In` Constant "N") :&&: (X 99 :<=: Integ 10) :->: (X 99 :<=: Integ 0))
     z2 = aX 0 ((X 0 `In` Constant "N") :&&: (X 0 :<=: Integ 0) :->: (X 0 :==: Integ 0))
-
+    mayTargetM = MaybeT $ return Nothing
 
 
 
@@ -1498,7 +1498,7 @@ main = do
                 return (src_set_func, p_pred_func)
 
     let schema = builderSchema (source_set_func::Vec2 ObjDeBr -> ObjDeBr) p_pred_func ::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text () IO (B.Vec2 ObjDeBr -> ObjDeBr))
-    (a,b,c,d) <- checkTheoremM schema
+    (a,b,c,d,_) <- checkTheoremM schema
     unless (a == builderTheorem source_set_func p_pred_func) (error "Builder Theorem check failed")
     printPropDeBrStepsBase d -- Print results
 
@@ -1507,12 +1507,12 @@ main = do
 
     
     let targetTm = builderTheorem source_set_func p_pred_func
-    testTheoremM schema (Just targetTm)
+    testTheoremM schema
     putStrLn "===================="
     putStrLn ""
     putStrLn "Testing silent theorem check" 
     let silent_schema = builderSchema (source_set_func::Vec2 ObjDeBr -> ObjDeBr) p_pred_func ::(TheoremAlgSchema () [ZFCRuleDeBr] PropDeBr Text () (B.Vec2 ObjDeBr -> ObjDeBr))
-    testSilentTheoremM silent_schema (Just targetTm)
+    testSilentTheoremM silent_schema
     error "Who knows"
 
     print "BUILDER THEOREM 2-------------------------------------"
@@ -1530,7 +1530,7 @@ main = do
                 return (src_set_func, p_pred_func)
         
     let schema = builderSchema source_set_func p_pred_func ::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text () IO (B.Vec 0 ObjDeBr -> ObjDeBr))
-    (a,b,c,d) <- checkTheoremM schema
+    (a,b,c,d,_) <- checkTheoremM schema
     unless (a == builderTheorem source_set_func p_pred_func) (error "Builder Theorem check failed")
     printPropDeBrStepsBase d -- Print results
 
@@ -1538,13 +1538,13 @@ main = do
 
 
     print "TEST BINARY UNION EXISTS SCHEMA-------------------------------------"
-    (a,b,c,d) <- checkTheoremM (binaryUnionExistsSchema::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text () IO ()))
+    (a,b,c,d,_) <- checkTheoremM (binaryUnionExistsSchema::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text () IO ()))
     unless (a == binaryUnionExistsTheorem) (error "Binary Union Exists Theorem check failed")
     printPropDeBrStepsBase d -- Print results
 
 
     print "TEST BINARY UNION THEOREM-------------------------------------"
-    (a,b,c,d) <- checkTheoremM (binaryUnionSchema::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text () IO (ObjDeBr->ObjDeBr->ObjDeBr)))
+    (a,b,c,d,_) <- checkTheoremM (binaryUnionSchema::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text () IO (ObjDeBr->ObjDeBr->ObjDeBr)))
     unless (a == binaryUnionTheorem) (error "Binary Union Theorem check failed")
     printPropDeBrStepsBase d -- Print results
 
@@ -1565,13 +1565,13 @@ main = do
         )::ProofGenTStd () [ZFCRuleDeBr] PropDeBr Text ()IO ())
 
     print "TEST BINARY INTERSECTION EXISTS SCHEMA-------------------------------------"
-    (a,b,c,d) <- checkTheoremM (binaryIntersectionExistsSchema::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text () IO ()))
+    (a,b,c,d,_) <- checkTheoremM (binaryIntersectionExistsSchema::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text () IO ()))
     unless (a == binaryIntersectionExistsTheorem) (error "Binary Intersection Exists Theorem Check Failed")
     printPropDeBrStepsBase d -- Print results
 
 
     print "TEST BINARY INTERSECTION THEOREM-------------------------------------"
-    (a,b,c,d) <- checkTheoremM (binaryIntersectionSchema::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text () IO (ObjDeBr->ObjDeBr->ObjDeBr)))
+    (a,b,c,d,_) <- checkTheoremM (binaryIntersectionSchema::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text () IO (ObjDeBr->ObjDeBr->ObjDeBr)))
     unless (a==binaryIntersectionTheorem) (error "Binary Intersection Theorem Check Failed")
     printPropDeBrStepsBase d -- Print results
 
@@ -1594,13 +1594,13 @@ main = do
 
 
     print "TEST UNION WITH EMPTY SET THEOREM-------------------------------------"
-    (a,b,c,d) <- checkTheoremM (unionWithEmptySetSchema::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text () IO ()))
+    (a,b,c,d,_) <- checkTheoremM (unionWithEmptySetSchema::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text () IO ()))
     unless (a==unionWithEmptySetTheorem) (error "Union With EmptySet Theorem Check Failed")
     printPropDeBrStepsBase d -- Print results
 
 
     print "DISJOINT SUBSET IS EMPTY THEOREM-------------------------------------"
-    (a,b,c,d) <- checkTheoremM (disjointSubsetIsEmptySchema::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text () IO ()))
+    (a,b,c,d,_) <- checkTheoremM (disjointSubsetIsEmptySchema::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text () IO ()))
     unless (a==disjointSubsetIsEmptyTheorem) (error "Disjoin Subset Is Empty Theorem Check Failed")
     printPropDeBrStepsBase d -- Print results
 

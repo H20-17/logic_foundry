@@ -40,6 +40,7 @@ module RuleSets.ZFC.Theorems
     builderTheorem,
     builderSchema
     
+    
 
 ) where
 
@@ -139,7 +140,7 @@ import Foreign (free)
 import Distribution.PackageDescription.Configuration (freeVars)
 import qualified Data.Vector.Fixed as V
 import qualified Data.Vector.Fixed.Boxed as B
-
+import Control.Monad.Trans.Maybe ( MaybeT(MaybeT, runMaybeT) )
 
 ---NEW IDEA
 
@@ -250,7 +251,7 @@ builderSchema (source_set_f::(v t -> t)) p_pred =
     let
         all_consts = Set.toList $ extractConstsFromLambdaSpec source_set_f p_pred
     in
-        theoremSchemaMT []
+        theoremSchemaMT (MaybeT $ return Nothing) []
            (proveBuilderTheoremM source_set_f p_pred)
            all_consts
 
@@ -470,7 +471,7 @@ proveBinaryUnionExistsM = do
 binaryUnionExistsSchema ::  HelperConstraints sE s eL m r t => 
      TheoremSchemaMT () r s Text () m ()
 binaryUnionExistsSchema =       
-    theoremSchemaMT [unionEquivTheorem] proveBinaryUnionExistsM []
+    theoremSchemaMT (MaybeT $ return Nothing) [unionEquivTheorem] proveBinaryUnionExistsM []
 
 
 binUnionTmWorker :: MonadSent s t sE m => m s
@@ -544,7 +545,7 @@ proveBinaryUnionTheorem = do
 binaryUnionSchema :: (HelperConstraints sE s eL m r t) => 
      TheoremSchemaMT () r s Text () m (t -> t -> t)
 binaryUnionSchema =
-    theoremSchemaMT [binaryUnionExistsTheorem] proveBinaryUnionTheorem []
+    theoremSchemaMT (MaybeT $ return Nothing) [binaryUnionExistsTheorem] proveBinaryUnionTheorem []
 
 
 
@@ -704,6 +705,7 @@ binaryIntersectionExistsSchema =
             return (src_set_func, p_func)
     in
         theoremSchemaMT
+            (MaybeT $ return Nothing)
             [builderTheorem source_set_func p_func]
             proveBinaryIntersectionExistsM
             []
@@ -779,7 +781,7 @@ proveBinaryIntersectionTheorem = do
 binaryIntersectionSchema :: (HelperConstraints sE s eL m r t) => 
      TheoremSchemaMT () r s Text () m (t -> t -> t)
 binaryIntersectionSchema =
-    theoremSchemaMT [binaryIntersectionExistsTheorem] proveBinaryIntersectionTheorem []
+    theoremSchemaMT (MaybeT $ return Nothing) [binaryIntersectionExistsTheorem] proveBinaryIntersectionTheorem []
 
 -- | Helper to instantiate the binary intersection theorem and return the intersection set.
 -- | For this helper to work, the theorem defined by 'binaryIntersectionExistsTheorem' must be proven
@@ -963,7 +965,7 @@ unionWithEmptySetSchema =
             binaryUnionTheorem
           ]
     in
-        theoremSchemaMT lemmas_needed
+        theoremSchemaMT (MaybeT $ return Nothing) lemmas_needed
             proveUnionWithEmptySetM
             []
 
@@ -1114,7 +1116,7 @@ disjointSubsetIsEmptySchema =
             binaryIntersectionTheorem
           ]
     in
-        theoremSchemaMT lemmas_needed
+        theoremSchemaMT (MaybeT $ return Nothing) lemmas_needed
             proveDisjointSubsetIsEmptyM
             []
 

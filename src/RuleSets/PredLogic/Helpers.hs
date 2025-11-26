@@ -52,7 +52,7 @@ import Control.Monad.Writer ( MonadWriter(tell) )
 import Data.Maybe ( isNothing, mapMaybe )
 import qualified Data.Vector.Fixed as V
 import Control.Monad.IO.Class(MonadIO,liftIO)
-
+import Control.Monad.Trans.Maybe ( MaybeT(MaybeT, runMaybeT) )
 import Kernel
 import Internal.StdPattern
 
@@ -235,6 +235,7 @@ data MetaRuleError s where
    ReverseANegIntroMNotExistsNot :: s -> MetaRuleError s
    ReverseENegIntroMNotForallNot :: s -> MetaRuleError s
    EqSubstMultiNotEquality :: s -> MetaRuleError s
+   TheoremTargetMismatch :: s -> s -> MetaRuleError s
    deriving(Show,Typeable)
 
 
@@ -315,28 +316,53 @@ constDictTest envDict = Data.Map.foldrWithKey f Nothing
 runTheoremM :: HelperConstraints m s tType o t sE eL r1 q
                  =>   TheoremSchemaMT tType r1 s o q m x ->
                                ProofGenTStd tType r1 s o q m (s, [Int], x)
-runTheoremM (TheoremSchemaMT constDict lemmas prog idxs qTypes) =  do
+runTheoremM (TheoremSchemaMT mayTargetM constDict lemmas prog idxs qTypes) =  do
         state <- getProofState
-        context <- ask
-        (tm, proof, extra, newSteps) <- lift $ checkTheoremMOpen (Just (state,context)) (TheoremSchemaMT constDict lemmas prog idxs qTypes)
-        mayMonadifyRes <- monadifyProofStd (theoremSchema $ TheoremSchema constDict lemmas tm proof)
-        idx <- maybe (error "No theorem returned by monadifyProofStd on theorem schema. This shouldn't happen") (return . snd) mayMonadifyRes
-        return (tm, idx, extra)
+        mayTarget <- (lift . runMaybeT) mayTargetM
+        case mayTarget of
+            Just (targetSent, targetData) -> do
+                let lookup_data = Data.Map.lookup targetSent (provenSents state)
+                case lookup_data of
+                    Just idxs -> do
+                        (_,idx) <- repM targetSent
+                        return (targetSent,idx, targetData)
+                    Nothing -> do
+                        context <- ask
+                        (tm, proof, extra, newSteps) <- lift $ checkTheoremMOpen 
+                             (Just (state,context)) 
+                             (TheoremSchemaMT mayTargetM constDict lemmas prog idxs qTypes)
+                        unless (targetSent==tm) $
+                            throwM $ TheoremTargetMismatch tm targetSent
+                        mayMonadifyRes <- monadifyProofStd (theoremSchema $ TheoremSchema constDict lemmas tm proof)
+                        idx <- maybe (error "No theorem returned by monadifyProofStd on theorem schema. This shouldn't happen") (return . snd) mayMonadifyRes
+                        return (tm, idx, extra)
+            Nothing -> do
+                context <- ask
+                (tm, proof, extra, newSteps) <- lift $ checkTheoremMOpen (Just (state,context)) (TheoremSchemaMT mayTargetM constDict lemmas prog idxs qTypes)
+                mayMonadifyRes <- monadifyProofStd (theoremSchema $ TheoremSchema constDict lemmas tm proof)
+                idx <- maybe (error "No theorem returned by monadifyProofStd on theorem schema. This shouldn't happen") (return . snd) mayMonadifyRes
+                return (tm, idx, extra)
 
 
 checkTheoremM :: (HelperConstraints m s tType o t sE eL r1 q)
                  =>  TheoremSchemaMT tType r1 s o q m x
-                              -> m (s, r1, x, [PrfStdStep s o tType])
-checkTheoremM = checkTheoremMOpen Nothing
+                              -> m (s, r1, x, [PrfStdStep s o tType],Maybe (s,x))
+checkTheoremM (TheoremSchemaMT mayTargetM constDict lemmas prog idxs qTypes) = do
+                    mayTargetTmData <- runMaybeT mayTargetM
+                    (provenSent, prf, extraData, steps) <- checkTheoremMOpen Nothing (TheoremSchemaMT mayTargetM constDict lemmas prog idxs qTypes)
+                    return (provenSent, prf, extraData, steps, mayTargetTmData)
+
 
 
 checkSilentTheoremM :: (HelperConstraints (Either SomeException) s tType o t sE eL r1 q, Monad m, MonadThrow m)
                  =>  TheoremAlgSchema tType r1 s o q x
-                              -> m (s, x)
-checkSilentTheoremM schema = do
-        let eitherResult = checkTheoremMOpen Nothing schema
+                              -> m (s, x, Maybe (s,x) )
+checkSilentTheoremM (TheoremSchemaMT mayTargetM constDict lemmas prog idxs qTypes) = do
+        let mayTargetTmDataOrErr = runMaybeT mayTargetM
+        mayTargetTmData <- either throwM return mayTargetTmDataOrErr
+        let eitherResult = checkTheoremMOpen Nothing (TheoremSchemaMT mayTargetM constDict lemmas prog idxs qTypes)
         (tm, proof, extra, newSteps) <- either throwM return eitherResult
-        return (tm, extra)
+        return (tm, extra, mayTargetTmData)
 
 
 
@@ -344,29 +370,34 @@ runTmSilentM :: HelperConstraints m s tType o t sE eL r1 q
                  =>   TheoremAlgSchema tType r1 s o q x ->
                                ProofGenTStd tType r1 s o q m (s, [Int], x)
 -- runTmSilentM f (TheoremSchemaMT constDict lemmas prog) =  do
-runTmSilentM (TheoremSchemaMT constDict lemmas prog idxs qTypes) =  do
+runTmSilentM (TheoremSchemaMT mayTargetM constDict lemmas prog idxs qTypes) =  do
         state <- getProofState
-        context <- ask
-        let eitherResult = checkTheoremMOpen 
-                     (Just (state,context)) 
-                     (TheoremSchemaMT constDict lemmas prog idxs qTypes)
-        (tm, proof, extra, newSteps) <- either throwM return eitherResult
-        let lookup_data = Data.Map.lookup tm (provenSents state)
-        case lookup_data of
-            Just idx -> return (tm,idx, extra)
-                -- Already proven, return existing index. No need to monadify again, and no live output. Silent means silent.
-                -- THis is how we obtain calculation results from theorem proofs without re-outputting the derivations.
-                -- Hopefully the results of runTmSlientM will generally be stored as thunks so the the derivations aren't
-                -- really re-computed. This is reasonable because, in the case of silent theorems, the base monad is pure (i.e., not IO).
-            Nothing -> do
-                mayMonadifyRes <- monadifyProofStd (theoremAlgSchema $ TheoremSchemaMT constDict lemmas newProg idxs qTypes)
-                idx <- maybe (error "No theorem returned by monadifyProofStd on theorem schema. This shouldn't happen") (return . snd) mayMonadifyRes
-                return (tm, idx, extra)
+        let mayTarget = runMaybeT mayTargetM
+        case mayTarget of
+            Left err -> throwM err
+            Right (Just (targetSent, targetData)) -> do
+                let lookup_data = Data.Map.lookup targetSent (provenSents state)
+                case lookup_data of
+                    Just idxs -> do
+                        (_,idx) <- repM targetSent
+                        return (targetSent,idx, targetData)
+                    Nothing -> do
+                        context <- ask
+                        let eitherResult = checkTheoremMOpen 
+                             (Just (state,context)) 
+                             (TheoremSchemaMT mayTargetM constDict lemmas prog idxs qTypes)
+                        (tm, proof, extra, newSteps) <- either throwM return eitherResult
+                        mayMonadifyRes <- monadifyProofStd (theoremAlgSchema $ TheoremSchemaMT nullDataTarget constDict lemmas newProg idxs qTypes)
+                        idx <- maybe (error "No theorem returned by monadifyProofStd on theorem schema. This shouldn't happen") (return . snd) mayMonadifyRes
+                        return (tm, idx, extra)
     where
         newProg = do
              prog
              return ()
-
+        nullDataTarget = do
+            (targetSent, targetData) <- mayTargetM
+            return (targetSent,())
+                   
 -- | Applies Universal Instantiation (UI) multiple times to a given proposition.
 -- | Returns the final instantiated proposition and its proof index.
 -- | - Case 0: No instantiation terms -> re-proves the initial proposition.
@@ -679,24 +710,27 @@ extractConstsFromLambdaSent (term_f::v t -> s) =
 
 
 testTheoremM :: (HelperConstraints m s tType o t sE eL r1 q, MonadIO m)
-                 =>  TheoremSchemaMT tType r1 s o q m x -> Maybe s
-                              -> m x
-testTheoremM schema mayTargetTm = do
+                 =>  TheoremSchemaMT tType r1 s o q m x 
+                              -> m (x, Maybe x)
+testTheoremM schema = do
     liftIO $ putStrLn "LIVE THEOREM OUTPUT"
     liftIO $ putStrLn "-------------------"
-    (provenSent, proof, returnData, proofSteps) <- checkTheoremM schema
+    (provenSent, proof, returnData, proofSteps, mayTargetTmData) <- checkTheoremM schema
     liftIO $ putStrLn ""
     liftIO $ putStrLn "POST HOC THEOREM OUTPUT"
     liftIO $ putStrLn "-----------------------"
     printStepsFull proofSteps
 
     liftIO $ putStrLn $ "Proven sentence: " <> show provenSent
+    let mayTargetTm = fmap fst mayTargetTmData
+    let mayTargetData = fmap snd mayTargetTmData
     case mayTargetTm of
+        Nothing -> liftIO $ putStrLn "Schema does not specify target sentence for comparison."
         Just targetTm -> do
             liftIO $ putStrLn $ "Target sentence: " <> show targetTm
             let testResult = if targetTm == provenSent then "PASSED" else "FAILED"
             liftIO $ putStrLn $ "Target sentence matches proven sentence: " <> testResult
-    return returnData
+    return (returnData, mayTargetData)
 
 
 -- | This extends testTheoremM by also checking that the returned data matches a target object.
@@ -704,33 +738,42 @@ testTheoremM schema mayTargetTm = do
 -- | are needed on the return type,
 -- | which may not always be available.
 testTheoremMWithTargetObj :: (HelperConstraints m s tType o t sE eL r1 q, MonadIO m, Show x, Eq x)
-                 =>  TheoremSchemaMT tType r1 s o q m x -> Maybe s -> x
+                 =>  TheoremSchemaMT tType r1 s o q m x
                               -> m ()
-
-testTheoremMWithTargetObj schema mayTargetTm targetObj = do
-    returnData <- testTheoremM schema mayTargetTm
+testTheoremMWithTargetObj schema = do
+    (returnData, mayTargetData) <- testTheoremM schema
     liftIO $ putStrLn $ "Return data: " <> show returnData
-    let testResult = if targetObj == returnData then "PASSED" else "FAILED"
-    liftIO $ putStrLn $ "Return data matches target data: " <> testResult
+    case mayTargetData of
+        Nothing -> liftIO $ putStrLn "Schema does not specify target data for comparison."
+        Just targetObj -> do
+            liftIO $ putStrLn $ "Target data: " <> show targetObj
+            let testResult = if targetObj == returnData then "PASSED" else "FAILED"
+            liftIO $ putStrLn $ "Return data matches target data: " <> testResult
 
 testSilentTheoremM :: (HelperConstraints (Either SomeException) s tType o t sE eL r1 q, MonadIO m, MonadThrow m)
-                 =>  TheoremAlgSchema tType r1 s o q x -> Maybe s
-                              -> m x
-testSilentTheoremM schema mayTargetTm = do
-    (provenSent, returnData) <- checkSilentTheoremM schema
+                 =>  TheoremAlgSchema tType r1 s o q x 
+                              -> m (x, Maybe x)
+testSilentTheoremM schema = do
+    (provenSent, returnData, mayTargetTmData) <- checkSilentTheoremM schema
     liftIO $ putStrLn $ "Proven sentence: " <> show provenSent
+    let mayTargetTm = fmap fst mayTargetTmData
     case mayTargetTm of
+        Nothing -> liftIO $ putStrLn "Schema does not specify target sentence for comparison."
         Just targetTm -> do
             liftIO $ putStrLn $ "Target sentence: " <> show targetTm
             let testResult = if targetTm == provenSent then "PASSED" else "FAILED"
             liftIO $ putStrLn $ "Target sentence matches proven sentence: " <> testResult
-    return returnData
+    return (returnData, fmap snd mayTargetTmData)
 
 testSilentTheoremMWithTargetObj :: (HelperConstraints (Either SomeException) s tType o t sE eL r1 q, MonadIO m, Show x, Eq x, MonadThrow m)
-                 =>  TheoremAlgSchema tType r1 s o q x -> Maybe s -> x
+                 =>  TheoremAlgSchema tType r1 s o q x -> x
                               -> m ()
-testSilentTheoremMWithTargetObj schema mayTargetTm targetObj = do
-    returnData <- testSilentTheoremM schema mayTargetTm
+testSilentTheoremMWithTargetObj schema targetObj = do
+    (returnData, mayTargetData) <- testSilentTheoremM schema
     liftIO $ putStrLn $ "Return data: " <> show returnData
-    let testResult = if targetObj == returnData then "PASSED" else "FAILED"
-    liftIO $ putStrLn $ "Return data matches target data: " <> testResult
+    case mayTargetData of
+        Nothing -> liftIO $ putStrLn "Schema does not specify target data for comparison."
+        Just targetObj -> do
+            liftIO $ putStrLn $ "Target data: " <> show targetObj
+            let testResult = if targetObj == returnData then "PASSED" else "FAILED"
+            liftIO $ putStrLn $ "Return data matches target data: " <> testResult

@@ -40,6 +40,7 @@ import Data.Data (Typeable)
 import GHC.Generics (Associativity (NotAssociative, RightAssociative, LeftAssociative))
 import Control.Arrow ( left )
 import Control.Monad.Trans ( MonadTrans(lift) )
+import Control.Monad.Trans.Maybe ( MaybeT(MaybeT, runMaybeT) )
 import Control.Monad.Reader ( MonadReader(ask) )
 import Control.Monad.State ( MonadState(get) )
 import Control.Monad.Writer ( MonadWriter(tell) )
@@ -627,6 +628,7 @@ establishTheorem schema context state = do
 
 data TheoremSchemaMT tType r s o q m x where
    TheoremSchemaMT :: {
+                       mayTargetM :: MaybeT m (s,x), 
                        constDictM :: [(o,tType)],
                        lemmasM :: [s],
                        proofM :: ProofGenTStd tType r s o q m x,
@@ -638,7 +640,7 @@ data TheoremSchemaMT tType r s o q m x where
 
 instance (Show s, Show o, Show tType) => Show (TheoremSchemaMT tType r s o q m x) where
     show :: (Show s, Show o, Show tType) => TheoremSchemaMT tType r s o q m x -> String
-    show (TheoremSchemaMT constDict ls prog idxs qTypes) =
+    show (TheoremSchemaMT mayTarget constDict ls prog idxs qTypes) =
         "TheoremSchemaMT " <> show ls <> " <<Monadic subproof>> " <> show constDict
 
 
@@ -740,9 +742,9 @@ multiUGMWorker typeList programCore =
 
 
 checkTheoremMOpen :: (HelperConstraints m s tType o t sE eL r1 q) 
-                 =>  Maybe (PrfStdState s o tType,PrfStdContext q s) ->  TheoremSchemaMT tType r1 s o q m x
+                 =>  Maybe (PrfStdState s o tType,PrfStdContext q s)  -> TheoremSchemaMT tType r1 s o q m x
                               -> m (s, r1, x, [PrfStdStep s o tType])
-checkTheoremMOpen mayPrStateCxt (TheoremSchemaMT constdict lemmas prog idxs qTypes) =  do
+checkTheoremMOpen mayPrStateCxt (TheoremSchemaMT mayTargetM constdict lemmas prog idxs qTypes) =  do
     let eitherConstDictMap = assignSequentialMap 0 constdict
     (newStepCountA, newConsts) <- either (throwM . BigExceptSchemaConstDup) return eitherConstDictMap
     let (newStepCountB, newProven) = assignSequentialSet newStepCountA lemmas
@@ -756,6 +758,8 @@ checkTheoremMOpen mayPrStateCxt (TheoremSchemaMT constdict lemmas prog idxs qTyp
     
     (extra,tm,proof,newSteps) 
                <- runSubproofM newContext mempty newState preambleSteps mayPreambleLastProp prog (Sum maxIndex)
+
+
     return (tm,proof,extra,newSteps) 
        where
             conststeps = Prelude.foldr h1 [] constdict
@@ -785,7 +789,7 @@ checkTheoremMOpen mayPrStateCxt (TheoremSchemaMT constdict lemmas prog idxs qTyp
                  f1 a = maybe maybeLemmaInsane Just 
                    where
                       maybeLemmaInsane = fmap (BigExceptLemmaSanityErr a) (checkSanity mempty [] constdictPure a)
-  
+
 
 
 
@@ -803,9 +807,9 @@ establishTmSilentM (schema :: TheoremAlgSchema tType r1 s o q ()) context state 
 
 expandTheoremM :: (HelperConstraints (Either SomeException) s tType o t sE eL r1 q)
                             => TheoremAlgSchema tType r1 s o q () -> Either  SomeException (TheoremSchema s r1 o tType)
-expandTheoremM ((TheoremSchemaMT constdict lemmas proofprog idxs qTypes):: TheoremAlgSchema tType r1 s o q ()) =
+expandTheoremM ((TheoremSchemaMT mayTargetM constdict lemmas proofprog idxs qTypes):: TheoremAlgSchema tType r1 s o q ()) =
       do
-          (tm,r1,(),_) <- checkTheoremMOpen Nothing (TheoremSchemaMT constdict lemmas proofprog idxs qTypes)
+          (tm,r1,(),_) <- checkTheoremMOpen Nothing (TheoremSchemaMT mayTargetM constdict lemmas proofprog idxs qTypes)
           return $ TheoremSchema constdict lemmas tm r1
 
 
