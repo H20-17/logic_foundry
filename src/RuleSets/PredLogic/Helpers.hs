@@ -387,6 +387,8 @@ runTmSilentM (TheoremSchemaMT mayTargetM constDict lemmas prog idxs qTypes) =  d
                              (Just (state,context)) 
                              (TheoremSchemaMT mayTargetM constDict lemmas prog idxs qTypes)
                         (tm, proof, extra, newSteps) <- either throwM return eitherResult
+                        unless (targetSent==tm) $
+                            throwM $ TheoremTargetMismatch tm targetSent
                         mayMonadifyRes <- monadifyProofStd (theoremAlgSchema $ TheoremSchemaMT nullDataTarget constDict lemmas newProg idxs qTypes)
                         idx <- maybe (error "No theorem returned by monadifyProofStd on theorem schema. This shouldn't happen") (return . snd) mayMonadifyRes
                         return (tm, idx, extra)
