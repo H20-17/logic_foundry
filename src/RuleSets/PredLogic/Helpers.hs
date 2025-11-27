@@ -21,7 +21,6 @@ module RuleSets.PredLogic.Helpers
     lambdaSentMulti,
     lambdaTermMultiM,
     testTheoremM,
-    testTheoremMWithTargetObj,
     checkTheoremM,
     checkSilentTheoremM,
     testSilentTheoremM
@@ -712,70 +711,66 @@ extractConstsFromLambdaSent (term_f::v t -> s) =
 
 
 testTheoremM :: (HelperConstraints m s tType o t sE eL r1 q, MonadIO m)
-                 =>  TheoremSchemaMT tType r1 s o q m x 
-                              -> m (x, Maybe x)
-testTheoremM schema = do
-    liftIO $ putStrLn "LIVE THEOREM OUTPUT"
+                 =>  TheoremSchemaMT tType r1 s o q m x
+                              -> (x -> x -> m ())
+                              -> m ()
+testTheoremM schema dataTest = do
+    liftIO $ putStrLn "LIVE THEOREM GENENERATOR OUTPUT"
     liftIO $ putStrLn "-------------------"
     (provenSent, proof, returnData, proofSteps, mayTargetTmData) <- checkTheoremM schema
     liftIO $ putStrLn ""
-    liftIO $ putStrLn "POST HOC THEOREM OUTPUT"
+    liftIO $ putStrLn "POST HOC THEOREM GENERATOR OUTPUT"
     liftIO $ putStrLn "-----------------------"
     printStepsFull proofSteps
+    liftIO $ putStrLn ""
+    case mayTargetTmData of
+        Nothing -> do
+            liftIO $ putStrLn $ "Proven theorem: " <> show provenSent
+        Just (targetSent,targetData) -> do
+            liftIO $ putStrLn "THEOREM TARGET MATCH CHECK"
+            liftIO $ putStrLn "-------------------"
+            liftIO $ putStrLn $ "Proven theorem: " <> show provenSent
+            liftIO $ putStrLn $ "Target theorem: " <> show targetSent
+            let sentTestResult = if targetSent == provenSent then "PASSED" else "FAILED"
+            liftIO $ putStrLn $ "Target theorem matches proven theorem: " <> sentTestResult
+            liftIO $ putStrLn ""
+            liftIO $ putStrLn "THEOREM DATA TARGET MATCH CHECK(S)"
+            liftIO $ putStrLn "-------------------"
+            dataTest returnData targetData
+            -- This test should print whatever info it wants about the data test,
+            -- The output should include PASS/FAIL info.
+            -- The test could incorporate multiple checks if needed.
+            liftIO $ putStrLn ""
+    return ()
 
-    liftIO $ putStrLn $ "Proven sentence: " <> show provenSent
-    let mayTargetTm = fmap fst mayTargetTmData
-    let mayTargetData = fmap snd mayTargetTmData
-    case mayTargetTm of
-        Nothing -> liftIO $ putStrLn "Schema does not specify target sentence for comparison."
-        Just targetTm -> do
-            liftIO $ putStrLn $ "Target sentence: " <> show targetTm
-            let testResult = if targetTm == provenSent then "PASSED" else "FAILED"
-            liftIO $ putStrLn $ "Target sentence matches proven sentence: " <> testResult
-    return (returnData, mayTargetData)
 
 
--- | This extends testTheoremM by also checking that the returned data matches a target object.
--- | The reason why testTheoremM does not do this itself is because extra constraints (Show, Eq) 
--- | are needed on the return type,
--- | which may not always be available.
-testTheoremMWithTargetObj :: (HelperConstraints m s tType o t sE eL r1 q, MonadIO m, Show x, Eq x)
-                 =>  TheoremSchemaMT tType r1 s o q m x
-                              -> m ()
-testTheoremMWithTargetObj schema = do
-    (returnData, mayTargetData) <- testTheoremM schema
-    liftIO $ putStrLn $ "Return data: " <> show returnData
-    case mayTargetData of
-        Nothing -> liftIO $ putStrLn "Schema does not specify target data for comparison."
-        Just targetObj -> do
-            liftIO $ putStrLn $ "Target data: " <> show targetObj
-            let testResult = if targetObj == returnData then "PASSED" else "FAILED"
-            liftIO $ putStrLn $ "Return data matches target data: " <> testResult
+
+
 
 testSilentTheoremM :: (HelperConstraints (Either SomeException) s tType o t sE eL r1 q, MonadIO m, MonadThrow m)
                  =>  TheoremAlgSchema tType r1 s o q x 
-                              -> m (x, Maybe x)
-testSilentTheoremM schema = do
-    (provenSent, returnData, mayTargetTmData) <- checkSilentTheoremM schema
-    liftIO $ putStrLn $ "Proven sentence: " <> show provenSent
-    let mayTargetTm = fmap fst mayTargetTmData
-    case mayTargetTm of
-        Nothing -> liftIO $ putStrLn "Schema does not specify target sentence for comparison."
-        Just targetTm -> do
-            liftIO $ putStrLn $ "Target sentence: " <> show targetTm
-            let testResult = if targetTm == provenSent then "PASSED" else "FAILED"
-            liftIO $ putStrLn $ "Target sentence matches proven sentence: " <> testResult
-    return (returnData, fmap snd mayTargetTmData)
-
-testSilentTheoremMWithTargetObj :: (HelperConstraints (Either SomeException) s tType o t sE eL r1 q, MonadIO m, Show x, Eq x, MonadThrow m)
-                 =>  TheoremAlgSchema tType r1 s o q x -> x
+                            -> (x -> x -> m ())
                               -> m ()
-testSilentTheoremMWithTargetObj schema targetObj = do
-    (returnData, mayTargetData) <- testSilentTheoremM schema
-    liftIO $ putStrLn $ "Return data: " <> show returnData
-    case mayTargetData of
-        Nothing -> liftIO $ putStrLn "Schema does not specify target data for comparison."
-        Just targetObj -> do
-            liftIO $ putStrLn $ "Target data: " <> show targetObj
-            let testResult = if targetObj == returnData then "PASSED" else "FAILED"
-            liftIO $ putStrLn $ "Return data matches target data: " <> testResult
+testSilentTheoremM schema dataTest = do
+    (provenSent, returnData, mayTargetTmData) <- checkSilentTheoremM schema
+    case mayTargetTmData of
+        Nothing -> do
+            liftIO $ putStrLn $ "Proven theorem: " <> show provenSent
+        Just (targetSent,targetData) -> do
+            liftIO $ putStrLn "THEOREM TARGET MATCH CHECK"
+            liftIO $ putStrLn "-------------------"
+            liftIO $ putStrLn $ "Proven theorem: " <> show provenSent
+            liftIO $ putStrLn $ "Target theorem: " <> show targetSent
+            let sentTestResult = if targetSent == provenSent then "PASSED" else "FAILED"
+            liftIO $ putStrLn $ "Target theorem matches proven theorem: " <> sentTestResult
+            liftIO $ putStrLn ""
+            liftIO $ putStrLn "THEOREM DATA TARGET MATCH CHECK(S)"
+            liftIO $ putStrLn "-------------------"
+            dataTest returnData targetData
+            -- This test should print whatever info it wants about the data test,
+            -- The output should include PASS/FAIL info.
+            -- The test could incorporate multiple checks if needed.
+            liftIO $ putStrLn ""
+    return ()
+

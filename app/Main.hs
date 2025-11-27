@@ -1498,49 +1498,26 @@ main = do
                 return (src_set_func, p_pred_func)
 
     let schema = builderSchema (source_set_func::Vec2 ObjDeBr -> ObjDeBr) p_pred_func ::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text () IO (B.Vec2 ObjDeBr -> ObjDeBr))
-    (a,b,c,d,_) <- checkTheoremM schema
-    unless (a == builderTheorem source_set_func p_pred_func) (error "Builder Theorem check failed")
-    printPropDeBrStepsBase d -- Print results
 
-    (putStrLn . show) a
-     
+    let tmDataTest generated_f target_f = do
+          let generated_inst = generated_f (V.mk2 (Constant "D") (Constant "E"))
+          putStrLn $ "Generated function instance: " <> show generated_inst
+          let target_inst = target_f (V.mk2 (Constant "D") (Constant "E"))
+          putStrLn $ "Target function instance:    " <> show target_inst
+          let dataInstanceTestResult = if generated_inst == target_inst then "PASSED" else "FAILED"
+          putStrLn $ "Data Instance Test Result: " <> dataInstanceTestResult
 
-    
-    let targetTm = builderTheorem source_set_func p_pred_func
-    testTheoremM schema
+          return ()
+
+    testTheoremM schema tmDataTest
+
     putStrLn "===================="
     putStrLn ""
-    putStrLn "Testing silent theorem check" 
-    let silent_schema = builderSchema (source_set_func::Vec2 ObjDeBr -> ObjDeBr) p_pred_func ::(TheoremAlgSchema () [ZFCRuleDeBr] PropDeBr Text () (B.Vec2 ObjDeBr -> ObjDeBr))
-    testSilentTheoremM silent_schema
+    
+    putStrLn "======================"
+    putStrLn "BUILDER THEOREM TEST 1"
+    putStrLn "----------------------"
 
-
-    let testProg = do
-            fakeConstM "S" ()
-            fakeConstM "C" ()
-            (_,_,result_func) <- runTheoremM schema
-            let result_func_inst = result_func (V.mk2 (Constant "D") (Constant "E"))
-            txt <- showTermM result_func_inst
-            remarkM $ "Builder set example is: " <> txt
-            let target_func_inst = mayTargetM schema 
-            mayTarget <- (lift . runMaybeT) target_func_inst
-            case mayTarget of
-                Just (theorem_target, f_target) -> do
-                    let target_inst = f_target (V.mk2 (Constant "D") (Constant "E"))
-                    txt2 <- showTermM target_inst
-                    remarkM $ "Target set example is: " <> txt2
-                    unless (result_func_inst == target_inst) (error "Builder Theorem instantiation does not match target!")
-                Nothing -> error "No target found in Builder Theorem instantiation!"
-            return ()
-    runProofGeneratorT (testProg::ProofGenTStd () [ZFCRuleDeBr] PropDeBr Text ()IO ())
-
-
-    error "Who knows"
-
-    print "BUILDER THEOREM 2-------------------------------------"
-
-    let source_set_func _ = Constant "S"
-    let p_pred_func _ y =  Constant "C" .==. y
     let (source_set_func,p_pred_func) =
             runIndexTracker $ do
                 let src_set_tmplt = Constant "S"
@@ -1552,11 +1529,22 @@ main = do
                 return (src_set_func, p_pred_func)
         
     let schema = builderSchema source_set_func p_pred_func ::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text () IO (B.Vec 0 ObjDeBr -> ObjDeBr))
-    (a,b,c,d,_) <- checkTheoremM schema
-    unless (a == builderTheorem source_set_func p_pred_func) (error "Builder Theorem check failed")
-    printPropDeBrStepsBase d -- Print results
     
+    let tmDataTest generated_f target_f = do
+          let generated_inst = generated_f V.mk0
+          putStrLn $ "Generated function instance: " <> show generated_inst
+          let target_inst = target_f V.mk0
+          putStrLn $ "Target function instance:    " <> show target_inst
+          let dataInstanceTestResult = if generated_inst == target_inst then "PASSED" else "FAILED"
+          putStrLn $ "Data Instance Test Result: " <> dataInstanceTestResult
 
+          return ()
+    testTheoremM schema tmDataTest
+
+    putStrLn "===================="
+    putStrLn ""
+    
+    error "STOP HERE FOR NOW"
 
 
 
