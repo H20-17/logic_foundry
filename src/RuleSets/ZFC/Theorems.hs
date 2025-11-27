@@ -142,6 +142,8 @@ import qualified Data.Vector.Fixed as V
 import qualified Data.Vector.Fixed.Boxed as B
 import Control.Monad.Trans.Maybe ( MaybeT(MaybeT, runMaybeT) )
 
+
+
 ---NEW IDEA
 
 
@@ -235,10 +237,10 @@ proveBuilderTheoremM (source_set_pred::(v t -> t )) p_pred = do
         let p_pred_free = p_pred freeVars_v
         proveBuilderTheoremMFree source_set_pred_free p_pred_free
 
-    let tm = builderTheorem source_set_pred p_pred
-    txt <- showSentM tm
-    remarkM txt
     let returnFunc = returnFuncListForm . V.toList
+
+
+
     return returnFunc
 
 
@@ -250,8 +252,19 @@ builderSchema :: (HelperConstraints sE s eL m r t, V.Vector v t) =>
 builderSchema (source_set_f::(v t -> t)) p_pred = 
     let
         all_consts = Set.toList $ extractConstsFromLambdaSpec source_set_f p_pred
+        builder_func = runIndexTracker $ do
+            let param_n = V.length (undefined::(v t))
+            param_idxs <- newIndices param_n
+            let param_vars = V.fromList $ Prelude.map x param_idxs
+            let source_set_tmplt = source_set_f param_vars
+            let p_tmplt_pred = p_pred param_vars
+            builderSet <- builderXMP source_set_tmplt p_tmplt_pred
+            builderFunc <- lambdaTermMultiM (V.reverse param_vars) builderSet
+            dropIndices param_n
+            return builderFunc
+
     in
-        theoremSchemaMT (MaybeT $ return Nothing) []
+        theoremSchemaMT (return (builderTheorem source_set_f p_pred, builder_func)) []
            (proveBuilderTheoremM source_set_f p_pred)
            all_consts
 

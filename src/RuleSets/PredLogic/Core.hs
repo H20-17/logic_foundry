@@ -934,7 +934,7 @@ type HelperConstraints m s tType o t sE eL r q = (
                       s o tType (Either SomeException)
             ) 
             
-type SentConstraints s t tType o q sE = (LogicSent s t tType o q, LogicTerm t, TypeableTerm t o tType sE q, TypedSent o tType sE s)
+type SentConstraints s t tType o q sE = (LogicSent s t tType o q, LogicTerm t, TypeableTerm t o tType sE q, TypedSent o tType sE s, Show t)
 
 
 type MonadSent s t tType o q sE m = (SentConstraints s t tType o q sE,  MonadState (Sum Int) m)

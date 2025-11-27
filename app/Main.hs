@@ -1513,6 +1513,28 @@ main = do
     putStrLn "Testing silent theorem check" 
     let silent_schema = builderSchema (source_set_func::Vec2 ObjDeBr -> ObjDeBr) p_pred_func ::(TheoremAlgSchema () [ZFCRuleDeBr] PropDeBr Text () (B.Vec2 ObjDeBr -> ObjDeBr))
     testSilentTheoremM silent_schema
+
+
+    let testProg = do
+            fakeConstM "S" ()
+            fakeConstM "C" ()
+            (_,_,result_func) <- runTheoremM schema
+            let result_func_inst = result_func (V.mk2 (Constant "D") (Constant "E"))
+            txt <- showTermM result_func_inst
+            remarkM $ "Builder set example is: " <> txt
+            let target_func_inst = mayTargetM schema 
+            mayTarget <- (lift . runMaybeT) target_func_inst
+            case mayTarget of
+                Just (theorem_target, f_target) -> do
+                    let target_inst = f_target (V.mk2 (Constant "D") (Constant "E"))
+                    txt2 <- showTermM target_inst
+                    remarkM $ "Target set example is: " <> txt2
+                    unless (result_func_inst == target_inst) (error "Builder Theorem instantiation does not match target!")
+                Nothing -> error "No target found in Builder Theorem instantiation!"
+            return ()
+    runProofGeneratorT (testProg::ProofGenTStd () [ZFCRuleDeBr] PropDeBr Text ()IO ())
+
+
     error "Who knows"
 
     print "BUILDER THEOREM 2-------------------------------------"
@@ -1533,6 +1555,7 @@ main = do
     (a,b,c,d,_) <- checkTheoremM schema
     unless (a == builderTheorem source_set_func p_pred_func) (error "Builder Theorem check failed")
     printPropDeBrStepsBase d -- Print results
+    
 
 
 

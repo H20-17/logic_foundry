@@ -610,7 +610,7 @@ createTermTmplt :: SentConstraints s t tType o q sE =>
 createTermTmplt subs originTerm = 
     let
         accumFunc (targetTerm,idx) accumTerm =
-            termSwapForX targetTerm idx originTerm
+            termSwapForX targetTerm idx accumTerm
     in foldr accumFunc originTerm subs
                
 
