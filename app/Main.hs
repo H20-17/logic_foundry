@@ -1515,7 +1515,7 @@ main = do
     putStrLn ""
     
     putStrLn "======================"
-    putStrLn "BUILDER THEOREM TEST 1"
+    putStrLn "BUILDER THEOREM TEST 2"
     putStrLn "----------------------"
 
     let (source_set_func,p_pred_func) =
