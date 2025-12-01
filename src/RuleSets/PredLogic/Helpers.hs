@@ -729,6 +729,9 @@ testTheoremM schema (dataShow,dataCompare) = do
         Nothing -> do
             liftIO $ putStrLn $ "Proven theorem: " <> show provenSent
             dataShow returnData
+            -- Sometimes the data can take the form of function, so we can't just show it here directly.
+            -- If the data is an unshowable function,
+            -- then the dataShow function should probably show an example or two of the function in action.
         Just (targetSent,targetData) -> do
             liftIO $ putStrLn "THEOREM TARGET MATCH CHECK"
             liftIO $ putStrLn "-------------------"
@@ -745,7 +748,7 @@ testTheoremM schema (dataShow,dataCompare) = do
             -- The test could incorporate multiple checks if needed.
             -- Sometimes that data can take the form of functions, so we can't just do an equality check here.
             liftIO $ putStrLn ""
-    return ()
+    return ()   
 
 
 testTheoremMBasic :: (HelperConstraints m s tType o t sE eL r1 q, MonadIO m, Show x, Eq x)
@@ -781,6 +784,9 @@ testSilentTheoremM schema (dataShow, dataCompare) = do
         Nothing -> do
             liftIO $ putStrLn $ "Proven theorem: " <> show provenSent
             dataShow returnData
+            -- Sometimes the data can take the form of functions, so we can't just show it here directly.
+            -- If the data is an unshowable function,
+            -- then the dataShow function should probably show an example or two of the function in action.
         Just (targetSent,targetData) -> do
             liftIO $ putStrLn "THEOREM TARGET MATCH CHECK"
             liftIO $ putStrLn "-------------------"
