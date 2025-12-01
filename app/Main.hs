@@ -1508,8 +1508,14 @@ main = do
           putStrLn $ "Data Instance Test Result: " <> dataInstanceTestResult
 
           return ()
+    
+    let tmDataShow generated_f = do
+          let generated_inst = generated_f (V.mk2 (Constant "D") (Constant "E"))
+          putStrLn $ "Generated function instance for show: " <> show generated_inst
+          return ()
 
-    testTheoremM schema tmDataTest
+
+    testTheoremM schema (tmDataShow, tmDataTest)
 
     putStrLn "===================="
     putStrLn ""
@@ -1528,7 +1534,7 @@ main = do
                 dropIndices 1
                 return (src_set_func, p_pred_func)
         
-    let schema = builderSchema source_set_func p_pred_func ::(TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text () IO (B.Vec 0 ObjDeBr -> ObjDeBr))
+    let schema = builderSchema source_set_func p_pred_func
     
     let tmDataTest generated_f target_f = do
           let generated_inst = generated_f V.mk0
@@ -1539,7 +1545,15 @@ main = do
           putStrLn $ "Data Instance Test Result: " <> dataInstanceTestResult
 
           return ()
-    testTheoremM schema tmDataTest
+
+    let tmDataShow generated_f = do
+          let generated_inst = generated_f V.mk0
+          putStrLn $ "Generated function instance for show: " <> show generated_inst
+          return ()
+
+    (testTheoremM::TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text () IO (B.Vec 0 ObjDeBr -> ObjDeBr) -> 
+           ((B.Vec 0 ObjDeBr -> ObjDeBr)-> IO (),(B.Vec 0 ObjDeBr -> ObjDeBr) -> (B.Vec 0 ObjDeBr -> ObjDeBr) -> IO ()) -> IO ()) 
+           schema (tmDataShow, tmDataTest)
 
     putStrLn "===================="
     putStrLn ""

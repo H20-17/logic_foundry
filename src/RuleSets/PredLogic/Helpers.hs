@@ -23,7 +23,9 @@ module RuleSets.PredLogic.Helpers
     testTheoremM,
     checkTheoremM,
     checkSilentTheoremM,
-    testSilentTheoremM
+    testSilentTheoremM,
+    testTheoremMBasic,
+    testSilentTheoremMBasic
 ) where
 
 
@@ -712,9 +714,9 @@ extractConstsFromLambdaSent (term_f::v t -> s) =
 
 testTheoremM :: (HelperConstraints m s tType o t sE eL r1 q, MonadIO m)
                  =>  TheoremSchemaMT tType r1 s o q m x
-                              -> (x -> x -> m ())
+                              -> (x -> m (), x -> x -> m ())
                               -> m ()
-testTheoremM schema dataTest = do
+testTheoremM schema (dataShow,dataCompare) = do
     liftIO $ putStrLn "LIVE THEOREM GENENERATOR OUTPUT"
     liftIO $ putStrLn "-------------------"
     (provenSent, proof, returnData, proofSteps, mayTargetTmData) <- checkTheoremM schema
@@ -726,6 +728,7 @@ testTheoremM schema dataTest = do
     case mayTargetTmData of
         Nothing -> do
             liftIO $ putStrLn $ "Proven theorem: " <> show provenSent
+            dataShow returnData
         Just (targetSent,targetData) -> do
             liftIO $ putStrLn "THEOREM TARGET MATCH CHECK"
             liftIO $ putStrLn "-------------------"
@@ -736,27 +739,48 @@ testTheoremM schema dataTest = do
             liftIO $ putStrLn ""
             liftIO $ putStrLn "THEOREM DATA TARGET MATCH CHECK(S)"
             liftIO $ putStrLn "-------------------"
-            dataTest returnData targetData
+            dataCompare returnData targetData
             -- This test should print whatever info it wants about the data test,
             -- The output should include PASS/FAIL info.
             -- The test could incorporate multiple checks if needed.
+            -- Sometimes that data can take the form of functions, so we can't just do an equality check here.
             liftIO $ putStrLn ""
     return ()
 
 
+testTheoremMBasic :: (HelperConstraints m s tType o t sE eL r1 q, MonadIO m, Show x, Eq x)
+                 =>  TheoremSchemaMT tType r1 s o q m x
+                              -> m ()
+testTheoremMBasic schema = do
+    let dataShow d = liftIO $ putStrLn $ "Returned data: " <> show d
+    let dataCompare d1 d2 = do
+            liftIO $ putStrLn $ "Returned data: " <> show d1
+            liftIO $ putStrLn $ "Target data: " <> show d2
+            let dataCompareResult = if d1 == d2 
+                                  then "PASSED"
+                                  else "FAILED"
+            liftIO $ putStrLn $ "Target data matches returned data: " <> dataCompareResult
+    testTheoremM schema (dataShow, dataCompare)
+
+
+
+
+
+ 
 
 
 
 
 testSilentTheoremM :: (HelperConstraints (Either SomeException) s tType o t sE eL r1 q, MonadIO m, MonadThrow m)
                  =>  TheoremAlgSchema tType r1 s o q x 
-                            -> (x -> x -> m ())
+                            -> (x -> m (), x -> x -> m ())
                               -> m ()
-testSilentTheoremM schema dataTest = do
+testSilentTheoremM schema (dataShow, dataCompare) = do
     (provenSent, returnData, mayTargetTmData) <- checkSilentTheoremM schema
     case mayTargetTmData of
         Nothing -> do
             liftIO $ putStrLn $ "Proven theorem: " <> show provenSent
+            dataShow returnData
         Just (targetSent,targetData) -> do
             liftIO $ putStrLn "THEOREM TARGET MATCH CHECK"
             liftIO $ putStrLn "-------------------"
@@ -767,10 +791,26 @@ testSilentTheoremM schema dataTest = do
             liftIO $ putStrLn ""
             liftIO $ putStrLn "THEOREM DATA TARGET MATCH CHECK(S)"
             liftIO $ putStrLn "-------------------"
-            dataTest returnData targetData
+            dataCompare returnData targetData
             -- This test should print whatever info it wants about the data test,
             -- The output should include PASS/FAIL info.
             -- The test could incorporate multiple checks if needed.
+            -- Sometimes that data can take the form of functions, so we can't just do an equality check here.
             liftIO $ putStrLn ""
     return ()
 
+testSilentTheoremMBasic :: (HelperConstraints (Either SomeException) s tType o t sE eL r1 q, MonadIO m, MonadThrow m, Show x, Eq x)
+                 =>  TheoremAlgSchema tType r1 s o q x 
+                              -> m ()
+testSilentTheoremMBasic schema = do
+    let dataShow d = liftIO $ putStrLn $ "Returned data: " <> show d
+    let dataCompare d1 d2 = do
+            liftIO $ putStrLn $ "Returned data: " <> show d1
+            liftIO $ putStrLn $ "Target data: " <> show d2
+            let dataCompareResult = if d1 == d2 
+                                  then "PASSED"
+                                  else "FAILED"
+            liftIO $ putStrLn $ "Target data matches returned data: " <> dataCompareResult
+    testSilentTheoremM schema (dataShow, dataCompare)
+
+    return ()
