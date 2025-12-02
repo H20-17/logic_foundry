@@ -714,9 +714,10 @@ extractConstsFromLambdaSent (term_f::v t -> s) =
 
 testTheoremM :: (HelperConstraints m s tType o t sE eL r1 q, MonadIO m)
                  =>  TheoremSchemaMT tType r1 s o q m x
-                              -> (x -> m (), x -> x -> m ())
+                              -> (x -> m ())
+                              -> (x -> x -> m ())
                               -> m ()
-testTheoremM schema (dataShow,dataCompare) = do
+testTheoremM schema dataShow dataCompare = do
     liftIO $ putStrLn "LIVE THEOREM GENENERATOR OUTPUT"
     liftIO $ putStrLn "-------------------"
     (provenSent, proof, returnData, proofSteps, mayTargetTmData) <- checkTheoremM schema
@@ -763,7 +764,7 @@ testTheoremMBasic schema = do
                                   then "PASSED"
                                   else "FAILED"
             liftIO $ putStrLn $ "Target data matches returned data: " <> dataCompareResult
-    testTheoremM schema (dataShow, dataCompare)
+    testTheoremM schema dataShow dataCompare
 
 
 
@@ -775,10 +776,11 @@ testTheoremMBasic schema = do
 
 
 testSilentTheoremM :: (HelperConstraints (Either SomeException) s tType o t sE eL r1 q, MonadIO m, MonadThrow m)
-                 =>  TheoremAlgSchema tType r1 s o q x 
-                            -> (x -> m (), x -> x -> m ())
-                              -> m ()
-testSilentTheoremM schema (dataShow, dataCompare) = do
+                 =>  TheoremAlgSchema tType r1 s o q x -> 
+                            (x -> m ()) -> 
+                            (x -> x -> m ()) ->
+                              m ()
+testSilentTheoremM schema dataShow dataCompare = do
     (provenSent, returnData, mayTargetTmData) <- checkSilentTheoremM schema
     case mayTargetTmData of
         Nothing -> do
@@ -817,6 +819,6 @@ testSilentTheoremMBasic schema = do
                                   then "PASSED"
                                   else "FAILED"
             liftIO $ putStrLn $ "Target data matches returned data: " <> dataCompareResult
-    testSilentTheoremM schema (dataShow, dataCompare)
+    testSilentTheoremM schema dataShow dataCompare
 
     return ()

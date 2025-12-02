@@ -1515,7 +1515,7 @@ main = do
           return ()
 
 
-    testTheoremM schema (tmDataShow, tmDataTest)
+    testTheoremM schema tmDataShow tmDataTest
 
     putStrLn "===================="
     putStrLn ""
@@ -1552,8 +1552,8 @@ main = do
           return ()
 
     (testTheoremM::TheoremSchemaMT () [ZFCRuleDeBr] PropDeBr Text () IO (B.Vec 0 ObjDeBr -> ObjDeBr) -> 
-           ((B.Vec 0 ObjDeBr -> ObjDeBr)-> IO (),(B.Vec 0 ObjDeBr -> ObjDeBr) -> (B.Vec 0 ObjDeBr -> ObjDeBr) -> IO ()) -> IO ()) 
-           schema (tmDataShow, tmDataTest)
+           ((B.Vec 0 ObjDeBr -> ObjDeBr)-> IO ()) -> ((B.Vec 0 ObjDeBr -> ObjDeBr) -> (B.Vec 0 ObjDeBr -> ObjDeBr) -> IO ()) -> IO ()) 
+           schema  tmDataShow tmDataTest
 
     putStrLn "===================="
     putStrLn ""
