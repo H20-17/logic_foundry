@@ -123,12 +123,14 @@ import RuleSets.PredLogic.Core hiding
    HelperConstraints(..),
    SentConstraints(..),
    MonadSent,
+   TheoremSchemaMT,
    aX, eX, hX, eXBang, multiAx,
    runProofByUGM)
 import qualified RuleSets.PredLogic.Core as PREDL
 import qualified RuleSets.PredLogic.Helpers as PREDL
 import GHC.Num (integerMul)
 import RuleSets.ZFC.Core
+import qualified RuleSets.ZFC.Core as ZFC
 import RuleSets.BaseLogic.Helpers hiding
      (MetaRuleError(..))
 import RuleSets.PredLogic.Helpers hiding
@@ -429,12 +431,12 @@ lambdaSpec contextIdxs specIdx (source_template::t) p_template =
 theoremSchemaMT :: HelperConstraints sE s eL m r t =>
     MaybeT m (s,x) -> 
     [s] -> ProofGenTStd () r s Text () m x -> [Text] -> 
-             TheoremSchemaMT () r s Text () m x
+             ZFC.TheoremSchemaMT r s m x
 theoremSchemaMT mayTargetProg lemmas proof consts =
     let 
         constDict = Prelude.map (,()) consts
     in
-        TheoremSchemaMT {
+        PREDL.TheoremSchemaMT {
               mayTargetM = mayTargetProg
             , constDictM = constDict
             , lemmasM = lemmas

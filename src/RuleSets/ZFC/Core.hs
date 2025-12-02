@@ -8,7 +8,8 @@ module RuleSets.ZFC.Core
     LogicTerm(..),
     HelperConstraints(..),
     SentConstraints(..),
-    MonadSent
+    MonadSent,
+    TheoremSchemaMT
 ) where
 
 
@@ -81,7 +82,8 @@ import RuleSets.PredLogic.Core hiding
    MetaRuleError(..),
    LogicTerm(..),
    HelperConstraints(..),
-   SentConstraints(..))
+   SentConstraints(..),
+   TheoremSchemaMT(..) )
 import qualified RuleSets.PredLogic.Core as PREDL
 import qualified RuleSets.PredLogic.Helpers as PREDL
 import GHC.Num (integerMul)
@@ -928,3 +930,7 @@ type SentConstraints s t sE
 
 type MonadSent s t sE m = (SentConstraints s t sE,  MonadState (Sum Int) m)
 -- , PREDL.MonadSent s t () Text m)
+
+
+type TheoremSchemaMT r s m x =
+    PREDL.TheoremSchemaMT () r s Text () m x

@@ -119,6 +119,7 @@ import RuleSets.PredLogic.Core hiding
    HelperConstraints(..),
    SentConstraints(..),
    MonadSent,
+   TheoremSchemaMT,
    aX, eX, hX, eXBang, multiAx, runProofByUGM)
 import qualified RuleSets.PredLogic.Core as PREDL
 import RuleSets.ZFC.Core
@@ -248,7 +249,7 @@ proveBuilderTheoremM (source_set_pred::(v t -> t )) p_pred = do
 builderSchema :: (HelperConstraints sE s eL m r t, V.Vector v t) =>
     (v t -> t)  ->         -- source_set expressed as a function on paramaters
     (v t -> t -> s) ->            -- predicate, expressed as a function on paramaters
-    TheoremSchemaMT () r s Text () m (v t -> t)
+    TheoremSchemaMT r s m (v t -> t)
 builderSchema (source_set_f::(v t -> t)) p_pred = 
     let
         all_consts = Set.toList $ extractConstsFromLambdaSpec source_set_f p_pred
@@ -482,7 +483,7 @@ proveBinaryUnionExistsM = do
 -- | The schema stipulates that:
 -- | "union_equiv_theorem" is a required lemma.
 binaryUnionExistsSchema ::  HelperConstraints sE s eL m r t => 
-     TheoremSchemaMT () r s Text () m ()
+     TheoremSchemaMT r s m ()
 binaryUnionExistsSchema =       
     theoremSchemaMT (MaybeT $ return Nothing) [unionEquivTheorem] proveBinaryUnionExistsM []
 
@@ -556,7 +557,7 @@ proveBinaryUnionTheorem = do
     
 
 binaryUnionSchema :: (HelperConstraints sE s eL m r t) => 
-     TheoremSchemaMT () r s Text () m (t -> t -> t)
+     TheoremSchemaMT r s m (t -> t -> t)
 binaryUnionSchema =
     theoremSchemaMT (MaybeT $ return Nothing) [binaryUnionExistsTheorem] proveBinaryUnionTheorem []
 
@@ -699,7 +700,7 @@ proveBinaryIntersectionExistsM = do
 -- | This theorem has no other high-level theorems as lemmas; it is proven
 -- | directly from the Axiom of Specification (via the builderInstantiateM helper).
 binaryIntersectionExistsSchema :: HelperConstraints sE s eL m r t =>
-     TheoremSchemaMT () r s Text () m ()
+     TheoremSchemaMT r s m ()
 binaryIntersectionExistsSchema =
     let
         (source_set_func, p_func) = runIndexTracker $ do
@@ -792,7 +793,7 @@ proveBinaryIntersectionTheorem = do
 
 
 binaryIntersectionSchema :: (HelperConstraints sE s eL m r t) => 
-     TheoremSchemaMT () r s Text () m (t -> t -> t)
+     TheoremSchemaMT r s m (t -> t -> t)
 binaryIntersectionSchema =
     theoremSchemaMT (MaybeT $ return Nothing) [binaryIntersectionExistsTheorem] proveBinaryIntersectionTheorem []
 
@@ -970,7 +971,7 @@ proveUnionWithEmptySetM = do
 -- | The schema that houses the proof for 'unionWithEmptySetTheorem'.
 -- | It declares its dependencies on other theorems.
 unionWithEmptySetSchema :: HelperConstraints sE s eL m r t =>
-     TheoremSchemaMT () r s Text () m ()
+     TheoremSchemaMT r s m ()
 unionWithEmptySetSchema =
     let
         -- The lemmas required for this proof.
@@ -1121,7 +1122,7 @@ proveDisjointSubsetIsEmptyM = do
 -- | The schema that houses the proof for 'disjointSubsetIsEmptyTheorem'.
 -- | It declares its dependencies on other theorems.
 disjointSubsetIsEmptySchema :: HelperConstraints sE s eL m r t =>
-     TheoremSchemaMT () r s Text () m ()
+     TheoremSchemaMT r s m ()
 disjointSubsetIsEmptySchema =
     let
         -- The lemmas required for this proof.
