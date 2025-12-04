@@ -58,6 +58,7 @@ import RuleSets.PredLogic.Core hiding
    LogicSent,
    SubproofMException(..),
    TheoremSchemaMT,
+   TheoremAlgSchema,
    aX, eX, hX, eXBang, multiAx)
 import qualified RuleSets.PredLogic.Core as PRED
 
@@ -1518,6 +1519,10 @@ main = do
 
     testTheoremM schema tmDataShow tmDataTest
 
+
+    testBuilderTheoremM source_set_func p_pred_func (V.mk2 (Constant "D") (Constant "E")) (Proxy @[ZFCRuleDeBr])
+
+
     putStrLn "===================="
     putStrLn ""
     
@@ -1535,8 +1540,10 @@ main = do
                 dropIndices 1
                 return (src_set_func, p_pred_func)
         
-    let schema = builderSchema source_set_func p_pred_func
-    
+    let schema = builderSchema source_set_func p_pred_func::(TheoremSchemaMT
+                     [ZFCRuleDeBr] PropDeBr IO (Vec 0 ObjDeBr -> ObjDeBr))
+    let schema2 = builderSchema source_set_func p_pred_func::(TheoremAlgSchema
+                     [ZFCRuleDeBr] PropDeBr (B.Vec 0 ObjDeBr -> ObjDeBr))
     let tmDataTest generated_f target_f = do
           let generated_inst = generated_f V.mk0
           putStrLn $ "Generated function instance: " <> show generated_inst
@@ -1552,9 +1559,16 @@ main = do
           putStrLn $ "Generated function instance for show: " <> show generated_inst
           return ()
 
-    (testTheoremM::TheoremSchemaMT [ZFCRuleDeBr] PropDeBr IO (B.Vec 0 ObjDeBr -> ObjDeBr) -> 
-           ((B.Vec 0 ObjDeBr -> ObjDeBr)-> IO ()) -> ((B.Vec 0 ObjDeBr -> ObjDeBr) -> (B.Vec 0 ObjDeBr -> ObjDeBr) -> IO ()) -> IO ()) 
+    testTheoremM 
            schema  tmDataShow tmDataTest
+
+
+    testSilentTheoremM
+           schema2 tmDataShow tmDataTest
+
+
+
+
 
     putStrLn "===================="
     putStrLn ""

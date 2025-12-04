@@ -931,10 +931,12 @@ type HelperConstraints m s tType o t sE eL r q = (
             , QuantifiableTerm q tType
             , BASE.LogicRuleClass r s o tType sE
             , StdPrfPrintMonad
-                      s o tType (Either SomeException)
+                      s o tType (Either SomeException)        
+            , Eq t
             ) 
             
-type SentConstraints s t tType o q sE = (LogicSent s t tType o q, LogicTerm t, TypeableTerm t o tType sE q, TypedSent o tType sE s, Show t)
+type SentConstraints s t tType o q sE = (LogicSent s t tType o q, LogicTerm t, TypeableTerm t o tType sE q, TypedSent o tType sE s, 
+                                        Eq t,Show t)
 
 
 type MonadSent s t tType o q sE m = (SentConstraints s t tType o q sE,  MonadState (Sum Int) m)

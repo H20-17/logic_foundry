@@ -1,6 +1,7 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE TypeApplications #-}
+{-# Language PartialTypeSignatures #-}
 module RuleSets.ZFC.Theorems
 (
     unionEquivTheorem,
@@ -38,7 +39,8 @@ module RuleSets.ZFC.Theorems
 --    strongInductionTheorem,
 --    strongInductionTheoremMSchema,
     builderTheorem,
-    builderSchema
+    builderSchema,
+    testBuilderTheoremM
     
     
 
@@ -142,6 +144,7 @@ import Distribution.PackageDescription.Configuration (freeVars)
 import qualified Data.Vector.Fixed as V
 import qualified Data.Vector.Fixed.Boxed as B
 import Control.Monad.Trans.Maybe ( MaybeT(MaybeT, runMaybeT) )
+import Control.Monad.IO.Class(MonadIO,liftIO)
 
 
 
@@ -245,6 +248,36 @@ proveBuilderTheoremM (source_set_pred::(v t -> t )) p_pred = do
     return returnFunc
 
 
+testBuilderTheoremM :: (HelperConstraints sE s eL m r t, V.Vector v t, MonadIO m, Show (v t)) =>
+    (v t -> t) ->         -- source_set expressed as a function on paramaters
+    (v t -> t -> s) ->            -- predicate, expressed as a function on paramaters
+    v t ->  -- arguments to apply to the paramaters for testing
+    Proxy r -> -- undefined rule type
+    m ()
+testBuilderTheoremM source_set_pred (pred_f::(v t -> t -> s)) args (proxy_r :: Proxy r) = do
+    let tmDataShow generated_f = do
+          liftIO $ putStrLn $ "Test arguments are: " <> show args
+          let generated_inst = generated_f args
+          liftIO $ putStrLn $ "Generated function instance for show: " <> show generated_inst
+          return ()
+
+    let tmDataTest generated_f target_f = do
+          liftIO $ putStrLn $ "Test arguments are: " <> show args
+          let generated_inst = generated_f args
+          liftIO $ putStrLn $ "Generated function instance: " <> show generated_inst
+          let target_inst = target_f args
+          liftIO $ putStrLn $ "Target function instance:    " <> show target_inst
+          let dataInstanceTestResult = if generated_inst == target_inst then "PASSED" else "FAILED"
+          liftIO $ putStrLn $ "Data Instance Test Result: " <> dataInstanceTestResult
+          return ()
+
+    
+    testTheoremM
+           ((builderSchema::(v t -> t) -> (v t -> t -> s) -> TheoremSchemaMT r s _ (v t -> t)) source_set_pred pred_f)
+                  tmDataShow tmDataTest
+    return ()
+
+
 
 builderSchema :: (HelperConstraints sE s eL m r t, V.Vector v t) =>
     (v t -> t)  ->         -- source_set expressed as a function on paramaters
@@ -270,6 +303,7 @@ builderSchema (source_set_f::(v t -> t)) p_pred =
            all_consts
 
    
+
 
 
 -- | Helper to instantiate a builder set and return its properties and object.

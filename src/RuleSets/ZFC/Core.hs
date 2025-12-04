@@ -9,7 +9,8 @@ module RuleSets.ZFC.Core
     HelperConstraints(..),
     SentConstraints(..),
     MonadSent,
-    TheoremSchemaMT
+    TheoremSchemaMT,
+    TheoremAlgSchema
 ) where
 
 
@@ -83,7 +84,8 @@ import RuleSets.PredLogic.Core hiding
    LogicTerm(..),
    HelperConstraints(..),
    SentConstraints(..),
-   TheoremSchemaMT(..) )
+   TheoremSchemaMT,
+   TheoremAlgSchema )
 import qualified RuleSets.PredLogic.Core as PREDL
 import qualified RuleSets.PredLogic.Helpers as PREDL
 import GHC.Num (integerMul)
@@ -217,7 +219,7 @@ data LogicRule s sE t  where
     ProofBySubArg :: ProofBySubArgSchema s [LogicRule s sE t] -> LogicRule s sE t
     ProofByUG :: ProofByUGSchema s [LogicRule s sE t] -> LogicRule s sE t 
     Theorem :: TheoremSchema s [LogicRule s sE t ] Text () -> LogicRule s sE t 
-    TheoremM :: TheoremAlgSchema () [LogicRule s sE t ] s Text () () -> 
+    TheoremM :: TheoremAlgSchema [LogicRule s sE t ] s () -> 
                              LogicRule s sE t
     --EmptySet :: LogicRule s sE t
     Specification :: [Int] -> Int -> t -> s -> LogicRule s sE t
@@ -363,7 +365,7 @@ instance PREDL.LogicRuleClass [LogicRule s sE t] s t () sE Text where
      eqSubst :: Int -> s -> s -> [LogicRule s sE t]
      eqSubst idx templateSent eqSent = [PredRule $ PREDL.EqSubst idx templateSent eqSent]
 
-class LogicRuleClass r s sE t | r->s, r->sE, r->t where
+class LogicRuleClass r s sE t | r->s, r->sE, r->t, s -> where
      specification :: [Int] -> Int -> t -> s -> r
      replacement :: [Int] -> Int -> Int -> t -> s -> r
      integerMembership    :: Int -> r
@@ -890,7 +892,7 @@ instance PL.SubproofRule [LogicRule s sE t] s where
 instance PREDL.SubproofRule [LogicRule s sE t] s Text () () where
      theoremSchema:: TheoremSchema s [LogicRule s sE t] Text () -> [LogicRule s sE t]
      theoremSchema schema = [Theorem schema]
-     theoremAlgSchema:: TheoremAlgSchema () [LogicRule s sE t] s Text () () -> [LogicRule s sE t]
+     theoremAlgSchema:: PREDL.TheoremAlgSchema () [LogicRule s sE t] s Text () () -> [LogicRule s sE t]
      theoremAlgSchema schema = [TheoremM schema]
 
      proofByUG:: s -> [LogicRule s sE t] -> [LogicRule s sE t]
@@ -920,7 +922,7 @@ type HelperConstraints sE s eL m r t =
     ( 
       PREDL.HelperConstraints m s () Text t sE eL r ()
     , LogicRuleClass r s sE t,
-    LogicSent s t, LogicTerm t
+    LogicSent s t, LogicTerm t, Eq t
     )
 
 type SentConstraints s t sE
@@ -934,3 +936,6 @@ type MonadSent s t sE m = (SentConstraints s t sE,  MonadState (Sum Int) m)
 
 type TheoremSchemaMT r s m x =
     PREDL.TheoremSchemaMT () r s Text () m x
+
+type TheoremAlgSchema r s x = 
+    TheoremSchemaMT r s (Either SomeException) x
