@@ -1499,29 +1499,10 @@ main = do
                 dropIndices 1
                 return (src_set_func, p_pred_func)
 
-    let schema = builderSchema (source_set_func::Vec2 ObjDeBr -> ObjDeBr) p_pred_func ::(TheoremSchemaMT [ZFCRuleDeBr] PropDeBr IO (B.Vec2 ObjDeBr -> ObjDeBr))
-
-    let tmDataTest generated_f target_f = do
-          let generated_inst = generated_f (V.mk2 (Constant "D") (Constant "E"))
-          putStrLn $ "Generated function instance: " <> show generated_inst
-          let target_inst = target_f (V.mk2 (Constant "D") (Constant "E"))
-          putStrLn $ "Target function instance:    " <> show target_inst
-          let dataInstanceTestResult = if generated_inst == target_inst then "PASSED" else "FAILED"
-          putStrLn $ "Data Instance Test Result: " <> dataInstanceTestResult
-
-          return ()
-    
-    let tmDataShow generated_f = do
-          let generated_inst = generated_f (V.mk2 (Constant "D") (Constant "E"))
-          putStrLn $ "Generated function instance for show: " <> show generated_inst
-          return ()
 
 
-    testTheoremM schema tmDataShow tmDataTest
-
-
-    testBuilderTheoremM source_set_func p_pred_func (V.mk2 (Constant "D") (Constant "E")) (Proxy @[ZFCRuleDeBr])
-
+    let testVector = V.mk2 (Constant "D") (Constant "E")::(Vec2 ObjDeBr)
+    testBuilderTheoremM source_set_func p_pred_func testVector (Proxy @[ZFCRuleDeBr])
 
     putStrLn "===================="
     putStrLn ""
@@ -1540,33 +1521,11 @@ main = do
                 dropIndices 1
                 return (src_set_func, p_pred_func)
         
-    let schema = builderSchema source_set_func p_pred_func::(TheoremSchemaMT
-                     [ZFCRuleDeBr] PropDeBr IO (Vec 0 ObjDeBr -> ObjDeBr))
-    let schema2 = builderSchema source_set_func p_pred_func::(TheoremAlgSchema
-                     [ZFCRuleDeBr] PropDeBr (B.Vec 0 ObjDeBr -> ObjDeBr))
-    let tmDataTest generated_f target_f = do
-          let generated_inst = generated_f V.mk0
-          putStrLn $ "Generated function instance: " <> show generated_inst
-          let target_inst = target_f V.mk0
-          putStrLn $ "Target function instance:    " <> show target_inst
-          let dataInstanceTestResult = if generated_inst == target_inst then "PASSED" else "FAILED"
-          putStrLn $ "Data Instance Test Result: " <> dataInstanceTestResult
-
-          return ()
-
-    let tmDataShow generated_f = do
-          let generated_inst = generated_f V.mk0
-          putStrLn $ "Generated function instance for show: " <> show generated_inst
-          return ()
-
-    testTheoremM 
-           schema  tmDataShow tmDataTest
 
 
-    testSilentTheoremM
-           schema2 tmDataShow tmDataTest
+    let testVector2 = V.mk0 :: (Vec 0 ObjDeBr)
 
-
+    testBuilderTheoremM source_set_func p_pred_func testVector2 (Proxy @[ZFCRuleDeBr])
 
 
 
