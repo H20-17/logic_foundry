@@ -254,7 +254,7 @@ testBuilderTheoremM :: (HelperConstraints sE s eL m r t, V.Vector v t, MonadIO m
     v t ->  -- arguments to apply to the paramaters for testing
     Proxy r -> -- undefined rule type
     m ()
-testBuilderTheoremM source_set_pred (pred_f::(v t -> t -> s)) args (proxy_r :: Proxy r) = do
+testBuilderTheoremM source_set_pred pred_f args (proxy_r :: Proxy r) = do
     let tmDataShow generated_f = do
           liftIO $ putStrLn $ "Test arguments are: " <> show args
           let generated_inst = generated_f args
@@ -273,7 +273,7 @@ testBuilderTheoremM source_set_pred (pred_f::(v t -> t -> s)) args (proxy_r :: P
 
     
     testTheoremM
-           ((builderSchema::(v t -> t) -> (v t -> t -> s) -> TheoremSchemaMT r s _ (v t -> t)) source_set_pred pred_f)
+           ((builderSchema::_ -> _ -> TheoremSchemaMT r _ _ _) source_set_pred pred_f)
                   tmDataShow tmDataTest
     return ()
 
