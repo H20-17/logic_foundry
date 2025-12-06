@@ -654,6 +654,7 @@ data SubproofMException s sE o tType where
    BigExceptLemmaNotEstablished :: s -> SubproofMException s sE o tType --
    BigExceptSchemaConstDup :: o -> SubproofMException s sE o tType  --
    TheoremTargetMismatch :: s -> s -> SubproofMException s sE o tType
+   TargetSanityErr :: s -> sE -> SubproofMException s sE o tType
 
 
 
@@ -755,6 +756,11 @@ checkTheoremMOpen mayPrStateCxt errOnTargetMismatch (TheoremSchemaMT mayTargetM 
     mayTarget <- runMaybeT mayTargetM
     maybe (maybe (return ()) throwM (g1 constdictPure)) (maybe (return ()) throwM . g2 constdictPure) mayPrStateCxt
     mayTarget <- runMaybeT mayTargetM
+    case mayTarget of
+        Just (targetSent, _) ->  do
+            let maySe = checkSanity mempty [] constdictPure targetSent
+            maybe (return ()) (throwM . TargetSanityErr targetSent) maySe
+        Nothing -> return ()
     case mayPrStateCxt of
         Just (provenState, provenContext) ->
             case mayTarget of
