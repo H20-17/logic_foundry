@@ -319,38 +319,25 @@ runTheoremM :: HelperConstraints m s tType o t sE eL r1 q
                                ProofGenTStd tType r1 s o q m (s, [Int], x)
 runTheoremM (TheoremSchemaMT mayTargetM constDict lemmas prog idxs qTypes) =  do
         state <- getProofState
-        mayTarget <- (lift . runMaybeT) mayTargetM
-        case mayTarget of
-            Just (targetSent, targetData) -> do
-                let lookup_data = Data.Map.lookup targetSent (provenSents state)
-                case lookup_data of
-                    Just idxs -> do
-                        (_,idx) <- repM targetSent
-                        return (targetSent,idx, targetData)
-                    Nothing -> do
-                        context <- ask
-                        (tm, proof, extra, newSteps) <- lift $ checkTheoremMOpen 
-                             (Just (state,context)) 
-                             (TheoremSchemaMT mayTargetM constDict lemmas prog idxs qTypes)
-                        unless (targetSent==tm) $
-                            throwM $ TheoremTargetMismatch tm targetSent
-                        mayMonadifyRes <- monadifyProofStd (theoremSchema $ TheoremSchema constDict lemmas tm proof)
-                        idx <- maybe (error "No theorem returned by monadifyProofStd on theorem schema. This shouldn't happen") (return . snd) mayMonadifyRes
-                        return (tm, idx, extra)
-            Nothing -> do
-                context <- ask
-                (tm, proof, extra, newSteps) <- lift $ checkTheoremMOpen (Just (state,context)) (TheoremSchemaMT mayTargetM constDict lemmas prog idxs qTypes)
+        context <- ask
+        (tm, extra, other,_) <- lift $ checkTheoremMOpen (Just (state,context)) True (TheoremSchemaMT mayTargetM constDict lemmas prog idxs qTypes)
+        case other of
+            Left (proof,newSteps) -> do
                 mayMonadifyRes <- monadifyProofStd (theoremSchema $ TheoremSchema constDict lemmas tm proof)
                 idx <- maybe (error "No theorem returned by monadifyProofStd on theorem schema. This shouldn't happen") (return . snd) mayMonadifyRes
                 return (tm, idx, extra)
+            Right idxs -> do
+                (_,idx) <- repM tm
+                return (tm,idx,extra)
 
 
 checkTheoremM :: (HelperConstraints m s tType o t sE eL r1 q)
                  =>  TheoremSchemaMT tType r1 s o q m x
                               -> m (s, r1, x, [PrfStdStep s o tType],Maybe (s,x))
 checkTheoremM (TheoremSchemaMT mayTargetM constDict lemmas prog idxs qTypes) = do
-                    mayTargetTmData <- runMaybeT mayTargetM
-                    (provenSent, prf, extraData, steps) <- checkTheoremMOpen Nothing (TheoremSchemaMT mayTargetM constDict lemmas prog idxs qTypes)
+                    (provenSent, extraData, other,mayTargetTmData) <- checkTheoremMOpen Nothing False (TheoremSchemaMT mayTargetM constDict lemmas prog idxs qTypes)
+                    (prf,steps) <- either return (error "checkTHeoremMOpen produced unexpected Right value in checkTheoremM function") other
+
                     return (provenSent, prf, extraData, steps, mayTargetTmData)
 
 
@@ -359,10 +346,9 @@ checkSilentTheoremM :: (HelperConstraints (Either SomeException) s tType o t sE 
                  =>  TheoremAlgSchema tType r1 s o q x
                               -> m (s, x, Maybe (s,x) )
 checkSilentTheoremM (TheoremSchemaMT mayTargetM constDict lemmas prog idxs qTypes) = do
-        let mayTargetTmDataOrErr = runMaybeT mayTargetM
-        mayTargetTmData <- either throwM return mayTargetTmDataOrErr
-        let eitherResult = checkTheoremMOpen Nothing (TheoremSchemaMT mayTargetM constDict lemmas prog idxs qTypes)
-        (tm, proof, extra, newSteps) <- either throwM return eitherResult
+        let eitherResult = checkTheoremMOpen Nothing False (TheoremSchemaMT mayTargetM constDict lemmas prog idxs qTypes)     
+        (tm,extra,other,mayTargetTmData) <- either throwM return eitherResult
+        either return (error "checkTHeoremMOpen produced unexpected Right value in checkSilentTheoremM function") other
         return (tm, extra, mayTargetTmData)
 
 
@@ -373,33 +359,18 @@ runTmSilentM :: HelperConstraints m s tType o t sE eL r1 q
 -- runTmSilentM f (TheoremSchemaMT constDict lemmas prog) =  do
 runTmSilentM (TheoremSchemaMT mayTargetM constDict lemmas prog idxs qTypes) =  do
         state <- getProofState
-        let mayTarget = runMaybeT mayTargetM
-        case mayTarget of
-            Left err -> throwM err
-            Right (Just (targetSent, targetData)) -> do
-                let lookup_data = Data.Map.lookup targetSent (provenSents state)
-                case lookup_data of
-                    Just idxs -> do
-                        (_,idx) <- repM targetSent
-                        return (targetSent,idx, targetData)
-                    Nothing -> do
-                        context <- ask
-                        let eitherResult = checkTheoremMOpen 
-                             (Just (state,context)) 
-                             (TheoremSchemaMT mayTargetM constDict lemmas prog idxs qTypes)
-                        (tm, proof, extra, newSteps) <- either throwM return eitherResult
-                        unless (targetSent==tm) $
-                            throwM $ TheoremTargetMismatch tm targetSent
-                        mayMonadifyRes <- monadifyProofStd (theoremAlgSchema $ TheoremSchemaMT nullDataTarget constDict lemmas newProg idxs qTypes)
-                        idx <- maybe (error "No theorem returned by monadifyProofStd on theorem schema. This shouldn't happen") (return . snd) mayMonadifyRes
-                        return (tm, idx, extra)
-    where
-        newProg = do
-             prog
-             return ()
-        nullDataTarget = do
-            (targetSent, targetData) <- mayTargetM
-            return (targetSent,())
+        context <- ask
+        let eitherResult = checkTheoremMOpen (Just (state,context)) True (TheoremSchemaMT mayTargetM constDict lemmas prog idxs qTypes)
+        (tm,extra,other,_) <- either throwM return eitherResult
+        case other of
+            Left (proof,newSteps) -> do
+                mayMonadifyRes <- monadifyProofStd (theoremSchema $ TheoremSchema constDict lemmas tm proof)
+                idx <- maybe (error "No theorem returned by monadifyProofStd on theorem schema. This shouldn't happen") (return . snd) mayMonadifyRes
+                return (tm, idx, extra)
+            Right idxs -> do
+                (_,idx) <- repM tm
+                return (tm,idx,extra)
+
                    
 -- | Applies Universal Instantiation (UI) multiple times to a given proposition.
 -- | Returns the final instantiated proposition and its proof index.

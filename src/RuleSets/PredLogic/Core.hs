@@ -24,7 +24,7 @@ module RuleSets.PredLogic.Core
 
 import Data.Monoid ( Last(..), Sum(..) )
 
-import Control.Monad ( foldM, unless )
+import Control.Monad ( foldM, unless, when )
 import Data.Set (Set, fromList)
 import Data.List (mapAccumL,intersperse)
 import qualified Data.Set as Set
@@ -653,6 +653,7 @@ data SubproofMException s sE o tType where
    BigExceptConstTypeConflict :: o -> tType -> tType -> SubproofMException s sE o tType --
    BigExceptLemmaNotEstablished :: s -> SubproofMException s sE o tType --
    BigExceptSchemaConstDup :: o -> SubproofMException s sE o tType  --
+   TheoremTargetMismatch :: s -> s -> SubproofMException s sE o tType
 
 
 
@@ -742,25 +743,64 @@ multiUGMWorker typeList programCore =
 
 
 checkTheoremMOpen :: (HelperConstraints m s tType o t sE eL r1 q) 
-                 =>  Maybe (PrfStdState s o tType,PrfStdContext q s)  -> TheoremSchemaMT tType r1 s o q m x
-                              -> m (s, r1, x, [PrfStdStep s o tType])
-checkTheoremMOpen mayPrStateCxt (TheoremSchemaMT mayTargetM constdict lemmas prog idxs qTypes) =  do
+                 =>  Maybe (PrfStdState s o tType,PrfStdContext q s)  
+                    -> Bool
+                    -> TheoremSchemaMT tType r1 s o q m x
+                    -> m (s, x, Either (r1,[PrfStdStep s o tType]) [Int], Maybe (s,x))
+checkTheoremMOpen mayPrStateCxt errOnTargetMismatch (TheoremSchemaMT mayTargetM constdict lemmas prog idxs qTypes) =  do
     let eitherConstDictMap = assignSequentialMap 0 constdict
     (newStepCountA, newConsts) <- either (throwM . BigExceptSchemaConstDup) return eitherConstDictMap
     let (newStepCountB, newProven) = assignSequentialSet newStepCountA lemmas
     let constdictPure = Data.Map.map fst newConsts
+    mayTarget <- runMaybeT mayTargetM
     maybe (maybe (return ()) throwM (g1 constdictPure)) (maybe (return ()) throwM . g2 constdictPure) mayPrStateCxt
-    let newContext = PrfStdContext [] [] (maybe []  ((<>[True]) . contextFrames . snd) mayPrStateCxt)
-    let preambleSteps = conststeps <> lemmasteps
-    let newState = PrfStdState newProven newConsts newStepCountB
-    let mayPreambleLastProp = if Prelude.null lemmas then Last Nothing else (Last . Just . last) lemmas
-    let maxIndex = if null idxs then 0 else maximum idxs + 1
+    mayTarget <- runMaybeT mayTargetM
+    case mayPrStateCxt of
+        Just (provenState, provenContext) ->
+            case mayTarget of
+                Just (targetSent, targetData) -> do
+                    let lookup_data = Data.Map.lookup targetSent (provenSents provenState)
+                    case lookup_data of
+                        Just idxs -> do
+                            return (targetSent, targetData, Right idxs,mayTarget)
+                        Nothing -> do
+                            let newContext = PrfStdContext [] [] (maybe []  ((<>[True]) . contextFrames . snd) mayPrStateCxt)
+                            let preambleSteps = conststeps <> lemmasteps
+                            let newState = PrfStdState newProven newConsts newStepCountB
+                            let mayPreambleLastProp = if Prelude.null lemmas then Last Nothing else (Last . Just . last) lemmas
+                            let maxIndex = if null idxs then 0 else maximum idxs + 1
     
-    (extra,tm,proof,newSteps) 
-               <- runSubproofM newContext mempty newState preambleSteps mayPreambleLastProp prog (Sum maxIndex)
+                            (extra,tm,proof,newSteps) 
+                                    <- runSubproofM newContext mempty newState preambleSteps mayPreambleLastProp prog (Sum maxIndex)
+                            when (targetSent /= tm && errOnTargetMismatch) $
+                                   throwM $ TheoremTargetMismatch tm targetSent
+                            return (tm,extra, Left (proof,newSteps), mayTarget)
+                Nothing -> do
+                    let newContext = PrfStdContext [] [] (maybe []  ((<>[True]) . contextFrames . snd) mayPrStateCxt)
+                    let preambleSteps = conststeps <> lemmasteps
+                    let newState = PrfStdState newProven newConsts newStepCountB
+                    let mayPreambleLastProp = if Prelude.null lemmas then Last Nothing else (Last . Just . last) lemmas
+                    let maxIndex = if null idxs then 0 else maximum idxs + 1
+    
+                    (extra,tm,proof,newSteps) 
+                                    <- runSubproofM newContext mempty newState preambleSteps mayPreambleLastProp prog (Sum maxIndex)
+                    return (tm,extra, Left (proof,newSteps), mayTarget)
+        Nothing -> do
+            let newContext = PrfStdContext [] [] (maybe []  ((<>[True]) . contextFrames . snd) mayPrStateCxt)
+            let preambleSteps = conststeps <> lemmasteps
+            let newState = PrfStdState newProven newConsts newStepCountB
+            let mayPreambleLastProp = if Prelude.null lemmas then Last Nothing else (Last . Just . last) lemmas
+            let maxIndex = if null idxs then 0 else maximum idxs + 1
+    
+            (extra,tm,proof,newSteps) 
+                        <- runSubproofM newContext mempty newState preambleSteps mayPreambleLastProp prog (Sum maxIndex)
+            when errOnTargetMismatch $ do
+                    let mayTargetSent = fmap fst mayTarget
+                    maybe (return ()) (\targetSent -> 
+                        unless (targetSent==tm) $
+                            throwM $ TheoremTargetMismatch tm targetSent)  mayTargetSent       
+            return (tm,extra, Left (proof,newSteps), mayTarget)
 
-
-    return (tm,proof,extra,newSteps) 
        where
             conststeps = Prelude.foldr h1 [] constdict
             lemmasteps = Prelude.foldr h2 [] lemmas
@@ -800,7 +840,7 @@ establishTmSilentM :: (HelperConstraints (Either SomeException) s tType o t sE e
                                     Either SomeException (s, PrfStdStep s o tType)
 establishTmSilentM (schema :: TheoremAlgSchema tType r1 s o q ()) context state = 
     do
-        (tm, prf, (),_) <-  checkTheoremMOpen  (Just (state,context)) schema
+        (tm, (),_,_) <-  checkTheoremMOpen  (Just (state,context)) True schema
         return (tm, PrfStdStepTheoremM tm)
 
 
@@ -809,7 +849,8 @@ expandTheoremM :: (HelperConstraints (Either SomeException) s tType o t sE eL r1
                             => TheoremAlgSchema tType r1 s o q () -> Either  SomeException (TheoremSchema s r1 o tType)
 expandTheoremM ((TheoremSchemaMT mayTargetM constdict lemmas proofprog idxs qTypes):: TheoremAlgSchema tType r1 s o q ()) =
       do
-          (tm,r1,(),_) <- checkTheoremMOpen Nothing (TheoremSchemaMT mayTargetM constdict lemmas proofprog idxs qTypes)
+          (tm,(),other,_) <- checkTheoremMOpen Nothing True (TheoremSchemaMT mayTargetM constdict lemmas proofprog idxs qTypes)
+          (r1,_) <- either return (error "TheoremAlgSchema M produced unexpected Right value") other
           return $ TheoremSchema constdict lemmas tm r1
 
 

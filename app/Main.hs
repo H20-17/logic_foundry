@@ -1480,7 +1480,9 @@ main = do
 
 
     putStrLn "======================"
-    putStrLn "BUILDER THEOREM TEST 1"
+    putStrLn "BUILDER THEOREM TESTS"
+    putStrLn "----------------------"
+    putStrLn "Test #1"
     putStrLn "----------------------"
     let (source_set_func,p_pred_func) = 
             runIndexTracker $ do
@@ -1503,12 +1505,9 @@ main = do
 
     let testVector = V.mk2 (Constant "D") (Constant "E")::(Vec2 ObjDeBr)
     testBuilderTheoremM source_set_func p_pred_func testVector (Proxy @[ZFCRuleDeBr])
-
-    putStrLn "===================="
     putStrLn ""
-    
-    putStrLn "======================"
-    putStrLn "BUILDER THEOREM TEST 2"
+    putStrLn "-----------------------"
+    putStrLn "Test #2"
     putStrLn "----------------------"
 
     let (source_set_func,p_pred_func) =
