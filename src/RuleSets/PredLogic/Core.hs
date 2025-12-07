@@ -908,6 +908,31 @@ class LogicTerm t where
 
 
 
+ugReindexTheoremStep :: ([Int] -> [Int]) -> PrfStdStep s o tType -> PrfStdStep s o tType
+ugReindexTheoremStep indexMap step = case step of
+    PrfStdStepLemma sent mayIdx -> PrfStdStepLemma sent (fmap indexMap mayIdx)
+    PrfStdStepConst constName constType mayIdx -> PrfStdStepConst constName constType (fmap indexMap mayIdx)
+    _ -> step
+
+
+ugReindexStep ::  ([Int] -> [Int]) -> PrfStdStep s o tType -> PrfStdStep s o tType
+ugReindexStep indexMap step = case step of
+    PrfStdStepStep sent ruleName idxs -> PrfStdStepStep sent ruleName (Prelude.map indexMap idxs)
+    PrfStdStepLemma sent mayIdx -> PrfStdStepLemma sent (fmap indexMap mayIdx)
+    PrfStdStepConst constName constType mayIdx -> PrfStdStepConst constName constType (fmap indexMap mayIdx)
+    PrfStdStepTheorem sent subSteps -> PrfStdStepTheorem sent (Prelude.map (ugReindexTheoremStep indexMap) subSteps)
+    PrfStdStepSubproof sent ruleName subSteps -> PrfStdStepSubproof sent ruleName (ugReindex indexMap subSteps)
+    PrfStdStepTheoremM sent -> PrfStdStepTheoremM sent
+    PrfStdStepFreevar idx termType -> PrfStdStepFreevar idx termType
+    PrfStdStepFakeConst constName termType ->  PrfStdStepFakeConst constName termType
+    PrfStdStepRemark body -> PrfStdStepRemark body
+
+ugReindex :: ([Int] -> [Int]) -> [PrfStdStep s o tType] -> [PrfStdStep s o tType]
+ugReindex indexMap =
+    Prelude.map (ugReindexStep indexMap)
+
+
+
 data SubproofError s sE eL where
    ProofByUGErrSubproofFailedOnErr :: TestSubproofErr s sE eL
                                     -> SubproofError s sE eL
@@ -935,11 +960,37 @@ runProofByUG (ProofByUGSchema generalization subproof) context state =
          let preambleSteps = [PrfStdStepFreevar (length varstack) (qTypeToTType tType)]
          let eitherTestResult = testSubproof newContext state newState preambleSteps (Last Nothing) generalizable subproof
          finalSteps <- either (throwError . ProofByUGErrSubproofFailedOnErr) return eitherTestResult
-         return  (generalization, PrfStdStepSubproof generalization "PRF_BY_UG" finalSteps)
+         let finalStepsNormalized = 
+                if length finalSteps == 2 then
+                    case finalSteps!!1 of
+                        PrfStdStepSubproof _ "PRF_BY_UG" substeps -> head finalSteps : ugReindex indexMap substeps
+                        _ -> finalSteps
+                else finalSteps
+         return  (generalization, PrfStdStepSubproof generalization "PRF_BY_UG" finalStepsNormalized)
+             where
+                indexMap oldIdx = 
+                    if length oldIdx > length (stepIdxPrefix context) + 2 then
+                        -- this cannot happen unless lenght oldIdx >= 3, since lenght oldIdx >= 1 automatically
+                        take (length (stepIdxPrefix context) + 1) oldIdx ++  [oldIdx!!(length (stepIdxPrefix context)+2) + 1] ++ drop (length (stepIdxPrefix context) + 3) oldIdx
+                    else
+                        oldIdx
 
 
+-- take 1 from 2.1.1.0
+
+-- then we get 2
+
+-- 2.1.1.0 mapped to 1 ....somehow
+
+-- 2.1.0 goes to 2.1
 
 
+-- 2.1.1.0 has to go to 2.2.0
+
+--first idx kept
+-- second dropt
+-- third incremented
+--remaning kept
 
 
 class SubproofRule r s o tType q | r->o, r -> tType, r -> q where

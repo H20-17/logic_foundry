@@ -513,15 +513,15 @@ runProofByUGM tt prog =  do
         let preambleSteps = [PrfStdStepFreevar (length frVarTypeStack) (qTypeToTType tt)]
         let modifiedProg = do
             progData <- prog
-            txt <- showTermM progData
-            remarkM $ "Data returned from program: " <> txt
+            -- txt <- showTermM progData
+            -- remarkM $ "Data returned from program: " <> txt
             topFreeVar <- getTopFreeVar
             newIdx <- newIndex
-            remarkM $ "new index for ug variable: " <> pack (show newIdx)
+            -- remarkM $ "new index for ug variable: " <> pack (show newIdx)
             let dataFuncTmplt = createTermTmplt [(topFreeVar, newIdx)] progData
             
-            txt <- showTermM dataFuncTmplt
-            remarkM $ "Creating universal generalization function: " <> txt
+            -- txt <- showTermM dataFuncTmplt
+            -- remarkM $ "Creating universal generalization function: " <> txt
             let returnFunc = lambdaTerm newIdx dataFuncTmplt
             dropIndices 1
             return returnFunc
