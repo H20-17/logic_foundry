@@ -6,7 +6,7 @@ module Langs.Internal.BasicUntyped.Rendering (
     showProp,
     showObj,
     showPropM,
-    showObjM,
+    showObjM
 ) where
 
 import Langs.Internal.BasicUntyped.Core
@@ -36,9 +36,12 @@ import Text.XHtml (sub)
 import qualified Internal.StdPattern
 import Data.Maybe (isJust)
 
-import Data.Text (Text, pack, unpack,concat, lines,intercalate)
+import Data.Text (Text, pack, unpack,concat, lines,intercalate,breakOn)
+import qualified Data.Text as T
 import Data.Map
     ( (!), foldrWithKey, fromList, insert, keysSet, lookup, map, Map )
+import qualified Data.Text.Read as TR
+import Data.Char (isDigit)
 
 
 data SubexpParseTree where
@@ -522,7 +525,8 @@ showSubexpParseTree sub = case sub of
     TupleProject idx obj ->  "𝛑" <> showIndexAsSubscript idx <> funcArgDisplay obj
   where 
     showHierarchalIdxAsSubscript :: [Int] -> Text
-    showHierarchalIdxAsSubscript idxs = Data.Text.concat (intersperse "." (Prelude.map showIndexAsSubscript idxs))
+    -- showHierarchalIdxAsSubscript idxs = Data.Text.concat (intersperse "." (Prelude.map showIndexAsSubscript idxs))
+    showHierarchalIdxAsSubscript idxs = "{%i" <> Data.Text.concat (intersperse "." (Prelude.map (pack . show) idxs)) <> "%}"
     assoc opSymb = fst $ binaryOpData!opSymb
     prec opSymb = snd $ binaryOpData!opSymb
     funcArgDisplay x = case x of
@@ -586,7 +590,62 @@ data PropDeBrStepState where
     PropDeBrStepState :: {sentMap :: Map PropDeBr [Int],
                           stpCount :: Int} -> PropDeBrStepState
 
+-- | Scans the text for patterns {%I...%} and {%i...%} and processes them.
+-- Matches the regex logic: /\{%([Ii])([\d.]+)%\}/g
+revealIdxs :: Text -> Text
+revealIdxs = go
+  where
+    go text =
+        -- Find the start of a tag
+        let (prefix, matchStart) = T.breakOn "{%" text
+        in if T.null matchStart
+           then prefix
+           else
+               -- matchStart begins with "{%"
+               -- Look for the closing "%}"
+               let potentialContent = T.drop 2 matchStart
+                   (inner, rest) = T.breakOn "%}" potentialContent
+               in if T.null rest
+                  then prefix <> matchStart -- No closing tag, return remainder as is
+                  else
+                      -- Check if the content matches our schema: [Ii][\d.]+
+                      if isValidContent inner
+                      then 
+                          let replacement = evalTag inner
+                              remainder = T.drop 2 rest -- Skip the closing "%}"
+                          in prefix <> replacement <> go remainder
+                      else 
+                          -- Invalid tag content, treat opening "{%" as literal text and continue
+                          prefix <> "{%" <> go potentialContent
 
+    -- Check if content starts with I/i and contains only digits/dots
+    isValidContent :: Text -> Bool
+    isValidContent t
+        | T.null t = False
+        | otherwise = 
+            let (mode, content) = (T.head t, T.tail t)
+            in (mode == 'I' || mode == 'i') && T.all (\c -> isDigit c || c == '.') content
+
+    -- Apply the transformation based on the mode char
+    evalTag :: Text -> Text
+    evalTag t =
+        let mode = T.head t
+            content = T.tail t
+        in case mode of
+            'I' -> 
+                -- Preserve existing behavior for uppercase I
+                content
+            'i' -> 
+                -- Apply showIndexAsSubscript to dot-separated numbers
+                let parts = T.splitOn "." content
+                    transformed = intersperse "." (Prelude.map (convertNumber . TR.decimal) parts)
+                in T.concat transformed
+            _   -> "{%" <> t <> "%}"
+
+    -- Helper to safely convert parsed Decimal results
+    convertNumber :: Either String (Int, Text) -> Text
+    convertNumber (Right (n, _)) = showIndexAsSubscript n
+    convertNumber (Left _)       = ""
 
 showPropDeBrStep :: PrfStdStep PropDeBr Text () -> RWS PropDeBrStepContext Text PropDeBrStepState ()
 showPropDeBrStep step = do
@@ -609,7 +668,7 @@ showPropDeBrStep step = do
             PrfStdStepStep prop justification depends -> do
                 let newDictMap = insert prop newIndex dictMap
                 put $ PropDeBrStepState newDictMap (lineNum + 1)
-                tell $ showProp newDictMap prop
+                tell $ revealIdxs (showProp newDictMap prop)
                        <> "    "
                        <> justification
                        <> showIndices depends
@@ -617,7 +676,7 @@ showPropDeBrStep step = do
             PrfStdStepLemma prop mayWhereProven -> do
                 let newDictMap = insert prop newIndex dictMap
                 put $ PropDeBrStepState newDictMap (lineNum + 1)
-                tell $ showProp newDictMap prop
+                tell $ revealIdxs (showProp newDictMap prop)
                        <> "    LEMMA"
                        <> maybe "" (("[⬅ " <>) . (<> "]"). showIndexDepend) mayWhereProven
                        <> qed
@@ -630,14 +689,14 @@ showPropDeBrStep step = do
             PrfStdStepTheorem prop steps -> do
                 let newDictMap = insert prop newIndex dictMap
                 put $ PropDeBrStepState newDictMap (lineNum + 1)
-                tell $ showProp newDictMap prop
+                tell $ revealIdxs (showProp newDictMap prop)
                        <> "    THEOREM"
                        <> showSubproofF steps True notMonadic mempty cf []
                        <> qed
             PrfStdStepSubproof prop subproofName steps -> do
                 let newDictMap = insert prop newIndex dictMap
                 put $ PropDeBrStepState newDictMap (lineNum + 1)
-                tell $ showProp newDictMap prop
+                tell $ revealIdxs (showProp newDictMap prop)
                        <> "    "
                        <> subproofName
                        <> qed
@@ -645,7 +704,7 @@ showPropDeBrStep step = do
             PrfStdStepTheoremM prop -> do
                 let newDictMap = insert prop newIndex dictMap
                 put $ PropDeBrStepState newDictMap (lineNum + 1)
-                tell $ showProp newDictMap prop
+                tell $ revealIdxs (showProp newDictMap prop)
                        <> "    ALGORITHMIC_THEOREM"
                        <> qed
             PrfStdStepFreevar index _ -> do
@@ -663,7 +722,7 @@ showPropDeBrStep step = do
                 tell $ "REMARK"
                      <> qed
                      <> (if text == "" then "" else "\n" <> contextFramesShown cf <> "║") 
-                     <> intercalate ("\n" <> contextFramesShown cf <> "║") (Data.Text.lines text)
+                     <> intercalate ("\n" <> contextFramesShown cf <> "║") (Data.Text.lines (revealIdxs text))
                      <> "\n"
                      <> contextFramesShown cf
                      <> "╚"
@@ -723,7 +782,7 @@ printPropDeBrStep step = do
             PrfStdStepStep prop justification depends -> do
                 let newDictMap = insert prop newIndex dictMap
                 put $ PropDeBrStepState newDictMap (lineNum + 1)
-                liftIO $ putStr $ unpack $ showProp newDictMap prop
+                liftIO $ putStr $ unpack $ revealIdxs (showProp newDictMap prop)
                        <> "    "
                        <> justification
                        <> showIndices depends
@@ -731,7 +790,7 @@ printPropDeBrStep step = do
             PrfStdStepLemma prop mayWhereProven -> do
                 let newDictMap = insert prop newIndex dictMap
                 put $ PropDeBrStepState newDictMap (lineNum + 1)
-                liftIO $ putStr $ unpack $ showProp newDictMap prop
+                liftIO $ putStr $ unpack $ revealIdxs (showProp newDictMap prop)
                        <> "    LEMMA"
                        <> maybe "" (("[⬅ " <>) . (<> "]"). showIndexDepend) mayWhereProven
                        <> qed
@@ -744,14 +803,14 @@ printPropDeBrStep step = do
             PrfStdStepTheorem prop steps -> do
                 let newDictMap = insert prop newIndex dictMap
                 put $ PropDeBrStepState newDictMap (lineNum + 1)
-                liftIO $ putStr $ unpack $ showProp newDictMap prop
+                liftIO $ putStr $ unpack $ revealIdxs (showProp newDictMap prop)
                        <> "    THEOREM"
                        <> showSubproofF steps True notMonadic mempty cf []
                        <> qed
             PrfStdStepSubproof prop subproofName steps -> do
                 let newDictMap = insert prop newIndex dictMap
                 put $ PropDeBrStepState newDictMap (lineNum + 1)
-                liftIO $ putStr $ unpack $ showProp newDictMap prop
+                liftIO $ putStr $ unpack $ revealIdxs (showProp newDictMap prop)
                        <> "    "
                        <> subproofName
                        <> qed
@@ -759,7 +818,7 @@ printPropDeBrStep step = do
             PrfStdStepTheoremM prop -> do
                 let newDictMap = insert prop newIndex dictMap
                 put $ PropDeBrStepState newDictMap (lineNum + 1)
-                liftIO $ putStr $ unpack $ showProp newDictMap prop
+                liftIO $ putStr $ unpack $ revealIdxs (showProp newDictMap prop)
                        <> "    ALGORITHMIC_THEOREM"
                        <> qed
             PrfStdStepFreevar index _ -> do
@@ -777,7 +836,7 @@ printPropDeBrStep step = do
                 liftIO $ putStr $ unpack $ "REMARK"
                      <> qed
                      <> (if text == "" then "" else "\n" <> contextFramesShown cf <> "║") 
-                     <> intercalate ("\n" <> contextFramesShown cf <> "║") (Data.Text.lines text)
+                     <> intercalate ("\n" <> contextFramesShown cf <> "║") (Data.Text.lines (revealIdxs text))
                      <> "\n"
                      <> contextFramesShown cf
                      <> "╚"

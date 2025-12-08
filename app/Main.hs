@@ -91,6 +91,7 @@ import Data.Data (Proxy (Proxy))
 import Control.Exception(assert)
 import Control.Monad.Trans.Maybe ( MaybeT(MaybeT, runMaybeT) )
 
+
 testTheoremMSchema :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) => PRED.TheoremSchemaMT () [PredRuleDeBr] PropDeBr Text () m ()
 testTheoremMSchema = PRED.TheoremSchemaMT mayTargetM [("N",())] [z1,z2] theoremProg [] []
   where
@@ -1531,6 +1532,7 @@ main = do
     putStrLn "===================="
     putStrLn ""
     
+
     error "STOP HERE FOR NOW"
 
 

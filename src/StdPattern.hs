@@ -13,7 +13,8 @@ module StdPattern(
     showSentM,
     showTermM,
     QuantifiableTerm(..),
-    getFreeVars
+    getFreeVars,
+    dynamicIndex
     
 ) where
 import Kernel
@@ -46,4 +47,5 @@ import Internal.StdPattern
       showSentM,
       showTermM,
       QuantifiableTerm(..),
-      getFreeVars)
+      getFreeVars,
+      dynamicIndex)

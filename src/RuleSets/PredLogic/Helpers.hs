@@ -36,6 +36,7 @@ import Data.Set (Set, fromList)
 import Data.List (mapAccumL,intersperse,find)
 import qualified Data.Set as Set
 import Data.Text ( pack, Text, unpack,concat)
+import qualified Data.Text as T
 import Data.Map
     ( (!), foldrWithKey, fromList, insert, keysSet, lookup, map, Map,restrictKeys )
 import Control.Applicative ( Alternative((<|>)) )
@@ -87,8 +88,8 @@ import RuleSets.PropLogic.Helpers hiding
    (MetaRuleError(..))
 import RuleSets.PredLogic.Core
 import IndexTracker
-
-
+import qualified Data.Text.Read as TR
+import Data.Char (isDigit)
 
 
 
@@ -495,6 +496,8 @@ multiEXM quantTypes inner = case quantTypes of
 --multiUGM typeList programCore = do
 --      (result_prop, idx, _) <- multiUGMWorker typeList programCore
 --      return (result_prop, idx)
+
+
 
 
 

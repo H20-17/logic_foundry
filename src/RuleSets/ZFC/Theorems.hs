@@ -80,7 +80,8 @@ import Internal.StdPattern
       ProofGenTStd,
       TypeableTerm(extractConstsTerm),
       TypedSent(extractConstsSent),
-      getFreeVars, ShowableTerm (showTerm) )
+      getFreeVars, ShowableTerm (showTerm),
+      dynamicIndex )
 
 import RuleSets.BaseLogic.Core hiding 
    (LogicRuleClass,
@@ -233,7 +234,12 @@ proveBuilderTheoremM (source_set_pred::(v t -> t )) p_pred = do
     let contextDepth = V.length (undefined::(v t))
     (_,_,returnFuncListForm) <- multiUGM contextDepth $ do
         freeVars <- getFreeVars       
-        (freeSpecAx,_) <- multiUIM closedSpecAxiom (reverse freeVars)
+        (freeSpecAx,idx) <- multiUIM closedSpecAxiom (reverse freeVars)
+        let dynIdx = dynamicIndex idx
+        let txt = "Fixed idx: " <> (pack . show) idx
+        remarkM txt
+        let txt = "Dynamic idx:" <> dynIdx
+        remarkM txt
         txt <- showSentM freeSpecAx
         remarkM txt
         let freeVars_v = V.fromList freeVars

@@ -14,7 +14,8 @@ module RuleSets.BaseLogic.Core
 import Data.Monoid ( Last(..) )
 
 import Control.Monad ( foldM, unless,forM )
-import Data.Text (Text, unpack)
+import Data.Text (Text, unpack,null,breakOn)
+import qualified Data.Text as T
 import Control.Monad.Except ( MonadError(throwError) )
 import Control.Monad.Catch
     ( SomeException, MonadThrow(..), Exception )
@@ -53,6 +54,8 @@ fetchProofIndexOfDependency provenMap dep =
     case Data.Map.lookup dep provenMap of
         Nothing -> Left $ LogicErrFakePropDependencyNotProven dep
         Just idx -> Right idx
+
+
 
 
 runProofAtomic :: (Ord s, TypedSent o tType sE s,Typeable s, Show s, Typeable o, Show o,

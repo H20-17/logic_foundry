@@ -29,6 +29,7 @@ import Data.Set (Set, fromList)
 import Data.List (mapAccumL,intersperse)
 import qualified Data.Set as Set
 import Data.Text ( pack, Text, unpack,concat)
+import qualified Data.Text as T
 import Data.Map
     ( (!), foldrWithKey, fromList, insert, keysSet, lookup, map, Map,restrictKeys )
 import Control.Applicative ( Alternative((<|>)) )
@@ -76,7 +77,8 @@ import qualified RuleSets.BaseLogic.Core as BASE
 import RuleSets.BaseLogic.Helpers
 import RuleSets.PropLogic.Helpers hiding
    (MetaRuleError(..))
-
+import qualified Data.Text.Read as TR
+import Data.Char (isDigit, digitToInt)
 
 
 
@@ -908,6 +910,59 @@ class LogicTerm t where
 
 
 
+-- | Remaps indices inside tags using the provided function.
+-- Preserves the tag wrappers ({%I...%} or {%i...%}) but updates the numbers inside.
+remarkReMapIndices :: ([Int] -> [Int]) -> Text -> Text
+remarkReMapIndices mapFunc input = go input
+  where
+    go text =
+        let (prefix, matchStart) = T.breakOn "{%" text
+        in if T.null matchStart
+           then prefix
+           else
+               let potentialContent = T.drop 2 matchStart
+                   (inner, rest) = T.breakOn "%}" potentialContent
+               in if T.null rest
+                  then prefix <> matchStart
+                  else
+                      if isValidContent inner
+                      then 
+                          let replacement = processTag inner
+                              remainder = T.drop 2 rest
+                          in prefix <> replacement <> go remainder
+                      else 
+                          prefix <> "{%" <> go potentialContent
+
+    isValidContent :: Text -> Bool
+    isValidContent t
+        | T.null t = False
+        | otherwise = 
+            let (mode, content) = (T.head t, T.tail t)
+            in (mode == 'I' || mode == 'i') && T.all (\c -> isDigit c || c == '.') content
+
+    processTag :: Text -> Text
+    processTag t =
+        let mode = T.head t
+            content = T.tail t
+            -- Split content "1.2.3" -> ["1", "2", "3"]
+            parts = T.splitOn "." content
+            -- Parse strings to Ints
+            currentIdxs = Prelude.map parseOrZero parts
+            -- Apply user mapping function
+            newIdxs = mapFunc currentIdxs
+            -- Convert back to dot-separated string
+            newContent = T.intercalate "." $ Prelude.map (T.pack . show) newIdxs
+        in "{%" <> T.singleton mode <> newContent <> "%}"
+
+    parseOrZero :: Text -> Int
+    parseOrZero txt = case TR.decimal txt of
+        Right (n, _) -> n
+        Left _       -> 0
+
+
+
+
+
 ugReindexTheoremStep :: ([Int] -> [Int]) -> PrfStdStep s o tType -> PrfStdStep s o tType
 ugReindexTheoremStep indexMap step = case step of
     PrfStdStepLemma sent mayIdx -> PrfStdStepLemma sent (fmap indexMap mayIdx)
@@ -925,7 +980,7 @@ ugReindexStep indexMap step = case step of
     PrfStdStepTheoremM sent -> PrfStdStepTheoremM sent
     PrfStdStepFreevar idx termType -> PrfStdStepFreevar idx termType
     PrfStdStepFakeConst constName termType ->  PrfStdStepFakeConst constName termType
-    PrfStdStepRemark body -> PrfStdStepRemark body
+    PrfStdStepRemark body -> PrfStdStepRemark (remarkReMapIndices indexMap body)
 
 ugReindex :: ([Int] -> [Int]) -> [PrfStdStep s o tType] -> [PrfStdStep s o tType]
 ugReindex indexMap =
