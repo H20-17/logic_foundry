@@ -797,7 +797,7 @@ parseIsFunc prop = do
     -- 6. Parse InnerC1 to extract f_actual and verify consistency of setA, setB, and gr_b.
     (f_extracted, components) <- parseIsTupleWhere 3 inner_c1_isTupleWhere
     guard (length components == 3)
-    let setA_from_tuple = components !! 0
+    let setA_from_tuple = head components
     let setB_from_tuple = components !! 1
     let gr_from_tuple   = components !! 2
 

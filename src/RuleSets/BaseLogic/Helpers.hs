@@ -41,7 +41,7 @@ runProofBySubArgM prog =  do
         let constdict = fmap fst (consts state)
         let newStepIdxPrefix = stepIdxPrefix context ++ [stepCount state]
         let newContextFrames = contextFrames context <> [False]
-        let newContext = PrfStdContext frVarTypeStack newStepIdxPrefix newContextFrames
+        let newContext = PrfStdContext frVarTypeStack newStepIdxPrefix newContextFrames (Just state)
         let newState = PrfStdState mempty mempty 0
 
         let preambleSteps = []
