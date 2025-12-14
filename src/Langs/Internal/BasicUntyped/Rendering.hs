@@ -592,62 +592,7 @@ data PropDeBrStepState where
                           constMap :: Map Text [Int],
                           stpCount :: Int} -> PropDeBrStepState
 
--- | Scans the text for patterns {%I...%} and {%i...%} and processes them.
--- Matches the regex logic: /\{%([Ii])([\d.]+)%\}/g
-revealIdxs :: Text -> Text
-revealIdxs = go
-  where
-    go text =
-        -- Find the start of a tag
-        let (prefix, matchStart) = T.breakOn "{%" text
-        in if T.null matchStart
-           then prefix
-           else
-               -- matchStart begins with "{%"
-               -- Look for the closing "%}"
-               let potentialContent = T.drop 2 matchStart
-                   (inner, rest) = T.breakOn "%}" potentialContent
-               in if T.null rest
-                  then prefix <> matchStart -- No closing tag, return remainder as is
-                  else
-                      -- Check if the content matches our schema: [Ii][\d.]+
-                      if isValidContent inner
-                      then 
-                          let replacement = evalTag inner
-                              remainder = T.drop 2 rest -- Skip the closing "%}"
-                          in prefix <> replacement <> go remainder
-                      else 
-                          -- Invalid tag content, treat opening "{%" as literal text and continue
-                          prefix <> "{%" <> go potentialContent
 
-    -- Check if content starts with I/i and contains only digits/dots
-    isValidContent :: Text -> Bool
-    isValidContent t
-        | T.null t = False
-        | otherwise = 
-            let (mode, content) = (T.head t, T.tail t)
-            in (mode == 'I' || mode == 'i') && T.all (\c -> isDigit c || c == '.') content
-
-    -- Apply the transformation based on the mode char
-    evalTag :: Text -> Text
-    evalTag t =
-        let mode = T.head t
-            content = T.tail t
-        in case mode of
-            'I' -> 
-                -- Preserve existing behavior for uppercase I
-                content
-            'i' -> 
-                -- Apply showIndexAsSubscript to dot-separated numbers
-                let parts = T.splitOn "." content
-                    transformed = intersperse "." (Prelude.map (convertNumber . TR.decimal) parts)
-                in T.concat transformed
-            _   -> "{%" <> t <> "%}"
-
-    -- Helper to safely convert parsed Decimal results
-    convertNumber :: Either String (Int, Text) -> Text
-    convertNumber (Right (n, _)) = showIndexAsSubscript n
-    convertNumber (Left _)       = ""
 
 showPropDeBrStep :: PrfStdStep PropDeBr Text () -> RWS PropDeBrStepContext Text PropDeBrStepState ()
 showPropDeBrStep step = do
@@ -716,10 +661,10 @@ showPropDeBrStep step = do
             PrfStdStepTheorem prop steps -> do
                 let newDictMap = insert prop newIndex dictMap
                 put $ PropDeBrStepState newDictMap cnstMap (lineNum + 1)
-                tell $ revealIdxs (showProp newDictMap prop)
+                tell $ showProp newDictMap prop
                        <> "    THEOREM"
-                       <> showSubproofF steps True notMonadic mempty mempty cf [] state
                        <> qed
+                       <> showSubproofF steps True notMonadic mempty mempty cf [] state
             PrfStdStepSubproof prop subproofName steps -> do
                 let newDictMap = insert prop newIndex dictMap
                 put $ PropDeBrStepState newDictMap cnstMap (lineNum + 1)
@@ -818,7 +763,7 @@ printPropDeBrStep step = do
                 let newDictMap = insert prop newIndex dictMap
                 let newConstMap = maybe cnstMap (\const -> insert const newIndex cnstMap) mayConst
                 put $ PropDeBrStepState newDictMap newConstMap (lineNum + 1)
-                liftIO $ putStr $ unpack $ revealIdxs (showProp newDictMap prop)
+                liftIO $ putStr $ unpack $ showProp newDictMap prop
                        <> "    "
                        <> justification
                        <> showIndices depends dictMap
@@ -836,7 +781,7 @@ printPropDeBrStep step = do
                       Nothing -> ""
                 let newDictMap = insert prop newIndex dictMap
                 put $ PropDeBrStepState newDictMap cnstMap (lineNum + 1)
-                liftIO $ putStr $ unpack $ revealIdxs (showProp newDictMap prop)
+                liftIO $ putStr $ unpack $ showProp newDictMap prop
                        <> "    LEMMA"
                        <> idxTxt
                        <> qed
@@ -862,8 +807,9 @@ printPropDeBrStep step = do
                 put $ PropDeBrStepState newDictMap cnstMap (lineNum + 1)
                 liftIO $ putStr $ unpack $ showProp newDictMap prop
                        <> "    THEOREM"
-                       <> showSubproofF steps True notMonadic mempty mempty cf [] state
                        <> qed
+                printSubproofF steps True notMonadic mempty mempty cf [] state
+                
             PrfStdStepSubproof prop subproofName steps -> do
                 let newDictMap = insert prop newIndex dictMap
                 put $ PropDeBrStepState newDictMap cnstMap (lineNum + 1)
@@ -871,11 +817,11 @@ printPropDeBrStep step = do
                        <> "    "
                        <> subproofName
                        <> qed
-                       <> showSubproofF steps False notMonadic newDictMap cnstMap cf newIndex state
+                printSubproofF steps False notMonadic newDictMap cnstMap cf newIndex state
             PrfStdStepTheoremM prop -> do
                 let newDictMap = insert prop newIndex dictMap
                 put $ PropDeBrStepState newDictMap cnstMap (lineNum + 1)
-                liftIO $ putStr $ unpack $ revealIdxs (showProp newDictMap prop)
+                liftIO $ putStr $ unpack $ showProp newDictMap prop
                        <> "    ALGORITHMIC_THEOREM"
                        <> qed
             PrfStdStepFreevar index _ -> do
@@ -915,14 +861,12 @@ printPropDeBrStep step = do
                             <> "]"
         showIndexDepend sentIndexMap s = maybe "?" showIndex (Data.Map.lookup s sentIndexMap)
         showIndex i = if Prelude.null i then "" else Data.Text.concat (intersperse "." (Prelude.map (pack . show) i))
-        showSubproofF steps isTheorem notMonadic dictMap constMap cf newIndex state = 
-                    if notMonadic then
-                         "\n"
-                        <> showPropDeBrSteps (cf <> [isTheorem]) newIndex 0 notMonadic newDictMap newConstMap steps (Just state)
-                        <> "\n"
-                       <> Data.Text.concat (Prelude.map mapBool cf) 
-                               <> cornerFrame
-                      else ""
+        printSubproofF steps isTheorem notMonadic dictMap constMap cf newIndex state = liftIO $ 
+                    when notMonadic $ do
+                              putStr "\n"
+                              printPropDeBrSteps (cf <> [isTheorem]) newIndex 0 notMonadic newDictMap newConstMap steps (Just state)
+                              putStr "\n"
+                              putStr $ unpack (Data.Text.concat (Prelude.map mapBool cf)) <>  cornerFrame
                      where
                         newDictMap = if isTheorem then
                                         mempty
