@@ -59,7 +59,7 @@ fetchProofIndexOfDependency provenMap dep =
 
 
 runProofAtomic :: (Ord s, TypedSent o tType sE s,Typeable s, Show s, Typeable o, Show o,
-                    Typeable tType, Show tType, StdPrfPrintMonad s o tType (Either SomeException)
+                    Typeable tType, Show tType, StdPrfPrintMonad q s o tType (Either SomeException)
                     
                      ) =>
                LogicRule tType s sE o q -> PrfStdContext q s o tType -> PrfStdState s o tType
@@ -99,7 +99,7 @@ runProofAtomic rule context state =
              
 instance ( Show s, Typeable s, Ord o, TypedSent o tType sE s,
           Typeable o, Show o, Typeable tType, Show tType, Monoid (PrfStdState s o tType),
-          StdPrfPrintMonad s o tType (Either SomeException),
+          StdPrfPrintMonad q s o tType (Either SomeException),
           Monoid (PrfStdContext q s o tType))
              => Proof (LogicError s sE o)
                  [LogicRule tType s sE o q] 
@@ -215,6 +215,6 @@ class SubproofRule r s where
 
 type HelperConstraints r s o tType sE eL q m = (Monad m, Ord o, Show sE, Typeable sE, Show s, Typeable s,
        MonadThrow m, Show o, Typeable o, Show tType, Typeable tType, TypedSent o tType sE s,
-       Monoid (PrfStdState s o tType), StdPrfPrintMonad s o tType m, ShowableSent s,
-       StdPrfPrintMonad s o tType (Either SomeException), Monoid (PrfStdContext q s o tType), LogicRuleClass r s o tType sE, ProofStd s eL r o tType q,
+       Monoid (PrfStdState s o tType), StdPrfPrintMonad q s o tType m, ShowableSent s,
+       StdPrfPrintMonad q s o tType (Either SomeException), Monoid (PrfStdContext q s o tType), LogicRuleClass r s o tType sE, ProofStd s eL r o tType q,
        Monoid r, Show eL, Typeable eL, SubproofRule r s)

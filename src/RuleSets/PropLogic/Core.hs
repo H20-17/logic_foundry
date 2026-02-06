@@ -155,7 +155,7 @@ data LogicRule tType s sE o q where
 
 runProofAtomic :: (ProofStd s (LogicError s sE o tType) [LogicRule tType s sE o q] o tType q,
                LogicSent s tType, Show sE, Typeable sE, Show s, Typeable s, Ord o, TypedSent o tType sE s,
-               Show o, Typeable o, Typeable tType, Show tType, StdPrfPrintMonad s o tType (Either SomeException)) =>
+               Show o, Typeable o, Typeable tType, Show tType, StdPrfPrintMonad q s o tType (Either SomeException)) =>
                             LogicRule tType s sE o q -> PrfStdContext q s o tType -> PrfStdState s o tType 
                                       -> Either (LogicError s sE o tType) (Maybe s,Maybe (o,tType),PrfStdStep s o tType)
 runProofAtomic rule context state = 
@@ -359,7 +359,7 @@ runProofAtomic rule context state =
 
 instance (LogicSent s tType, Show sE, Typeable sE, Show s, Typeable s, Ord o, TypedSent o tType sE s,
           Typeable o, Show o, Typeable tType, Show tType, Monoid (PrfStdState s o tType),
-          StdPrfPrintMonad s o tType (Either SomeException),
+          StdPrfPrintMonad q s o tType (Either SomeException),
           Monoid (PrfStdContext q s o tType))
              => Proof (LogicError s sE o tType)
                  [LogicRule tType s sE o q] 
@@ -500,7 +500,7 @@ instance SubproofRule [LogicRule tType s sE o q] s where
 
 standardRuleM :: (Monoid r,Monad m, Ord o, Show sE, Typeable sE, Show s, Typeable s, Show eL, Typeable eL,
        MonadThrow m, Show o, Typeable o, Show tType, Typeable tType, TypedSent o tType sE s,
-       Monoid (PrfStdState s o tType), ProofStd s eL r o tType q, StdPrfPrintMonad s o tType m    )
+       Monoid (PrfStdState s o tType), ProofStd s eL r o tType q, StdPrfPrintMonad q s o tType m    )
        => r -> ProofGenTStd tType r s o q m (s,[Int])
 standardRuleM rule = do
     -- function is unsafe and used for rules that generate one or more sentence.
@@ -514,8 +514,8 @@ mpM, exclMidM, simpLM, simpRM, absurdM, doubleNegElimM, deMorganConjM,
        peircesLawM, contraFM ::
        (Monad m, LogicSent s tType, Ord o, Show sE, Typeable sE, Show s, Typeable s,
        MonadThrow m, Show o, Typeable o, Show tType, Typeable tType, TypedSent o tType sE s,
-       Monoid (PrfStdState s o tType), StdPrfPrintMonad s o tType m,
-       StdPrfPrintMonad s o tType (Either SomeException), Monoid (PrfStdContext q s o tType),
+       Monoid (PrfStdState s o tType), StdPrfPrintMonad q s o tType m,
+       StdPrfPrintMonad q s o tType (Either SomeException), Monoid (PrfStdContext q s o tType),
        LogicRuleClass r s tType sE o, Monoid r,
        ProofStd s eL r o tType q, Typeable eL, Show eL )
           => s -> ProofGenTStd tType r s o q m (s,[Int])
@@ -523,8 +523,8 @@ mpM, exclMidM, simpLM, simpRM, absurdM, doubleNegElimM, deMorganConjM,
 adjM, disjIntroLM, disjIntroRM,  bicondIntroM  ::
        (Monad m, LogicSent s tType, Ord o, Show sE, Typeable sE, Show s, Typeable s,
        MonadThrow m, Show o, Typeable o, Show tType, Typeable tType, TypedSent o tType sE s,
-       Monoid (PrfStdState s o tType), StdPrfPrintMonad s o tType m,
-       StdPrfPrintMonad s o tType (Either SomeException), Monoid (PrfStdContext q s o tType),
+       Monoid (PrfStdState s o tType), StdPrfPrintMonad q s o tType m,
+       StdPrfPrintMonad q s o tType (Either SomeException), Monoid (PrfStdContext q s o tType),
        LogicRuleClass r s tType sE o, Monoid r,
        ProofStd s eL r o tType q, Typeable eL, Show eL )
           => s -> s -> ProofGenTStd tType r s o q m (s,[Int])
@@ -532,8 +532,8 @@ adjM, disjIntroLM, disjIntroRM,  bicondIntroM  ::
 disjElimM ::
        (Monad m, LogicSent s tType, Ord o, Show sE, Typeable sE, Show s, Typeable s,
        MonadThrow m, Show o, Typeable o, Show tType, Typeable tType, TypedSent o tType sE s,
-       Monoid (PrfStdState s o tType), StdPrfPrintMonad s o tType m,
-       StdPrfPrintMonad s o tType (Either SomeException), Monoid (PrfStdContext q s o tType),
+       Monoid (PrfStdState s o tType), StdPrfPrintMonad q s o tType m,
+       StdPrfPrintMonad q s o tType (Either SomeException), Monoid (PrfStdContext q s o tType),
        LogicRuleClass r s tType sE o, Monoid r,
        ProofStd s eL r o tType q, Typeable eL, Show eL )
           => s -> s -> s -> ProofGenTStd tType r s o q m (s,[Int])

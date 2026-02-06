@@ -555,7 +555,7 @@ runProofAtomic :: (
                Show sE, Typeable sE, Show s, Typeable s, TypeableTerm t Text () sE (),
                 TypedSent Text () sE s,
                Show t, Typeable t,
-               StdPrfPrintMonad s Text () (Either SomeException), ShowableSent s,
+               StdPrfPrintMonad () s Text () (Either SomeException), ShowableSent s,
                             PREDL.LogicSent s t () Text (), LogicSent s t ,
                             Eq t, LogicTerm t, QuantifiableTerm () (),
                             PREDL.LogicTerm t, ShowableTerm s t) =>
@@ -834,7 +834,7 @@ runProofAtomic rule context state  =
 instance (Show sE, Typeable sE, Show s, Typeable s, TypedSent Text () sE s,
              TypeableTerm t Text () sE (), 
              Monoid (PrfStdState s Text ()), Show t, Typeable t,
-             StdPrfPrintMonad s Text () (Either SomeException),
+             StdPrfPrintMonad () s Text () (Either SomeException),
              Monoid (PrfStdContext () s Text ()),
              PREDL.LogicSent s t () Text (),
              LogicSent s t, Eq t, LogicTerm t,

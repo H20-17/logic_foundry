@@ -92,7 +92,7 @@ import Control.Exception(assert)
 import Control.Monad.Trans.Maybe ( MaybeT(MaybeT, runMaybeT) )
 
 
-testTheoremMSchema :: (MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) => PRED.TheoremSchemaMT () [PredRuleDeBr] PropDeBr Text () m ()
+testTheoremMSchema :: (MonadThrow m, StdPrfPrintMonad () PropDeBr Text () m) => PRED.TheoremSchemaMT () [PredRuleDeBr] PropDeBr Text () m ()
 testTheoremMSchema = PRED.TheoremSchemaMT mayTargetM [("N",())] [z1,z2] theoremProg [] []
   where
     z1 = aX 99 ((X 99 `In` Constant "N") :&&: (X 99 :<=: Integ 10) :->: (X 99 :<=: Integ 0))
@@ -1758,7 +1758,7 @@ testprog5 = do
     return ()
 
 
-theoremProg::(MonadThrow m, StdPrfPrintMonad PropDeBr Text () m) => ProofGenTStd () [PredRuleDeBr] PropDeBr Text ()m ()
+theoremProg::(MonadThrow m, StdPrfPrintMonad () PropDeBr Text () m) => ProofGenTStd () [PredRuleDeBr] PropDeBr Text ()m ()
 theoremProg = do
     let z1 = aX 0 ((X 0 `In` Constant "N") :&&: (X 0 :<=: Integ 10) :->: (X 0 :<=: Integ 0))
     let z2 = aX 0 ((X 0 `In` Constant "N") :&&: (X 0 :<=: Integ 0) :->: (X 0 :==: Integ  0))

@@ -269,7 +269,7 @@ runProofAtomic :: (LogicSent s t tType o q,
                 ProofStd s (LogicError s sE o t tType ) [LogicRule s sE o t tType q] o tType q,
                Show sE, Typeable sE, Show s, Typeable s, TypeableTerm t o tType sE q, TypedSent o tType sE s,
                Typeable o, Show o,Typeable tType, Show tType, Show t, Typeable t,
-               StdPrfPrintMonad s o tType (Either SomeException), Eq t, QuantifiableTerm q tType, ShowableTerm s t, LogicTerm t,
+               StdPrfPrintMonad q s o tType (Either SomeException), Eq t, QuantifiableTerm q tType, ShowableTerm s t, LogicTerm t,
                ShowableSent s) =>
                             LogicRule s sE o t tType q ->
                             PrfStdContext q s o tType ->
@@ -447,7 +447,7 @@ runProofAtomic rule context state  =
 instance (LogicSent s t tType o q, Show sE, Typeable sE, Show s, Typeable s, TypedSent o tType sE s,
              TypeableTerm t o tType sE q, Typeable o, Show o, Typeable tType, Show tType,
              Monoid (PrfStdState s o tType), Show t, Typeable t,
-             StdPrfPrintMonad s o tType (Either SomeException),
+             StdPrfPrintMonad q s o tType (Either SomeException),
              Monoid (PrfStdContext q s o tType), Eq t, QuantifiableTerm q tType, ShowableTerm s t, LogicTerm t,
              ShowableSent s) 
           => Proof (LogicError s sE o t tType ) 
@@ -1085,7 +1085,7 @@ type HelperConstraints m s tType o t sE eL r q = (
             , QuantifiableTerm q tType
             , BASE.LogicRuleClass r s o tType sE
             , StdPrfPrintMonad
-                      s o tType (Either SomeException)        
+                      q s o tType (Either SomeException)        
             , Eq t
             ) 
             
