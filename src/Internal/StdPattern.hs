@@ -237,9 +237,7 @@ class Monad m => StdPrfPrintMonadFrame m where
 class (Monad m, StdPrfPrintMonadFrame m) => StdPrfPrintMonad q s o tType m |  s -> o, s-> tType, s->q where
      printSteps :: 
            PrfStdContext q s o tType
-        -> Int   -- stepStart 
-        -> Map s [Int] --dictMap
-        -> Map o [Int] --constMap
+        ->  PrfStdState s o tType
         -> Bool        -- printSubsteps
         -> [PrfStdStep s o tType] --steps
         -> m ()
@@ -247,13 +245,18 @@ class (Monad m, StdPrfPrintMonadFrame m) => StdPrfPrintMonad q s o tType m |  s 
 printStepsFull :: (StdPrfPrintMonad q s o tType m, Ord s, Ord o) => [PrfStdStep s o tType] -> m ()
 printStepsFull = printSteps 
                    PrfStdContext {
-                   freeVarTypeStack =  [],
-                   stepIdxPrefix = [],
-                   contextFrames = [],
-                   mayParentState = Nothing
+                    freeVarTypeStack =  [],
+                    stepIdxPrefix = [],
+                    contextFrames = [],
+                    mayParentState = Nothing
 
                    }
-                   0 mempty mempty True
+                    PrfStdState {
+                         provenSents = mempty,
+                         consts = mempty,
+                         stepCount = 0
+                     }
+                   True
 
 
 
@@ -273,14 +276,12 @@ instance (StdPrfPrintMonad q s o tType m,
   printSteps :: (StdPrfPrintMonad q s o tType m, ProofStd s eL r o tType q, Monoid r,
                 StdPrfPrintMonadFrame (ProofGenTStd tType r s o q m)) =>
                 PrfStdContext q s o tType
-            -> Int
-            -> Map s [Int]
-            -> Map o [Int]
+            -> PrfStdState s o tType
             -> Bool
             -> [PrfStdStep s o tType]
             -> ProofGenTStd tType r s o q m ()
-  printSteps context stepStart dictMap constMap printSubsteps steps 
-     = lift $ printSteps context stepStart dictMap constMap printSubsteps steps
+  printSteps context state printSubsteps steps 
+     = lift $ printSteps context state printSubsteps steps
 
 
 
@@ -298,7 +299,7 @@ monadifyProofStd p = do
      (addedState,steps, mayLastProp) <- monadifyProof p
      let typelessConstDict = fmap snd (consts state) 
      --printSteps contextFrames idx (stepCount state) (provenSents state) typelessConstDict False (Just (provenSents state, typelessConstDict, stepCount state)) steps
-     printSteps context (stepCount state) (provenSents state) typelessConstDict False steps
+     printSteps context state False steps
      let stuff = f addedState =<< mayLastProp
      return stuff
    where
@@ -392,12 +393,12 @@ runSubproofM context baseState preambleState preambleSteps mayPreambleLastProp p
           let newParentStateData = case mayParentState context of
                Just (PrfStdState provenSents consts stepCount) -> Just (provenSents, fmap snd consts, stepCount) 
                Nothing -> Nothing
-
+          let baseStateZero = PrfStdState (provenSents baseState) (consts baseState) 0
           unless (Prelude.null preambleSteps) 
                  --   (printSteps (contextFrames context) (stepIdxPrefix context) 0
                  --       (provenSents baseState) (fmap snd (consts baseState)) False newParentStateData preambleSteps)
-                    (printSteps context 0 (provenSents baseState) (fmap snd (consts baseState)) False preambleSteps)
-          let baseStateZero = PrfStdState (provenSents baseState) (consts baseState) 0
+                    (printSteps context baseStateZero False preambleSteps)
+          
           let startState = baseStateZero <> preambleState
           (extraData,newState,r,newSteps, mayLastProp) <- runProofGeneratorTOpen prog context startState vIdx
           let constdict = fmap fst (consts startState)

@@ -587,44 +587,44 @@ showIndexAsSubscript n =
 --                            mayParentState :: Maybe PropDeBrStepState } ->
 --                           PropDeBrStepContext
 
-data PropDeBrStepState where
-    PropDeBrStepState :: {sentMap :: Map PropDeBr [Int],
-                          constMap :: Map Text [Int],
-                          stpCount :: Int} -> PropDeBrStepState
+-- data PropDeBrStepState where
+--    PropDeBrStepState :: {sentMap :: Map PropDeBr [Int],
+--                          constMap :: Map Text [Int],
+--                          stpCount :: Int} -> PropDeBrStepState
 
-prfStdStateToPropDeBrStepState :: PrfStdState PropDeBr Text () -> PropDeBrStepState
-prfStdStateToPropDeBrStepState prfState =
-    let dictMap = provenSents prfState
-        cnstMap = fmap snd (consts prfState)
-    in PropDeBrStepState {
-        sentMap = dictMap,
-        constMap = cnstMap,
-        stpCount = 1
-    }
+-- prfStdStateToPropDeBrStepState :: PrfStdState PropDeBr Text () -> PropDeBrStepState
+-- prfStdStateToPropDeBrStepState prfState =
+--    let dictMap = provenSents prfState
+--        cnstMap = fmap snd (consts prfState)
+--    in PropDeBrStepState {
+--        sentMap = dictMap,
+--        constMap = cnstMap,
+--        stpCount = 1
+--    }
 
-propDeBrStepStateToPrfStdState :: PropDeBrStepState -> PrfStdState PropDeBr Text () 
-propDeBrStepStateToPrfStdState stepState =
-    let dictMap = sentMap stepState
-        cnstMap = constMap stepState
-        prfSents = dictMap
-        prfConsts = fmap (\idx -> ((), idx)) cnstMap
-    in PrfStdState {
-        provenSents = prfSents,
-        consts = prfConsts,
-        stepCount = stpCount stepState
-    }
+-- propDeBrStepStateToPrfStdState :: PropDeBrStepState -> PrfStdState PropDeBr Text () 
+-- propDeBrStepStateToPrfStdState stepState =
+--    let dictMap = sentMap stepState
+--        cnstMap = constMap stepState
+--        prfSents = dictMap
+--        prfConsts = fmap (\idx -> ((), idx)) cnstMap
+--    in PrfStdState {
+--        provenSents = prfSents,
+--        consts = prfConsts,
+--        stepCount = stpCount stepState
+--    }
 
 
 printPropDeBrStep :: MonadIO m => 
-       Int -> Bool -> PrfStdStep PropDeBr Text () -> RWST (PrfStdContext () PropDeBr Text ()) Text PropDeBrStepState m ()
+       Int -> Bool -> PrfStdStep PropDeBr Text () -> RWST (PrfStdContext () PropDeBr Text ()) Text (PrfStdState PropDeBr Text ()) m ()
 printPropDeBrStep lastLineN notMonadic step = do
         context <- ask
         let cf = contextFrames context
         let lIndex = stepIdxPrefix context
         state <- get
-        let dictMap = sentMap state
-        let cnstMap = constMap state
-        let lineNum = stpCount state
+        let dictMap = provenSents state
+        let cnstMap = fmap snd (consts state)
+        let lineNum = stepCount state
         let mayPrntState = mayParentState context
         liftIO $ putStr $ unpack $ contextFramesShown cf
           <> showIndex lIndex
@@ -637,7 +637,13 @@ printPropDeBrStep lastLineN notMonadic step = do
             PrfStdStepStep prop justification mayConst depends -> do
                 let newDictMap = insert prop newIndex dictMap
                 let newConstMap = maybe cnstMap (\const -> insert const newIndex cnstMap) mayConst
-                put $ PropDeBrStepState newDictMap newConstMap (lineNum + 1)
+                let newConstMapFull = fmap (\const -> ((),const)) newConstMap
+                -- put $ PrfStdState newDictMap newConstMap (lineNum + 1)
+                put $ PrfStdState {
+                    provenSents = newDictMap,
+                    consts = newConstMapFull,
+                    stepCount = lineNum + 1
+                }
                 liftIO $ putStr $ unpack $ showProp newDictMap prop
                        <> "    "
                        <> justification
@@ -655,7 +661,14 @@ printPropDeBrStep lastLineN notMonadic step = do
                                 Nothing -> error $ "Parent context state index map does not contain proposition: " <> show prop
                       Nothing -> ""
                 let newDictMap = insert prop newIndex dictMap
-                put $ PropDeBrStepState newDictMap cnstMap (lineNum + 1)
+                let newConstMapFull = fmap (\const -> ((),const)) cnstMap
+                -- put $ PropDeBrStepState newDictMap cnstMap (lineNum + 1)
+                put $ PrfStdState {
+                    provenSents = newDictMap,
+                    consts = newConstMapFull,
+                    stepCount = lineNum + 1
+                }
+
                 liftIO $ putStr $ unpack $ showProp newDictMap prop
                        <> "    LEMMA"
                        <> idxTxt
@@ -672,47 +685,83 @@ printPropDeBrStep lastLineN notMonadic step = do
                                 Nothing -> error $ "Parent context state index map does not contain const: " <> unpack constName <> " " <> show cMap
                       Nothing -> ""
                 let newConstMap = insert constName newIndex cnstMap
-                put $ PropDeBrStepState dictMap newConstMap (lineNum + 1)
+                let newConstMapFull = fmap (\const -> ((),const)) newConstMap
+                put $ PrfStdState {
+                    provenSents = dictMap,
+                    consts = newConstMapFull,
+                    stepCount = lineNum + 1
+                }
+                
                 liftIO $ putStr $ unpack $ "Const "
                      <> (pack .show) constName
                      <> "    CONSTDEF"
                      <> idxTxt
             PrfStdStepTheorem prop steps -> do
                 let newDictMap = insert prop newIndex dictMap
-                put $ PropDeBrStepState newDictMap cnstMap (lineNum + 1)
+                let newConstMapFull = fmap (\const -> ((),const)) cnstMap
+                put $ PrfStdState {
+                    provenSents = newDictMap,
+                    consts = newConstMapFull,
+                    stepCount = lineNum + 1
+                }
                 liftIO $ putStr $ unpack $ showProp newDictMap prop
                        <> "    THEOREM"
                        <> qed
                 
-                printSubproofF steps True notMonadic mempty mempty cf [] (propDeBrStepStateToPrfStdState state)
+                printSubproofF steps True notMonadic mempty mempty cf [] state
                 
             PrfStdStepSubproof prop subproofName steps -> do
                 let newDictMap = insert prop newIndex dictMap
-                put $ PropDeBrStepState newDictMap cnstMap (lineNum + 1)
+                let newConstMapFull = fmap (\const -> ((),const)) cnstMap
+                put $ PrfStdState {
+                    provenSents = newDictMap,
+                    consts = newConstMapFull,
+                    stepCount = lineNum + 1
+                }
                 liftIO $ putStr $ unpack $ showProp newDictMap prop
                        <> "    "
                        <> subproofName
                        <> qed
-                printSubproofF steps False notMonadic newDictMap cnstMap cf newIndex (propDeBrStepStateToPrfStdState state)
+                printSubproofF steps False notMonadic newDictMap cnstMap cf newIndex state
             PrfStdStepTheoremM prop -> do
                 let newDictMap = insert prop newIndex dictMap
-                put $ PropDeBrStepState newDictMap cnstMap (lineNum + 1)
+                let newConstMapFull = fmap (\const -> ((),const)) cnstMap
+                put $ PrfStdState {
+                    provenSents = newDictMap,
+                    consts = newConstMapFull,
+                    stepCount = lineNum + 1
+                }
                 liftIO $ putStr $ unpack $ showProp newDictMap prop
                        <> "    ALGORITHMIC_THEOREM"
                        <> qed
             PrfStdStepFreevar index _ -> do
-                put $ PropDeBrStepState dictMap cnstMap (lineNum + 1)
+                let newConstMapFull = fmap (\const -> ((),const)) cnstMap
+                put $ PrfStdState {
+                    provenSents = dictMap,
+                    consts = newConstMapFull,
+                    stepCount = lineNum + 1
+                }
                 liftIO $ putStr $ unpack $ "FreeVar 𝑣"
                      <> showIndexAsSubscript index
                      <> "    VARDEF"
             PrfStdStepFakeConst constName _ -> do
                 let newConstMap = insert constName newIndex cnstMap
-                put $ PropDeBrStepState dictMap newConstMap (lineNum + 1)
+                let newConstMapFull = fmap (\const -> ((),const)) newConstMap
+                put $ PrfStdState {
+                    provenSents = dictMap,
+                    consts = newConstMapFull,
+                    stepCount = lineNum + 1
+                }
                 liftIO $ putStr $ unpack $ "Const "
                      <> constName
                      <> "    FAKE_CONST"
             PrfStdStepRemark text -> do
-                put $ PropDeBrStepState dictMap cnstMap (lineNum + 1)
+                let newConstMapFull = fmap (\const -> ((),const)) cnstMap
+                put $ PrfStdState {
+                    provenSents = dictMap,
+                    consts = newConstMapFull,
+                    stepCount = lineNum + 1
+                }
                 liftIO $ putStr $ unpack $ "REMARK"
                      <> qed
                      <> (if text == "" then "" else "\n" <> contextFramesShown cf <> "║") 
@@ -746,7 +795,12 @@ printPropDeBrStep lastLineN notMonadic step = do
                                  contextFrames = cf <> [isTheorem],
                                  mayParentState = Just state
                               }
-                              printPropDeBrSteps newContext 0 notMonadic newDictMap newConstMap steps
+                              let newState = PrfStdState{
+                                    provenSents = newDictMap,
+                                    consts = fmap (\const -> ((),const)) newConstMap,
+                                    stepCount = 0
+                              }
+                              printPropDeBrSteps newContext newState notMonadic steps
                               putStr "\n"
                               putStr $ unpack (Data.Text.concat (Prelude.map mapBool cf)) <>  cornerFrame
                      where
@@ -798,14 +852,12 @@ instance StdPrfPrintMonad () PropDeBr Text () IO where
   
 
   printSteps :: PrfStdContext () PropDeBr Text ()
-    -> Int
-    -> Map PropDeBr [Int]
-    -> Map Text [Int]
+    -> PrfStdState PropDeBr Text ()
     -> Bool
     -> [PrfStdStep PropDeBr Text ()]
     -> IO ()
-  printSteps context stepStart dictMap constMap printSubsteps steps = do
-    printPropDeBrSteps context stepStart printSubsteps dictMap constMap steps
+  printSteps context state printSubsteps steps = do
+    printPropDeBrSteps context state printSubsteps steps
     putStrLn ""
 
 
@@ -816,31 +868,27 @@ instance StdPrfPrintMonad () PropDeBr Text () (Either SomeException) where
   
   printSteps :: 
        PrfStdContext () PropDeBr Text ()
-    -> Int
-    -> Map PropDeBr [Int]
-    -> Map Text [Int]
+    -> PrfStdState PropDeBr Text ()
     -> Bool
     -> [PrfStdStep PropDeBr Text ()]
     -> Either SomeException ()
-  printSteps _ _ _ _ _ _ = return ()
+  printSteps _ _ _ _ = return ()
 
 
 
 printPropDeBrSteps ::
          PrfStdContext () PropDeBr Text ()  -- context 
-      -> Int                      -- startLine
+      -> PrfStdState PropDeBr Text ()     -- state
       -> Bool                     -- notFromMonad
-      -> Map PropDeBr [Int]       -- dictMap
-      -> Map Text [Int]           -- constMap
       -> [PrfStdStepPredDeBr]     -- steps
       -> IO ()
-printPropDeBrSteps context startLine notFromMonad dictMap constMap steps = do
+printPropDeBrSteps context state notFromMonad steps = do
 
     runRWST (mapM_ (printPropDeBrStep lastLineN notFromMonad) steps) context state
     return ()
         where
-            lastLineN = startLine + length steps - 1
-            state = PropDeBrStepState dictMap constMap startLine
+            lastLineN = stepCount state + length steps - 1
+            --state = PropDeBrStepState dictMap constMap startLine
 
 
 
@@ -861,7 +909,7 @@ printPropDeBrSteps context startLine notFromMonad dictMap constMap steps = do
 
 printPropDeBrStepsBase :: [PrfStdStepPredDeBr] -> IO ()
 printPropDeBrStepsBase steps = do
-    printPropDeBrSteps mempty 0 True mempty mempty steps
+    printPropDeBrSteps mempty mempty True steps
     putStrLn ""
 
 
