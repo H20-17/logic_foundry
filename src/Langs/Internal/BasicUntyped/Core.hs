@@ -824,7 +824,7 @@ type PredRuleDeBr = PREDL.LogicRule PropDeBr DeBrSe Text ObjDeBr () ()
 
 type ZFCRuleDeBr = ZFC.LogicRule PropDeBr DeBrSe ObjDeBr
 
-type PrfStdStepPredDeBr = PrfStdStep PropDeBr Text ()
+type PrfStdStepPredDeBr = PrfStdStep PropDeBr Text () ObjDeBr
 
 
 

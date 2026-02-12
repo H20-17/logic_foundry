@@ -96,7 +96,7 @@ import Data.Char (isDigit)
 
 
 standardRuleM :: HelperConstraints m s tType o t sE eL r q
-       => r -> ProofGenTStd tType r s o q m (s,[Int])
+       => r -> ProofGenTStd tType r s o q t m (s,[Int])
 standardRuleM rule = do
     -- function is unsafe and used for rules that generate one or more sentence.
     -- probably should not be externally facing.
@@ -107,14 +107,14 @@ standardRuleM rule = do
 
 
 uiM, egM :: HelperConstraints m s tType o t sE eL r q
-                   => t -> s -> ProofGenTStd tType r s o q m (s,[Int])
+                   => t -> s -> ProofGenTStd tType r s o q t m (s,[Int])
 uiM term sent = standardRuleM (ui term sent)
 egM term sent = standardRuleM (eg term sent)
 
 
 
 eiM :: HelperConstraints m s tType o t sE eL r q
-                   => s -> o -> ProofGenTStd tType r s o q m (s,[Int],t)
+                   => s -> o -> ProofGenTStd tType r s o q t m (s,[Int],t)
 eiM sent const = do
                    (instantiated, idx) <- standardRuleM (ei sent const)
                    return (instantiated,idx,const2Term const)
@@ -122,7 +122,7 @@ eiM sent const = do
 
 
 eNegIntroM, aNegIntroM, eqSymM :: HelperConstraints m s tType o t sE eL r q
-                   => s -> ProofGenTStd tType r s o q m (s,[Int])
+                   => s -> ProofGenTStd tType r s o q t m (s,[Int])
 eNegIntroM sent = standardRuleM (eNegIntro sent)
 
 aNegIntroM sent = standardRuleM (aNegIntro sent)
@@ -131,7 +131,7 @@ eqSymM eqSent = standardRuleM (eqSym eqSent)
 
 
 eiHilbertM :: HelperConstraints m s tType o t sE eL r q
-                   => s -> ProofGenTStd tType r s o q m (s,[Int],t)
+                   => s -> ProofGenTStd tType r s o q t m (s,[Int],t)
 
 eiHilbertM sent = do
          (instantiated, idx) <- standardRuleM (eiHilbert sent)
@@ -142,7 +142,7 @@ eiHilbertM sent = do
 
 
 eqTransM :: HelperConstraints m s tType o t sE eL r q
-           => s -> s -> ProofGenTStd tType r s o q m (s,[Int])
+           => s -> s -> ProofGenTStd tType r s o q t m (s,[Int])
 eqTransM eqSent1 eqSent2 = standardRuleM (eqTrans eqSent1 eqSent2)
 
 -- | Given a template sentence and a list of equalities, this function iteratively
@@ -158,7 +158,7 @@ eqTransM eqSent1 eqSent2 = standardRuleM (eqTrans eqSent1 eqSent2)
 eqSubstMultiM :: HelperConstraints m s tType o t sE eL r q
               => [(Int, s)]  -- ^ List of (index, equality) pairs for substitution.
               -> s           -- ^ The template sentence.
-              -> ProofGenTStd tType r s o q m (s, [Int])
+              -> ProofGenTStd tType r s o q t m (s, [Int])
 eqSubstMultiM substitutions templateSent = do
     -- This function requires parsers for the left and right sides of an equality.
     -- We'll assume a `parseEq :: s -> Maybe (t, t)` function exists in the environment.
@@ -218,16 +218,16 @@ eqSubstMultiM substitutions templateSent = do
 
 
 eqSubstM :: HelperConstraints m s tType o t sE eL r q
-           => Int -> s -> s -> ProofGenTStd tType r s o q m (s,[Int])
+           => Int -> s -> s -> ProofGenTStd tType r s o q t m (s,[Int])
 eqSubstM idx templateSent eqSent = standardRuleM (eqSubst idx templateSent eqSent)
 
 eqReflM :: HelperConstraints m s tType o t sE eL r q
-          => t -> ProofGenTStd tType r s o q m (s,[Int])
+          => t -> ProofGenTStd tType r s o q t m (s,[Int])
 eqReflM term = standardRuleM (eqRefl term)
 
 
 reverseANegIntroM, reverseENegIntroM :: HelperConstraints m s tType o t sE eL r q
-                   => s -> ProofGenTStd tType r s o q m (s,[Int])
+                   => s -> ProofGenTStd tType r s o q t m (s,[Int])
 
 
 
@@ -283,7 +283,7 @@ reverseENegIntroM forallXNotPx = do
 
 extractConstsSentM :: HelperConstraints m  s tType o t sE eL r1 q
                  =>   s
-                            -> ProofGenTStd tType r1 s o q m (Map o tType)
+                            -> ProofGenTStd tType r1 s o q t m (Map o tType)
 
 extractConstsSentM sentence = do
     state <- getProofState
@@ -316,8 +316,8 @@ constDictTest envDict = Data.Map.foldrWithKey f Nothing
 
 
 runTheoremM :: HelperConstraints m s tType o t sE eL r1 q
-                 =>   TheoremSchemaMT tType r1 s o q m x ->
-                               ProofGenTStd tType r1 s o q m (s, [Int], x)
+                 =>   TheoremSchemaMT tType r1 s o q t m x ->
+                               ProofGenTStd tType r1 s o q t m (s, [Int], x)
 runTheoremM (TheoremSchemaMT mayTargetM constDict lemmas prog idxs qTypes) =  do
         state <- getProofState
         context <- ask
@@ -333,8 +333,8 @@ runTheoremM (TheoremSchemaMT mayTargetM constDict lemmas prog idxs qTypes) =  do
 
 
 checkTheoremM :: (HelperConstraints m s tType o t sE eL r1 q)
-                 =>  TheoremSchemaMT tType r1 s o q m x
-                              -> m (s, r1, x, [PrfStdStep s o tType],Maybe (s,x))
+                 =>  TheoremSchemaMT tType r1 s o q t m x
+                              -> m (s, r1, x, [PrfStdStep s o tType t],Maybe (s,x))
 checkTheoremM (TheoremSchemaMT mayTargetM constDict lemmas prog idxs qTypes) = do
                     (provenSent, extraData, other,mayTargetTmData) <- checkTheoremMOpen Nothing False (TheoremSchemaMT mayTargetM constDict lemmas prog idxs qTypes)
                     (prf,steps) <- either return (error "checkTHeoremMOpen produced unexpected Right value in checkTheoremM function") other
@@ -344,7 +344,7 @@ checkTheoremM (TheoremSchemaMT mayTargetM constDict lemmas prog idxs qTypes) = d
 
 
 checkSilentTheoremM :: (HelperConstraints (Either SomeException) s tType o t sE eL r1 q, Monad m, MonadThrow m)
-                 =>  TheoremAlgSchema tType r1 s o q x
+                 =>  TheoremAlgSchema tType r1 s o q t x
                               -> m (s, x, Maybe (s,x) )
 checkSilentTheoremM (TheoremSchemaMT mayTargetM constDict lemmas prog idxs qTypes) = do
         let eitherResult = checkTheoremMOpen Nothing False (TheoremSchemaMT mayTargetM constDict lemmas prog idxs qTypes)     
@@ -355,8 +355,8 @@ checkSilentTheoremM (TheoremSchemaMT mayTargetM constDict lemmas prog idxs qType
 
 
 runTmSilentM :: HelperConstraints m s tType o t sE eL r1 q
-                 =>   TheoremAlgSchema tType r1 s o q x ->
-                               ProofGenTStd tType r1 s o q m (s, [Int], x)
+                 =>   TheoremAlgSchema tType r1 s o q t x ->
+                               ProofGenTStd tType r1 s o q t m (s, [Int], x)
 -- runTmSilentM f (TheoremSchemaMT constDict lemmas prog) =  do
 runTmSilentM (TheoremSchemaMT mayTargetM constDict lemmas prog idxs qTypes) =  do
         state <- getProofState
@@ -381,7 +381,7 @@ runTmSilentM (TheoremSchemaMT mayTargetM constDict lemmas prog idxs qTypes) =  d
 multiUIM ::  HelperConstraints m s tType o t sE eL r1 q =>
     s ->      -- initialProposition: The proposition to start with.
     [t] ->    -- instantiationTerms: List of terms to instantiate with, in order.
-    ProofGenTStd tType r1 s o q m (s,[Int])
+    ProofGenTStd tType r1 s o q t m (s,[Int])
 multiUIM initialProposition instantiationTerms =
     case instantiationTerms of
         [] ->
@@ -502,8 +502,8 @@ multiEXM quantTypes inner = case quantTypes of
 
 
 runProofByUGM :: HelperConstraints m s tType o t sE eL r1 q
-                 =>  q -> ProofGenTStd tType r1 s o q m t
-                            -> ProofGenTStd tType r1 s o q m (s, [Int], t-> t)
+                 =>  q -> ProofGenTStd tType r1 s o q t m t
+                            -> ProofGenTStd tType r1 s o q t m (s, [Int], t-> t)
 runProofByUGM tt prog =  do
         state <- getProofState
         context <- ask
@@ -512,7 +512,7 @@ runProofByUGM tt prog =  do
         let newContextFrames = contextFrames context <> [False]
         let newStepIdxPrefix = stepIdxPrefix context ++ [stepCount state]
         let newContext = PrfStdContext newFrVarTypStack newStepIdxPrefix newContextFrames (Just state)
-        let newState = PrfStdState mempty mempty 1
+        let newState = PrfStdState mempty mempty 1 mempty
         let preambleSteps = [PrfStdStepFreevar (length frVarTypeStack) (qTypeToTType tt)]
         let modifiedProg = do
             progData <- prog
@@ -543,9 +543,9 @@ runProofByUGM tt prog =  do
 
 multiUGM :: HelperConstraints m s tType o t sE eL r1 q =>
     [q] ->                             -- ^ List of types for UG variables (outermost first).
-    ProofGenTStd tType r1 s o q m t ->       -- ^ The core program. Its monadic return 'x' is discarded.
+    ProofGenTStd tType r1 s o q t m t ->       -- ^ The core program. Its monadic return 'x' is discarded.
                                            --   It must set 'Last s' with the prop to be generalized.
-    ProofGenTStd tType r1 s o q m (s, [Int],[t]->t)  -- ^ Returns (final_generalized_prop, its_index).
+    ProofGenTStd tType r1 s o q t m (s, [Int],[t]->t)  -- ^ Returns (final_generalized_prop, its_index).
 multiUGM typeList programCore =
     case typeList of
         [] ->
@@ -687,7 +687,7 @@ extractConstsFromLambdaSent (term_f::v t -> s) =
 
 
 testTheoremM :: (HelperConstraints m s tType o t sE eL r1 q, MonadIO m)
-                 =>  TheoremSchemaMT tType r1 s o q m x
+                 =>  TheoremSchemaMT tType r1 s o q t m x
                               -> (x -> m ())
                               -> (x -> x -> m ())
                               -> m ()
@@ -727,7 +727,7 @@ testTheoremM schema dataShow dataCompare = do
 
 
 testTheoremMBasic :: (HelperConstraints m s tType o t sE eL r1 q, MonadIO m, Show x, Eq x)
-                 =>  TheoremSchemaMT tType r1 s o q m x
+                 =>  TheoremSchemaMT tType r1 s o q t m x
                               -> m ()
 testTheoremMBasic schema = do
     let dataShow d = liftIO $ putStrLn $ "Returned data: " <> show d
@@ -750,7 +750,7 @@ testTheoremMBasic schema = do
 
 
 testSilentTheoremM :: (HelperConstraints (Either SomeException) s tType o t sE eL r1 q, MonadIO m, MonadThrow m)
-                 =>  TheoremAlgSchema tType r1 s o q x -> 
+                 =>  TheoremAlgSchema tType r1 s o q t x -> 
                             (x -> m ()) -> 
                             (x -> x -> m ()) ->
                               m ()
@@ -782,7 +782,7 @@ testSilentTheoremM schema dataShow dataCompare = do
     return ()
 
 testSilentTheoremMBasic :: (HelperConstraints (Either SomeException) s tType o t sE eL r1 q, MonadIO m, MonadThrow m, Show x, Eq x)
-                 =>  TheoremAlgSchema tType r1 s o q x 
+                 =>  TheoremAlgSchema tType r1 s o q t x 
                               -> m ()
 testSilentTheoremMBasic schema = do
     let dataShow d = liftIO $ putStrLn $ "Returned data: " <> show d

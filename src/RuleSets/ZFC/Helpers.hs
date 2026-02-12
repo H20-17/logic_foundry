@@ -146,7 +146,7 @@ import qualified Data.Vector.Fixed.Cont as C
 import Control.Monad.Trans.Maybe ( MaybeT(MaybeT, runMaybeT) )
 
 standardRuleM :: HelperConstraints sE s eL m r t
-       => r -> ProofGenTStd () r s Text () m (s,[Int])
+       => r -> ProofGenTStd () r s Text () t m (s,[Int])
 standardRuleM rule = do
     -- function is unsafe and used for rules that generate one or more sentence.
     -- probably should not be externally facing.
@@ -156,12 +156,12 @@ standardRuleM rule = do
 
 
 specificationM :: HelperConstraints sE s eL m r t
-       => [Int] -> Int -> t -> s -> ProofGenTStd () r s Text ()m (s,[Int])
+       => [Int] -> Int -> t -> s -> ProofGenTStd () r s Text () t m (s,[Int])
 specificationM outerIdxs idx t s = standardRuleM (specification outerIdxs idx t s)
 
 
 specificationMNew :: (HelperConstraints sE s eL m r t, V.Vector v t)
-       => (v t -> t) -> (v t -> t -> s) -> ProofGenTStd () r s Text () m (s,[Int])
+       => (v t -> t) -> (v t -> t -> s) -> ProofGenTStd () r s Text () t m (s,[Int])
 specificationMNew (t::(v t -> t)) p_pred = do
     let param_n = V.length (undefined :: v t)
     outerIdxs <- newIndices param_n
@@ -185,18 +185,18 @@ specificationMNew (t::(v t -> t)) p_pred = do
 
 
 replacementM :: HelperConstraints sE s eL m r t
-       => [Int] -> Int -> Int -> t -> s -> ProofGenTStd () r s Text () m (s,[Int])
+       => [Int] -> Int -> Int -> t -> s -> ProofGenTStd () r s Text () t m (s,[Int])
 replacementM outerIdxs idx1 idx2 t s = standardRuleM (replacement outerIdxs idx1 idx2 t s)
 
 
 integerMembershipM, integerNegationM :: HelperConstraints sE s eL m r t
-       => Int -> ProofGenTStd () r s Text ()m (s,[Int])
+       => Int -> ProofGenTStd () r s Text () t m (s,[Int])
 integerMembershipM i = standardRuleM (integerMembership i)
 integerNegationM i = standardRuleM (integerNegation i)
 
 integerAdditionM, integerMultiplicationM, integerCompareM, integerInequalityM
  :: HelperConstraints sE s eL m r t
-       => Int -> Int -> ProofGenTStd () r s Text () m (s,[Int])
+       => Int -> Int -> ProofGenTStd () r s Text () t m (s,[Int])
 integerAdditionM i1 i2 = standardRuleM (integerAddition i1 i2)
 integerMultiplicationM i1 i2 = standardRuleM (integerMultiplication i1 i2)
 integerCompareM i1 i2 = standardRuleM (integerCompare i1 i2)
@@ -212,7 +212,7 @@ integersAreUrelementsM, emptySetAxiomM, extensionalityAxiomM,emptySetNotIntM,reg
              intDistributivityAxiomM,intOrderAddCompatibilityAxiomM, intOrderMulCompatibilityAxiomM,
              natWellOrderingAxiomM
        :: HelperConstraints sE s eL m r t
-       => ProofGenTStd () r s Text () m (s,[Int])
+       => ProofGenTStd () r s Text () t m (s,[Int])
 integersAreUrelementsM = standardRuleM integersAreUrelements
 emptySetAxiomM = standardRuleM emptySetStatement
 extensionalityAxiomM = standardRuleM extensionality
@@ -260,7 +260,7 @@ natWellOrderingAxiomM = standardRuleM natWellOrdering
 -- |    `isSet(PowerSet(x)) ∧ ∀Y(...)`.
 powerSetInstantiateM :: HelperConstraints sE s eL m r t =>
     t -> -- ^ The object 'x' for which to prove its power set is a set.
-    ProofGenTStd () r s Text ()m (s, [Int], t)
+    ProofGenTStd () r s Text () t m (s, [Int], t)
 powerSetInstantiateM x = do
     runProofBySubArgM $ do
         -- Step 1: Get the Axiom of Power Set from the ZFC rule set.
@@ -286,15 +286,15 @@ powerSetInstantiateM x = do
 
 
 runProofByUGM :: HelperConstraints sE s eL m r t
-                 =>  ProofGenTStd () r s Text () m t
-                            -> ProofGenTStd () r s Text () m (s, [Int],t -> t)
+                 =>  ProofGenTStd () r s Text () t m t
+                            -> ProofGenTStd () r s Text () t m (s, [Int],t -> t)
 runProofByUGM = PREDL.runProofByUGM ()
 
 multiUGM :: HelperConstraints sE s eL m r t =>
     Int ->                             -- ^ Number of UG's
-    ProofGenTStd () r s Text () m t ->       -- ^ The core program. Its monadic return 'x' is discarded.
+    ProofGenTStd () r s Text () t m t ->       -- ^ The core program. Its monadic return 'x' is discarded.
                                            --   It must set 'Last s' with the prop to be generalized.
-    ProofGenTStd () r s Text () m (s, [Int],[t] -> t)  -- ^ Returns (final_generalized_prop, its_index).
+    ProofGenTStd () r s Text () t m (s, [Int],[t] -> t)  -- ^ Returns (final_generalized_prop, its_index).
 multiUGM n = PREDL.multiUGM (replicate n ()) 
 
 
@@ -430,8 +430,8 @@ lambdaSpec contextIdxs specIdx (source_template::t) p_template =
 
 theoremSchemaMT :: HelperConstraints sE s eL m r t =>
     MaybeT m (s,x) -> 
-    [s] -> ProofGenTStd () r s Text () m x -> [Text] -> 
-             ZFC.TheoremSchemaMT r s m x
+    [s] -> ProofGenTStd () r s Text () t m x -> [Text] -> 
+             ZFC.TheoremSchemaMT r s t m x
 theoremSchemaMT mayTargetProg lemmas proof consts =
     let 
         constDict = Prelude.map (,()) consts

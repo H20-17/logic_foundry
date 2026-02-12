@@ -20,7 +20,8 @@ module Internal.StdPattern(
     ShowableTerm(..),
     QuantifiableTerm(..),
     printStepsFull,
-    dynamicIndex
+    dynamicIndex,
+    TagData(..)
 
 
 ) where
@@ -62,74 +63,85 @@ import Control.Monad.IO.Class(MonadIO,liftIO)
 
 default(Text)
 
-data PrfStdContext q s o tType where
+data PrfStdContext q s o tType t where
     PrfStdContext :: {
         freeVarTypeStack :: [q],
         stepIdxPrefix :: [Int],
         contextFrames :: [Bool],
-        mayParentState :: Maybe (PrfStdState s o tType)
-    } -> PrfStdContext q s o tType
+        mayParentState :: Maybe (PrfStdState s o tType t)
+    } -> PrfStdContext q s o tType t
     deriving Show
 
-data PrfStdState s o tType where
+
+data TagData s t where
+    TagDataTerm :: t -> TagData s t
+    TagDataSent :: s -> TagData s t
+  deriving Show
+
+
+data PrfStdState s o tType t where
    PrfStdState :: {
       provenSents :: Map s [Int],
       consts :: Map o (tType, [Int]),
-      stepCount :: Int
-   } -> PrfStdState s o tType
+      stepCount :: Int,
+      tagData :: Map Text (TagData s t)
+   } -> PrfStdState s o tType t
    deriving Show
 
 
 
 
 
-instance Semigroup (PrfStdContext q s o tType) where
-     (<>) :: PrfStdContext q s o tType -> PrfStdContext q s o tType -> PrfStdContext q s o tType
+instance Semigroup (PrfStdContext q s o tType t) where
+     (<>) :: PrfStdContext q s o tType t -> PrfStdContext q s o tType t -> PrfStdContext q s o tType t
      (<>) (PrfStdContext v1 prf1 frames1 mayParentState1) 
              (PrfStdContext v2 prf2 frames2 mayParentState2) 
          =
             PrfStdContext (v1 <> v2) (prf1 <> prf2) (frames1 <> frames2) mayParentState1
 
-instance Monoid (PrfStdContext q s o tType) where
-    mempty :: PrfStdContext q s o tType
+instance Monoid (PrfStdContext q s o tType t) where
+    mempty :: PrfStdContext q s o tType t
     mempty = PrfStdContext [] [] [] Nothing
 
 
-instance (Ord s, Ord o) => Semigroup (PrfStdState s o tType ) where
-    (<>) :: PrfStdState s o tType
-              -> PrfStdState s o tType -> PrfStdState s o tType
-    (<>) (PrfStdState proven1 consts1 count1) (PrfStdState proven2 consts2 count2)
-            = PrfStdState (proven2 <> proven1) (consts1 <> consts2) (count1 + count2)
+instance (Ord s, Ord o) => Semigroup (PrfStdState s o tType t ) where
+    (<>) :: PrfStdState s o tType t
+              -> PrfStdState s o tType t -> PrfStdState s o tType t
+    (<>) (PrfStdState proven1 consts1 count1 tagDict1) (PrfStdState proven2 consts2 count2 tagDict2)
+            = PrfStdState (proven2 <> proven1) (consts1 <> consts2) (count1 + count2) (tagDict2 <> tagDict1)
 
 
-instance (Ord s, Ord o) => Monoid (PrfStdState s o tType ) where
-     mempty :: (Ord s, Ord o) => PrfStdState s o tType
-     mempty = PrfStdState mempty mempty 0
-
-
-
-
-
-
-type ProofGenTStd tType r s o q m 
-               = ProofGeneratorT s [PrfStdStep s o tType] (PrfStdContext q s o tType) r (PrfStdState s o tType) (Sum Int) m
+instance (Ord s, Ord o) => Monoid (PrfStdState s o tType t) where
+     mempty :: (Ord s, Ord o) => PrfStdState s o tType t
+     mempty = PrfStdState mempty mempty 0 mempty
 
 
 
 
 
-type ProofStd s eL r o tType q = Proof eL r (PrfStdState s o tType) (PrfStdContext q s o tType) [PrfStdStep s o tType] s
 
-data PrfStdStep s o tType where
-    PrfStdStepStep :: s -> Text -> Maybe o -> [s] -> PrfStdStep s o tType
-    PrfStdStepLemma :: s -> PrfStdStep s o tType
-    PrfStdStepConst :: o -> tType -> PrfStdStep s o tType
-    PrfStdStepTheorem :: s -> [PrfStdStep s o tType] -> PrfStdStep s o tType
-    PrfStdStepSubproof :: s -> Text -> [PrfStdStep s o tType] ->  PrfStdStep s o tType
-    PrfStdStepTheoremM :: s -> PrfStdStep s o tType
-    PrfStdStepFreevar :: Int -> tType -> PrfStdStep s o tType
-    PrfStdStepFakeConst :: o ->tType -> PrfStdStep s o tType
-    PrfStdStepRemark :: Text -> PrfStdStep s o tType
+type ProofGenTStd tType r s o q t m 
+               = ProofGeneratorT s [PrfStdStep s o tType t] (PrfStdContext q s o tType t) r (PrfStdState s o tType t) (Sum Int) m
+
+
+
+
+
+type ProofStd s eL r o tType q t = Proof eL r (PrfStdState s o tType t) (PrfStdContext q s o tType t) [PrfStdStep s o tType t] s
+
+
+
+data PrfStdStep s o tType t where
+    PrfStdStepStep :: s -> Text -> Maybe o -> [s] -> PrfStdStep s o tType t
+    PrfStdStepLemma :: s -> PrfStdStep s o tType t
+    PrfStdStepConst :: o -> tType -> PrfStdStep s o tType t
+    PrfStdStepTheorem :: s -> [PrfStdStep s o tType t] -> PrfStdStep s o tType t
+    PrfStdStepSubproof :: s -> Text -> [PrfStdStep s o tType t] ->  PrfStdStep s o tType t
+    PrfStdStepTheoremM :: s -> PrfStdStep s o tType t
+    PrfStdStepFreevar :: Int -> tType -> PrfStdStep s o tType t
+    PrfStdStepFakeConst :: o ->tType -> PrfStdStep s o tType t
+    PrfStdStepRemark :: Text -> PrfStdStep s o tType t
+    PrfStdStepTagObject :: Text -> TagData s t -> PrfStdStep s o tType t
   deriving Show
 
 
@@ -189,15 +201,15 @@ data TestSubproofErr s sE eL where
    deriving(Show)
 
 
-testSubproof :: (ProofStd s eL1 r1 o tType q, TypedSent o tType sE s    )
-                       => PrfStdContext q s o tType -> PrfStdState s o tType -> PrfStdState s o tType -> 
-                          [PrfStdStep s o tType] -> Last s -> s -> r1 
-                             -> Either (TestSubproofErr s sE eL1) [PrfStdStep s o tType]
+testSubproof :: (ProofStd s eL1 r1 o tType q t, TypedSent o tType sE s    )
+                       => PrfStdContext q s o tType t -> PrfStdState s o tType t -> PrfStdState s o tType t -> 
+                          [PrfStdStep s o tType t] -> Last s -> s -> r1 
+                             -> Either (TestSubproofErr s sE eL1) [PrfStdStep s o tType t]
 testSubproof context baseState preambleState preambleSteps mayPreambleLastProp targetProp subproof =
       --either return (const Nothing) eitherResult
       do
              let frVarTypeStack = freeVarTypeStack context
-             let baseStateZero = PrfStdState (provenSents baseState) (consts baseState) 0
+             let baseStateZero = PrfStdState (provenSents baseState) (consts baseState) 0 (tagData baseState)
              let startState = baseStateZero <> preambleState
              let constdict = fmap fst (consts startState)
              let sc = checkSanity mempty frVarTypeStack constdict targetProp
@@ -234,15 +246,15 @@ instance (
 class Monad m => StdPrfPrintMonadFrame m where
     printStartFrame :: [Bool] -> m()
 
-class (Monad m, StdPrfPrintMonadFrame m) => StdPrfPrintMonad q s o tType m |  s -> o, s-> tType, s->q where
+class (Monad m, StdPrfPrintMonadFrame m) => StdPrfPrintMonad q s o tType t m |  s -> o, s-> tType, s->q, s->t where
      printSteps :: 
-           PrfStdContext q s o tType
-        ->  PrfStdState s o tType
+           PrfStdContext q s o tType t
+        ->  PrfStdState s o tType t
         -> Bool        -- printSubsteps
-        -> [PrfStdStep s o tType] --steps
+        -> [PrfStdStep s o tType t] --steps
         -> m ()
 
-printStepsFull :: (StdPrfPrintMonad q s o tType m, Ord s, Ord o) => [PrfStdStep s o tType] -> m ()
+printStepsFull :: (StdPrfPrintMonad q s o tType t m, Ord s, Ord o) => [PrfStdStep s o tType t] -> m ()
 printStepsFull = printSteps 
                    PrfStdContext {
                     freeVarTypeStack =  [],
@@ -254,32 +266,33 @@ printStepsFull = printSteps
                     PrfStdState {
                          provenSents = mempty,
                          consts = mempty,
-                         stepCount = 0
+                         stepCount = 0,
+                         tagData = mempty
                      }
                    True
 
 
 
-instance (ProofStd s eL r o tType q, Monoid r, Monad m, StdPrfPrintMonadFrame m) 
-          => StdPrfPrintMonadFrame (ProofGenTStd tType r s o q m) where
-    printStartFrame :: [Bool] -> ProofGenTStd tType r s o q m ()
+instance (ProofStd s eL r o tType q t, Monoid r, Monad m, StdPrfPrintMonadFrame m) 
+          => StdPrfPrintMonadFrame (ProofGenTStd tType r s o q t m) where
+    printStartFrame :: [Bool] -> ProofGenTStd tType r s o q t m ()
     printStartFrame contextFrames = lift $ printStartFrame contextFrames
     
 
 
-instance (StdPrfPrintMonad q s o tType m, 
-          ProofStd s eL r o tType q, 
+instance (StdPrfPrintMonad q s o tType t m, 
+          ProofStd s eL r o tType q t, 
           Monoid r, 
-          StdPrfPrintMonadFrame (ProofGenTStd tType r s o q m))
-             => StdPrfPrintMonad q s o tType (ProofGenTStd tType r s o q m) where
+          StdPrfPrintMonadFrame (ProofGenTStd tType r s o q t m))
+             => StdPrfPrintMonad q s o tType t (ProofGenTStd tType r s o q t m) where
 
-  printSteps :: (StdPrfPrintMonad q s o tType m, ProofStd s eL r o tType q, Monoid r,
-                StdPrfPrintMonadFrame (ProofGenTStd tType r s o q m)) =>
-                PrfStdContext q s o tType
-            -> PrfStdState s o tType
+  printSteps :: (StdPrfPrintMonad q s o tType t m, ProofStd s eL r o tType q t, Monoid r,
+                StdPrfPrintMonadFrame (ProofGenTStd tType r s o q t m)) =>
+                PrfStdContext q s o tType t
+            -> PrfStdState s o tType t
             -> Bool
-            -> [PrfStdStep s o tType]
-            -> ProofGenTStd tType r s o q m ()
+            -> [PrfStdStep s o tType t]
+            -> ProofGenTStd tType r s o q t m ()
   printSteps context state printSubsteps steps 
      = lift $ printSteps context state printSubsteps steps
 
@@ -289,9 +302,9 @@ instance (StdPrfPrintMonad q s o tType m,
 
 
 
-monadifyProofStd :: (MonadThrow m, ProofStd s eL r o tType q, Monoid r,
-                    Show eL, Typeable eL, StdPrfPrintMonad q s o tType m, Ord s)
-           => r -> ProofGenTStd tType r s o q m (Maybe (s,[Int]))
+monadifyProofStd :: (MonadThrow m, ProofStd s eL r o tType q t, Monoid r,
+                    Show eL, Typeable eL, StdPrfPrintMonad q s o tType t m, Ord s)
+           => r -> ProofGenTStd tType r s o q t m (Maybe (s,[Int]))
 monadifyProofStd p = do
      context <- ask
      -- PrfStdContext fvStack idx contextFrames maybeParentState <- ask
@@ -305,9 +318,9 @@ monadifyProofStd p = do
    where
        f state prop = Just (prop, provenSents state!prop )
           
-newConstM :: (MonadThrow m, ProofStd s eL r o tType q, Monoid r,
+newConstM :: (MonadThrow m, ProofStd s eL r o tType q t, Monoid r,
                     LogicConst o)
-           => ProofGenTStd tType r s o q m o
+           => ProofGenTStd tType r s o q t m o
 newConstM = do
     context <- ask
     state <- getProofState
@@ -319,12 +332,12 @@ newConstM = do
 
 
 
-getTopFreeVar :: (Monoid r1, ProofStd s eL1 r1 o tType q, Monad m,
+getTopFreeVar :: (Monoid r1, ProofStd s eL1 r1 o tType q t, Monad m,
                        Show eL1, Typeable eL1,
                     Show s, Typeable s,
                        MonadThrow m, TypedSent o tType sE s, Show sE, Typeable sE,
-                       StdPrfPrintMonad q s o tType m, TypeableTerm t o tType sE q)
-                 =>  ProofGenTStd tType r1 s o q m t
+                       StdPrfPrintMonad q s o tType t m, TypeableTerm t o tType sE q)
+                 =>  ProofGenTStd tType r1 s o q t m t
 getTopFreeVar =  do
         context <- ask
         let frVarTypeStack = freeVarTypeStack context
@@ -332,12 +345,12 @@ getTopFreeVar =  do
             else return (free2Term $ length frVarTypeStack - 1)
 
 
-getTopFreeVars :: (Monoid r1, ProofStd s eL1 r1 o tType q, Monad m,
+getTopFreeVars :: (Monoid r1, ProofStd s eL1 r1 o tType q t, Monad m,
                        Show eL1, Typeable eL1,
                     Show s, Typeable s,
                        MonadThrow m, TypedSent o tType sE s, Show sE, Typeable sE,
-                       StdPrfPrintMonad q s o tType m, TypeableTerm t o tType sE q)
-                 =>  Int -> ProofGenTStd tType r1 s o q m [t]
+                       StdPrfPrintMonad q s o tType t m, TypeableTerm t o tType sE q)
+                 =>  Int -> ProofGenTStd tType r1 s o q t m [t]
 getTopFreeVars n =  do
         context <- ask
         let frVarTypeStack = freeVarTypeStack context
@@ -347,12 +360,12 @@ getTopFreeVars n =  do
         return (fmap free2Term topVars)
 
 
-getFreeVars :: (Monoid r1, ProofStd s eL1 r1 o tType q, Monad m,
+getFreeVars :: (Monoid r1, ProofStd s eL1 r1 o tType q t, Monad m,
                        Show eL1, Typeable eL1,
                     Show s, Typeable s,
                        MonadThrow m, TypedSent o tType sE s, Show sE, Typeable sE,
-                       StdPrfPrintMonad q s o tType m, TypeableTerm t Text tType sE q)
-                 =>  ProofGenTStd tType r1 s o q m [t]
+                       StdPrfPrintMonad q s o tType t m, TypeableTerm t Text tType sE q)
+                 =>  ProofGenTStd tType r1 s o q t m [t]
 getFreeVars = do
         context <- ask
         let frVarTypeStack = freeVarTypeStack context
@@ -368,12 +381,12 @@ getFreeVars = do
     
 
 
-getFreeVarCount :: (Monoid r1, ProofStd s eL1 r1 o tType q, Monad m,
+getFreeVarCount :: (Monoid r1, ProofStd s eL1 r1 o tType q t, Monad m,
                         Show eL1, Typeable eL1,
                     Show s, Typeable s,
                         MonadThrow m, TypedSent o tType sE s, Show sE, Typeable sE,
-                        StdPrfPrintMonad q s o tType m)
-                 =>  ProofGenTStd tType r1 s o q m Int
+                        StdPrfPrintMonad q s o tType t m)
+                 =>  ProofGenTStd tType r1 s o q t m Int
 getFreeVarCount = do
         context <- ask
         let frVarTypeStack = freeVarTypeStack context
@@ -381,19 +394,19 @@ getFreeVarCount = do
 
 
 
-runSubproofM :: ( Monoid r1, ProofStd s eL1 r1 o tType q, Monad m,
+runSubproofM :: ( Monoid r1, ProofStd s eL1 r1 o tType q t, Monad m,
                         Show eL1, Typeable eL1, Show s, Typeable s,
-                        MonadThrow m, TypedSent o tType sE s, Show sE, Typeable sE, StdPrfPrintMonad q s o tType m )
-                 =>    PrfStdContext q s o tType -> PrfStdState s o tType -> PrfStdState s o tType
-                          -> [PrfStdStep s o tType] -> Last s -> ProofGenTStd tType r1 s o q m x
+                        MonadThrow m, TypedSent o tType sE s, Show sE, Typeable sE, StdPrfPrintMonad q s o tType t m )
+                 =>    PrfStdContext q s o tType t -> PrfStdState s o tType t -> PrfStdState s o tType t
+                          -> [PrfStdStep s o tType t] -> Last s -> ProofGenTStd tType r1 s o q t m x
                           -> Sum Int
-                          ->  m (x,s,r1,[PrfStdStep s o tType])
+                          ->  m (x,s,r1,[PrfStdStep s o tType t])
 runSubproofM context baseState preambleState preambleSteps mayPreambleLastProp prog vIdx = do
           printStartFrame (contextFrames context)
           let newParentStateData = case mayParentState context of
-               Just (PrfStdState provenSents consts stepCount) -> Just (provenSents, fmap snd consts, stepCount) 
+               Just (PrfStdState provenSents consts stepCount tagDict) -> Just (provenSents, fmap snd consts, stepCount) 
                Nothing -> Nothing
-          let baseStateZero = PrfStdState (provenSents baseState) (consts baseState) 0
+          let baseStateZero = PrfStdState (provenSents baseState) (consts baseState) 0 (tagData baseState)
           unless (Prelude.null preambleSteps) 
                  --   (printSteps (contextFrames context) (stepIdxPrefix context) 0
                  --       (provenSents baseState) (fmap snd (consts baseState)) False newParentStateData preambleSteps)
@@ -412,8 +425,8 @@ runSubproofM context baseState preambleState preambleSteps mayPreambleLastProp p
 
 
 showTermM :: (Monad m, Monoid r,
-             Proof eL r (PrfStdState s o tType) (PrfStdContext q s o tType) [PrfStdStep s o tType] s, ShowableTerm s t)
-                     => t -> ProofGenTStd tType r s o q m Text
+             Proof eL r (PrfStdState s o tType t) (PrfStdContext q s o tType t) [PrfStdStep s o tType t] s, ShowableTerm s t)
+                     => t -> ProofGenTStd tType r s o q t m Text
 showTermM obj = 
     do
       state <- getProofState
@@ -421,8 +434,8 @@ showTermM obj =
       return $ showTerm dict obj
 
 showSentM :: (Monad m, Monoid r,
-             Proof eL r (PrfStdState s o tType) (PrfStdContext q s o tType) [PrfStdStep s o tType] s, ShowableSent s)
-                     => s -> ProofGenTStd tType r s o q m Text
+             Proof eL r (PrfStdState s o tType t) (PrfStdContext q s o tType t) [PrfStdStep s o tType t] s, ShowableSent s)
+                     => s -> ProofGenTStd tType r s o q t m Text
 showSentM obj =
     do
       state <- getProofState

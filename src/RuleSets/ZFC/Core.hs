@@ -22,7 +22,7 @@ import Data.List (mapAccumL,intersperse)
 import qualified Data.Set as Set
 import Data.Text ( pack, Text, unpack,concat)
 import Data.Map
-    ( (!), foldrWithKey, fromList, insert, keysSet, lookup, map, Map )
+    ( (!), foldrWithKey, fromList, insert, keysSet, lookup, map, Map, singleton )
 import Control.Applicative ( Alternative((<|>)) )
 import Control.Monad.Except ( MonadError(throwError) )
 import Control.Monad.Catch
@@ -219,7 +219,7 @@ data LogicRule s sE t  where
     ProofBySubArg :: ProofBySubArgSchema s [LogicRule s sE t] -> LogicRule s sE t
     ProofByUG :: ProofByUGSchema s [LogicRule s sE t] -> LogicRule s sE t 
     Theorem :: TheoremSchema s [LogicRule s sE t ] Text () -> LogicRule s sE t 
-    TheoremM :: TheoremAlgSchema [LogicRule s sE t ] s () -> 
+    TheoremM :: TheoremAlgSchema [LogicRule s sE t ] s t () -> 
                              LogicRule s sE t
     --EmptySet :: LogicRule s sE t
     Specification :: [Int] -> Int -> t -> s -> LogicRule s sE t
@@ -272,6 +272,8 @@ instance REM.LogicRuleClass [LogicRule s sE t] s Text () sE where
      fakeProp deps s = [(PredRule . PREDL.PropRule . PL.BaseRule . REM.FakeProp deps) s]
      fakeConst:: Text -> () -> [LogicRule s sE t ]
      fakeConst o t = [PredRule $ PREDL.PropRule $ PL.BaseRule $ REM.FakeConst o t]
+     tagSent :: Text -> s -> [LogicRule s sE t]
+     tagSent tagName sent = [PredRule $ PREDL.PropRule . PL.BaseRule $ REM.TagSent tagName sent]  
 
 
 instance PL.LogicRuleClass [LogicRule s sE t] s () sE Text where
@@ -551,37 +553,38 @@ lambdaSpec contextIdxs specIdx source_template p_template =
 
 
 runProofAtomic :: (
-               ProofStd s (LogicError s sE t) [LogicRule s sE t] Text () (),
+               ProofStd s (LogicError s sE t) [LogicRule s sE t] Text () () t,
                Show sE, Typeable sE, Show s, Typeable s, TypeableTerm t Text () sE (),
                 TypedSent Text () sE s,
                Show t, Typeable t,
-               StdPrfPrintMonad () s Text () (Either SomeException), ShowableSent s,
+               StdPrfPrintMonad () s Text () t (Either SomeException), ShowableSent s,
                             PREDL.LogicSent s t () Text (), LogicSent s t ,
                             Eq t, LogicTerm t, QuantifiableTerm () (),
                             PREDL.LogicTerm t, ShowableTerm s t) =>
                             LogicRule s sE t  ->
-                            PrfStdContext () s Text ()->
-                            PrfStdState s Text () ->
-                            Either (LogicError s sE t) (Maybe s,Maybe (Text,()),PrfStdStep s Text ())
+                            PrfStdContext () s Text () t->
+                            PrfStdState s Text () t ->
+                            Either (LogicError s sE t) (Maybe s,Maybe (Text,()),Maybe (Text, TagData s t), Bool,
+                                                       PrfStdStep s Text () t)
 runProofAtomic rule context state  = 
       case rule of
           PredRule predR -> do
                left  LogicErrPredL (PREDL.runProofAtomic predR context state)
           ProofByAsm schema -> do
                (implication,step) <- left LogicErrPrfByAsm (runProofByAsm schema context state)
-               return (Just implication, Nothing, step)
+               return (Just implication, Nothing, Nothing, False, step)
           ProofBySubArg schema -> do
                step <- left LogicErrPrfBySubArg (runProofBySubArg schema context state)
-               return (Just $ argPrfConsequent schema, Nothing, step)
+               return (Just $ argPrfConsequent schema, Nothing, Nothing, False, step)
           Theorem schema -> do
                step <- left LogicErrTheorem (establishTheorem schema context state)
-               return (Just $ theorem schema, Nothing, step)
+               return (Just $ theorem schema, Nothing, Nothing, False, step)
           TheoremM schema -> do
                (theorem,step) <- left LogicErrTheoremM (establishTmSilentM schema context state)
-               return (Just theorem,Nothing, step)
+               return (Just theorem,Nothing, Nothing, False, step)
           ProofByUG schema -> do
                (generalized,step) <- left LogicErrUG (runProofByUG schema context state)
-               return (Just generalized,Nothing, step)
+               return (Just generalized,Nothing, Nothing, False, step)
           Specification outerIdxs idx t s -> do
                -- Check idx is not in outerIdxs
                when (idx `elem` outerIdxs) $ -- Use 'when' from Control.Monad for cleaner Either handling
@@ -618,7 +621,7 @@ runProofAtomic rule context state  =
                -- **No final sanity check on specAx needed here if assumptions hold**
                -- Create the proof step
                let step = PrfStdStepStep specAx "AXIOM_SPECIFICATION" Nothing []
-               return (Just specAx, Nothing, step)
+               return (Just specAx, Nothing, Nothing, False, step)
           Replacement outerIdxs idx1 idx2 t s -> do
                -- Basic validation of indices
                when (idx1 == idx2) $
@@ -661,34 +664,34 @@ runProofAtomic rule context state  =
 
                -- Create the proof step
                let step = PrfStdStepStep replAx "AXIOM_REPLACEMENT" Nothing []
-               return (Just replAx, Nothing, step)
+               return (Just replAx, Nothing, Nothing, False, step)
 
           IntegerMembership i -> do
               let resultSent = integer i `memberOf` intSet
-              return (Just resultSent, Nothing, PrfStdStepStep resultSent "AXIOM_INTEGER_MEMBERSHIP" Nothing [])
+              return (Just resultSent, Nothing, Nothing, False, PrfStdStepStep resultSent "AXIOM_INTEGER_MEMBERSHIP" Nothing [])
 
           IntegerAddition i1 i2 -> do
               let termLHS = integer i1 .+. integer i2
               let termRHS = integer (i1 + i2) -- Meta-level calculation
               let resultSent = termLHS .==. termRHS
-              return (Just resultSent, Nothing, PrfStdStepStep resultSent "AXIOM_INTEGER_ADDITION" Nothing [])
+              return (Just resultSent, Nothing, Nothing, False, PrfStdStepStep resultSent "AXIOM_INTEGER_ADDITION" Nothing [])
 
           IntegerMultiplication i1 i2 -> do
               let termLHS = integer i1 .*. integer i2
               let termRHS = integer (i1 * i2) -- Meta-level calculation
               let resultSent = termLHS .==. termRHS
-              return (Just resultSent, Nothing, PrfStdStepStep resultSent "AXIOM_INTEGER_MULTIPLICATION" Nothing [])
+              return (Just resultSent, Nothing, Nothing, False, PrfStdStepStep resultSent "AXIOM_INTEGER_MULTIPLICATION" Nothing [])
 
           IntegerNegation i -> do
               let termLHS = intNeg (integer i)
               let termRHS = integer (-i) -- Meta-level calculation
               let resultSent = termLHS .==. termRHS
-              return (Just resultSent, Nothing, PrfStdStepStep resultSent "AXIOM_INTEGER_NEGATION" Nothing [])
+              return (Just resultSent, Nothing, Nothing, False, PrfStdStepStep resultSent "AXIOM_INTEGER_NEGATION" Nothing [])
           IntegerCompare i1 i2 -> do
               when (i1 > i2) $
                   throwError $ LogicErrIntCompareFalse i1 i2 -- Error for invalid comparison
               let resultSent = integer i1 .<=. integer i2
-              return (Just resultSent, Nothing, PrfStdStepStep resultSent "AXIOM_INTEGER_LTE" Nothing [])
+              return (Just resultSent, Nothing, Nothing, False, PrfStdStepStep resultSent "AXIOM_INTEGER_LTE" Nothing [])
           IntegersAreUrelements -> do
               -- Get the axiom instance by calling the renamed LogicSent method
               let axiomInstance = intsAreUrelementsAxiom -- Use the renamed method
@@ -698,7 +701,7 @@ runProofAtomic rule context state  =
               -- Create the proof step
               let justificationText = "AXIOM_INTEGER_URELEMENT"
               let step = PrfStdStepStep axiomInstance justificationText Nothing []
-              return (Just axiomInstance, Nothing, step)
+              return (Just axiomInstance, Nothing, Nothing, False, step)
           IntegerInequality i1 i2 -> do
               when (i1 == i2) $ -- This axiom asserts inequality, so it's an error if inputs are equal
                   throwError $ LogicErrIntInequalitySameValues i1 i2
@@ -710,118 +713,118 @@ runProofAtomic rule context state  =
               -- For your specific types PropDeBr and ObjDeBr, these resolve to
               -- Neg ((Integ i1) :==: (Integ i2)), which is your (./=.) shorthand.
               let resultSent = neg (integer i1 .==. integer i2)
-              return (Just resultSent, Nothing, PrfStdStepStep resultSent "AXIOM_INTEGER_INEQUALITY" Nothing [])
+              return (Just resultSent, Nothing, Nothing, False, PrfStdStepStep resultSent "AXIOM_INTEGER_INEQUALITY" Nothing [])
           EmptySetAxiom -> do
               let axiomInstance = emptySetAxiom -- From LogicSent s t constraint
               -- Optional: Sanity check if the axiom is complexly generated in LogicSent
               -- maybe (return ()) (throwError . MetaRuleErrNotClosed axiomInstance) (checkSanity mempty [] (fmap fst (consts state)) axiomInstance)
               let step = PrfStdStepStep axiomInstance "AXIOM_EMPTY_SET" Nothing []
-              return (Just axiomInstance, Nothing, step)
+              return (Just axiomInstance, Nothing, Nothing, False, step)
 
           ExtensionalityAxiom -> do
               let axiomInstance = extensionalityAxiom -- From LogicSent s t constraint
               -- Optional: Sanity check
               -- maybe (return ()) (throwError . MetaRuleErrNotClosed axiomInstance) (checkSanity mempty [] (fmap fst (consts state)) axiomInstance)
               let step = PrfStdStepStep axiomInstance "AXIOM_EXTENSIONALITY" Nothing []
-              return (Just axiomInstance, Nothing, step)
+              return (Just axiomInstance, Nothing, Nothing, False, step)
           RegularityAxiom -> do
               let axiomInstance = regularityAxiom -- From LogicSent s t constraint
               -- No sanity check needed as it's a fixed, closed proposition.
               let step = PrfStdStepStep axiomInstance "AXIOM_REGULARITY" Nothing []
-              return (Just axiomInstance, Nothing, step) 
+              return (Just axiomInstance, Nothing, Nothing, False, step) 
           UnionAxiom -> do
               let axiomInstance = unionAxiom -- From LogicSent s t constraint
               let step = PrfStdStepStep axiomInstance "AXIOM_UNION" Nothing []
-              return (Just axiomInstance, Nothing, step)
+              return (Just axiomInstance, Nothing, Nothing, False, step)
           PowerSetAxiom -> do
               let axiomInstance = powerSetAxStatement -- From LogicSent s t constraint
               let step = PrfStdStepStep axiomInstance "AXIOM_POWER_SET" Nothing []
-              return (Just axiomInstance, Nothing, step)
+              return (Just axiomInstance, Nothing, Nothing, False, step)
           PairingAxiom -> do
               let axiomInstance = pairingAxiom -- From LogicSent s t constraint
               let step = PrfStdStepStep axiomInstance "AXIOM_PAIRING" Nothing []
-              return (Just axiomInstance, Nothing, step)
+              return (Just axiomInstance, Nothing, Nothing, False, step)
           AxiomOfChoice -> do
               let axiomInstance = axiomOfChoice -- From LogicSent s t constraint
               let step = PrfStdStepStep axiomInstance "AXIOM_CHOICE" Nothing []
-              return (Just axiomInstance, Nothing, step)
+              return (Just axiomInstance, Nothing, Nothing, False, step)
           IntOrderAntisymmetry -> do
               let axiomInstance = intOrderAntisymmetryAxiom -- From LogicSent s t constraint
               let step = PrfStdStepStep axiomInstance "AXIOM_INT_ORDER_ANTISYMMETRY" Nothing []
-              return (Just axiomInstance, Nothing, step)
+              return (Just axiomInstance, Nothing, Nothing, False, step)
           IntOrderReflexivity -> do
               let axiomInstance = intOrderReflexivityAxiom -- From LogicSent s t constraint
               let step = PrfStdStepStep axiomInstance "AXIOM_INT_ORDER_REFLEXIVITY" Nothing []
-              return (Just axiomInstance, Nothing, step)
+              return (Just axiomInstance, Nothing, Nothing, False, step)
           IntOrderTransitivity -> do
                 let axiomInstance = intOrderTransitivityAxiom -- From LogicSent s t constraint
                 let step = PrfStdStepStep axiomInstance "AXIOM_INT_ORDER_TRANSITIVITY" Nothing []
-                return (Just axiomInstance, Nothing, step)
+                return (Just axiomInstance, Nothing, Nothing, False, step)
           IntOrderTotality -> do
                 let axiomInstance = intOrderTotalityAxiom -- From LogicSent s t constraint
                 let step = PrfStdStepStep axiomInstance "AXIOM_INT_ORDER_TOTALITY" Nothing []
-                return (Just axiomInstance, Nothing, step)
+                return (Just axiomInstance, Nothing, Nothing, False, step)
 
           IntAddClosure -> do
               let axiomInstance = intAddClosureAxiom
               let step = PrfStdStepStep axiomInstance "AXIOM_INT_ADD_CLOSURE" Nothing []
-              return (Just axiomInstance, Nothing, step)
+              return (Just axiomInstance, Nothing, Nothing, False, step)
           IntMulClosure -> do
               let axiomInstance = intMulClosureAxiom
               let step = PrfStdStepStep axiomInstance "AXIOM_INT_MUL_CLOSURE" Nothing []
-              return (Just axiomInstance, Nothing, step)
+              return (Just axiomInstance, Nothing, Nothing, False, step)
           IntNegClosure -> do
               let axiomInstance = intNegClosureAxiom
               let step = PrfStdStepStep axiomInstance "AXIOM_INT_NEG_CLOSURE" Nothing []
-              return (Just axiomInstance, Nothing, step)
+              return (Just axiomInstance, Nothing, Nothing, False, step)
           IntAddAssociativity -> do -- Was previously started/duplicated, now unique
               let axiomInstance = intAddAssociativityAxiom
               let step = PrfStdStepStep axiomInstance "AXIOM_INT_ADD_ASSOCIATIVITY" Nothing []
-              return (Just axiomInstance, Nothing, step)
+              return (Just axiomInstance, Nothing, Nothing, False, step)
           IntAddCommutativity -> do
               let axiomInstance = intAddCommutativityAxiom
               let step = PrfStdStepStep axiomInstance "AXIOM_INT_ADD_COMMUTATIVITY" Nothing []
-              return (Just axiomInstance, Nothing, step)
+              return (Just axiomInstance, Nothing, Nothing, False, step)
           IntAddIdentity -> do
               let axiomInstance = intAddIdentityAxiom
               let step = PrfStdStepStep axiomInstance "AXIOM_INT_ADD_IDENTITY" Nothing []
-              return (Just axiomInstance, Nothing, step)
+              return (Just axiomInstance, Nothing, Nothing, False, step)
           IntAddInverse -> do
               let axiomInstance = intAddInverseAxiom
               let step = PrfStdStepStep axiomInstance "AXIOM_INT_ADD_INVERSE" Nothing []
-              return (Just axiomInstance, Nothing, step)
+              return (Just axiomInstance, Nothing, Nothing, False, step)
           IntMulAssociativity -> do
               let axiomInstance = intMulAssociativityAxiom
               let step = PrfStdStepStep axiomInstance "AXIOM_INT_MUL_ASSOCIATIVITY" Nothing []
-              return (Just axiomInstance, Nothing, step)
+              return (Just axiomInstance, Nothing, Nothing, False, step)
           IntMulCommutativity -> do
               let axiomInstance = intMulCommutativityAxiom
               let step = PrfStdStepStep axiomInstance "AXIOM_INT_MUL_COMMUTATIVITY" Nothing []
-              return (Just axiomInstance, Nothing, step)
+              return (Just axiomInstance, Nothing, Nothing, False, step)
           IntMulIdentity -> do
               let axiomInstance = intMulIdentityAxiom
               let step = PrfStdStepStep axiomInstance "AXIOM_INT_MUL_IDENTITY" Nothing []
-              return (Just axiomInstance, Nothing, step)
+              return (Just axiomInstance, Nothing, Nothing, False, step)
           IntDistributivity -> do
               let axiomInstance = intDistributivityAxiom
               let step = PrfStdStepStep axiomInstance "AXIOM_INT_DISTRIBUTIVITY" Nothing []
-              return (Just axiomInstance, Nothing, step)
+              return (Just axiomInstance, Nothing, Nothing, False, step)
           IntOrderAddCompatibility -> do
               let axiomInstance = intOrderAddCompatibilityAxiom
               let step = PrfStdStepStep axiomInstance "AXIOM_INT_ORDER_ADD_COMPATIBILITY" Nothing []
-              return (Just axiomInstance, Nothing, step)
+              return (Just axiomInstance, Nothing, Nothing, False, step)
           IntOrderMulCompatibility -> do
               let axiomInstance = intOrderMulCompatibilityAxiom
               let step = PrfStdStepStep axiomInstance "AXIOM_INT_ORDER_MUL_COMPATIBILITY" Nothing []
-              return (Just axiomInstance, Nothing, step)
+              return (Just axiomInstance, Nothing, Nothing, False, step)
           NatWellOrderingAxiom -> do
               let axiomInstance = natWellOrderingAxiom
               let step = PrfStdStepStep axiomInstance "AXIOM_NAT_WELL_ORDERING" Nothing []
-              return (Just axiomInstance, Nothing, step)
+              return (Just axiomInstance, Nothing, Nothing, False, step)
           EmptySetNotIntAxiom -> do
               let axiomInstance = emptySetNotIntAxiom
               let step = PrfStdStepStep axiomInstance "AXIOM_EMPTY_SET_IS_SET" Nothing []
-              return (Just axiomInstance, Nothing, step)
+              return (Just axiomInstance, Nothing, Nothing, False, step)
 
     where
         proven = (keysSet . provenSents) state
@@ -833,45 +836,48 @@ runProofAtomic rule context state  =
 
 instance (Show sE, Typeable sE, Show s, Typeable s, TypedSent Text () sE s,
              TypeableTerm t Text () sE (), 
-             Monoid (PrfStdState s Text ()), Show t, Typeable t,
-             StdPrfPrintMonad () s Text () (Either SomeException),
-             Monoid (PrfStdContext () s Text ()),
+             Monoid (PrfStdState s Text () t), Show t, Typeable t,
+             StdPrfPrintMonad () s Text () t (Either SomeException),
+             Monoid (PrfStdContext () s Text () t),
              PREDL.LogicSent s t () Text (),
              LogicSent s t, Eq t, LogicTerm t,
              QuantifiableTerm () (), ShowableSent s, PREDL.LogicTerm t, ShowableTerm s t) 
           => Proof (LogicError s sE t) 
              [LogicRule s sE t] 
-             (PrfStdState s Text ()) 
-             (PrfStdContext () s Text ())
-             [PrfStdStep s Text ()]
+             (PrfStdState s Text () t) 
+             (PrfStdContext () s Text () t)
+             [PrfStdStep s Text () t]
                s 
                  where
 
     runProofOpen :: [LogicRule s sE t ]
-                     -> PrfStdContext () s Text ()
-                     -> PrfStdState s Text ()
-                     -> Either (LogicError s sE t) (PrfStdState s Text (),[PrfStdStep s Text ()], Last s)
-    runProofOpen rs context oldState = foldM f (PrfStdState mempty mempty 0,[], Last Nothing) rs
+                     -> PrfStdContext () s Text () t
+                     -> PrfStdState s Text () t
+                     -> Either (LogicError s sE t) (PrfStdState s Text () t,[PrfStdStep s Text () t], Last s)
+    runProofOpen rs context oldState = foldM f (PrfStdState mempty mempty 0 mempty,[], Last Nothing) rs
        where
            f (newState,newSteps, mayLastProp) r =  fmap g (runProofAtomic r context (oldState <> newState))
              where
                  g ruleResult = case ruleResult of
-                    (Just s,Nothing,step) -> (newState <> PrfStdState (Data.Map.insert s newLineIndex mempty ) mempty 1,
+                    (Just s,Nothing,Nothing, False, step) -> (newState <> PrfStdState (Data.Map.insert s (newLineIndex False) mempty ) mempty 1 mempty,
                                          newSteps <> [step], (Last . Just) s)
-                    (Just s,Just (newConst,tType), step) -> (newState <> 
-                            PrfStdState (Data.Map.insert s newLineIndex mempty) 
-                               (Data.Map.insert newConst (tType,newLineIndex) mempty) 1,
+                    (Just s,Just (newConst,tType), Nothing, False, step) -> (newState <> 
+                            PrfStdState (Data.Map.insert s (newLineIndex False) mempty) 
+                               (Data.Map.insert newConst (tType,newLineIndex False) mempty) 1 mempty,
                                newSteps <> [step], (Last . Just) s)
-                    (Nothing,Just (newConst,tType), step) -> (newState <> 
+                    (Nothing,Just (newConst,tType), Nothing, False, step) -> (newState <> 
                             PrfStdState mempty
-                               (Data.Map.insert newConst (tType,newLineIndex) mempty) 1,
+                               (Data.Map.insert newConst (tType,newLineIndex False) mempty) 1 mempty,
                                newSteps <> [step], mayLastProp)
-                    (Nothing,Nothing, step) -> (newState <>
-                            PrfStdState mempty mempty 1,
+                    (Nothing,Nothing, Nothing, False, step) -> (newState <>
+                            PrfStdState mempty mempty 1 mempty,
                                newSteps <> [step], mayLastProp)
+                    (Nothing, Nothing, Just (tagName, tagData), True, step) -> 
+                        (newState <> PrfStdState mempty mempty 0 (Data.Map.singleton tagName tagData),
+                         newSteps <> [step], mayLastProp)         
                     where
-                        newStepCount = stepCount newState + 1
-                        newLineIndex = stepIdxPrefix context <> [stepCount oldState + newStepCount-1]
+                        newStepCount hiddenStep = if hiddenStep then stepCount newState else stepCount newState + 1
+                        newLineIndex hiddenStep = stepIdxPrefix context <> [stepCount oldState + newStepCount hiddenStep -1]
 
 
 
@@ -889,10 +895,10 @@ instance PL.SubproofRule [LogicRule s sE t] s where
      proofByAsm asm cons subproof = [ProofByAsm $ ProofByAsmSchema asm cons subproof]
 
 
-instance PREDL.SubproofRule [LogicRule s sE t] s Text () () where
+instance PREDL.SubproofRule [LogicRule s sE t] s Text () () t where
      theoremSchema:: TheoremSchema s [LogicRule s sE t] Text () -> [LogicRule s sE t]
      theoremSchema schema = [Theorem schema]
-     theoremAlgSchema:: PREDL.TheoremAlgSchema () [LogicRule s sE t] s Text () () -> [LogicRule s sE t]
+     theoremAlgSchema:: PREDL.TheoremAlgSchema () [LogicRule s sE t] s Text () t () -> [LogicRule s sE t]
      theoremAlgSchema schema = [TheoremM schema]
 
      proofByUG:: s -> [LogicRule s sE t] -> [LogicRule s sE t]
@@ -937,5 +943,5 @@ type MonadSent s t sE m = (SentConstraints s t sE,  MonadState (Sum Int) m)
 type TheoremSchemaMT r s m x =
     PREDL.TheoremSchemaMT () r s Text () m x
 
-type TheoremAlgSchema r s x = 
-    TheoremSchemaMT r s (Either SomeException) x
+type TheoremAlgSchema r s t x = 
+    TheoremSchemaMT r s t (Either SomeException) x

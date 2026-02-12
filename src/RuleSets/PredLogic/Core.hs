@@ -143,7 +143,7 @@ data LogicRule s sE o t tType q  where
         -- If the resulting sentence is already proven, then the generalization is OK, and that is sentence s.
 
     Theorem :: TheoremSchema s [LogicRule s sE o t tType q] o tType -> LogicRule s sE o t tType q
-    TheoremM :: TheoremAlgSchema tType [LogicRule s sE o t tType q] s o q () -> 
+    TheoremM :: TheoremAlgSchema tType [LogicRule s sE o t tType q] s o q t () -> 
                              LogicRule s sE o t tType q
     ENegIntro :: s -> LogicRule s sE o t tType q
     ANegIntro :: s -> LogicRule s sE o t tType q
@@ -164,6 +164,8 @@ instance REM.LogicRuleClass [LogicRule s sE o t tType q] s o tType sE where
      fakeProp deps s = [(PropRule . PL.BaseRule . REM.FakeProp deps) s]
      fakeConst:: o -> tType -> [LogicRule s sE o t tType q]
      fakeConst o t = [PropRule $ PL.BaseRule $ REM.FakeConst o t]
+     tagSent :: Text -> s -> [LogicRule s sE o t tType q]
+     tagSent tagName sent = [PropRule $ PL.BaseRule $ REM.TagSent tagName sent]
 
 instance PL.LogicRuleClass [LogicRule s sE o t tType q] s tType sE o where
      mp:: s -> [LogicRule s sE o t tType q]
@@ -266,34 +268,35 @@ instance LogicRuleClass [LogicRule s sE o t tType q] s t tType sE o where
 
 
 runProofAtomic :: (LogicSent s t tType o q,
-                ProofStd s (LogicError s sE o t tType ) [LogicRule s sE o t tType q] o tType q,
+                ProofStd s (LogicError s sE o t tType ) [LogicRule s sE o t tType q] o tType q t,
                Show sE, Typeable sE, Show s, Typeable s, TypeableTerm t o tType sE q, TypedSent o tType sE s,
                Typeable o, Show o,Typeable tType, Show tType, Show t, Typeable t,
-               StdPrfPrintMonad q s o tType (Either SomeException), Eq t, QuantifiableTerm q tType, ShowableTerm s t, LogicTerm t,
+               StdPrfPrintMonad q s o tType t (Either SomeException), Eq t, QuantifiableTerm q tType, ShowableTerm s t, LogicTerm t,
                ShowableSent s) =>
                             LogicRule s sE o t tType q ->
-                            PrfStdContext q s o tType ->
-                            PrfStdState s o tType ->
-                            Either (LogicError s sE o t tType ) (Maybe s,Maybe (o,tType),PrfStdStep s o tType)
+                            PrfStdContext q s o tType t ->
+                            PrfStdState s o tType t->
+                            Either (LogicError s sE o t tType ) (Maybe s,Maybe (o,tType),Maybe (Text, TagData s t), Bool, 
+                                       PrfStdStep s o tType t)
 runProofAtomic rule context state  = 
       case rule of
           PropRule propR -> do
                left  LogicErrPL (PL.runProofAtomic propR context state)
           ProofByAsm schema -> do
                (implication,step) <- left LogicErrPrfByAsm (runProofByAsm schema context state)
-               return (Just implication, Nothing, step)
+               return (Just implication, Nothing, Nothing, False, step)
           ProofBySubArg schema -> do
                step <- left LogicErrPrfBySubArg (runProofBySubArg schema context state)
-               return (Just $ argPrfConsequent schema, Nothing, step)
+               return (Just $ argPrfConsequent schema, Nothing, Nothing, False, step)
           Theorem schema -> do
                step <- left LogicErrTheorem (establishTheorem schema context state)
-               return (Just $ theorem schema, Nothing, step)
+               return (Just $ theorem schema, Nothing, Nothing, False, step)
           TheoremM schema -> do
                (theorem,step) <- left LogicErrTheoremM (establishTmSilentM schema context state)
-               return (Just theorem,Nothing, step)
+               return (Just theorem,Nothing, Nothing, False, step)
           ProofByUG schema -> do
                (generalized,step) <- left LogicErrUG (runProofByUG schema context state)
-               return (Just generalized,Nothing, step)
+               return (Just generalized,Nothing, Nothing, False, step)
           EI existsSent const -> do 
                let mayExistsParse = parseExists existsSent
                (f,tType) <- maybe ((throwError . LogicErrEINotExists) existsSent) return mayExistsParse
@@ -302,7 +305,7 @@ runProofAtomic rule context state  =
                let constNotDefined = isNothing $ Data.Map.lookup const constDict
                unless constNotDefined ((throwError . LogicErrEIConstDefined) const)
                let eIResultSent = (f . const2Term) const
-               return (Just eIResultSent,Just (const,qTypeToTType tType), PrfStdStepStep eIResultSent "EI" (Just const) [existsSent])
+               return (Just eIResultSent,Just (const,qTypeToTType tType), Nothing, False, PrfStdStepStep eIResultSent "EI" (Just const) [existsSent])
           EG term generalization -> do
                let eitherTermType = getTypeTerm mempty varStack constDict term
                termType <- left PredProofTermSanity eitherTermType
@@ -312,7 +315,7 @@ runProofAtomic rule context state  =
                let sourceSent = f term
                let maySourceSentIdx = Data.Map.lookup sourceSent (provenSents state)
                sourceSentIdx <- maybe ((throwError . LogicErrEGNotGeneralization term) generalization) return maySourceSentIdx
-               return (Just generalization,Nothing, PrfStdStepStep generalization "EG" Nothing [sourceSent])
+               return (Just generalization,Nothing, Nothing, False, PrfStdStepStep generalization "EG" Nothing [sourceSent])
           UI term forallSent -> do
                let mayForallSentIdx = Data.Map.lookup forallSent (provenSents state)
                forallSentIdx <- maybe ((throwError . LogicErrUINotProven) forallSent) return mayForallSentIdx
@@ -321,7 +324,7 @@ runProofAtomic rule context state  =
                let eitherTermType = getTypeTerm mempty varStack constDict term
                termType <- left PredProofTermSanity eitherTermType
                unless (qTypeToTType tType == termType) ((throwError .  LogicErrUITermTypeMismatch term termType forallSent) (qTypeToTType tType))
-               return (Just $ f term,Nothing, PrfStdStepStep (f term) "UI" Nothing [forallSent])
+               return (Just $ f term,Nothing, Nothing, False, PrfStdStepStep (f term) "UI" Nothing [forallSent])
           ENegIntro negExistsSent -> do
                let mayExistsSent = parseNeg negExistsSent
                existsSent <- maybe ((throwError . LogicErrENegNotExists) negExistsSent) return mayExistsSent
@@ -330,7 +333,7 @@ runProofAtomic rule context state  =
                let mayNegExistsIdx = Data.Map.lookup negExistsSent (provenSents state)
                negExistsIdx <- maybe ((throwError . LogicErrENegNotProven) negExistsSent) return mayNegExistsIdx
                let forallNegSent = reverseParseQuantToForallNot f tType
-               return (Just forallNegSent, Nothing, PrfStdStepStep forallNegSent "E_NEG" Nothing [negExistsSent])
+               return (Just forallNegSent, Nothing, Nothing, False, PrfStdStepStep forallNegSent "E_NEG" Nothing [negExistsSent])
           ANegIntro negForallSent -> do
                let mayForallSent = parseNeg negForallSent
                forallSent <- maybe ((throwError . LogicErrANegNotForall) negForallSent) return mayForallSent
@@ -339,7 +342,7 @@ runProofAtomic rule context state  =
                let mayNegForallIdx = Data.Map.lookup negForallSent (provenSents state)
                negForallIdx <- maybe ((throwError . LogicErrANegNotProven) negForallSent) return mayNegForallIdx
                let existsNegSent = reverseParseQuantToExistsNot f tType
-               return (Just existsNegSent, Nothing, PrfStdStepStep existsNegSent "A_NEG" Nothing [negForallSent])
+               return (Just existsNegSent, Nothing, Nothing, False, PrfStdStepStep existsNegSent "A_NEG" Nothing [negForallSent])
           EIHilbert existsSent -> do 
                let mayExistsParse = parseExists existsSent
                (f,tType) <- maybe ((throwError . LogicErrEINotExists) existsSent) return mayExistsParse
@@ -347,13 +350,13 @@ runProofAtomic rule context state  =
                existsSentIdx <- maybe ((throwError . LogicErrEINotProven) existsSent) return mayExistsSentIdx
                let hilbertObj = reverseParseQuantToHilbert f tType
                let eIResultSent = f hilbertObj
-               return (Just eIResultSent,Nothing, PrfStdStepStep eIResultSent "EI_HILBERT" Nothing [existsSent])
+               return (Just eIResultSent,Nothing, Nothing, False, PrfStdStepStep eIResultSent "EI_HILBERT" Nothing [existsSent])
           EqRefl term -> do
               -- Check term sanity (similar to EG/UI)
               let eitherTermType = getTypeTerm mempty varStack constDict term
               termType <- left PredProofTermSanity eitherTermType
               let resultSent = term .==. term
-              return (Just resultSent, Nothing, PrfStdStepStep resultSent "EQ_REFL" Nothing [])
+              return (Just resultSent, Nothing, Nothing, False, PrfStdStepStep resultSent "EQ_REFL" Nothing [])
 
           EqSym eqSent -> do
               -- Parse the equality sentence (e.g., a .==. b)
@@ -364,7 +367,7 @@ runProofAtomic rule context state  =
                                  return (Data.Map.lookup eqSent (provenSents state))
               -- Construct the symmetric sentence (b .==. a)
               let symSent = termB .==. termA
-              return (Just symSent, Nothing, PrfStdStepStep symSent "EQ_SYM" Nothing [eqSent])
+              return (Just symSent, Nothing, Nothing, False, PrfStdStepStep symSent "EQ_SYM" Nothing [eqSent])
 
           EqTrans eqSent1 eqSent2 -> do
               -- Parse the first equality (e.g., a .==. b)
@@ -385,7 +388,7 @@ runProofAtomic rule context state  =
 
               -- Construct the transitive sentence (a .==. c)
               let transSent = termA .==. termC
-              return (Just transSent, Nothing, PrfStdStepStep transSent "EQ_TRANS" Nothing [eqSent1, eqSent2])
+              return (Just transSent, Nothing, Nothing, False, PrfStdStepStep transSent "EQ_TRANS" Nothing [eqSent1, eqSent2])
           EqSubst idx templateSent eqSent -> do
               -- Check if equality sentence a == b is proven
               eqSentIdx <- maybe (throwError $ LogicErrEqSubstEqNotProven eqSent)
@@ -429,7 +432,7 @@ runProofAtomic rule context state  =
               let resultSent = sentSubX idx termB templateSent
 
 
-              return (Just resultSent, Nothing, PrfStdStepStep resultSent "EQ_SUBST" Nothing [sourceSent, eqSent])
+              return (Just resultSent, Nothing, Nothing, False, PrfStdStepStep resultSent "EQ_SUBST" Nothing [sourceSent, eqSent])
 
 
 
@@ -446,15 +449,15 @@ runProofAtomic rule context state  =
 
 instance (LogicSent s t tType o q, Show sE, Typeable sE, Show s, Typeable s, TypedSent o tType sE s,
              TypeableTerm t o tType sE q, Typeable o, Show o, Typeable tType, Show tType,
-             Monoid (PrfStdState s o tType), Show t, Typeable t,
-             StdPrfPrintMonad q s o tType (Either SomeException),
-             Monoid (PrfStdContext q s o tType), Eq t, QuantifiableTerm q tType, ShowableTerm s t, LogicTerm t,
+             Monoid (PrfStdState s o tType t), Show t, Typeable t,
+             StdPrfPrintMonad q s o tType t (Either SomeException),
+             Monoid (PrfStdContext q s o tType t), Eq t, QuantifiableTerm q tType, ShowableTerm s t, LogicTerm t,
              ShowableSent s) 
           => Proof (LogicError s sE o t tType ) 
              [LogicRule s sE o t tType q] 
-             (PrfStdState s o tType) 
-             (PrfStdContext q s o tType)
-             [PrfStdStep s o tType]
+             (PrfStdState s o tType t) 
+             (PrfStdContext q s o tType t)
+             [PrfStdStep s o tType t]
                s 
                  where
 
@@ -462,30 +465,33 @@ instance (LogicSent s t tType o q, Show sE, Typeable sE, Show s, Typeable s, Typ
                  TypedSent o tType sE s, TypeableTerm t o tType sE q, Typeable o,
                  Show o, Typeable tType, Show tType, QuantifiableTerm q tType) =>
                     [LogicRule s sE o t tType q]
-                     -> PrfStdContext q s o tType
-                     -> PrfStdState s o tType 
-                     -> Either (LogicError s sE o t tType ) (PrfStdState s o tType,[PrfStdStep s o tType], Last s)
-    runProofOpen rs context oldState = foldM f (PrfStdState mempty mempty 0,[], Last Nothing) rs
+                     -> PrfStdContext q s o tType t
+                     -> PrfStdState s o tType t
+                     -> Either (LogicError s sE o t tType ) (PrfStdState s o tType t,[PrfStdStep s o tType t], Last s)
+    runProofOpen rs context oldState = foldM f (PrfStdState mempty mempty 0 mempty,[], Last Nothing) rs
        where
            f (newState,newSteps, mayLastProp) r =  fmap g (runProofAtomic r context (oldState <> newState))
              where
                  g ruleResult = case ruleResult of
-                    (Just s,Nothing,step) -> (newState <> PrfStdState (Data.Map.insert s newLineIndex mempty) mempty 1,
+                    (Just s,Nothing,Nothing, False,step) -> (newState <> PrfStdState (Data.Map.insert s (newLineIndex False) mempty) mempty 1 mempty,
                                          newSteps <> [step], (Last . Just) s)
-                    (Just s,Just (newConst,tType), step) -> (newState <> 
-                            PrfStdState (Data.Map.insert s newLineIndex mempty) 
-                               (Data.Map.insert newConst (tType,newLineIndex) mempty) 1,
+                    (Just s,Just (newConst,tType), Nothing, False, step) -> (newState <> 
+                            PrfStdState (Data.Map.insert s (newLineIndex False) mempty) 
+                               (Data.Map.insert newConst (tType,newLineIndex False) mempty) 1 mempty,
                                newSteps <> [step], (Last . Just) s)
-                    (Nothing,Just (newConst,tType), step) -> (newState <> 
+                    (Nothing,Just (newConst,tType), Nothing, False, step) -> (newState <> 
                             PrfStdState mempty
-                               (Data.Map.insert newConst (tType,newLineIndex) mempty) 1,
+                               (Data.Map.insert newConst (tType,newLineIndex False) mempty) 1 mempty,
                                newSteps <> [step], mayLastProp)
-                    (Nothing,Nothing, step) -> (newState <>
-                            PrfStdState mempty mempty 1,
+                    (Nothing,Nothing, Nothing, False, step) -> (newState <>
+                            PrfStdState mempty mempty 1 mempty,
                                newSteps <> [step], mayLastProp)
+                    (Nothing, Nothing, Just (tagName, tagData), True, step) ->
+                            (newState <> PrfStdState mempty mempty 0 (Data.Map.insert tagName tagData mempty),
+                            newSteps <> [step], mayLastProp)
                     where
-                        newStepCount = stepCount newState + 1
-                        newLineIndex = stepIdxPrefix context <> [stepCount oldState + newStepCount-1]
+                        newStepCount hiddenStep = if hiddenStep then stepCount newState else stepCount newState + 1
+                        newLineIndex hiddenStep = stepIdxPrefix context <> [stepCount oldState + newStepCount hiddenStep -1]
 
 
 
@@ -500,11 +506,11 @@ instance PL.SubproofRule [LogicRule s sE o t tType q] s where
      proofByAsm asm cons subproof = [ProofByAsm $ ProofByAsmSchema asm cons subproof]
 
 
-instance SubproofRule [LogicRule s sE o t tType q] s o tType q where
+instance SubproofRule [LogicRule s sE o t tType q] s o tType q t where
      theoremSchema:: TheoremSchema s [LogicRule s sE o t tType q] o tType -> [LogicRule s sE o t tType q]
      theoremSchema schema = [Theorem schema]
 
-     theoremAlgSchema :: TheoremAlgSchema tType [LogicRule s sE o t tType q] s o q ()
+     theoremAlgSchema :: TheoremAlgSchema tType [LogicRule s sE o t tType q] s o q t ()
              -> [LogicRule s sE o t tType q]
      theoremAlgSchema schema = [TheoremM schema]
 
@@ -564,9 +570,9 @@ assignSequentialMap base ls = Prelude.foldr f (Right (base,mempty)) ls
                                 Just _ -> Left k
 
 
-checkTheoremOpen :: (ProofStd s eL1 r1 o tType q,TypedSent o tType sE s    )
-                            => Maybe (PrfStdState s o tType,PrfStdContext q s o tType) -> TheoremSchema s r1 o tType 
-                                       -> Either (ChkTheoremError s sE eL1 o tType) [PrfStdStep s o tType]
+checkTheoremOpen :: (ProofStd s eL1 r1 o tType q t,TypedSent o tType sE s    )
+                            => Maybe (PrfStdState s o tType t,PrfStdContext q s o tType t) -> TheoremSchema s r1 o tType 
+                                       -> Either (ChkTheoremError s sE eL1 o tType) [PrfStdStep s o tType t]
                                        
 checkTheoremOpen mayPrStateCxt (TheoremSchema constdict lemmas theorem subproof)  =
   do
@@ -577,7 +583,7 @@ checkTheoremOpen mayPrStateCxt (TheoremSchema constdict lemmas theorem subproof)
        maybe (return ()) throwError (maybe (g1 constdictPure) (g2 constdictPure) mayPrStateCxt)
        let newContext = PrfStdContext [] [] (maybe []  ((<>[True]) . contextFrames . snd) mayPrStateCxt)
               (fmap fst mayPrStateCxt)
-       let newState = PrfStdState newProven newConsts newStepCountB
+       let newState = PrfStdState newProven newConsts newStepCountB mempty
        let preambleSteps = conststeps <> lemmasteps
        let mayPreambleLastProp = if Prelude.null lemmas then Last Nothing else (Last . Just . last) lemmas  
        left ChkTheoremErrSubproofErr (
@@ -594,7 +600,7 @@ checkTheoremOpen mayPrStateCxt (TheoremSchema constdict lemmas theorem subproof)
                  q Nothing = Nothing
                  q (Just (state,_)) = Data.Map.lookup lemma (provenSents state) 
 
-         g2 constdictPure (PrfStdState alreadyProven alreadyDefinedConsts stepCount, 
+         g2 constdictPure (PrfStdState alreadyProven alreadyDefinedConsts stepCount tagDict, 
                  PrfStdContext freeVarTypeStack stepIdfPrefix contextDepth mayPState) 
                = fmap constDictErr (constDictTest (fmap fst alreadyDefinedConsts) constdictPure)
                                                <|> Prelude.foldr f1 Nothing lemmas
@@ -612,15 +618,15 @@ checkTheoremOpen mayPrStateCxt (TheoremSchema constdict lemmas theorem subproof)
                where
                   maybeLemmaInsane = fmap (ChkTheoremErrLemmaSanity a) (checkSanity mempty [] constdictPure a)
 
-checkTheorem :: (ProofStd s eL1 r1 o tType q, TypedSent o tType sE s    )
+checkTheorem :: (ProofStd s eL1 r1 o tType q t, TypedSent o tType sE s    )
                             => TheoremSchema s r1 o tType
-                                       -> Either (ChkTheoremError s sE eL1 o tType) [PrfStdStep s o tType]
+                                       -> Either (ChkTheoremError s sE eL1 o tType) [PrfStdStep s o tType t]
 checkTheorem  = checkTheoremOpen Nothing
 
 
-establishTheorem :: (ProofStd s eL1 r1 o tType q,  TypedSent o tType sE s    )
-                            => TheoremSchema s r1 o tType -> PrfStdContext q s o tType -> PrfStdState s o tType 
-                                       -> Either (ChkTheoremError s sE eL1 o tType) (PrfStdStep s o tType)
+establishTheorem :: (ProofStd s eL1 r1 o tType q t,  TypedSent o tType sE s    )
+                            => TheoremSchema s r1 o tType -> PrfStdContext q s o tType t -> PrfStdState s o tType t
+                                       -> Either (ChkTheoremError s sE eL1 o tType) (PrfStdStep s o tType t)
 establishTheorem schema context state = do
     steps <- checkTheoremOpen (Just (state,context)) schema
     let tm = theorem schema
@@ -629,20 +635,19 @@ establishTheorem schema context state = do
 
 
 
-data TheoremSchemaMT tType r s o q m x where
+data TheoremSchemaMT tType r s o q t m x where
    TheoremSchemaMT :: {
                        mayTargetM :: MaybeT m (s,x), 
                        constDictM :: [(o,tType)],
                        lemmasM :: [s],
-                       proofM :: ProofGenTStd tType r s o q m x,
+                       proofM :: ProofGenTStd tType r s o q t m x,
                        protectedXVars :: [Int],
                        contextVarTypes :: [q]
 
-                     } -> TheoremSchemaMT tType r s o q m x
+                     } -> TheoremSchemaMT tType r s o q t m x
 
-
-instance (Show s, Show o, Show tType) => Show (TheoremSchemaMT tType r s o q m x) where
-    show :: (Show s, Show o, Show tType) => TheoremSchemaMT tType r s o q m x -> String
+instance (Show s, Show o, Show tType) => Show (TheoremSchemaMT tType r s o q t m x) where
+    show :: (Show s, Show o, Show tType) => TheoremSchemaMT tType r s o q t m x -> String
     show (TheoremSchemaMT mayTarget constDict ls prog idxs qTypes) =
         "TheoremSchemaMT " <> show ls <> " <<Monadic subproof>> " <> show constDict
 
@@ -675,12 +680,12 @@ instance (
 
 
 
-type TheoremAlgSchema tType r s o q x = TheoremSchemaMT tType r s o q (Either SomeException) x
+type TheoremAlgSchema tType r s o q t x = TheoremSchemaMT tType r s o q t (Either SomeException) x
 
 
 runProofByUGMWorker :: HelperConstraints m s tType o t sE eL r1 q
-                 =>  q -> ProofGenTStd tType r1 s o q m x
-                            -> ProofGenTStd tType r1 s o q m (s, [Int], x)
+                 =>  q -> ProofGenTStd tType r1 s o q t m x
+                            -> ProofGenTStd tType r1 s o q t m (s, [Int], x)
 runProofByUGMWorker tt prog =  do
         state <- getProofState
         context <- ask
@@ -689,7 +694,7 @@ runProofByUGMWorker tt prog =  do
         let newContextFrames = contextFrames context <> [False]
         let newStepIdxPrefix = stepIdxPrefix context ++ [stepCount state]
         let newContext = PrfStdContext newFrVarTypStack newStepIdxPrefix newContextFrames (Just state)
-        let newState = PrfStdState mempty mempty 1
+        let newState = PrfStdState mempty mempty 1 mempty
         let preambleSteps = [PrfStdStepFreevar (length frVarTypeStack) (qTypeToTType tt)]
         vIdx <- get
         (extraData,generalizable,subproof, newSteps) 
@@ -706,9 +711,9 @@ runProofByUGMWorker tt prog =  do
 
 multiUGMWorker :: HelperConstraints m s tType o t sE eL r1 q =>
     [q] ->                             -- ^ List of types for UG variables (outermost first).
-    ProofGenTStd tType r1 s o q m x ->       -- ^ The core program. Its monadic return 'x' is discarded.
+    ProofGenTStd tType r1 s o q t m x ->       -- ^ The core program. Its monadic return 'x' is discarded.
                                            --   It must set 'Last s' with the prop to be generalized.
-    ProofGenTStd tType r1 s o q m (s, [Int],x)  -- ^ Returns (final_generalized_prop, its_index).
+    ProofGenTStd tType r1 s o q t m (s, [Int],x)  -- ^ Returns (final_generalized_prop, its_index).
 multiUGMWorker typeList programCore =
     case typeList of
         [] ->
@@ -747,10 +752,10 @@ multiUGMWorker typeList programCore =
 
 
 checkTheoremMOpen :: (HelperConstraints m s tType o t sE eL r1 q) 
-                 =>  Maybe (PrfStdState s o tType,PrfStdContext q s o tType)  
+                 =>  Maybe (PrfStdState s o tType t,PrfStdContext q s o tType t)  
                     -> Bool
-                    -> TheoremSchemaMT tType r1 s o q m x
-                    -> m (s, x, Either (r1,[PrfStdStep s o tType]) [Int], Maybe (s,x))
+                    -> TheoremSchemaMT tType r1 s o q t m x
+                    -> m (s, x, Either (r1,[PrfStdStep s o tType t]) [Int], Maybe (s,x))
 checkTheoremMOpen mayPrStateCxt errOnTargetMismatch (TheoremSchemaMT mayTargetM constdict lemmas prog idxs qTypes) =  do
     let eitherConstDictMap = assignSequentialMap 0 constdict
     (newStepCountA, newConsts) <- either (throwM . BigExceptSchemaConstDup) return eitherConstDictMap
@@ -775,7 +780,7 @@ checkTheoremMOpen mayPrStateCxt errOnTargetMismatch (TheoremSchemaMT mayTargetM 
                         Nothing -> do
                             let newContext = PrfStdContext [] [] (maybe []  ((<>[True]) . contextFrames . snd) mayPrStateCxt) (Just provenState)
                             let preambleSteps = conststeps <> lemmasteps
-                            let newState = PrfStdState newProven newConsts newStepCountB
+                            let newState = PrfStdState newProven newConsts newStepCountB mempty
                             let mayPreambleLastProp = if Prelude.null lemmas then Last Nothing else (Last . Just . last) lemmas
                             let maxIndex = if null idxs then 0 else maximum idxs + 1
     
@@ -787,7 +792,7 @@ checkTheoremMOpen mayPrStateCxt errOnTargetMismatch (TheoremSchemaMT mayTargetM 
                 Nothing -> do
                     let newContext = PrfStdContext [] [] (maybe []  ((<>[True]) . contextFrames . snd) mayPrStateCxt) (Just provenState)
                     let preambleSteps = conststeps <> lemmasteps
-                    let newState = PrfStdState newProven newConsts newStepCountB
+                    let newState = PrfStdState newProven newConsts newStepCountB mempty
                     let mayPreambleLastProp = if Prelude.null lemmas then Last Nothing else (Last . Just . last) lemmas
                     let maxIndex = if null idxs then 0 else maximum idxs + 1
     
@@ -797,7 +802,7 @@ checkTheoremMOpen mayPrStateCxt errOnTargetMismatch (TheoremSchemaMT mayTargetM 
         Nothing -> do
             let newContext = PrfStdContext [] [] (maybe []  ((<>[True]) . contextFrames . snd) mayPrStateCxt) Nothing
             let preambleSteps = conststeps <> lemmasteps
-            let newState = PrfStdState newProven newConsts newStepCountB
+            let newState = PrfStdState newProven newConsts newStepCountB mempty
             let mayPreambleLastProp = if Prelude.null lemmas then Last Nothing else (Last . Just . last) lemmas
             let maxIndex = if null idxs then 0 else maximum idxs + 1
     
@@ -822,7 +827,7 @@ checkTheoremMOpen mayPrStateCxt errOnTargetMismatch (TheoremSchemaMT mayTargetM 
                  q Nothing = Nothing
                  q (Just (state,_)) = Data.Map.lookup lemma (provenSents state) 
 
-            g2 constdictPure (PrfStdState alreadyProven alreadyDefinedConsts stepCount, PrfStdContext freeVarTypeStack stepIdfPrefix contextDepth mayPrntState) 
+            g2 constdictPure (PrfStdState alreadyProven alreadyDefinedConsts stepCount tagDict, PrfStdContext freeVarTypeStack stepIdfPrefix contextDepth mayPrntState) 
                  = fmap constDictErr (constDictTest (fmap fst alreadyDefinedConsts) constdictPure)
                                                <|> Prelude.foldr f1 Nothing lemmas
              where
@@ -843,11 +848,11 @@ checkTheoremMOpen mayPrStateCxt errOnTargetMismatch (TheoremSchemaMT mayTargetM 
 
 
 establishTmSilentM :: (HelperConstraints (Either SomeException) s tType o t sE eL r1 q)
-                            =>  TheoremAlgSchema tType r1 s o q () -> 
-                                PrfStdContext q s o tType ->
-                                PrfStdState s o tType -> 
-                                    Either SomeException (s, PrfStdStep s o tType)
-establishTmSilentM (schema :: TheoremAlgSchema tType r1 s o q ()) context state = 
+                            =>  TheoremAlgSchema tType r1 s o q t () -> 
+                                PrfStdContext q s o tType t ->
+                                PrfStdState s o tType t -> 
+                                    Either SomeException (s, PrfStdStep s o tType t)
+establishTmSilentM (schema :: TheoremAlgSchema tType r1 s o q t ()) context state = 
     do
         (tm, (),_,_) <-  checkTheoremMOpen  (Just (state,context)) True schema
         return (tm, PrfStdStepTheoremM tm)
@@ -855,8 +860,8 @@ establishTmSilentM (schema :: TheoremAlgSchema tType r1 s o q ()) context state 
 
 
 expandTheoremM :: (HelperConstraints (Either SomeException) s tType o t sE eL r1 q)
-                            => TheoremAlgSchema tType r1 s o q () -> Either  SomeException (TheoremSchema s r1 o tType)
-expandTheoremM ((TheoremSchemaMT mayTargetM constdict lemmas proofprog idxs qTypes):: TheoremAlgSchema tType r1 s o q ()) =
+                            => TheoremAlgSchema tType r1 s o q t () -> Either  SomeException (TheoremSchema s r1 o tType)
+expandTheoremM ((TheoremSchemaMT mayTargetM constdict lemmas proofprog idxs qTypes):: TheoremAlgSchema tType r1 s o q t ()) =
       do
           (tm,(),other,_) <- checkTheoremMOpen Nothing True (TheoremSchemaMT mayTargetM constdict lemmas proofprog idxs qTypes)
           (r1,_) <- either return (error "TheoremAlgSchema M produced unexpected Right value") other
@@ -995,12 +1000,12 @@ data SubproofError s sE eL where
    ProofByUGErrGenNotForall :: s -> SubproofError s sE eL 
      deriving(Show)
 
-runProofByUG :: ( ProofStd s eL1 r1 o tType q, LogicSent s t tType o q, TypedSent o tType sE s,
+runProofByUG :: ( ProofStd s eL1 r1 o tType q t, LogicSent s t tType o q, TypedSent o tType sE s,
                   TypeableTerm t o tType sE q, QuantifiableTerm q tType)
                         => ProofByUGSchema s r1
-                            -> PrfStdContext q s o tType
-                            -> PrfStdState s o tType
-                          -> Either (SubproofError s sE eL1) (s, PrfStdStep s o tType)
+                            -> PrfStdContext q s o tType t
+                            -> PrfStdState s o tType t
+                          -> Either (SubproofError s sE eL1) (s, PrfStdStep s o tType t)
 runProofByUG (ProofByUGSchema generalization subproof) context state =
       do
          let varstack = freeVarTypeStack context
@@ -1010,7 +1015,7 @@ runProofByUG (ProofByUGSchema generalization subproof) context state =
          let newStepIdxPrefix = stepIdxPrefix context ++ [stepCount state]
          let newContextFrames = contextFrames context <> [False]
          let newContext = PrfStdContext newVarstack newStepIdxPrefix newContextFrames (Just state)
-         let newState = PrfStdState mempty mempty 1
+         let newState = PrfStdState mempty mempty 1 mempty
          let newFreeTerm = free2Term $ length varstack
          let generalizable = f newFreeTerm
          let preambleSteps = [PrfStdStepFreevar (length varstack) (qTypeToTType tType)]
@@ -1049,9 +1054,9 @@ runProofByUG (ProofByUGSchema generalization subproof) context state =
 --remaning kept
 
 
-class SubproofRule r s o tType q | r->o, r -> tType, r -> q where
+class SubproofRule r s o tType q t | r->o, r -> tType, r -> q, r -> t where
    theoremSchema :: TheoremSchema s r o tType -> r
-   theoremAlgSchema :: TheoremAlgSchema tType r s o q () -> r
+   theoremAlgSchema :: TheoremAlgSchema tType r s o q t () -> r
    proofByUG :: s -> r -> r
 
 
@@ -1073,10 +1078,10 @@ constDictTest envDict = Data.Map.foldrWithKey f Nothing
 
 
 type HelperConstraints m s tType o t sE eL r q = ( 
-              PL.HelperConstraints r s o tType sE eL q m
+              PL.HelperConstraints r s o tType sE eL q t m
             , LogicSent s t tType o q
             , LogicRuleClass r s t tType sE o
-            , SubproofRule r s o tType q
+            , SubproofRule r s o tType q t
             , TypeableTerm t o tType sE q
             , LogicTerm t
             , ShowableTerm s t
@@ -1085,7 +1090,7 @@ type HelperConstraints m s tType o t sE eL r q = (
             , QuantifiableTerm q tType
             , BASE.LogicRuleClass r s o tType sE
             , StdPrfPrintMonad
-                      q s o tType (Either SomeException)        
+                      q s o tType t (Either SomeException)        
             , Eq t
             ) 
             

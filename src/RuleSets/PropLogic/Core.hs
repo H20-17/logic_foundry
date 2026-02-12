@@ -1,3 +1,5 @@
+{-# LANGUAGE UndecidableInstances #-}
+
 module RuleSets.PropLogic.Core 
 (
     LogicError, LogicRule(..), runProofAtomic,
@@ -14,7 +16,7 @@ import Data.List (mapAccumL,intersperse)
 import qualified Data.Set as Set
 import Data.Text ( pack, Text, unpack,concat)
 import Data.Map
-    ( (!), foldrWithKey, fromList, insert, keysSet, lookup, map, Map )
+    ( (!), foldrWithKey, fromList, insert, keysSet, lookup, map, Map, singleton )
 import Control.Applicative ( Alternative((<|>)) )
 import Control.Monad.Except ( MonadError(throwError) )
 import Control.Monad.Catch
@@ -153,11 +155,11 @@ data LogicRule tType s sE o q where
 
 
 
-runProofAtomic :: (ProofStd s (LogicError s sE o tType) [LogicRule tType s sE o q] o tType q,
+runProofAtomic :: (ProofStd s (LogicError s sE o tType) [LogicRule tType s sE o q] o tType q t,
                LogicSent s tType, Show sE, Typeable sE, Show s, Typeable s, Ord o, TypedSent o tType sE s,
-               Show o, Typeable o, Typeable tType, Show tType, StdPrfPrintMonad q s o tType (Either SomeException)) =>
-                            LogicRule tType s sE o q -> PrfStdContext q s o tType -> PrfStdState s o tType 
-                                      -> Either (LogicError s sE o tType) (Maybe s,Maybe (o,tType),PrfStdStep s o tType)
+               Show o, Typeable o, Typeable tType, Show tType, StdPrfPrintMonad q s o tType t (Either SomeException)) =>
+                            LogicRule tType s sE o q -> PrfStdContext q s o tType t -> PrfStdState s o tType t
+                                      -> Either (LogicError s sE o tType) (Maybe s,Maybe (o,tType),Maybe (Text, TagData s t), Bool,PrfStdStep s o tType t)
 runProofAtomic rule context state = 
       case rule of
         BaseRule r -> do
@@ -166,53 +168,53 @@ runProofAtomic rule context state =
              (antecedant, conseq) <- maybe ((throwError . LogicErrSentenceNotImp) implication) return (parse_implication implication)
              impIndex <- maybe ((throwError . LogicErrMPImplNotProven) implication) return (Data.Map.lookup implication (provenSents state))
              anteIndex <- maybe ((throwError . LogicErrMPAnteNotProven) antecedant) return (Data.Map.lookup antecedant (provenSents state))
-             return (Just conseq, Nothing, PrfStdStepStep conseq "MP" Nothing [implication,antecedant])
+             return (Just conseq, Nothing, Nothing, False, PrfStdStepStep conseq "MP" Nothing [implication,antecedant])
         ProofByAsm schema -> do
              (imp, step) <- left LogicErrPrfByAsmErr (runProofByAsm schema context state)
-             return (Just imp, Nothing, step)
+             return (Just imp, Nothing, Nothing, False, step)
         ProofBySubArg schema -> do
              step <- left LogicErrPrfBySubArgErr (runProofBySubArg schema context state)
-             return (Just $ argPrfConsequent schema, Nothing, step)
+             return (Just $ argPrfConsequent schema, Nothing, Nothing, False, step)
         ExclMid s -> do
              maybe (return ())   (throwError . LogicErrExclMidSanityErr s) (checkSanity mempty (freeVarTypeStack context) (fmap fst (consts state))s)
              let prop = s .||. neg s
-             return (Just prop, Nothing, PrfStdStepStep prop "EXMID" Nothing [])
+             return (Just prop, Nothing, Nothing, False, PrfStdStepStep prop "EXMID" Nothing [])
         SimpL aAndB -> do
             (a,b) <- maybe ((throwError . LogicErrSentenceNotAdj) aAndB) return (parseAdj aAndB)
             aAndBIndex <- maybe ((throwError . LogicErrSimpLAdjNotProven) aAndB) return (Data.Map.lookup aAndB (provenSents state))
-            return (Just a, Nothing, PrfStdStepStep a "SIMP_L" Nothing [aAndB])
+            return (Just a, Nothing, Nothing, False, PrfStdStepStep a "SIMP_L" Nothing [aAndB])
         SimpR aAndB -> do
             (a,b) <- maybe ((throwError . LogicErrSentenceNotAdj) aAndB) return (parseAdj aAndB)
             aAndBIndex <- maybe ((throwError . LogicErrSimpLAdjNotProven) aAndB) return (Data.Map.lookup aAndB (provenSents state))
-            return (Just b, Nothing, PrfStdStepStep b "SIMP_R" Nothing [aAndB])
+            return (Just b, Nothing, Nothing, False, PrfStdStepStep b "SIMP_R" Nothing [aAndB])
         Adj a b -> do
             leftIndex <- maybe ((throwError . LogicErrAdjLeftNotProven) a) return (Data.Map.lookup a (provenSents state))
             rightIndex <- maybe ((throwError . LogicErrAdjRightNotProven) b) return (Data.Map.lookup b (provenSents state))
             let aAndB = a .&&. b
-            return (Just aAndB, Nothing, PrfStdStepStep aAndB "ADJ" Nothing [a,b])
+            return (Just aAndB, Nothing, Nothing, False, PrfStdStepStep aAndB "ADJ" Nothing [a,b])
         ContraF p -> do
             let notP = neg p
             idx <- maybe ((throwError . LogicErrContraPNotProven) p) return (Data.Map.lookup p (provenSents state))
             idx' <- maybe ((throwError . LogicErrContraNotPNotProven) notP) return (Data.Map.lookup notP (provenSents state))
-            return (Just false, Nothing, PrfStdStepStep false "CONTRA" Nothing [p,notP])
+            return (Just false, Nothing, Nothing, False, PrfStdStepStep false "CONTRA" Nothing [p,notP])
           
         Absurd sImpF ->do
             (antecedant, conseq) <- maybe ((throwError . LogicErrSentenceNotImp) sImpF) return (parse_implication sImpF)
             unless (conseq == false) (throwError . LogicErrConseqNotFalse $ conseq)
             idx <- maybe ((throwError . LogicErrAbsurdityNotProven) sImpF) return (Data.Map.lookup sImpF (provenSents state))
             let negation = neg antecedant
-            return (Just negation , Nothing, PrfStdStepStep negation "ABSURD" Nothing [sImpF])
+            return (Just negation , Nothing, Nothing, False, PrfStdStepStep negation "ABSURD" Nothing [sImpF])
 
         DisjIntroL a b -> do
             leftIndex <- maybe ((throwError . LogicErrDisjIntroLLeftNotProven) a) return (Data.Map.lookup a (provenSents state))
             maybe (return ())   (throwError . LogicErrDisjIntroLRightNotSane b) (checkSanity mempty (freeVarTypeStack context) (fmap fst (consts state)) b)
             let aOrB = a .||. b
-            return (Just aOrB, Nothing, PrfStdStepStep aOrB "DISJ_INTRO_L" Nothing [a])
+            return (Just aOrB, Nothing, Nothing, False, PrfStdStepStep aOrB "DISJ_INTRO_L" Nothing [a])
         DisjIntroR a b -> do
             rightIndex <- maybe ((throwError . LogicErrDisjIntroRRightNotProven) b) return (Data.Map.lookup b (provenSents state))
             maybe (return ())   (throwError . LogicErrDisjIntroRLeftNotSane a) (checkSanity mempty (freeVarTypeStack context) (fmap fst (consts state)) a)
             let aOrB = a .||. b
-            return (Just aOrB, Nothing, PrfStdStepStep aOrB "DISJ_INTRO_R" Nothing [b])
+            return (Just aOrB, Nothing, Nothing, False, PrfStdStepStep aOrB "DISJ_INTRO_R" Nothing [b])
 
         DisjElim disj pImpR qImpR -> do
             -- Ensure disjunction (P ∨ Q) is proven
@@ -245,12 +247,12 @@ runProofAtomic rule context state =
 
             -- Conclusion: R
             let result = r1
-            return (Just result, Nothing, PrfStdStepStep result "DISJ_ELIM" Nothing [disj, pImpR, qImpR])
+            return (Just result, Nothing, Nothing, False, PrfStdStepStep result "DISJ_ELIM" Nothing [disj, pImpR, qImpR])
         DoubleNegElim doubleNegP -> do
             notP <- maybe ((throwError . LogicErrSentenceNotDoubleNeg) doubleNegP) return (parseNeg doubleNegP)
             innerP <- maybe ((throwError . LogicErrSentenceNotDoubleNeg) doubleNegP) return (parseNeg notP)
             idx <- maybe ((throwError . LogicErrDoubleNegNotProven) doubleNegP) return (Data.Map.lookup doubleNegP (provenSents state))
-            return (Just innerP, Nothing, PrfStdStepStep innerP "DOUBLE_NEG_ELIM" Nothing [doubleNegP])
+            return (Just innerP, Nothing, Nothing, False, PrfStdStepStep innerP "DOUBLE_NEG_ELIM" Nothing [doubleNegP])
         DeMorganConj negAnd -> do
             -- Step 1: Ensure negAnd is a negation
             inner <- maybe (throwError $ LogicErrSentenceNotNegConj negAnd) return (parseNeg negAnd)
@@ -265,7 +267,7 @@ runProofAtomic rule context state =
             index <- maybe (throwError $ LogicErrDeMorganConjNotProven negAnd) return (Data.Map.lookup negAnd (provenSents state))
             
             -- Step 5: Return the new sentence
-            return (Just disj, Nothing, PrfStdStepStep disj "DEMORGAN_CONJ" Nothing [negAnd])
+            return (Just disj, Nothing, Nothing, False, PrfStdStepStep disj "DEMORGAN_CONJ" Nothing [negAnd])
 
         DeMorganDisj negOr -> do
             -- Step 1: Ensure negOr is a negation
@@ -281,7 +283,7 @@ runProofAtomic rule context state =
             index <- maybe (throwError $ LogicErrDeMorganDisjNotProven negOr) return (Data.Map.lookup negOr (provenSents state))
             
             -- Step 5: Return the new sentence
-            return (Just conj, Nothing, PrfStdStepStep conj "DEMORGAN_DISJ" Nothing [negOr])
+            return (Just conj, Nothing, Nothing, False, PrfStdStepStep conj "DEMORGAN_DISJ" Nothing [negOr])
         BicondIntro pImpQ qImpP -> do
             -- Ensure P → Q is proven
             pImpQIndex <- maybe (throwError $ LogicErrBicondIntroPImpQNotProven pImpQ)
@@ -304,25 +306,25 @@ runProofAtomic rule context state =
 
             -- Conclusion: P ↔ Q
             let bicond = p1 .<->. q1
-            return (Just bicond, Nothing, PrfStdStepStep bicond "BICOND_INTRO" Nothing [pImpQ, qImpP])
+            return (Just bicond, Nothing, Nothing, False, PrfStdStepStep bicond "BICOND_INTRO" Nothing [pImpQ, qImpP])
         BicondElimL bicond -> do
             (p, q) <- maybe (throwError $ LogicErrSentenceNotBicond bicond) return (parseIff bicond)
             bicondIndex <- maybe (throwError $ LogicErrBicondElimLNotProven bicond) return (Data.Map.lookup bicond (provenSents state))
             let imp = p .->. q
-            return (Just imp, Nothing, PrfStdStepStep imp "BICOND_ELIM_L" Nothing [bicond])
+            return (Just imp, Nothing, Nothing, False, PrfStdStepStep imp "BICOND_ELIM_L" Nothing [bicond])
 
         BicondElimR bicond -> do
             (p, q) <- maybe (throwError $ LogicErrSentenceNotBicond bicond) return (parseIff bicond)
             bicondIndex <- maybe (throwError $ LogicErrBicondElimRNotProven bicond) return (Data.Map.lookup bicond (provenSents state))
             let imp = q .->. p
-            return (Just imp, Nothing, PrfStdStepStep imp "BICOND_ELIM_R" Nothing [bicond])
+            return (Just imp, Nothing, Nothing, False, PrfStdStepStep imp "BICOND_ELIM_R" Nothing [bicond])
         AbsorpAnd lhs -> do 
            --lhs = P ∧ (P ∨ Q) ⟶ P
            (p, rhs) <- maybe (throwError $ LogicErrInvalidAbsorpAnd lhs) return (parse_implication lhs)
            (p', q)  <- maybe (throwError $ LogicErrInvalidAbsorpAnd lhs) return (parseAdj rhs)
            unless (p == p') (throwError $ LogicErrAbsorpAndMismatch p p')
            index <- maybe (throwError $ LogicErrAbsorpAndNotProven lhs) return (Data.Map.lookup lhs (provenSents state))
-           return (Just p, Nothing, PrfStdStepStep p "ABSORP_1" Nothing [lhs])
+           return (Just p, Nothing, Nothing, False, PrfStdStepStep p "ABSORP_1" Nothing [lhs])
 
         AbsorpOr lhs -> do
            -- lhs = P ∨ (P ∧ Q) ⟶ P
@@ -330,20 +332,20 @@ runProofAtomic rule context state =
            (p', q)  <- maybe (throwError $ LogicErrInvalidAbsorpOr lhs) return (parseAdj rhs)
            unless (p == p') (throwError $ LogicErrAbsorpOrMismatch p p')
            index <- maybe (throwError $ LogicErrAbsorpOrNotProven lhs) return (Data.Map.lookup lhs (provenSents state))
-           return (Just p, Nothing, PrfStdStepStep p "ABSORP_2" Nothing [lhs])
+           return (Just p, Nothing, Nothing, False, PrfStdStepStep p "ABSORP_2" Nothing [lhs])
         DistAndOverOr lhs -> do
             (p, rhs) <- maybe (throwError $ LogicErrInvalidDistAndOverOr lhs) return (parseAdj lhs)
             (q, r)   <- maybe (throwError $ LogicErrInvalidDistAndOverOr lhs) return (parseDisj rhs)
             index <- maybe (throwError $ LogicErrDistAndOverOrNotProven lhs) return (Data.Map.lookup lhs (provenSents state))
             let conclusion = (p .&&. q) .||. (p .&&. r)
-            return (Just conclusion, Nothing, PrfStdStepStep conclusion "DIST_AND_OVER_OR" Nothing [lhs])
+            return (Just conclusion, Nothing, Nothing, False, PrfStdStepStep conclusion "DIST_AND_OVER_OR" Nothing [lhs])
 
         DistOrOverAnd lhs -> do
             (p, rhs) <- maybe (throwError $ LogicErrInvalidDistOrOverAnd lhs) return (parseDisj lhs)
             (q, r)   <- maybe (throwError $ LogicErrInvalidDistOrOverAnd lhs) return (parseAdj rhs)
             index <- maybe (throwError $ LogicErrDistOrOverAndNotProven lhs) return (Data.Map.lookup lhs (provenSents state))
             let conclusion = (p .&&. q) .||. (p .&&. r)
-            return (Just conclusion, Nothing, PrfStdStepStep conclusion "DIST_OR_OVER_AND" Nothing [lhs])
+            return (Just conclusion, Nothing, Nothing, False, PrfStdStepStep conclusion "DIST_OR_OVER_AND" Nothing [lhs])
         PeircesLaw lhs -> do
 
             -- Parse (P → Q) → P
@@ -355,46 +357,49 @@ runProofAtomic rule context state =
            index <- maybe (throwError $ LogicErrPeircesLawNotProven lhs) return (Data.Map.lookup lhs (provenSents state))
 
             -- Return P
-           return (Just p1, Nothing, PrfStdStepStep p1 "PEIRCE" Nothing [lhs])
+           return (Just p1, Nothing, Nothing, False, PrfStdStepStep p1 "PEIRCE" Nothing [lhs])
 
 instance (LogicSent s tType, Show sE, Typeable sE, Show s, Typeable s, Ord o, TypedSent o tType sE s,
-          Typeable o, Show o, Typeable tType, Show tType, Monoid (PrfStdState s o tType),
-          StdPrfPrintMonad q s o tType (Either SomeException),
-          Monoid (PrfStdContext q s o tType))
+          Typeable o, Show o, Typeable tType, Show tType, Monoid (PrfStdState s o tType t),
+          StdPrfPrintMonad q s o tType t (Either SomeException),
+          Monoid (PrfStdContext q s o tType t))
              => Proof (LogicError s sE o tType)
                  [LogicRule tType s sE o q] 
-                 (PrfStdState s o tType) 
-                 (PrfStdContext q s o tType)
-                 [PrfStdStep s o tType]
+                 (PrfStdState s o tType t) 
+                 (PrfStdContext q s o tType t)
+                 [PrfStdStep s o tType t]
                  s
                     where
   runProofOpen :: (LogicSent s tType, Show sE, Typeable sE, Show s, Typeable s,
                Ord o, TypedSent o tType sE s, Typeable o, Show o, Typeable tType,
-               Show tType, Monoid (PrfStdState s o tType)) =>
+               Show tType, Monoid (PrfStdState s o tType t)) =>
                  [LogicRule tType s sE o q] -> 
-                 PrfStdContext q s o tType -> PrfStdState s o tType
-                        -> Either (LogicError s sE o tType) (PrfStdState s o tType, [PrfStdStep s o tType],Last s) 
-  runProofOpen rs context oldState = foldM f (PrfStdState mempty mempty 0,[], Last Nothing) rs
+                 PrfStdContext q s o tType t -> PrfStdState s o tType t
+                        -> Either (LogicError s sE o tType) (PrfStdState s o tType t, [PrfStdStep s o tType t],Last s) 
+  runProofOpen rs context oldState = foldM f (PrfStdState mempty mempty 0 mempty,[], Last Nothing) rs
        where
            f (newState,newSteps, mayLastProp) r =  fmap g (runProofAtomic r context (oldState <> newState))
              where
                  g ruleResult = case ruleResult of
-                    (Just s,Nothing,step) -> (newState <> PrfStdState (Data.Map.insert s newLineIndex mempty) mempty 1,
+                    (Just s,Nothing,Nothing, False, step) -> (newState <> PrfStdState (Data.Map.insert s (newLineIndex False) mempty) mempty 1 mempty,
                                          newSteps <> [step], (Last . Just) s)
-                    (Just s,Just (newConst,tType), step) -> (newState <> 
-                            PrfStdState (Data.Map.insert s newLineIndex mempty) 
-                               (Data.Map.insert newConst (tType,newLineIndex) mempty) 1,
+                    (Just s,Just (newConst,tType), Nothing, False, step) -> (newState <> 
+                            PrfStdState (Data.Map.insert s (newLineIndex False) mempty) 
+                               (Data.Map.insert newConst (tType,newLineIndex False) mempty) 1 mempty,
                                newSteps <> [step], (Last . Just) s)
-                    (Nothing,Just (newConst,tType), step) -> (newState <> 
+                    (Nothing,Just (newConst,tType), Nothing, False, step) -> (newState <> 
                             PrfStdState mempty
-                               (Data.Map.insert newConst (tType,newLineIndex) mempty) 1,
+                               (Data.Map.insert newConst (tType,newLineIndex False) mempty) 1 mempty,
                                newSteps <> [step], mayLastProp)
-                    (Nothing,Nothing, step) -> (newState <>
-                            PrfStdState mempty mempty 1,
+                    (Nothing,Nothing, Nothing, False, step) -> (newState <>
+                            PrfStdState mempty mempty 1 mempty,
+                               newSteps <> [step], mayLastProp)
+                    (Nothing, Nothing, Just (tagName, tagData), True, step) -> (newState <>
+                            PrfStdState mempty mempty 0 (Data.Map.singleton tagName tagData),
                                newSteps <> [step], mayLastProp)
                     where
-                        newStepCount = stepCount newState + 1
-                        newLineIndex = stepIdxPrefix context <> [stepCount oldState + newStepCount-1]   
+                        newStepCount hiddenStep = if hiddenStep then stepCount newState else stepCount newState + 1
+                        newLineIndex hiddenStep = stepIdxPrefix context <> [stepCount oldState + newStepCount hiddenStep-1]
 
 
 
@@ -407,6 +412,8 @@ instance REM.LogicRuleClass [LogicRule tType s sE o q] s o tType sE where
     fakeProp deps s = [BaseRule . REM.FakeProp deps $ s]
     fakeConst:: o -> tType -> [LogicRule tType s sE o q]
     fakeConst o t = [BaseRule $ REM.FakeConst o t]
+    tagSent :: Text -> s -> [LogicRule tType s sE o q]
+    tagSent tagName sent = [BaseRule $ REM.TagSent tagName sent]
 
         --   return . PropRemark . REM.ProofBySubArg  
 
@@ -500,8 +507,8 @@ instance SubproofRule [LogicRule tType s sE o q] s where
 
 standardRuleM :: (Monoid r,Monad m, Ord o, Show sE, Typeable sE, Show s, Typeable s, Show eL, Typeable eL,
        MonadThrow m, Show o, Typeable o, Show tType, Typeable tType, TypedSent o tType sE s,
-       Monoid (PrfStdState s o tType), ProofStd s eL r o tType q, StdPrfPrintMonad q s o tType m    )
-       => r -> ProofGenTStd tType r s o q m (s,[Int])
+       Monoid (PrfStdState s o tType t), ProofStd s eL r o tType q t, StdPrfPrintMonad q s o tType t m    )
+       => r -> ProofGenTStd tType r s o q t m (s,[Int])
 standardRuleM rule = do
     -- function is unsafe and used for rules that generate one or more sentence.
     -- probably should not be externally facing.
@@ -514,29 +521,29 @@ mpM, exclMidM, simpLM, simpRM, absurdM, doubleNegElimM, deMorganConjM,
        peircesLawM, contraFM ::
        (Monad m, LogicSent s tType, Ord o, Show sE, Typeable sE, Show s, Typeable s,
        MonadThrow m, Show o, Typeable o, Show tType, Typeable tType, TypedSent o tType sE s,
-       Monoid (PrfStdState s o tType), StdPrfPrintMonad q s o tType m,
-       StdPrfPrintMonad q s o tType (Either SomeException), Monoid (PrfStdContext q s o tType),
+       Monoid (PrfStdState s o tType t), StdPrfPrintMonad q s o tType t m,
+       StdPrfPrintMonad q s o tType t (Either SomeException), Monoid (PrfStdContext q s o tType t),
        LogicRuleClass r s tType sE o, Monoid r,
-       ProofStd s eL r o tType q, Typeable eL, Show eL )
-          => s -> ProofGenTStd tType r s o q m (s,[Int])
+       ProofStd s eL r o tType q t, Typeable eL, Show eL )
+          => s -> ProofGenTStd tType r s o q t m (s,[Int])
 
 adjM, disjIntroLM, disjIntroRM,  bicondIntroM  ::
        (Monad m, LogicSent s tType, Ord o, Show sE, Typeable sE, Show s, Typeable s,
        MonadThrow m, Show o, Typeable o, Show tType, Typeable tType, TypedSent o tType sE s,
-       Monoid (PrfStdState s o tType), StdPrfPrintMonad q s o tType m,
-       StdPrfPrintMonad q s o tType (Either SomeException), Monoid (PrfStdContext q s o tType),
+       Monoid (PrfStdState s o tType t), StdPrfPrintMonad q s o tType t m,
+       StdPrfPrintMonad q s o tType t (Either SomeException), Monoid (PrfStdContext q s o tType t),
        LogicRuleClass r s tType sE o, Monoid r,
-       ProofStd s eL r o tType q, Typeable eL, Show eL )
-          => s -> s -> ProofGenTStd tType r s o q m (s,[Int])
+       ProofStd s eL r o tType q t, Typeable eL, Show eL )
+          => s -> s -> ProofGenTStd tType r s o q t m (s,[Int])
 
 disjElimM ::
        (Monad m, LogicSent s tType, Ord o, Show sE, Typeable sE, Show s, Typeable s,
        MonadThrow m, Show o, Typeable o, Show tType, Typeable tType, TypedSent o tType sE s,
-       Monoid (PrfStdState s o tType), StdPrfPrintMonad q s o tType m,
-       StdPrfPrintMonad q s o tType (Either SomeException), Monoid (PrfStdContext q s o tType),
+       Monoid (PrfStdState s o tType t), StdPrfPrintMonad q s o tType t m,
+       StdPrfPrintMonad q s o tType t (Either SomeException), Monoid (PrfStdContext q s o tType t),
        LogicRuleClass r s tType sE o, Monoid r,
-       ProofStd s eL r o tType q, Typeable eL, Show eL )
-          => s -> s -> s -> ProofGenTStd tType r s o q m (s,[Int])
+       ProofStd s eL r o tType q t, Typeable eL, Show eL )
+          => s -> s -> s -> ProofGenTStd tType r s o q t m (s,[Int])
 
 mpM s = standardRuleM (mp s)
 exclMidM s = standardRuleM (exclMid s)
@@ -582,11 +589,11 @@ data SubproofError senttype sanityerrtype logcicerrtype where
     deriving(Show)
 
 
-runProofByAsm :: (ProofStd s eL1 r1 o tType q, LogicSent s tType, TypedSent o tType sE s) => 
+runProofByAsm :: (ProofStd s eL1 r1 o tType q t, LogicSent s tType, TypedSent o tType sE s) => 
                        ProofByAsmSchema s r1 ->  
-                        PrfStdContext q s o tType -> 
-                        PrfStdState s o tType ->
-                        Either (SubproofError s sE eL1) (s,PrfStdStep s o tType)
+                        PrfStdContext q s o tType t-> 
+                        PrfStdState s o tType t ->
+                        Either (SubproofError s sE eL1) (s,PrfStdStep s o tType t)
 runProofByAsm (ProofByAsmSchema assumption consequent subproof) context state  =
       do
          let frVarTypeStack = freeVarTypeStack context
@@ -598,7 +605,7 @@ runProofByAsm (ProofByAsmSchema assumption consequent subproof) context state  =
          let newSents = Data.Map.insert assumption (newStepIdxPrefix ++ [0]) mempty
          let newContextFrames = contextFrames context <> [False]
          let newContext = PrfStdContext frVarTypeStack newStepIdxPrefix newContextFrames (Just state)
-         let newState = PrfStdState newSents mempty 1
+         let newState = PrfStdState newSents mempty 1 mempty
          let preambleSteps = [PrfStdStepStep assumption "ASM" Nothing []]
          let mayPreambleLastProp = (Last . Just) assumption
          let eitherTestResult = testSubproof newContext state newState preambleSteps mayPreambleLastProp consequent subproof
@@ -639,8 +646,8 @@ infixr 0 .->.
 infixr 0 .<->.
 
 
-type HelperConstraints r1 s o tType sE eL1 q m = (
-                      REM.HelperConstraints r1 s o tType sE eL1 q m
+type HelperConstraints r1 s o tType sE eL1 q t m = (
+                      REM.HelperConstraints r1 s o tType sE eL1 q t m
                     , LogicSent s tType
                     , SubproofRule r1 s
                     , LogicRuleClass r1 s tType sE o

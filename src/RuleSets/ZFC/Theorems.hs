@@ -209,7 +209,7 @@ builderTheorem t p =
 proveBuilderTheoremMFree :: (HelperConstraints sE s eL m r t) =>
     t ->            -- source_set
     (t->s) ->            -- p_template
-    ProofGenTStd () r s Text () m t
+    ProofGenTStd () r s Text () t m t
 proveBuilderTheoremMFree source_set (p_pred::(t->s)) = do      
           
         let freeSpecAxiom = specAxInstance (const source_set) (const p_pred
@@ -219,14 +219,15 @@ proveBuilderTheoremMFree source_set (p_pred::(t->s)) = do
         (tm,_,h_obj) <- eiHilbertM freeSpecAxiom
         txt <- showTermM h_obj
         remarkM $ "hilbert_obj: " <> txt
-        return h_obj
+        tagSentM "other tag" freeSpecAxiom
+        return h_obj 
 
              
 
 proveBuilderTheoremM :: (HelperConstraints sE s eL m r t, V.Vector v t) =>
     (v t -> t) ->            -- source_set_template
     (v t ->t->s) ->            -- p_template
-    ProofGenTStd () r s Text () m (v t -> t)
+    ProofGenTStd () r s Text () t m (v t -> t)
 proveBuilderTheoremM (source_set_pred::(v t -> t )) p_pred = do
 
     (closedSpecAxiom, _) <- specificationMNew source_set_pred p_pred
@@ -235,6 +236,7 @@ proveBuilderTheoremM (source_set_pred::(v t -> t )) p_pred = do
     (_,_,returnFuncListForm) <- multiUGM contextDepth $ do
         freeVars <- getFreeVars       
         (freeSpecAx,idx) <- multiUIM closedSpecAxiom (reverse freeVars)
+        tagSentM "freeSpecAx" freeSpecAx
         let dynIdx = dynamicIndex idx
         let txt = "Fixed idx: " <> (pack . show) idx
         remarkM txt
@@ -245,8 +247,9 @@ proveBuilderTheoremM (source_set_pred::(v t -> t )) p_pred = do
         let freeVars_v = V.fromList freeVars
         let source_set_pred_free = source_set_pred freeVars_v
         let p_pred_free = p_pred freeVars_v
-        proveBuilderTheoremMFree source_set_pred_free p_pred_free
-
+        returnFunc <- proveBuilderTheoremMFree source_set_pred_free p_pred_free
+        tagSentM "AnotherTag" freeSpecAx
+        return returnFunc
     let returnFunc = returnFuncListForm . V.toList
 
 
@@ -279,7 +282,7 @@ testBuilderTheoremM source_set_pred pred_f args (proxy_r :: Proxy r) = do
 
     
     testTheoremM
-           ((builderSchema::_ -> _ -> TheoremSchemaMT r _ _ _) source_set_pred pred_f)
+           ((builderSchema::_ -> _ -> TheoremSchemaMT r _ _ _ _) source_set_pred pred_f)
                   tmDataShow tmDataTest
     return ()
 
@@ -290,7 +293,7 @@ testBuilderTheoremM source_set_pred pred_f args (proxy_r :: Proxy r) = do
 builderSchema :: (HelperConstraints sE s eL m r t, V.Vector v t) =>
     (v t -> t)  ->         -- source_set expressed as a function on paramaters
     (v t -> t -> s) ->            -- predicate, expressed as a function on paramaters
-    TheoremSchemaMT r s m (v t -> t)
+    TheoremSchemaMT r s t m (v t -> t)
 builderSchema (source_set_f::(v t -> t)) p_pred = 
     let
         all_consts = Set.toList $ extractConstsFromLambdaSpec source_set_f p_pred
@@ -319,7 +322,7 @@ builderInstantiateM :: (HelperConstraints sE s eL m r t,V.Vector v t) =>
      (v t -> t)  ->         -- source_set expressed as a function on paramaters
      (v t -> t -> s) ->            -- predicate, expressed as a function on paramaters
      v t ->  -- arguments to apply to the paramaters
-    ProofGenTStd () r s Text () m ((s,t),[Int])
+    ProofGenTStd () r s Text () t m ((s,t),[Int])
 builderInstantiateM source_set_f pred_f args = do
     (builderProps, proofIdx, instantiatedObj) <- runProofBySubArgM $ do
         remarkM "hello 1"
@@ -327,6 +330,7 @@ builderInstantiateM source_set_f pred_f args = do
         remarkM "hello 2"
         (builderProps,_) <- multiUIM tm (V.toList args)
         remarkM "hello 3"
+        
         let instantiatedObj = builderFunc args
         return instantiatedObj
     return ((builderProps, instantiatedObj), proofIdx)
@@ -464,7 +468,7 @@ binaryUnionExistsTheorem =
 -- | Note that 'union_equiv_theorem' is a required lemma.
 
 proveBinaryUnionExistsM :: HelperConstraints sE s eL m r t =>
-    ProofGenTStd () r s Text () m ()
+    ProofGenTStd () r s Text () t m ()
 proveBinaryUnionExistsM = do
     -- Universally generalize over A and B.
     multiUGM 2 $ do
@@ -525,7 +529,7 @@ proveBinaryUnionExistsM = do
 -- | The schema stipulates that:
 -- | "union_equiv_theorem" is a required lemma.
 binaryUnionExistsSchema ::  HelperConstraints sE s eL m r t => 
-     TheoremSchemaMT r s m ()
+     TheoremSchemaMT r s t m ()
 binaryUnionExistsSchema =       
     theoremSchemaMT (MaybeT $ return Nothing) [unionEquivTheorem] proveBinaryUnionExistsM []
 
@@ -578,7 +582,7 @@ binaryUnionTheorem =
 
 
 proveBinaryUnionTheorem :: HelperConstraints sE s eL m r t =>
-    ProofGenTStd () r s Text () m (t -> t -> t)
+    ProofGenTStd () r s Text () t m (t -> t -> t)
 
 
 proveBinaryUnionTheorem = do
@@ -599,7 +603,7 @@ proveBinaryUnionTheorem = do
     
 
 binaryUnionSchema :: (HelperConstraints sE s eL m r t) => 
-     TheoremSchemaMT r s m (t -> t -> t)
+     TheoremSchemaMT r s t m (t -> t -> t)
 binaryUnionSchema =
     theoremSchemaMT (MaybeT $ return Nothing) [binaryUnionExistsTheorem] proveBinaryUnionTheorem []
 
@@ -611,7 +615,7 @@ binaryUnionSchema =
 -- | For this function to work in a proof, isSet(setA) and isSet(setB) must be already proven,
 -- | as well as the binary union theorem itself.
 binaryUnionInstantiateM ::  HelperConstraints sE s eL m r t =>
-    t -> t -> ProofGenTStd () r s Text () m (s, [Int], t)
+    t -> t -> ProofGenTStd () r s Text () t m (s, [Int], t)
 binaryUnionInstantiateM setA setB = do
     (unionProps, proofIdx, instantiatedObj) <- runProofBySubArgM $ do
         repM $ isSet setA
@@ -667,7 +671,7 @@ binaryIntersectionExistsTheorem =
 -- | The resulting set S = {x ∈ A | x ∈ B} is precisely the intersection A ∩ B.
 -- | The `builderInstantiateM` helper encapsulates this application of the axiom.
 proveBinaryIntersectionExistsM :: HelperConstraints sE s eL m r t =>
-    ProofGenTStd () r s Text () m ()
+    ProofGenTStd () r s Text () t m ()
 proveBinaryIntersectionExistsM = do
     -- The theorem is universally quantified over two sets, A and B.
     (final_sent,_,_) <- multiUGM 2 $ do
@@ -742,7 +746,7 @@ proveBinaryIntersectionExistsM = do
 -- | This theorem has no other high-level theorems as lemmas; it is proven
 -- | directly from the Axiom of Specification (via the builderInstantiateM helper).
 binaryIntersectionExistsSchema :: HelperConstraints sE s eL m r t =>
-     TheoremSchemaMT r s m ()
+     TheoremSchemaMT r s t m ()
 binaryIntersectionExistsSchema =
     let
         (source_set_func, p_func) = runIndexTracker $ do
@@ -815,7 +819,7 @@ binaryIntersectionTheorem =
 
 
 proveBinaryIntersectionTheorem :: HelperConstraints sE s eL m r t =>
-    ProofGenTStd () r s Text () m (t -> t -> t)
+    ProofGenTStd () r s Text () t m (t -> t -> t)
 
 proveBinaryIntersectionTheorem = do
     (_,_,intersectionFuncRaw) <- multiUGM 2 $ do
@@ -835,7 +839,7 @@ proveBinaryIntersectionTheorem = do
 
 
 binaryIntersectionSchema :: (HelperConstraints sE s eL m r t) => 
-     TheoremSchemaMT r s m (t -> t -> t)
+     TheoremSchemaMT r s t m (t -> t -> t)
 binaryIntersectionSchema =
     theoremSchemaMT (MaybeT $ return Nothing) [binaryIntersectionExistsTheorem] proveBinaryIntersectionTheorem []
 
@@ -845,7 +849,7 @@ binaryIntersectionSchema =
 -- | For this function to work in a proof, isSet(setA) and isSet(setB) must be already proven,
 -- | as well as the binary intersection theorem itself.
 binaryIntersectionInstantiateM ::  HelperConstraints sE s eL m r t =>
-    t -> t -> ProofGenTStd () r s Text () m (s, [Int], t)
+    t -> t -> ProofGenTStd () r s Text () t m (s, [Int], t)
 binaryIntersectionInstantiateM setA setB = do
     (intersectionProps, proofIdx, instantiatedObj) <- runProofBySubArgM $ do
         repM $ isSet setA
@@ -873,7 +877,7 @@ binaryIntersectionInstantiateM setA setB = do
 -- | proven in the current proof context.
 -- | It also relies on the theorem `binaryUnionExistsTheorem` being proven beforehand.
 proveUnionIsSetM :: HelperConstraints sE s eL m r t =>
-    t -> t -> ProofGenTStd () r s Text () m (s, [Int])
+    t -> t -> ProofGenTStd () r s Text () t m (s, [Int])
 proveUnionIsSetM setA setB = do
     (resultProp,idx,_) <- runProofBySubArgM $ do
         remarkM "Proving union is set"
@@ -916,7 +920,7 @@ unionWithEmptySetTheorem =
 -- | 'binaryUnionExists' theorem. To prove A = B, we must show:
 -- |   isSet(A) ∧ isSet(B) ∧ ∀y(y ∈ A ↔ y ∈ B)
 proveUnionWithEmptySetM :: HelperConstraints sE s eL m r t =>
-    ProofGenTStd () r s Text () m ()
+    ProofGenTStd () r s Text () t m ()
 proveUnionWithEmptySetM = do
     -- Prove the theorem: ∀x (isSet x → x ∪ ∅ = x)
     runProofByUGM  $ do
@@ -1013,7 +1017,7 @@ proveUnionWithEmptySetM = do
 -- | The schema that houses the proof for 'unionWithEmptySetTheorem'.
 -- | It declares its dependencies on other theorems.
 unionWithEmptySetSchema :: HelperConstraints sE s eL m r t =>
-     TheoremSchemaMT r s m ()
+     TheoremSchemaMT r s t m ()
 unionWithEmptySetSchema =
     let
         -- The lemmas required for this proof.
@@ -1063,7 +1067,7 @@ disjointSubsetIsEmptyTheorem = runIndexTracker disjointSubsetIsEmptyTheoremWorke
 -- | 9. Therefore, our assumption must be false, so ¬∃x(x ∈ b), which is ∀x(¬(x ∈ b)).
 -- | 10. With ∀x(x ∈ b ↔ x ∈ ∅) proven, the Axiom of Extensionality gives b = ∅.
 proveDisjointSubsetIsEmptyM :: HelperConstraints sE s eL m r t =>
-    ProofGenTStd () r s Text ()m ()
+    ProofGenTStd () r s Text () t m ()
 proveDisjointSubsetIsEmptyM = do
     -- Prove: ∀a ∀b (isSet(a) ∧ a ∩ b = ∅ ∧ b ⊆ a → b=∅)
     multiUGM 2 $ do
@@ -1164,7 +1168,7 @@ proveDisjointSubsetIsEmptyM = do
 -- | The schema that houses the proof for 'disjointSubsetIsEmptyTheorem'.
 -- | It declares its dependencies on other theorems.
 disjointSubsetIsEmptySchema :: HelperConstraints sE s eL m r t =>
-     TheoremSchemaMT r s m ()
+     TheoremSchemaMT r s t m ()
 disjointSubsetIsEmptySchema =
     let
         -- The lemmas required for this proof.

@@ -6,7 +6,7 @@ module RuleSets.BaseLogic.Helpers
 (
     remarkM, 
     fakePropM, fakeConstM, repM,
-    runProofBySubArgM
+    runProofBySubArgM, tagSentM
 ) where
 
 import RuleSets.BaseLogic.Core
@@ -27,13 +27,14 @@ import Control.Monad.Trans ( MonadTrans(lift) )
 import Data.Map (Map,lookup)
 import Internal.StdPattern
 import Kernel
+-- import qualified IndexTracker as sentence
 
 
 
 
-runProofBySubArgM :: HelperConstraints r1 s o tType sE eL q m
-                 =>   ProofGenTStd tType r1 s o q m x
-                            -> ProofGenTStd tType r1 s o q m (s, [Int],x)
+runProofBySubArgM :: HelperConstraints r1 s o tType sE eL q t m
+                 =>   ProofGenTStd tType r1 s o q t m x
+                            -> ProofGenTStd tType r1 s o q t m (s, [Int],x)
 runProofBySubArgM prog =  do
         state <- getProofState
         context <- ask
@@ -42,7 +43,7 @@ runProofBySubArgM prog =  do
         let newStepIdxPrefix = stepIdxPrefix context ++ [stepCount state]
         let newContextFrames = contextFrames context <> [False]
         let newContext = PrfStdContext frVarTypeStack newStepIdxPrefix newContextFrames (Just state)
-        let newState = PrfStdState mempty mempty 0
+        let newState = PrfStdState mempty mempty 0 mempty
 
         let preambleSteps = []
         vIdx <- get
@@ -53,8 +54,8 @@ runProofBySubArgM prog =  do
         return (consequent, idx, extraData)
 
 
-remarkM :: HelperConstraints r s o tType sE eL q m
-          => Text -> ProofGenTStd tType r s o q m [Int]
+remarkM :: HelperConstraints r s o tType sE eL q t m
+          => Text -> ProofGenTStd tType r s o q t m [Int]
           
 remarkM txt = do
     monadifyProofStd (remark txt)
@@ -67,8 +68,8 @@ remarkM txt = do
     return finalIdx  
 
 
-standardRuleM :: HelperConstraints r s o tType sE eL q m
-       => r -> ProofGenTStd tType r s o q m (s,[Int])
+standardRuleM :: HelperConstraints r s o tType sE eL q t m
+       => r -> ProofGenTStd tType r s o q t m (s,[Int])
 standardRuleM rule = do
     -- function is unsafe and used for rules that generate one or more sentence.
     -- probably should not be externally facing.
@@ -80,17 +81,28 @@ standardRuleM rule = do
 
 
 
-repM :: HelperConstraints r s o tType sE eL q m
-          => s -> ProofGenTStd tType r s o q m (s,[Int])
+repM :: HelperConstraints r s o tType sE eL q t m
+          => s -> ProofGenTStd tType r s o q t m (s,[Int])
 repM s = standardRuleM (rep s)
 
-fakePropM :: HelperConstraints r s o tType sE eL q m
-          => [s] -> s -> ProofGenTStd tType r s o q m (s,[Int])
+fakePropM :: HelperConstraints r s o tType sE eL q t m
+          => [s] -> s -> ProofGenTStd tType r s o q t m (s,[Int])
 fakePropM deps s = standardRuleM (fakeProp deps s)
 
 
-fakeConstM :: HelperConstraints r s o tType sE eL q m
-          => o -> tType -> ProofGenTStd tType  r s o q m ()
+fakeConstM :: HelperConstraints r s o tType sE eL q t m
+          => o -> tType -> ProofGenTStd tType  r s o q t m ()
 fakeConstM name tType = do
      monadifyProofStd (fakeConst name tType)
+     -- we aren't using standardRuleM, because that returns the last sentence generated, and fakeConst doesn't generate a sentence.
+     -- We really should look up the index of the generated constant and return it, but for now, we'll just forget it because
+     -- that methodology is going to be abandoned in favor of a more robust system of tracking generated sentences and constants.
      return ()
+
+tagSentM :: HelperConstraints r s o tType sE eL q t m
+          => Text -> s -> ProofGenTStd tType  r s o q t m ()
+tagSentM tag sent = do
+    monadifyProofStd (tagSent tag sent)
+    -- There is essentially nothing to return. A tag step in a proof is a virtual step that doesn't generate or sentence
+    -- or have an index for that matter. It's just a way to attach a tag to a sentence for later reference. So we return unit, and the caller can choose to ignore it or return something else if they want.
+    return ()

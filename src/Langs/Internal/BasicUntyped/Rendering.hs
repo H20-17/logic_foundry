@@ -542,8 +542,9 @@ showObj dict obj = showSubexpParseTree $ toSubexpParseTree obj dict
 
 
 showObjM :: (Monad m, Monoid r, 
-             Proof eL r (PrfStdState PropDeBr Text ()) (PrfStdContext () PropDeBr Text ()) [PrfStdStep PropDeBr Text ()] PropDeBr) 
-                     => ObjDeBr -> ProofGenTStd () r PropDeBr Text () m Text
+             Proof eL r (PrfStdState PropDeBr Text () ObjDeBr) 
+                (PrfStdContext () PropDeBr Text () ObjDeBr) [PrfStdStep PropDeBr Text () ObjDeBr] PropDeBr) 
+                     => ObjDeBr -> ProofGenTStd () r PropDeBr Text () ObjDeBr m Text
 showObjM obj = 
     do
       state <- getProofState
@@ -555,8 +556,9 @@ showProp :: Map PropDeBr [Int] -> PropDeBr -> Text
 showProp dict prop = showSubexpParseTree $ toSubexpParseTree prop dict
 
 showPropM :: (Monad m, Monoid r, 
-             Proof eL r (PrfStdState PropDeBr Text ()) (PrfStdContext () PropDeBr Text ()) [PrfStdStep PropDeBr Text ()] PropDeBr) 
-                     => PropDeBr -> ProofGenTStd () r PropDeBr Text () m Text
+             Proof eL r (PrfStdState PropDeBr Text () ObjDeBr) 
+                 (PrfStdContext () PropDeBr Text () ObjDeBr) [PrfStdStep PropDeBr Text () ObjDeBr] PropDeBr) 
+                     => PropDeBr -> ProofGenTStd () r PropDeBr Text () ObjDeBr m Text
 showPropM obj = 
     do
       state <- getProofState
@@ -616,7 +618,9 @@ showIndexAsSubscript n =
 
 
 printPropDeBrStep :: MonadIO m => 
-       Int -> Bool -> PrfStdStep PropDeBr Text () -> RWST (PrfStdContext () PropDeBr Text ()) Text (PrfStdState PropDeBr Text ()) m ()
+       Int -> Bool -> PrfStdStep PropDeBr Text () ObjDeBr
+          -> RWST (PrfStdContext () PropDeBr Text () ObjDeBr) Text 
+                (PrfStdState PropDeBr Text () ObjDeBr) m ()
 printPropDeBrStep lastLineN notMonadic step = do
         context <- ask
         let cf = contextFrames context
@@ -626,11 +630,21 @@ printPropDeBrStep lastLineN notMonadic step = do
         let cnstMap = fmap snd (consts state)
         let lineNum = stepCount state
         let mayPrntState = mayParentState context
-        liftIO $ putStr $ unpack $ contextFramesShown cf
-          <> showIndex lIndex
-                <> (if (not . Prelude.null) lIndex then "." else "")
-                <> (pack . show) lineNum
-                <> ": "
+        let oldTagData = tagData state
+        case step of
+            PrfStdStepTagObject tagName obj ->
+              unless notMonadic $ do
+                    liftIO $ putStr $ unpack $ contextFramesShown cf
+                    liftIO $ putStr $ unpack $ "[" <> tagName <> "]: "
+                -- tag lines are not indexed since they are not proof steps, but organizational markers. 
+                -- If we indexed them, it would be confusing since they don't represent propositions or constants that can be referenced in justifications.
+            _ -> 
+                liftIO $ do
+                    liftIO $ putStr $ unpack $ contextFramesShown cf
+                    putStr $ unpack $ showIndex lIndex
+                      <> (if (not . Prelude.null) lIndex then "." else "")
+                      <> (pack . show) lineNum
+                      <> ": "
         let newIndex = lIndex <> [lineNum]
         let qed = if notMonadic && lineNum == lastLineN && (not . null) cf then " ◻" else ""
         case step of
@@ -642,7 +656,8 @@ printPropDeBrStep lastLineN notMonadic step = do
                 put $ PrfStdState {
                     provenSents = newDictMap,
                     consts = newConstMapFull,
-                    stepCount = lineNum + 1
+                    stepCount = lineNum + 1,
+                    tagData = oldTagData
                 }
                 liftIO $ putStr $ unpack $ showProp newDictMap prop
                        <> "    "
@@ -666,7 +681,8 @@ printPropDeBrStep lastLineN notMonadic step = do
                 put $ PrfStdState {
                     provenSents = newDictMap,
                     consts = newConstMapFull,
-                    stepCount = lineNum + 1
+                    stepCount = lineNum + 1,
+                    tagData=oldTagData
                 }
 
                 liftIO $ putStr $ unpack $ showProp newDictMap prop
@@ -689,7 +705,8 @@ printPropDeBrStep lastLineN notMonadic step = do
                 put $ PrfStdState {
                     provenSents = dictMap,
                     consts = newConstMapFull,
-                    stepCount = lineNum + 1
+                    stepCount = lineNum + 1,
+                    tagData = oldTagData
                 }
                 
                 liftIO $ putStr $ unpack $ "Const "
@@ -702,13 +719,14 @@ printPropDeBrStep lastLineN notMonadic step = do
                 put $ PrfStdState {
                     provenSents = newDictMap,
                     consts = newConstMapFull,
-                    stepCount = lineNum + 1
+                    stepCount = lineNum + 1,
+                    tagData=oldTagData
                 }
                 liftIO $ putStr $ unpack $ showProp newDictMap prop
                        <> "    THEOREM"
                        <> qed
                 
-                printSubproofF steps True notMonadic mempty mempty cf [] state
+                printSubproofF steps True notMonadic mempty mempty cf [] state oldTagData
                 
             PrfStdStepSubproof prop subproofName steps -> do
                 let newDictMap = insert prop newIndex dictMap
@@ -716,20 +734,23 @@ printPropDeBrStep lastLineN notMonadic step = do
                 put $ PrfStdState {
                     provenSents = newDictMap,
                     consts = newConstMapFull,
-                    stepCount = lineNum + 1
+                    stepCount = lineNum + 1,
+                    tagData=oldTagData
+                    
                 }
                 liftIO $ putStr $ unpack $ showProp newDictMap prop
                        <> "    "
                        <> subproofName
                        <> qed
-                printSubproofF steps False notMonadic newDictMap cnstMap cf newIndex state
+                printSubproofF steps False notMonadic newDictMap cnstMap cf newIndex state oldTagData
             PrfStdStepTheoremM prop -> do
                 let newDictMap = insert prop newIndex dictMap
                 let newConstMapFull = fmap (\const -> ((),const)) cnstMap
                 put $ PrfStdState {
                     provenSents = newDictMap,
                     consts = newConstMapFull,
-                    stepCount = lineNum + 1
+                    stepCount = lineNum + 1,
+                    tagData=oldTagData
                 }
                 liftIO $ putStr $ unpack $ showProp newDictMap prop
                        <> "    ALGORITHMIC_THEOREM"
@@ -739,7 +760,8 @@ printPropDeBrStep lastLineN notMonadic step = do
                 put $ PrfStdState {
                     provenSents = dictMap,
                     consts = newConstMapFull,
-                    stepCount = lineNum + 1
+                    stepCount = lineNum + 1,
+                    tagData=oldTagData
                 }
                 liftIO $ putStr $ unpack $ "FreeVar 𝑣"
                      <> showIndexAsSubscript index
@@ -750,7 +772,8 @@ printPropDeBrStep lastLineN notMonadic step = do
                 put $ PrfStdState {
                     provenSents = dictMap,
                     consts = newConstMapFull,
-                    stepCount = lineNum + 1
+                    stepCount = lineNum + 1,
+                    tagData=oldTagData
                 }
                 liftIO $ putStr $ unpack $ "Const "
                      <> constName
@@ -760,7 +783,8 @@ printPropDeBrStep lastLineN notMonadic step = do
                 put $ PrfStdState {
                     provenSents = dictMap,
                     consts = newConstMapFull,
-                    stepCount = lineNum + 1
+                    stepCount = lineNum + 1,
+                    tagData=oldTagData
                 }
                 liftIO $ putStr $ unpack $ "REMARK"
                      <> qed
@@ -769,12 +793,28 @@ printPropDeBrStep lastLineN notMonadic step = do
                      <> "\n"
                      <> contextFramesShown cf
                      <> "╚"
+            PrfStdStepTagObject tagName tagObj -> do
+                let newConstMapFull = fmap (\const -> ((),const)) cnstMap
+                put $ PrfStdState {
+                    provenSents = dictMap,
+                    consts = newConstMapFull,
+                    stepCount = lineNum,
+                    tagData=Data.Map.insert tagName tagObj oldTagData
+                }
+                unless notMonadic $ liftIO $ putStr $ unpack $ tagText
+                   where
+                      tagText = case tagObj of
+                        TagDataTerm obj -> showObj dictMap obj
+                        TagDataSent prop -> showProp dictMap prop
         -- let eol = if lineNum < lastLineN then "\n" else ""
-        when (lineNum < lastLineN) (liftIO $ putStrLn "")
-
+        when (lineNum < lastLineN && not (isTagStep step)) (liftIO $ putStrLn "")
+           
         -- liftIO $ putStrLn $ unpack  eol
         -- return ()
       where
+        isTagStep step = case step of
+            PrfStdStepTagObject _ _ -> True
+            _ -> False
         contextFramesShown cf = Data.Text.concat (Prelude.map mapBool cf)
         mapBool frameBool =  if frameBool
                                 then
@@ -786,7 +826,7 @@ printPropDeBrStep lastLineN notMonadic step = do
                             <> "]"
         showIndexDepend sentIndexMap s = maybe "?" showIndex (Data.Map.lookup s sentIndexMap)
         showIndex i = if Prelude.null i then "" else Data.Text.concat (intersperse "." (Prelude.map (pack . show) i))
-        printSubproofF steps isTheorem notMonadic dictMap constMap cf newIndex state = liftIO $ 
+        printSubproofF steps isTheorem notMonadic dictMap constMap cf newIndex state tagData = liftIO $ 
                     when notMonadic $ do
                               putStr "\n"
                               let newContext = PrfStdContext {
@@ -798,7 +838,8 @@ printPropDeBrStep lastLineN notMonadic step = do
                               let newState = PrfStdState{
                                     provenSents = newDictMap,
                                     consts = fmap (\const -> ((),const)) newConstMap,
-                                    stepCount = 0
+                                    stepCount = 0,
+                                    tagData = newTagData
                               }
                               printPropDeBrSteps newContext newState notMonadic steps
                               putStr "\n"
@@ -812,6 +853,10 @@ printPropDeBrStep lastLineN notMonadic step = do
                                         mempty
                                       else
                                         constMap
+                        newTagData = if isTheorem then
+                                        mempty
+                                     else
+                                        tagData
 
                         cornerFrame = if isTheorem then
                                  "┗"
@@ -848,13 +893,13 @@ instance StdPrfPrintMonadFrame (Either SomeException) where
     printStartFrame :: [Bool] -> Either SomeException ()
     printStartFrame _ = return ()
 
-instance StdPrfPrintMonad () PropDeBr Text () IO where
+instance StdPrfPrintMonad () PropDeBr Text () ObjDeBr IO where
   
 
-  printSteps :: PrfStdContext () PropDeBr Text ()
-    -> PrfStdState PropDeBr Text ()
+  printSteps :: PrfStdContext () PropDeBr Text () ObjDeBr
+    -> PrfStdState PropDeBr Text () ObjDeBr
     -> Bool
-    -> [PrfStdStep PropDeBr Text ()]
+    -> [PrfStdStep PropDeBr Text () ObjDeBr]
     -> IO ()
   printSteps context state printSubsteps steps = do
     printPropDeBrSteps context state printSubsteps steps
@@ -862,23 +907,22 @@ instance StdPrfPrintMonad () PropDeBr Text () IO where
 
 
 
-
-instance StdPrfPrintMonad () PropDeBr Text () (Either SomeException) where
+instance StdPrfPrintMonad () PropDeBr Text () ObjDeBr (Either SomeException) where
          
   
   printSteps :: 
-       PrfStdContext () PropDeBr Text ()
-    -> PrfStdState PropDeBr Text ()
+       PrfStdContext () PropDeBr Text () ObjDeBr
+    -> PrfStdState PropDeBr Text () ObjDeBr
     -> Bool
-    -> [PrfStdStep PropDeBr Text ()]
+    -> [PrfStdStep PropDeBr Text () ObjDeBr]
     -> Either SomeException ()
   printSteps _ _ _ _ = return ()
 
 
 
 printPropDeBrSteps ::
-         PrfStdContext () PropDeBr Text ()  -- context 
-      -> PrfStdState PropDeBr Text ()     -- state
+         PrfStdContext () PropDeBr Text () ObjDeBr  -- context 
+      -> PrfStdState PropDeBr Text () ObjDeBr     -- state
       -> Bool                     -- notFromMonad
       -> [PrfStdStepPredDeBr]     -- steps
       -> IO ()
@@ -887,7 +931,13 @@ printPropDeBrSteps context state notFromMonad steps = do
     runRWST (mapM_ (printPropDeBrStep lastLineN notFromMonad) steps) context state
     return ()
         where
-            lastLineN = stepCount state + length steps - 1
+            stepsToCount = Prelude.filter (not . isTagStep) steps
+
+            isTagStep step = case step of
+                PrfStdStepTagObject _ _ -> True
+                _ -> False 
+            lastLineN = 
+                                stepCount state + length stepsToCount - 1
             --state = PropDeBrStepState dictMap constMap startLine
 
 

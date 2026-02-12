@@ -71,8 +71,8 @@ import RuleSets.PropLogic.Core
 
 
 
-standardRuleM :: HelperConstraints r s o tType sE eL q m
-       => r -> ProofGenTStd tType r s o q m (s,[Int])
+standardRuleM :: HelperConstraints r s o tType sE eL q t m
+       => r -> ProofGenTStd tType r s o q t m (s,[Int])
 standardRuleM rule = do
     -- function is unsafe and used for rules that generate one or more sentence.
     -- probably should not be externally facing.
@@ -83,24 +83,24 @@ standardRuleM rule = do
 mpM, exclMidM, simpLM, simpRM, absurdM, doubleNegElimM, deMorganConjM, 
        deMorganDisjM, bicondElimLM, bicondElimRM, absorpAndM, absorpOrM, distAndOverOrM, distOrOverAndM, 
        peircesLawM, contraFM ::
-       HelperConstraints r s o tType sE eL q m
-          => s -> ProofGenTStd tType r s o q m (s,[Int])
+       HelperConstraints r s o tType sE eL q t m
+          => s -> ProofGenTStd tType r s o q t m (s,[Int])
 
 adjM, disjIntroLM, disjIntroRM,  bicondIntroM  ::
-         HelperConstraints r s o tType sE eL q m
-          => s -> s -> ProofGenTStd tType r s o q m (s,[Int])
+         HelperConstraints r s o tType sE eL q t m
+          => s -> s -> ProofGenTStd tType r s o q t m (s,[Int])
 
 disjElimM ::
-       HelperConstraints r s o tType sE eL q m
-          => s -> s -> s -> ProofGenTStd tType r s o q m (s,[Int])
+       HelperConstraints r s o tType sE eL q t m
+          => s -> s -> s -> ProofGenTStd tType r s o q t m (s,[Int])
 
 
 -- | Proves 'B ∨ A' from a given proof of 'A ∨ B'.
 -- | This demonstrates the commutativity of disjunction using proof by cases (∨-Elimination).
 -- | This helper assumes 's_a_or_b' (A ∨ B) is already proven in the context.
-commOrM :: HelperConstraints r1 s o tType sE eL q m =>
+commOrM :: HelperConstraints r1 s o tType sE eL q t m =>
             s -- ^ A proven proposition 's_a_or_b' of the form (A ∨ B).
-            -> ProofGenTStd tType r1 s o q m (s, [Int]) -- ^ Returns the proven proposition (B ∨ A) and its proof index.
+            -> ProofGenTStd tType r1 s o q t m (s, [Int]) -- ^ Returns the proven proposition (B ∨ A) and its proof index.
 commOrM s_a_or_b = do
     -- 1. Parse the input disjunction s_a_or_b = (A ∨ B) to get terms A and B.
     (a_term, b_term) <- maybe (throwM $ MetaRuleErrNotDisj s_a_or_b) return (parseDisj s_a_or_b)
@@ -207,9 +207,9 @@ instance (Show s, Typeable s, Show sE, Typeable sE) => Exception (MetaRuleError 
 -- | Note on Naming: The name 'imp2ConjM' is misleading for this function,
 -- | as it transforms an implication into a disjunction.
 -- | A more appropriate name would be 'impToDisjM' or 'materialImplicationM'.
-imp2DisjM :: HelperConstraints r1 s o tType sE eL q m =>
+imp2DisjM :: HelperConstraints r1 s o tType sE eL q t m =>
             s -- ^ A proven proposition 's' of the form (A → B).
-            -> ProofGenTStd tType r1 s o q m (s, [Int]) -- ^ Returns the proven proposition (¬A ∨ B) and its proof index.
+            -> ProofGenTStd tType r1 s o q t m (s, [Int]) -- ^ Returns the proven proposition (¬A ∨ B) and its proof index.
 imp2DisjM s_imp_ab = do
     -- 1. Parse the input implication s_imp_ab = (a -> b) to extract antecedent 'a' and consequent 'b'.
     (a_term, b_term) <- maybe (throwM $ MetaRuleErrNotImp s_imp_ab) return (parse_implication s_imp_ab)
@@ -279,9 +279,9 @@ imp2DisjM s_imp_ab = do
 -- | 4. By RAA (absurdM), from (¬B → False), derive ¬¬B.
 -- | 5. By Double Negation Elimination, from ¬¬B, derive B.
 -- | 6. Since assuming A led to B, conclude A → B.
-disj2ImpM :: HelperConstraints r1 s o tType sE eL q m =>
+disj2ImpM :: HelperConstraints r1 s o tType sE eL q t m =>
             s -- ^ A proven proposition 's' of the form (¬A ∨ B).
-            -> ProofGenTStd tType r1 s o q m (s, [Int]) -- ^ Returns the proven proposition (A → B) and its proof index.
+            -> ProofGenTStd tType r1 s o q t m (s, [Int]) -- ^ Returns the proven proposition (A → B) and its proof index.
 disj2ImpM s_notA_or_B_proven = do
     -- 1. Parse the input disjunction s_notA_or_B_proven = (¬A ∨ B)
     --    to get terms ¬A (not_a_term_parsed), B (b_term_parsed), and A (a_term_parsed).
@@ -341,9 +341,9 @@ disj2ImpM s_notA_or_B_proven = do
 
 -- Helper to transform a proven Neg(A && Neg B) into a proven (Neg A || B)
 -- Uses DeMorgan, Double Negation Elimination, and Proof by Cases (DisjElim).
-negAndNotToOrM :: HelperConstraints r1 s o tType sE eL q m
+negAndNotToOrM :: HelperConstraints r1 s o tType sE eL q t m
                => s -- ^ The proven proposition of the form Neg (a :&&: Neg b)
-               -> ProofGenTStd tType r1 s o q m (s, [Int]) -- Returns (Neg a :||: b, its_index)
+               -> ProofGenTStd tType r1 s o q t m (s, [Int]) -- Returns (Neg a :||: b, its_index)
 negAndNotToOrM provenNegAAndNotB = do
     -- 1. Parse the input to get the terms A and B.
     innerConjunction <- maybe (throwM $ MetaRuleErrNotNeg provenNegAAndNotB)
@@ -418,9 +418,9 @@ negAndNotToOrM provenNegAAndNotB = do
 -- | 3. The subproof (assuming ¬(A ∧ ¬B)) has led to False.
 -- |    Thus, by RAA (via `absurdM`), we conclude ¬(¬(A ∧ ¬B)).
 -- | 4. Apply Double Negation Elimination (`doubleNegElimM`) to get (A ∧ ¬B).
-negImpToConjViaEquivM :: (HelperConstraints r1 s o tType sE eL q m) =>
+negImpToConjViaEquivM :: (HelperConstraints r1 s o tType sE eL q t m) =>
             s -- ^ A proven proposition 's_input' of the form ¬(A → B).
-            -> ProofGenTStd tType r1 s o q m (s, [Int]) -- ^ Returns the proven proposition (A ∧ ¬B) and its proof index.
+            -> ProofGenTStd tType r1 s o q t m (s, [Int]) -- ^ Returns the proven proposition (A ∧ ¬B) and its proof index.
 negImpToConjViaEquivM s_input_neg_A_implies_B = do
     -- 1. Parse the input s_input_neg_A_implies_B = ¬(A → B) to get terms A and B.
     --    These terms are needed to construct the assumption for RAA: ¬(A ∧ ¬B).
@@ -463,10 +463,10 @@ negImpToConjViaEquivM s_input_neg_A_implies_B = do
 
 
 
-modusTollensM :: (HelperConstraints r1 s o tType sE eL q m)
+modusTollensM :: (HelperConstraints r1 s o tType sE eL q t m)
     => s
     -> -- ProofGeneratorT s [PrfStdStep s o tType] (PrfStdContext tType) r1 (PrfStdState s o tType) m (s, [Int])
-       ProofGenTStd tType r1 s o q m (s, [Int])
+       ProofGenTStd tType r1 s o q t m (s, [Int])
 modusTollensM s = do
     -- Parse (P → Q) and ¬Q from the input statement s
     (p,q) <- maybe (throwM $ MetaRuleErrNotModusTollens s) return (parse_implication s)
@@ -488,9 +488,9 @@ modusTollensM s = do
     mpM negPImpNegQ
     -- this will prove neg p
 
-doubleNegIntroM :: (HelperConstraints r1 s o tType sE eL q m) 
+doubleNegIntroM :: (HelperConstraints r1 s o tType sE eL q t m) 
     => s  -- The sentence P, which must be already proven
-    -> ProofGenTStd tType r1 s o q m (s, [Int]) -- Returns the proven ¬¬P and its index
+    -> ProofGenTStd tType r1 s o q t m (s, [Int]) -- Returns the proven ¬¬P and its index
 doubleNegIntroM p = do
     -- Prove ¬P → ⊥ by assuming ¬P and deriving a contradiction with P
     (negP_imp_False, _, _) <- runProofByAsmM (neg p) $ do
@@ -516,9 +516,9 @@ doubleNegIntroM p = do
 -- | 3. The subproof concludes, having proven ¬P → False.
 -- | 4. Apply 'absurdM' to get ¬¬P.
 -- | 5. Apply 'doubleNegElimM' to get P.
-exFalsoM :: HelperConstraints r1 s o tType sE eL q m =>
+exFalsoM :: HelperConstraints r1 s o tType sE eL q t m =>
     s -> -- ^ s_target: The arbitrary proposition 'p' to be proven.
-    ProofGenTStd tType r1 s o q m (s, [Int])
+    ProofGenTStd tType r1 s o q t m (s, [Int])
 exFalsoM s_target = do
     (s_target_proven,idx,_) <- runProofBySubArgM $ do
         -- Step 1: Start a subproof assuming the negation of our target.
@@ -547,9 +547,9 @@ exFalsoM s_target = do
 -- | 2. ¬Q
 -- | If the required sentences are already proven then P will be derived.
 -- | This is a fundamental tautology of classical logic.
-disjunctiveSyllogismM :: (HelperConstraints r1 s o tType sE eL q m) =>
+disjunctiveSyllogismM :: (HelperConstraints r1 s o tType sE eL q t m) =>
     s -> -- ^ The proposition P ∨ Q
-    ProofGenTStd tType r1 s o q m (s, [Int])
+    ProofGenTStd tType r1 s o q t m (s, [Int])
 disjunctiveSyllogismM pOrQ = do
     (p,q) <- maybe (throwM $ MetaRuleErrDisjSyllNotDisj pOrQ) return (parseDisj pOrQ)
     let negQ = neg q
@@ -590,9 +590,9 @@ disjunctiveSyllogismM pOrQ = do
 
 
 -- | From P ↔ Q, derive ¬P ↔ ¬Q 
-posBicondToNegBicondM :: (HelperConstraints r1 s o tType sE eL q m) =>
+posBicondToNegBicondM :: (HelperConstraints r1 s o tType sE eL q t m) =>
     s -> -- ^ The proposition P ↔ Q
-    ProofGenTStd tType r1 s o q m (s, [Int])
+    ProofGenTStd tType r1 s o q t m (s, [Int])
 posBicondToNegBicondM s = do
     -- The goal is to prove the proposition (¬P ↔ ¬Q).
     -- We prove this by assuming the antecedent and deriving the consequent.
@@ -638,9 +638,9 @@ posBicondToNegBicondM s = do
 
 
 -- | From ¬P ↔ ¬Q, derive P ↔ Q.
-negBicondToPosBicondM :: (HelperConstraints r1 s o tType sE eL q m) =>
+negBicondToPosBicondM :: (HelperConstraints r1 s o tType sE eL q t m) =>
     s -> -- ^ The proposition ¬P ↔ ¬Q
-    ProofGenTStd tType r1 s o q m (s, [Int])
+    ProofGenTStd tType r1 s o q t m (s, [Int])
 negBicondToPosBicondM s = do
     -- The goal is to derive the proposition P ↔ Q.
     -- We prove this by assuming the antecedent and deriving the consequent.
@@ -679,9 +679,9 @@ negBicondToPosBicondM s = do
 
 
 -- | From P ∧ Q, derive both P and Q.
-deconstructAdjM :: (HelperConstraints r1 s o tType sE eL q m) =>
+deconstructAdjM :: (HelperConstraints r1 s o tType sE eL q t m) =>
     s -> -- ^ The proposition ¬P ↔ ¬Q
-    ProofGenTStd tType r1 s o q m ((s, [Int]), (s, [Int]))
+    ProofGenTStd tType r1 s o q t m ((s, [Int]), (s, [Int]))
 deconstructAdjM s = do
     adjunct1_data <- simpLM s
     adjunct2_data <- simpRM s
@@ -697,10 +697,10 @@ deconstructAdjM s = do
 -- |
 -- | Note: This helper assumes the input proposition `s` is already proven in the context.
 -- | It also assumes the conjunctions are right-associative, e.g., P₁ ∧ (P₂ ∧ P₃).
-deconstructMultiAdjM :: (HelperConstraints r1 s o tType sE eL q m) =>
+deconstructMultiAdjM :: (HelperConstraints r1 s o tType sE eL q t m) =>
     s -> -- ^ The nested conjunction P₁ ∧ P₂ ∧ ...
     Int -> -- ^ The number of conjunctions ('∧') to parse/split.
-    ProofGenTStd tType r1 s o q m [(s, [Int])]
+    ProofGenTStd tType r1 s o q t m [(s, [Int])]
 deconstructMultiAdjM s num_splits = do
     when (num_splits < 0) $
         throwM (MetaRuleErrDeconstructMultiAdjMNonNegSplits num_splits)
@@ -715,8 +715,8 @@ deconstructMultiAdjM s num_splits = do
 
 -- A recursive helper to perform `k` splits.
 -- Returns a list of all resulting proven propositions.
-peelOff :: (HelperConstraints r1 s o tType sE eL q m) =>
-    Int -> s -> ProofGenTStd tType r1 s o q m [(s, [Int])]
+peelOff :: (HelperConstraints r1 s o tType sE eL q t m) =>
+    Int -> s -> ProofGenTStd tType r1 s o q t m [(s, [Int])]
 peelOff 0 current_s = do
     -- Base case: we've performed enough splits. The remainder is the last element.
     final_proof <- repM current_s
@@ -734,9 +734,9 @@ peelOff k current_s = do
     return (left_proof : remaining_proofs)
 
 
-runProofByAsmM :: HelperConstraints r1 s o tType sE eL1 q m
-                 =>   s -> ProofGenTStd tType r1 s o q m x
-                            -> ProofGenTStd tType r1 s o q m (s, [Int],x )
+runProofByAsmM :: HelperConstraints r1 s o tType sE eL1 q t m
+                 =>   s -> ProofGenTStd tType r1 s o q t m x
+                            -> ProofGenTStd tType r1 s o q t m (s, [Int],x )
 runProofByAsmM asm prog =  do
         state <- getProofState
         context <- ask
@@ -748,7 +748,7 @@ runProofByAsmM asm prog =  do
         let newSents = Data.Map.insert asm (newStepIdxPrefix ++ [0]) mempty
         let newContextFrames = contextFrames context <> [False]
         let newContext = PrfStdContext frVarTypeStack newStepIdxPrefix newContextFrames (Just state)
-        let newState = PrfStdState newSents mempty 1
+        let newState = PrfStdState newSents mempty 1 mempty
         let preambleSteps = [PrfStdStepStep asm "ASM" Nothing []]
         let mayPreambleLastProp = (Last . Just) asm
         vIdx <- get
