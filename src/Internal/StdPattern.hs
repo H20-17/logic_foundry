@@ -20,7 +20,6 @@ module Internal.StdPattern(
     ShowableTerm(..),
     QuantifiableTerm(..),
     printStepsFull,
-    dynamicIndex,
     TagData(..)
 
 
@@ -173,8 +172,7 @@ class (Ord s, Eq tType, Ord o) => TypedSent o tType sE s | s-> tType, s-> sE, s 
     checkSanity :: Map Int tType -> [q] -> Map o tType -> s -> Maybe sE
     extractConstsSent :: s -> Set o
 
-dynamicIndex :: [Int] -> Text
-dynamicIndex idxs = "{%I" <> Data.Text.concat (intersperse "." (Prelude.map (pack . show) idxs)) <> "%}"
+
 
 
 

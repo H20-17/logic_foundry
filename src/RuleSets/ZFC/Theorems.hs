@@ -81,7 +81,7 @@ import Internal.StdPattern
       TypeableTerm(extractConstsTerm),
       TypedSent(extractConstsSent),
       getFreeVars, ShowableTerm (showTerm),
-      dynamicIndex )
+     )
 
 import RuleSets.BaseLogic.Core hiding 
    (LogicRuleClass,
@@ -237,11 +237,6 @@ proveBuilderTheoremM (source_set_pred::(v t -> t )) p_pred = do
         freeVars <- getFreeVars       
         (freeSpecAx,idx) <- multiUIM closedSpecAxiom (reverse freeVars)
         tagSentM "freeSpecAx" freeSpecAx
-        let dynIdx = dynamicIndex idx
-        let txt = "Fixed idx: " <> (pack . show) idx
-        remarkM txt
-        let txt = "Dynamic idx:" <> dynIdx
-        remarkM txt
         txt <- showSentM freeSpecAx
         remarkM txt
         let freeVars_v = V.fromList freeVars
@@ -249,6 +244,7 @@ proveBuilderTheoremM (source_set_pred::(v t -> t )) p_pred = do
         let p_pred_free = p_pred freeVars_v
         returnFunc <- proveBuilderTheoremMFree source_set_pred_free p_pred_free
         tagSentM "AnotherTag" freeSpecAx
+        remarkM "Testing tag {%AnotherTag2%}"
         return returnFunc
     let returnFunc = returnFuncListForm . V.toList
 

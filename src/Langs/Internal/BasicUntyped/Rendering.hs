@@ -42,7 +42,10 @@ import qualified Data.Text.Read as TR
 import Data.Char (isDigit)
 import Internal.StdPattern (PrfStdContext(mayParentState))
 import Text.ParserCombinators.ReadPrec (step)
-
+import Data.Data (Typeable)
+import Control.Monad.Catch
+    ( SomeException, MonadThrow(..), Exception )
+import Text.Regex.TDFA
 
 data SubexpParseTree where
     BinaryOp :: Text -> SubexpParseTree -> SubexpParseTree -> SubexpParseTree
@@ -525,8 +528,8 @@ showSubexpParseTree sub = case sub of
     TupleProject idx obj ->  "𝛑" <> showIndexAsSubscript idx <> funcArgDisplay obj
   where 
     showHierarchalIdxAsSubscript :: [Int] -> Text
-    -- showHierarchalIdxAsSubscript idxs = Data.Text.concat (intersperse "." (Prelude.map showIndexAsSubscript idxs))
-    showHierarchalIdxAsSubscript idxs = "{%i" <> Data.Text.concat (intersperse "." (Prelude.map (pack . show) idxs)) <> "%}"
+    showHierarchalIdxAsSubscript idxs = Data.Text.concat (intersperse "." (Prelude.map showIndexAsSubscript idxs))
+    -- showHierarchalIdxAsSubscript idxs = "{%i" <> Data.Text.concat (intersperse "." (Prelude.map (pack . show) idxs)) <> "%}"
     assoc opSymb = fst $ binaryOpData!opSymb
     prec opSymb = snd $ binaryOpData!opSymb
     funcArgDisplay x = case x of
@@ -617,7 +620,48 @@ showIndexAsSubscript n =
 --    }
 
 
-printPropDeBrStep :: MonadIO m => 
+data TagRenderError where
+    TagNotDefined :: Text -> Text -> TagRenderError
+     deriving (Typeable, Show)
+
+instance Exception TagRenderError
+
+
+
+convertRemText ::
+                  Map PropDeBr [Int] 
+               -> Map Text (TagData PropDeBr ObjDeBr) 
+               -> Text 
+               -> Either TagRenderError Text
+convertRemText sentIdxs tagDict input = go input
+  where
+    go :: Text -> Either TagRenderError Text
+    go text 
+      | T.null text = Right ""
+      | otherwise = 
+          let (prefix, rest) = T.breakOn "{%" text
+          in if T.null rest 
+             then Right prefix -- No more tags found, return the remaining text
+             else 
+               -- 'rest' starts with "{%", so we drop 2 and look for "%}"
+               let (tagBlock, remainder) = T.breakOn "%}" (T.drop 2 rest)
+               in if T.null remainder
+                  then Right text -- Unclosed "{%" pattern, treat the rest as literal text
+                  else do
+                      let tagName = tagBlock
+                      -- Look up the tag in the dictionary
+                      replacement <- case Data.Map.lookup tagName tagDict of
+                                       Nothing -> Left (TagNotDefined tagName input)
+                                       Just (TagDataTerm term) -> Right (showTerm sentIdxs term)
+                                       Just (TagDataSent sent) -> Right (showSent sentIdxs sent)
+                      
+                      -- Recursively process the remainder (dropping the "%}")
+                      restConverted <- go (T.drop 2 remainder)
+                      
+                      -- Concatenate and return
+                      Right (prefix <> replacement <> restConverted) 
+
+printPropDeBrStep :: (MonadIO m,MonadThrow m) => 
        Int -> Bool -> PrfStdStep PropDeBr Text () ObjDeBr
           -> RWST (PrfStdContext () PropDeBr Text () ObjDeBr) Text 
                 (PrfStdState PropDeBr Text () ObjDeBr) m ()
@@ -786,10 +830,12 @@ printPropDeBrStep lastLineN notMonadic step = do
                     stepCount = lineNum + 1,
                     tagData=oldTagData
                 }
+                convertedRem <- either throwM return (convertRemText dictMap oldTagData text)
+                --convertedRem = text
                 liftIO $ putStr $ unpack $ "REMARK"
                      <> qed
                      <> (if text == "" then "" else "\n" <> contextFramesShown cf <> "║") 
-                     <> intercalate ("\n" <> contextFramesShown cf <> "║") (Data.Text.lines text)
+                     <> intercalate ("\n" <> contextFramesShown cf <> "║") (Data.Text.lines convertedRem)
                      <> "\n"
                      <> contextFramesShown cf
                      <> "╚"
