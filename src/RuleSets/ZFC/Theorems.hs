@@ -244,7 +244,8 @@ proveBuilderTheoremM (source_set_pred::(v t -> t )) p_pred = do
         let p_pred_free = p_pred freeVars_v
         returnFunc <- proveBuilderTheoremMFree source_set_pred_free p_pred_free
         tagSentM "AnotherTag" freeSpecAx
-        remarkM "Testing tag {%AnotherTag%} {%freeSpecAx%}"
+        z <- fakeConstM "z" ()
+        remarkM "Testing tag {%AnotherTag%} {%freeSpecAx%} {@freeSpecAx@}"
         return returnFunc
     let returnFunc = returnFuncListForm . V.toList
 

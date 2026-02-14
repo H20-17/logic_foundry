@@ -90,14 +90,14 @@ fakePropM :: HelperConstraints r s o tType sE eL q t m
 fakePropM deps s = standardRuleM (fakeProp deps s)
 
 
-fakeConstM :: HelperConstraints r s o tType sE eL q t m
-          => o -> tType -> ProofGenTStd tType  r s o q t m ()
+fakeConstM :: (HelperConstraints r s o tType sE eL q t m, TypeableTerm t o tType sE q)
+          => o -> tType -> ProofGenTStd tType  r s o q t m t
 fakeConstM name tType = do
      monadifyProofStd (fakeConst name tType)
      -- we aren't using standardRuleM, because that returns the last sentence generated, and fakeConst doesn't generate a sentence.
      -- We really should look up the index of the generated constant and return it, but for now, we'll just forget it because
      -- that methodology is going to be abandoned in favor of a more robust system of tracking generated sentences and constants.
-     return ()
+     return (const2Term name) 
 
 tagSentM :: HelperConstraints r s o tType sE eL q t m
           => Text -> s -> ProofGenTStd tType  r s o q t m ()

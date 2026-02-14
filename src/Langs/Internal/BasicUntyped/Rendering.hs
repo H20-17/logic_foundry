@@ -622,44 +622,71 @@ showIndexAsSubscript n =
 
 data TagRenderError where
     TagNotDefined :: Text -> Text -> TagRenderError
+    TaggedPropNotIndexed :: Text -> Text -> PropDeBr -> TagRenderError
+    TaggedTermNotIndexed :: Text -> Text -> ObjDeBr -> TagRenderError
      deriving (Typeable, Show)
 
 instance Exception TagRenderError
 
 
-
 convertRemText ::
                   Map PropDeBr [Int] 
+               -> Map Text [Int]
                -> Map Text (TagData PropDeBr ObjDeBr) 
                -> Text 
                -> Either TagRenderError Text
-convertRemText sentIdxs tagDict input = go input
+convertRemText sentIdxs constIdxs tagDict input = go input
   where
     go :: Text -> Either TagRenderError Text
     go text 
       | T.null text = Right ""
       | otherwise = 
-          let (prefix, rest) = T.breakOn "{%" text
+          let (prefix, rest) = T.breakOn "{" text
           in if T.null rest 
-             then Right prefix -- No more tags found, return the remaining text
+             then Right prefix -- No more tags found
              else 
-               -- 'rest' starts with "{%", so we drop 2 and look for "%}"
-               let (tagBlock, remainder) = T.breakOn "%}" (T.drop 2 rest)
-               in if T.null remainder
-                  then Right text -- Unclosed "{%" pattern, treat the rest as literal text
-                  else do
-                      let tagName = tagBlock
-                      -- Look up the tag in the dictionary
-                      replacement <- case Data.Map.lookup tagName tagDict of
-                                       Nothing -> Left (TagNotDefined tagName input)
-                                       Just (TagDataTerm term) -> Right (showTerm sentIdxs term)
-                                       Just (TagDataSent sent) -> Right (showSent sentIdxs sent)
-                      
-                      -- Recursively process the remainder (dropping the "%}")
-                      restConverted <- go (T.drop 2 remainder)
-                      
-                      -- Concatenate and return
-                      Right (prefix <> replacement <> restConverted) 
+               let afterOpen = T.drop 1 rest
+               in if T.null afterOpen 
+                  then Right (prefix <> "{") -- dangling "{"
+                  else case T.head afterOpen of
+                     '%' -> handlePattern "%}" handleTagContent (T.drop 1 afterOpen) prefix
+                     '@' -> handlePattern "@}" handleIndexContent (T.drop 1 afterOpen) prefix
+                     _   -> do 
+                         restConv <- go afterOpen
+                         Right (prefix <> "{" <> restConv)
+
+    handlePattern closer handler content prefix =
+        let (tagBlock, remainder) = T.breakOn closer content
+        in if T.null remainder
+           then Right (prefix <> "{" <> (if closer == "%}" then "%" else "@") <> content)
+           else do
+               let tagName = tagBlock
+               replacement <- handler tagName
+               restConverted <- go (T.drop (T.length closer) remainder)
+               Right (prefix <> replacement <> restConverted)
+
+    handleTagContent tagName = 
+        case Data.Map.lookup tagName tagDict of
+            Nothing -> Left (TagNotDefined tagName input)
+            Just (TagDataTerm term) -> Right (showTerm sentIdxs term)
+            Just (TagDataSent sent) -> Right (showSent sentIdxs sent)
+
+    handleIndexContent tagName =
+        case Data.Map.lookup tagName tagDict of
+            Nothing -> Left (TagNotDefined tagName input)
+            Just (TagDataSent sent) -> 
+                case Data.Map.lookup sent sentIdxs of
+                    Just idxs -> Right (showIndex idxs)
+                    Nothing -> Left (TaggedPropNotIndexed tagName input sent)
+            Just (TagDataTerm term) ->        
+                case term of
+                   Constant c -> 
+                        case Data.Map.lookup c constIdxs of
+                             Just idxs -> Right (showIndex idxs)
+                             Nothing -> Left (TaggedTermNotIndexed tagName input term) -- LogicTerm mismatch error type?
+                   _ -> Left (TaggedTermNotIndexed tagName input term)
+      where             
+        showIndex i = if Prelude.null i then "" else Data.Text.concat (intersperse "." (Prelude.map (pack . show) i))
 
 printPropDeBrStep :: (MonadIO m,MonadThrow m) => 
        Int -> Bool -> PrfStdStep PropDeBr Text () ObjDeBr
@@ -830,7 +857,7 @@ printPropDeBrStep lastLineN notMonadic step = do
                     stepCount = lineNum + 1,
                     tagData=oldTagData
                 }
-                convertedRem <- either throwM return (convertRemText dictMap oldTagData text)
+                convertedRem <- either throwM return (convertRemText dictMap cnstMap oldTagData text)
                 --convertedRem = text
                 liftIO $ putStr $ unpack $ "REMARK"
                      <> qed
