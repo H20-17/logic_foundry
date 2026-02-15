@@ -434,7 +434,7 @@ negImpToConjViaEquivM s_input_neg_A_implies_B = do
 
     x <- showSentM assumption_for_raa
 
-    remarkM x
+    remarkM x Nothing
 
     -- 3. Start the RAA subproof: Assume ¬(A ∧ ¬B) and derive False.
     --    This will prove (¬(A ∧ ¬B) → False).
@@ -748,7 +748,13 @@ runProofByAsmM asm prog =  do
         let newSents = Data.Map.insert asm (newStepIdxPrefix ++ [0]) mempty
         let newContextFrames = contextFrames context <> [False]
         let newContext = PrfStdContext frVarTypeStack newStepIdxPrefix newContextFrames (Just state)
-        let newState = PrfStdState newSents mempty 1 mempty
+        let newState = PrfStdState {
+            provenSents = newSents,
+            consts = mempty,
+            stepCount = 1,
+            tagData = mempty,
+            remarkTagIdxs = mempty
+        }
         let preambleSteps = [PrfStdStepStep asm "ASM" Nothing []]
         let mayPreambleLastProp = (Last . Just) asm
         vIdx <- get

@@ -105,40 +105,40 @@ testTheoremMSchema = PRED.TheoremSchemaMT mayTargetM [("N",())] [z1,z2] theoremP
 
 testEqualityRules :: ProofGenTStd () [PredRuleDeBr] PropDeBr Text () ObjDeBr IO ()
 testEqualityRules = do
-    remarkM "--- Testing Equality Rules ---"
+    remarkM "--- Testing Equality Rules ---" Nothing
 
     -- Test eqReflM
-    remarkM "Testing eqReflM (0 == 0):"
+    remarkM "Testing eqReflM (0 == 0):" Nothing
     let term0 = Integ 0
     (reflSent, reflIdx) <- eqReflM term0
     reflShow <- showPropM reflSent
-    remarkM $ "Proved: " <> reflShow <> " at index " <> pack (show reflIdx)
+    remarkM ("Proved: " <> reflShow <> " at index " <> pack (show reflIdx)) Nothing
 
     -- Test eqSymM
-    remarkM "Testing eqSymM (given fake 1 == 2):"
+    remarkM "Testing eqSymM (given fake 1 == 2):" Nothing
     let term1 = Integ 1
     let term2 = Integ 2
     let eq12 = term1 :==: term2
     (eq12Sent, eq12Idx) <- fakePropM [] eq12 -- Assume 1==2 is proven for the test
     eq12Show <- showPropM eq12Sent
-    remarkM $ "Assuming: " <> eq12Show <> " at index " <> pack (show eq12Idx)
+    remarkM ("Assuming: " <> eq12Show <> " at index " <> pack (show eq12Idx)) Nothing
     (symSent, symIdx) <- eqSymM eq12Sent
     symShow <- showPropM symSent
-    remarkM $ "Proved: " <> symShow <> " at index " <> pack (show symIdx)
+    remarkM ("Proved: " <> symShow <> " at index " <> pack (show symIdx)) Nothing
 
     -- Test eqTransM
-    remarkM "Testing eqTransM (given fake 1 == 2 and 2 == 3):"
+    remarkM "Testing eqTransM (given fake 1 == 2 and 2 == 3):" Nothing
     let term3 = Integ 3
     let eq23 = term2 :==: term3
     (eq23Sent, eq23Idx) <- fakePropM []eq23 -- Assume 2==3 is proven
     eq23Show <- showPropM eq23Sent
-    remarkM $ "Assuming: " <> eq23Show <> " at index " <> pack (show eq23Idx)
+    remarkM ("Assuming: " <> eq23Show <> " at index " <> pack (show eq23Idx)) Nothing
     (transSent, transIdx) <- eqTransM eq12Sent eq23Sent -- Use eq12Sent from previous step
     transShow <- showPropM transSent
-    remarkM $ "Proved: " <> transShow <> " at index " <> pack (show transIdx)
+    remarkM ("Proved: " <> transShow <> " at index " <> pack (show transIdx)) Nothing
 
     -- Test eqSubstM
-    remarkM "Testing eqSubstM (template X0 == X0, given fake 5 == 6):"
+    remarkM "Testing eqSubstM (template X0 == X0, given fake 5 == 6):" Nothing
     let template = X 0 :==: X 0
     let term5 = Integ 5
     let term6 = Integ 6
@@ -146,22 +146,22 @@ testEqualityRules = do
     -- Prove the source sentence P(a), which is 5 == 5
     (sourceSent, sourceIdx) <- eqReflM term5 -- Use eqReflM to prove 5==5
     sourceShow <- showPropM sourceSent
-    remarkM $ "Proved source: " <> sourceShow <> " at index " <> pack (show sourceIdx)
+    remarkM ("Proved source: " <> sourceShow <> " at index " <> pack (show sourceIdx)) Nothing
     -- Assume the equality a == b, which is 5 == 6
     (eqSent, eqIdx) <- fakePropM [] eq56
     eqShow <- showPropM eqSent
-    remarkM $ "Assuming equality: " <> eqShow <> " at index " <> pack (show eqIdx)
+    remarkM ("Assuming equality: " <> eqShow <> " at index " <> pack (show eqIdx)) Nothing
     -- Perform substitution
     (substSent, substIdx) <- eqSubstM 0 template eqSent -- Use the template, not the source sentence here
     substShow <- showPropM substSent
-    remarkM $ "Proved subst: " <> substShow <> " at index " <> pack (show substIdx)
+    remarkM ("Proved subst: " <> substShow <> " at index " <> pack (show substIdx)) Nothing
 
-    remarkM "--- Equality Rule Tests Complete ---"
+    remarkM "--- Equality Rule Tests Complete ---" Nothing
     return ()
 
 testNormalization :: ProofGenTStd () [PredRuleDeBr] PropDeBr Text () ObjDeBr IO ()
 testNormalization = do
-    remarkM "--- Testing Normalization ---"
+    remarkM "--- Testing Normalization ---" Nothing
     let term2 = Integ 1
     let s1 = aX 1 (eXBang 0 (X 1 :==: X 0))
 
@@ -169,12 +169,12 @@ testNormalization = do
     fakeConstM "N" ()
     fakePropM [] s1
     s1Show <- showPropM s1
-    remarkM $ "Proved: " <> s1Show   
+    remarkM ("Proved: " <> s1Show) Nothing
     return ()
  
 testMoreComplexNesting :: ProofGenTStd () [PredRuleDeBr] PropDeBr Text () ObjDeBr IO ()
 testMoreComplexNesting = do
-    remarkM "--- Testing More Complex Nesting (A > E > E!) ---"
+    remarkM "--- Testing More Complex Nesting (A > E > E!) ---" Nothing
     
     -- Represents ∀𝑥₂ ( ∃𝑥₁ ( ∃!𝑥₀ ( (𝑥₂ = 𝑥₁) ∧ (𝑥₁ = 𝑥₀) ) ) )
     let s3 = aX 2 ( eX 1 ( eXBang 0 ( (X 2 :==: X 1) :&&: (X 1 :==: X 0) ) ) )
@@ -182,15 +182,15 @@ testMoreComplexNesting = do
     -- Add as fake prop and print
     fakePropM []s3
     s3Show <- showPropM s3
-    remarkM "Input: aX 2 ( eX 1 ( eXBang 0 ( (X 2 :==: X 1) :&&: (X 1 :==: X 0) ) ) )"
-    remarkM $ "Printed: " <> s3Show   
+    remarkM ("Input: aX 2 ( eX 1 ( eXBang 0 ( (X 2 :==: X 1) :&&: (X 1 :==: X 0) ) ) )") Nothing
+    remarkM ("Printed: " <> s3Show) Nothing
     
-    remarkM "--- More Complex Nesting Test Complete ---"
+    remarkM "--- More Complex Nesting Test Complete ---" Nothing
     return ()
 
 testNonSequentialIndices :: ProofGenTStd () [PredRuleDeBr] PropDeBr Text () ObjDeBr IO ()
 testNonSequentialIndices = do
-    remarkM "--- Testing Non-Sequential Indices (A5 > E!2 > A7) ---"
+    remarkM "--- Testing Non-Sequential Indices (A5 > E!2 > A7) ---" Nothing
 
     -- Represents ∀𝑥₅ ( ∃!𝑥₂ ( ∀𝑥₇ ( (𝑥₅ = 𝑥₂) ∨ (𝑥₂ = 𝑥₇) ) ) )
     let s4 = aX 5 ( eXBang 2 ( aX 7 ( (X 5 :==: X 2) :||: (X 2 :==: X 7) ) ) )
@@ -198,10 +198,10 @@ testNonSequentialIndices = do
     -- Add as fake prop and print
     fakePropM [] s4
     s4Show <- showPropM s4
-    remarkM "Input: aX 5 ( eXBang 2 ( aX 7 ( (X 5 :==: X 2) :||: (X 2 :==: X 7) ) ) )"
-    remarkM $ "Printed: " <> s4Show
+    remarkM ("Input: aX 5 ( eXBang 2 ( aX 7 ( (X 5 :==: X 2) :||: (X 2 :==: X 7) ) ) )") Nothing
+    remarkM ("Printed: " <> s4Show) Nothing
 
-    remarkM "--- Non-Sequential Indices Test Complete ---"
+    remarkM "--- Non-Sequential Indices Test Complete ---" Nothing
     return ()
 
 
@@ -211,7 +211,7 @@ testNonSequentialIndices = do
 
 testComplexSubsetNotation :: ProofGenTStd () [PredRuleDeBr] PropDeBr Text () ObjDeBr IO ()
 testComplexSubsetNotation = do
-    remarkM "--- Testing More Complex Subset Notation (⊆) ---"
+    remarkM "--- Testing More Complex Subset Notation (⊆) ---" Nothing
 
     -- 1. Define constants to represent sets
     let setN = Constant "N"
@@ -226,26 +226,26 @@ testComplexSubsetNotation = do
     fakeConstM "C" ()
 
     -- 3. Test 1: Basic subset A B
-    remarkM "Test 1: Basic subset A B"
+    remarkM "Test 1: Basic subset A B" Nothing
     let subPropAB = subset setA setB
     (addedProp1, _) <- fakePropM [] subPropAB
     printedOutput1 <- showPropM addedProp1
-    remarkM $ "Actual printed output (Test 1): " <> printedOutput1
-    remarkM "(Should be A ⊆ B)"
+    remarkM ("Actual printed output (Test 1): " <> printedOutput1) Nothing
+    remarkM "(Should be A ⊆ B)" Nothing
 
     -- 4. Test 2: Subset notation within a conjunction: (A ⊆ B) ∧ (B ⊆ C)
-    remarkM "Test 2: Subset notation within conjunction (A ⊆ B) ∧ (B ⊆ C)"
+    remarkM "Test 2: Subset notation within conjunction (A ⊆ B) ∧ (B ⊆ C)" Nothing
     let subPropBC = subset setB setC
     -- Construct the conjunction using the PropDeBr operator :&&:
     let conjProp = subPropAB :&&: subPropBC
     (addedConjProp, _) <- fakePropM [] conjProp
     printedOutputConj <- showPropM addedConjProp
-    remarkM $ "Actual printed output (Test 2): " <> printedOutputConj
+    remarkM ("Actual printed output (Test 2): " <> printedOutputConj) Nothing
     -- Note: Depending on operator precedence for ∧ and ⊆, parentheses might appear
-    remarkM "(Should look like (A ⊆ B) ∧ (B ⊆ C) or similar)"
+    remarkM "(Should look like (A ⊆ B) ∧ (B ⊆ C) or similar)" Nothing
 
     -- 5. Test 3: Using a set builder expression {x ∈ N | x ≥ 5} ⊆ N
-    remarkM "Test 3: Checking print for {x ∈ N | x ≥ 5} ⊆ N"
+    remarkM "Test 3: Checking print for {x ∈ N | x ≥ 5} ⊆ N" Nothing
     -- Ensure N constant is added (done above)
     let five = Integ 5
     -- Define the property P(x) as x <= 5, using X 0 for the bound variable 'x'
@@ -257,15 +257,15 @@ testComplexSubsetNotation = do
     -- Add, print, and check the output
     (addedPropBuilder, _) <- fakePropM []subPropBuilder
     printedOutputBuilder <- showPropM addedPropBuilder
-    remarkM $ "Actual printed output (Test 3): " <> printedOutputBuilder
-    remarkM "(Should look like {𝑥₀ ∈ N | 𝑥₀ ≥ 5} ⊆ N or similar)"
+    remarkM ("Actual printed output (Test 3): " <> printedOutputBuilder) Nothing
+    remarkM "(Should look like {𝑥₀ ∈ N | 𝑥₀ ≥ 5} ⊆ N or similar)" Nothing
 
-    remarkM "--- Complex Subset Notation Test Complete ---"
+    remarkM "--- Complex Subset Notation Test Complete ---" Nothing
     return ()
 
 testStrictSubsetNotation :: ProofGenTStd () [PredRuleDeBr] PropDeBr Text () ObjDeBr IO ()
 testStrictSubsetNotation = do
-    remarkM "--- Testing Strict Subset Notation (⊂) ---"
+    remarkM "--- Testing Strict Subset Notation (⊂) ---" Nothing
 
     -- 1. Define constants
     let setA = Constant "A"
@@ -278,16 +278,16 @@ testStrictSubsetNotation = do
     fakeConstM "N" ()
 
     -- 3. Test 1: Basic strict subset A ⊂ B
-    remarkM "Test 1: Basic strict subset A ⊂ B"
+    remarkM "Test 1: Basic strict subset A ⊂ B" Nothing
     -- This assumes strictSubset a b = subset a b :&&: Neg (a :==: b)
     let strictSubProp1 = strictSubset setA setB
     (addedProp1, _) <- fakePropM [] strictSubProp1
     printedOutput1 <- showPropM addedProp1
-    remarkM $ "Actual printed output (Test 1): " <> printedOutput1
-    remarkM "(Should be A ⊂ B)"
+    remarkM ("Actual printed output (Test 1): " <> printedOutput1) Nothing
+    remarkM "(Should be A ⊂ B)" Nothing
 
     -- 4. Test 2: Strict subset with set builder {x ∈ N | x ≥ 5} ⊂ N
-    remarkM "Test 2: Strict subset involving a Set Builder expression"
+    remarkM "Test 2: Strict subset involving a Set Builder expression" Nothing
     let five = Integ 5
     let propertyP = X 0 :<=: five
     let setBuilderA = builderX 0 setN propertyP -- {x ∈ N | x ≥ 5}
@@ -295,27 +295,27 @@ testStrictSubsetNotation = do
     let strictSubPropBuilder = strictSubset setBuilderA setN
     (addedPropBuilder, _) <- fakePropM [] strictSubPropBuilder
     printedOutputBuilder <- showPropM addedPropBuilder
-    remarkM $ "Actual printed output (Test 2): " <> printedOutputBuilder
-    remarkM "(Should look like {𝑥₀ ∈ N | 𝑥₀ ≥ 5} ⊂ N or similar)"
+    remarkM ("Actual printed output (Test 2): " <> printedOutputBuilder) Nothing
+    remarkM "(Should look like {𝑥₀ ∈ N | 𝑥₀ ≥ 5} ⊂ N or similar)" Nothing
 
     -- 5. Test 3: A structure that should NOT use the ⊂ notation
-    remarkM "Test 3: Structure that should NOT print as ⊂ (using A=A instead of Not(A=B))"
+    remarkM "Test 3: Structure that should NOT print as ⊂ (using A=A instead of Not(A=B))" Nothing
     -- Example: (A ⊆ B) ∧ (A = A) -- Does not match Neg(A==B)
     (eqAA, _) <- eqReflM setA -- Prove A = A using EqRefl rule
     let subPropAB = subset setA setB -- A ⊆ B part
     let nonStrictSubProp = subPropAB :&&: eqAA -- Combine with A=A
     (addedProp3, _) <- fakePropM [] nonStrictSubProp
     printedOutput3 <- showPropM addedProp3
-    remarkM $ "Actual printed output (Test 3): " <> printedOutput3
-    remarkM "(Should be (A ⊆ B) ∧ (A = A) or similar, *NOT* A ⊂ B)"
+    remarkM ("Actual printed output (Test 3): " <> printedOutput3) Nothing
+    remarkM "(Should be (A ⊆ B) ∧ (A = A) or similar, *NOT* A ⊂ B)" Nothing
 
-    remarkM "--- Strict Subset Notation Test Complete ---"
+    remarkM "--- Strict Subset Notation Test Complete ---" Nothing
     return ()
 
 
 testNotSubsetNotation :: ProofGenTStd () [PredRuleDeBr] PropDeBr Text () ObjDeBr IO ()
 testNotSubsetNotation = do
-    remarkM "--- Testing Not Subset Notation (⊈) ---"
+    remarkM "--- Testing Not Subset Notation (⊈) ---" Nothing
 
     -- 1. Define constants
     let setA = Constant "A"
@@ -328,16 +328,16 @@ testNotSubsetNotation = do
     fakeConstM "N" ()
 
     -- 3. Test 1: Basic not subset A ⊈ B
-    remarkM "Test 1: Basic not subset A ⊈ B"
+    remarkM "Test 1: Basic not subset A ⊈ B" Nothing
     -- Assumes notSubset a b = Neg (subset a b)
     let notSubProp1 = notSubset setA setB
     (addedProp1, _) <- fakePropM [] notSubProp1
     printedOutput1 <- showPropM addedProp1
-    remarkM $ "Actual printed output (Test 1): " <> printedOutput1
-    remarkM "(Should be A ⊈ B)"
+    remarkM ("Actual printed output (Test 1): " <> printedOutput1) Nothing
+    remarkM "(Should be A ⊈ B)" Nothing
 
     -- 4. Test 2: Not subset with set builder {x ∈ N | x ≥ 5} ⊈ N
-    remarkM "Test 2: Not subset involving a Set Builder expression"
+    remarkM "Test 2: Not subset involving a Set Builder expression" Nothing
     let five = Integ 5
     let propertyP = X 0 :<=: five
     let setBuilderA = builderX 0 setN propertyP -- {x ∈ N | x ≥ 5}
@@ -345,27 +345,27 @@ testNotSubsetNotation = do
     let notSubPropBuilder = notSubset setBuilderA setN
     (addedPropBuilder, _) <- fakePropM [] notSubPropBuilder
     printedOutputBuilder <- showPropM addedPropBuilder
-    remarkM $ "Actual printed output (Test 2): " <> printedOutputBuilder
-    remarkM "(Should look like {𝑥₀ ∈ N | 𝑥₀ ≥ 5} ⊈ N or similar)"
+    remarkM ("Actual printed output (Test 2): " <> printedOutputBuilder) Nothing
+    remarkM "(Should look like {𝑥₀ ∈ N | 𝑥₀ ≥ 5} ⊈ N or similar)" Nothing
 
     -- 5. Test 3: A structure that should NOT use the ⊈ notation
-    remarkM "Test 3: Structure that should NOT print as ⊈"
+    remarkM "Test 3: Structure that should NOT print as ⊈" Nothing
     -- Example: Neg (A ⊂ B) -- Should print as ¬(A ⊂ B), not A ⊈ B
     let strictSubProp = strictSubset setA setB -- Assuming this helper exists and works
     let negStrictSubProp = Neg strictSubProp
     (addedProp3, _) <- fakePropM []negStrictSubProp
     printedOutput3 <- showPropM addedProp3
-    remarkM $ "Actual printed output (Test 3): " <> printedOutput3
-    remarkM "(Should be ¬(A ⊂ B) or similar, *NOT* related to ⊈)"
+    remarkM ("Actual printed output (Test 3): " <> printedOutput3) Nothing
+    remarkM "(Should be ¬(A ⊂ B) or similar, *NOT* related to ⊈)" Nothing
 
-    remarkM "--- Not Subset Notation Test Complete ---"
+    remarkM "--- Not Subset Notation Test Complete ---" Nothing
     return ()
 
 
 
 testHelperPreconditionViolation :: ProofGenTStd () [PredRuleDeBr] PropDeBr Text () ObjDeBr IO ()
 testHelperPreconditionViolation = do
-    remarkM "--- Testing Helper Precondition Violation ---"
+    remarkM "--- Testing Helper Precondition Violation ---" Nothing
     let setN = Constant "N"
     let constC = Constant "C"
     let setB = Constant "B"
@@ -378,27 +378,27 @@ testHelperPreconditionViolation = do
     -- This term 'setA' contains Bound 1 internally. Its depth is 1.
     let setA = builderX 0 setN (X 0 :==: constC)
     setAShow <- showObjM setA -- See the structure (likely involves Bound 1)
-    remarkM $ "Constructed setA = " <> setAShow
+    remarkM ("Constructed setA = " <> setAShow) Nothing
 
     -- Construct subset A B
     -- This calculates idx = max(depth A, depth B) = max(1, 0) = 1.
     -- Precondition requires A not contain Bound 1, but it does.
     let violatingSubsetProp = subset setA setB
-    remarkM "Constructed 'subset setA setB'. Precondition (A must not contain Bound 1) is VIOLATED."
+    remarkM "Constructed 'subset setA setB'. Precondition (A must not contain Bound 1) is VIOLATED." Nothing
 
     -- Add it to the proof state. It might pass checkSanity if the check isn't perfect,
     -- but it represents a violation of the helper's intended use conditions.
     (addedProp, _) <- fakePropM [] violatingSubsetProp
     printedProp <- showPropM addedProp
-    remarkM $ "Resulting PropDeBr structure (printed form): " <> printedProp
-    remarkM "(Check if it printed using ⊆ or fallback ∀ notation)"
-    remarkM "--- Precondition Violation Test Complete ---"
+    remarkM ("Resulting PropDeBr structure (printed form): " <> printedProp) Nothing
+    remarkM "(Check if it printed using ⊆ or fallback ∀ notation)" Nothing
+    remarkM "--- Precondition Violation Test Complete ---" Nothing
     return ()
 
 
 testBuilderXSuite :: ProofGenTStd () [PredRuleDeBr] PropDeBr Text () ObjDeBr IO ()
 testBuilderXSuite = do
-    remarkM "--- Starting New builderX Test Suite ---"
+    remarkM "--- Starting New builderX Test Suite ---" Nothing
 
     -- Prerequisite Constants
     fakeConstM "N" () -- Natural numbers (example source set)
@@ -410,64 +410,64 @@ testBuilderXSuite = do
     let int5 = Integ 5
 
     -- Test 1: Simple Predicate (x <= 5)
-    remarkM "Test 1: Simple Predicate { x ∈ N | x ≥ 5 }"
+    remarkM "Test 1: Simple Predicate { x ∈ N | x ≥ 5 }" Nothing
     let prop1 = X 0 :<=: int5
     let builtSet1 = builderX 0 setN prop1
     builtSet1Show <- showObjM builtSet1
-    remarkM $ "Constructed (idx=0): " <> builtSet1Show
-    remarkM "(Expected: {𝑥₀ ∈ N | 𝑥₀ ≥ 5})"
+    remarkM ("Constructed (idx=0): " <> builtSet1Show) Nothing
+    remarkM "(Expected: {𝑥₀ ∈ N | 𝑥₀ ≥ 5})" Nothing
 
     -- Test 2: Predicate with Equality (x == C)
-    remarkM "Test 2: Predicate with Equality { x ∈ N | x == C }"
+    remarkM "Test 2: Predicate with Equality { x ∈ N | x == C }" Nothing
     let prop2 = X 0 :==: constC
     let builtSet2 = builderX 0 setN prop2
     builtSet2Show <- showObjM builtSet2
-    remarkM $ "Constructed (idx=0): " <> builtSet2Show
-    remarkM "(Expected: {𝑥₀ ∈ N | 𝑥₀ = C})"
+    remarkM ("Constructed (idx=0): " <> builtSet2Show) Nothing
+    remarkM "(Expected: {𝑥₀ ∈ N | 𝑥₀ = C})" Nothing
 
     -- Test 3: Using a different index (idx=1)
-    remarkM "Test 3: Using Different Index { x ∈ N | x ≥ 5 }"
+    remarkM "Test 3: Using Different Index { x ∈ N | x ≥ 5 }" Nothing
     let prop3 = X 1 :<=: int5 -- Using X 1 now
     let builtSet3 = builderX 1 setN prop3 -- Using index 1
     builtSet3Show <- showObjM builtSet3
-    remarkM $ "Constructed (idx=1): " <> builtSet3Show
-    remarkM "(Expected: {𝑥₁ ∈ N | 𝑥₁ ≥ 5})"
+    remarkM ("Constructed (idx=1): " <> builtSet3Show) Nothing
+    remarkM "(Expected: {𝑥₁ ∈ N | 𝑥₁ ≥ 5})" Nothing
 
     -- Test 4: Predicate with nested quantifiers (∀y (y ∈ M -> x = y))
-    remarkM "Test 4: Nested Quantifier in Predicate { x ∈ N | ∀y (y ∈ M → x = y) }"
+    remarkM "Test 4: Nested Quantifier in Predicate { x ∈ N | ∀y (y ∈ M → x = y) }" Nothing
     -- Predicate: aX 1 ( (X 1 `In` setM) :->: (X 0 :==: X 1) )
     -- Here, x is X 0 (bound by builderX), y is X 1 (bound by aX)
     let prop4 = aX 1 ( (X 1 `In` setM) :->: (X 0 :==: X 1) )
     let builtSet4 = builderX 0 setN prop4 -- Using index 0 for x
     builtSet4Show <- showObjM builtSet4
-    remarkM $ "Constructed (idx=0): " <> builtSet4Show
-    remarkM "(Expected: {𝑥₀ ∈ N | ∀𝑥₁((𝑥₁ ∈ M) → (𝑥₀ = 𝑥₁))})"
+    remarkM ("Constructed (idx=0): " <> builtSet4Show) Nothing
+    remarkM "(Expected: {𝑥₀ ∈ N | ∀𝑥₁((𝑥₁ ∈ M) → (𝑥₀ = 𝑥₁))})" Nothing
 
     -- Test 5: Complex Predicate with Existential Quantifier
-    remarkM "Test 5: Complex Predicate { x ∈ N | ∃y (y ∈ M ∧ x = <y, C>) }"
+    remarkM "Test 5: Complex Predicate { x ∈ N | ∃y (y ∈ M ∧ x = <y, C>) }" Nothing
     -- Predicate: eX 1 ( (X 1 `In` setM) :&&: (X 0 :==: Pair (X 1) constC) )
     -- Here, x is X 0 (bound by builderX), y is X 1 (bound by eX)
     let prop5 = eX 1 ( (X 1 `In` setM) :&&: (X 0 :==: pair (X 1) constC) )
     let builtSet5 = builderX 0 setN prop5 -- Using index 0 for x
     builtSet5Show <- showObjM builtSet5
-    remarkM $ "Constructed (idx=0): " <> builtSet5Show
-    remarkM "(Expected: {𝑥₀ ∈ N | ∃𝑥₁((𝑥₁ ∈ M) ∧ (𝑥₀ = <𝑥₁, C>))})"
+    remarkM ("Constructed (idx=0): " <> builtSet5Show) Nothing
+    remarkM "(Expected: {𝑥₀ ∈ N | ∃𝑥₁((𝑥₁ ∈ M) ∧ (𝑥₀ = <𝑥₁, C>))})" Nothing
 
     -- Test 6: Using a different source set M
-    remarkM "Test 6: Different Source Set { x ∈ M | x == C }"
+    remarkM "Test 6: Different Source Set { x ∈ M | x == C }" Nothing
     let prop6 = X 0 :==: constC
     let builtSet6 = builderX 0 setM prop6 -- Source set is M
     builtSet6Show <- showObjM builtSet6
-    remarkM $ "Constructed (idx=0): " <> builtSet6Show
-    remarkM "(Expected: {𝑥₀ ∈ M | 𝑥₀ = C})"
+    remarkM ("Constructed (idx=0): " <> builtSet6Show) Nothing
+    remarkM "(Expected: {𝑥₀ ∈ M | 𝑥₀ = C})" Nothing
 
     -- Test 7: Predicate always true (using x == x)
-    remarkM "Test 7: Predicate Always True { x ∈ N | x == x }"
+    remarkM "Test 7: Predicate Always True { x ∈ N | x == x }" Nothing
     let prop7 = X 0 :==: X 0
     let builtSet7 = builderX 0 setN prop7
     builtSet7Show <- showObjM builtSet7
-    remarkM $ "Constructed (idx=0): " <> builtSet7Show
-    remarkM "(Expected: {𝑥₀ ∈ N | 𝑥₀ = 𝑥₀})"
+    remarkM ("Constructed (idx=0): " <> builtSet7Show) Nothing
+    remarkM "(Expected: {𝑥₀ ∈ N | 𝑥₀ = 𝑥₀})" Nothing
 
     -- Test 8: Predicate involving other template variables (if needed later)
     -- remarkM "Test 8: Predicate with other X vars - Placeholder"
@@ -477,13 +477,13 @@ testBuilderXSuite = do
     -- remarkM $ "Constructed (idx=0): " <> builtSet8Show
     -- remarkM "(Shows interaction with other template vars if applicable)"
 
-    remarkM "--- builderX Test Suite Complete ---"
+    remarkM "--- builderX Test Suite Complete ---" Nothing
     return ()
 
 
 testCompositionImplementation :: ProofGenTStd () [PredRuleDeBr] PropDeBr Text () ObjDeBr IO ()
 testCompositionImplementation = do
-    remarkM "--- Testing Composition Implementation (with Tupl [dom, cod, graph] assumption) ---"
+    remarkM "--- Testing Composition Implementation (with Tupl [dom, cod, graph] assumption) ---" Nothing
 
     -- Define simple functions and argument
     -- NOTE: We assume f and g are now represented as triples Tupl[dom,cod,graph]
@@ -494,49 +494,49 @@ testCompositionImplementation = do
     fakeConstM "F" () -- Represents function F as Tupl[DomF, CodF, GraphF]
     fakeConstM "G" () -- Represents function G as Tupl[DomG, CodG, GraphG]
     fakeConstM "A" () -- Represents argument A
-    remarkM "Using f = F, g = G, x = A"
+    remarkM "Using f = F, g = G, x = A" Nothing
 
     -- 1. Calculate h = f .:. g using the definition based on compositionTemplate
-    remarkM "Calculating h = f .:. g"
+    remarkM "Calculating h = f .:. g" Nothing
     let h = f .:. g -- Assumes .:. uses compositionTemplate which uses the new .@.
     hShow <- showObjM h
-    remarkM $ "Constructed h: " <> hShow
-    remarkM "(Note: This will be a complex Hilbert term based on compositionTemplate and the new .@.)"
+    remarkM ("Constructed h: " <> hShow) Nothing
+    remarkM "(Note: This will be a complex Hilbert term based on compositionTemplate and the new .@.)" Nothing
 
     -- 2. Calculate h .@. x using the new .@. definition
-    remarkM "Calculating h .@. x"
+    remarkM "Calculating h .@. x" Nothing
     -- This now uses: objDeBrSubXs [(0,h),(1,x)] (hX 2 ( Tupl [X 1, X 2] `In` tripletLast (X 0) ))
     let applied_h = h .@. x
     applied_h_Show <- showObjM applied_h
-    remarkM $ "Result (h .@. x): " <> applied_h_Show
-    remarkM "(Note: This involves substituting h and x into the .@. template containing tripletLast)"
+    remarkM ("Result (h .@. x): " <> applied_h_Show) Nothing
+    remarkM "(Note: This involves substituting h and x into the .@. template containing tripletLast)" Nothing
 
     -- 3. Calculate f .@. (g .@. x) separately using the new .@.
-    remarkM "Calculating f .@. (g .@. x) separately"
+    remarkM "Calculating f .@. (g .@. x) separately" Nothing
     -- Inner application: g .@. x
     let applied_g = g .@. x
     applied_g_Show <- showObjM applied_g
-    remarkM $ "  Inner (g .@. x): " <> applied_g_Show
+    remarkM ("  Inner (g .@. x): " <> applied_g_Show) Nothing
     -- Outer application: f .@. applied_g
     let expected_result = f .@. applied_g
     expected_result_Show <- showObjM expected_result
-    remarkM $ "  Outer f .@. (g .@. x): " <> expected_result_Show
+    remarkM ("  Outer f .@. (g .@. x): " <> expected_result_Show) Nothing
 
     -- 4. Compare (visually via remarks)
-    remarkM "--- Comparison ---"
-    remarkM $ "h .@. x             => " <> applied_h_Show
-    remarkM $ "f .@. (g .@. x)     => " <> expected_result_Show
-    remarkM "Check if the final term structures match visually."
-    remarkM "WARNING: Visual comparison of these complex Hilbert terms might be difficult."
-    remarkM "Consider adding a formal proof step to check equality if possible."
-    remarkM "If they differ structurally, there might be an issue in how .:. or .@. interacts with the substitutions."
+    remarkM "--- Comparison ---" Nothing
+    remarkM ("h .@. x             => " <> applied_h_Show) Nothing
+    remarkM ("f .@. (g .@. x)     => " <> expected_result_Show) Nothing
+    remarkM "Check if the final term structures match visually." Nothing
+    remarkM "WARNING: Visual comparison of these complex Hilbert terms might be difficult." Nothing
+    remarkM "Consider adding a formal proof step to check equality if possible." Nothing
+    remarkM "If they differ structurally, there might be an issue in how .:. or .@. interacts with the substitutions." Nothing
 
-    remarkM "--- Composition Implementation Test Complete ---"
+    remarkM "--- Composition Implementation Test Complete ---" Nothing
     return ()
 
 testShorthandRendering :: ProofGenTStd () [PredRuleDeBr] PropDeBr Text () ObjDeBr IO ()
 testShorthandRendering = do
-    remarkM "--- Testing Shorthand Rendering (Post Function Triple Change) ---"
+    remarkM "--- Testing Shorthand Rendering (Post Function Triple Change) ---" Nothing
 
     -- Setup Constants
     let a = Constant "A"
@@ -558,124 +558,124 @@ testShorthandRendering = do
     let zero = Integ 0
 
     -- Test 1: Function Application (.@.) -> f(x_arg)
-    remarkM "Test 1: f .@. x_arg"
+    remarkM "Test 1: f .@. x_arg" Nothing
     -- Uses the new .@. definition internally
     let app_f_x = f .@. x_arg
     app_f_x_show <- showObjM app_f_x
-    remarkM "  Input Term (structure depends on new .@.): f .@. x_arg"
-    remarkM $ "  Actual Rendered:   " <> app_f_x_show
-    remarkM "  Expected Rendered: f(x_arg)"
-    remarkM "  (Success depends on parseFuncApplication recognizing the new structure)"
+    remarkM "  Input Term (structure depends on new .@.): f .@. x_arg" Nothing
+    remarkM ("  Actual Rendered:   " <> app_f_x_show) Nothing
+    remarkM "  Expected Rendered: f(x_arg)" Nothing
+    remarkM "  (Success depends on parseFuncApplication recognizing the new structure)" Nothing
 
     -- Test 2: Nested Function Application -> f(g(x_arg))
-    remarkM "Test 2: f .@. (g .@. x_arg)"
+    remarkM "Test 2: f .@. (g .@. x_arg)" Nothing
     let app_g_x = g .@. x_arg
     let app_f_gx = f .@. app_g_x
     app_f_gx_show <- showObjM app_f_gx
-    remarkM "  Input Term: f .@. (g .@. x_arg)"
-    remarkM $ "  Actual Rendered:   " <> app_f_gx_show
-    remarkM "  Expected Rendered: f(g(x_arg))"
-    remarkM "  (Success depends on parseFuncApplication recognizing nested new structures)"
+    remarkM "  Input Term: f .@. (g .@. x_arg)" Nothing
+    remarkM ("  Actual Rendered:   " <> app_f_gx_show) Nothing
+    remarkM "  Expected Rendered: f(g(x_arg))" Nothing
+    remarkM "  (Success depends on parseFuncApplication recognizing nested new structures)" Nothing
 
     -- Test 3: Function Composition (.:.) -> f ∘ g
-    remarkM "Test 3: f .:. g"
+    remarkM "Test 3: f .:. g" Nothing
     -- Assumes .:. uses compositionTemplate which uses the new .@.
     let comp_f_g = f .:. g
     comp_f_g_show <- showObjM comp_f_g
-    remarkM "  Input Term (structure depends on new .@. via template): f .:. g"
-    remarkM $ "  Actual Rendered:   " <> comp_f_g_show
-    remarkM "  Expected Rendered: f ∘ g"
-    remarkM "  (Success depends on parseComposition recognizing the template structure)"
+    remarkM "  Input Term (structure depends on new .@. via template): f .:. g" Nothing
+    remarkM ("  Actual Rendered:   " <> comp_f_g_show) Nothing
+    remarkM "  Expected Rendered: f ∘ g" Nothing
+    remarkM "  (Success depends on parseComposition recognizing the template structure)" Nothing
 
     -- Test 3b: Apply composed function -> (f ∘ g)(x_arg)
-    remarkM "Test 3b: (f .:. g) .@. x_arg"
+    remarkM "Test 3b: (f .:. g) .@. x_arg" Nothing
     let app_comp_x = comp_f_g .@. x_arg
     app_comp_x_show <- showObjM app_comp_x
-    remarkM "  Input Term: (f .:. g) .@. x_arg"
-    remarkM $ "  Actual Rendered:   " <> app_comp_x_show
-    remarkM "  Expected Rendered: (f ∘ g)(x_arg)"
-    remarkM "  (Success depends on parseFuncApplication recognizing the composed structure)"
+    remarkM "  Input Term: (f .:. g) .@. x_arg" Nothing
+    remarkM ("  Actual Rendered:   " <> app_comp_x_show) Nothing
+    remarkM "  Expected Rendered: (f ∘ g)(x_arg)" Nothing
+    remarkM "  (Success depends on parseFuncApplication recognizing the composed structure)" Nothing
 
     -- == Other tests remain largely the same, as they don't depend on the function representation ==
 
     -- Test 4: Set Builder -> { x ∈ N | x ≥ 5 }
-    remarkM "Test 4: builderX 0 N (X 0 :<=: 5)"
+    remarkM "Test 4: builderX 0 N (X 0 :<=: 5)" Nothing
     let builder_n_ge_5 = builderX 0 n (X 0 :<=: five)
     builder_n_ge_5_show <- showObjM builder_n_ge_5
-    remarkM "  Input: builderX 0 N (X 0 :<=: 5)"
-    remarkM $ "  Actual:   " <> builder_n_ge_5_show
-    remarkM "  Expected: {𝑥₀ ∈ N | 𝑥₀ ≥ 5}"
+    remarkM "  Input: builderX 0 N (X 0 :<=: 5)" Nothing
+    remarkM ("  Actual:   " <> builder_n_ge_5_show) Nothing
+    remarkM "  Expected: {𝑥₀ ∈ N | 𝑥₀ ≥ 5}" Nothing
 
     -- Test 5: Hilbert Epsilon Shorthand -> ε[index]
-    remarkM "Test 5: Hilbert ε shorthand (requires proven Exists)"
+    remarkM "Test 5: Hilbert ε shorthand (requires proven Exists)" Nothing
     let hilbert_prop = X 0 :==: a -- Example property P(x) = (x == A)
     let hilbert_term = hX 0 hilbert_prop -- εx.(x == A)
     let exists_prop = eX 0 hilbert_prop -- ∃x.(x == A)
     (fake_exists, fake_idx) <- fakePropM [] exists_prop
     exists_show <- showPropM fake_exists -- Show the prop being faked
-    remarkM $ "  Faking proof of: " <> exists_show  <> " at index " <> pack (show fake_idx)
+    remarkM ("  Faking proof of: " <> exists_show  <> " at index " <> pack (show fake_idx)) Nothing
     hilbert_term_short_show <- showObjM hilbert_term
-    remarkM "  Input: hX 0 (X 0 :==: A)  (after proving Exists)"
-    remarkM $ "  Actual:   " <> hilbert_term_short_show
-    remarkM $ "  Expected: ε" <> pack (show fake_idx) -- Adjust format if needed
+    remarkM "  Input: hX 0 (X 0 :==: A)  (after proving Exists)" Nothing
+    remarkM ("  Actual:   " <> hilbert_term_short_show) Nothing
+    remarkM ("  Expected: ε" <> pack (show fake_idx)) Nothing -- Adjust format if needed
 
     -- Test 6: Default Hilbert -> εx.(...)
-    remarkM "Test 6: Default Hilbert ε binding"
+    remarkM "Test 6: Default Hilbert ε binding" Nothing
     let hilbert_term_default = hX 1 (X 1 :<=: zero) -- εx.(x <= 0)
     hilbert_term_default_show <- showObjM hilbert_term_default
-    remarkM "  Input: hX 1 (X 1 :<=: 0)"
-    remarkM $ "  Actual:   " <> hilbert_term_default_show
-    remarkM "  Expected: ε𝑥₁(𝑥₁ ≥ 0)"
+    remarkM "  Input: hX 1 (X 1 :<=: 0)" Nothing
+    remarkM ("  Actual:   " <> hilbert_term_default_show) Nothing
+    remarkM "  Expected: ε𝑥₁(𝑥₁ ≥ 0)" Nothing
 
     -- Test 7: Subset (⊆)
-    remarkM "Test 7: subset A B"
+    remarkM "Test 7: subset A B" Nothing
     let subset_a_b = subset a b
     subset_a_b_show <- showPropM subset_a_b
-    remarkM "  Input: subset A B"
-    remarkM $ "  Actual:   " <> subset_a_b_show
-    remarkM "  Expected: A ⊆ B"
+    remarkM "  Input: subset A B" Nothing
+    remarkM ("  Actual:   " <> subset_a_b_show) Nothing
+    remarkM "  Expected: A ⊆ B" Nothing
 
     -- Test 8: Strict Subset (⊂)
-    remarkM "Test 8: strictSubset A B"
+    remarkM "Test 8: strictSubset A B" Nothing
     let strictsubset_a_b = strictSubset a b
     strictsubset_a_b_show <- showPropM strictsubset_a_b
-    remarkM "  Input: strictSubset A B"
-    remarkM $ "  Actual:   " <> strictsubset_a_b_show
-    remarkM "  Expected: A ⊂ B"
+    remarkM "  Input: strictSubset A B" Nothing
+    remarkM ("  Actual:   " <> strictsubset_a_b_show) Nothing
+    remarkM "  Expected: A ⊂ B" Nothing
 
     -- Test 9: Not Subset (⊈)
-    remarkM "Test 9: notSubset A B"
+    remarkM "Test 9: notSubset A B" Nothing
     let notsubset_a_b = notSubset a b
     notsubset_a_b_show <- showPropM notsubset_a_b
-    remarkM "  Input: notSubset A B"
-    remarkM $ "  Actual:   " <> notsubset_a_b_show
-    remarkM "  Expected: A ⊈ B"
+    remarkM "  Input: notSubset A B" Nothing
+    remarkM ("  Actual:   " <> notsubset_a_b_show) Nothing
+    remarkM "  Expected: A ⊈ B" Nothing
 
     -- Test 10: Exists Unique (∃!)
-    remarkM "Test 10: eXBang 0 (X 0 :==: A)"
+    remarkM "Test 10: eXBang 0 (X 0 :==: A)" Nothing
     let existsunique_a = eXBang 0 (X 0 :==: a)
     existsunique_a_show <- showPropM existsunique_a
-    remarkM "  Input: eXBang 0 (X 0 :==: A)"
-    remarkM $ "  Actual:   " <> existsunique_a_show
-    remarkM "  Expected: ∃!𝑥₀(𝑥₀ = A)"
+    remarkM "  Input: eXBang 0 (X 0 :==: A)" Nothing
+    remarkM ("  Actual:   " <> existsunique_a_show) Nothing
+    remarkM "  Expected: ∃!𝑥₀(𝑥₀ = A)" Nothing
 
     -- Test 11: Not Equal (≠)
-    remarkM "Test 11: A ./=. B"
+    remarkM "Test 11: A ./=. B" Nothing
     let notequal_a_b = a ./=. b -- Or Neg (a :==: b)
     notequal_a_b_show <- showPropM notequal_a_b
-    remarkM "  Input: A ./=. B"
-    remarkM $ "  Actual:   " <> notequal_a_b_show
-    remarkM "  Expected: A ≠ B"
+    remarkM "  Input: A ./=. B" Nothing
+    remarkM ("  Actual:   " <> notequal_a_b_show) Nothing
+    remarkM "  Expected: A ≠ B" Nothing
 
     -- Test 12: Not In (∉)
-    remarkM "Test 12: A `nIn` B"
+    remarkM "Test 12: A `nIn` B" Nothing
     let notin_a_b = a `nIn` b -- Or Neg (a `In` b)
     notin_a_b_show <- showPropM notin_a_b
-    remarkM "  Input: A `nIn` B"
-    remarkM $ "  Actual:   " <> notin_a_b_show
-    remarkM "  Expected: A ∉ B"
+    remarkM "  Input: A `nIn` B" Nothing
+    remarkM ("  Actual:   " <> notin_a_b_show) Nothing
+    remarkM "  Expected: A ∉ B" Nothing
 
-    remarkM "--- Shorthand Rendering Tests Complete ---"
+    remarkM "--- Shorthand Rendering Tests Complete ---" Nothing
     return ()
 
 
@@ -684,7 +684,7 @@ testShorthandRendering = do
 
 testProjectShorthandParsing :: ProofGenTStd () [PredRuleDeBr] PropDeBr Text () ObjDeBr IO ()
 testProjectShorthandParsing = do
-    remarkM "--- Testing Project Shorthand Parsing (via Rendering) ---"
+    remarkM "--- Testing Project Shorthand Parsing (via Rendering) ---" Nothing
 
     -- Setup Constants and Variables
     let tupleA = Constant "MyTupleA"
@@ -702,77 +702,77 @@ testProjectShorthandParsing = do
     -- == Positive Cases ==
 
     -- Test 1: Simple 2-tuple, project index 0
-    remarkM "Test 1: Project 2 0 MyTupleA"
+    remarkM "Test 1: Project 2 0 MyTupleA" Nothing
     let proj_2_0_A = project 2 0 tupleA -- Generate term using helper
     proj_2_0_A_show <- showObjM proj_2_0_A
-    remarkM "  Input:    project 2 0 MyTupleA"
-    remarkM $ "  Actual:   " <> proj_2_0_A_show
-    remarkM "  Expected: π₀(MyTupleA)"
+    remarkM "  Input:    project 2 0 MyTupleA" Nothing
+    remarkM ("  Actual:   " <> proj_2_0_A_show) Nothing
+    remarkM "  Expected: π₀(MyTupleA)" Nothing
 
     -- Test 2: Simple 2-tuple, project index 1
-    remarkM "Test 2: Project 2 1 MyTupleA"
+    remarkM "Test 2: Project 2 1 MyTupleA" Nothing
     let proj_2_1_A = project 2 1 tupleA
     proj_2_1_A_show <- showObjM proj_2_1_A
-    remarkM "  Input:    project 2 1 MyTupleA"
-    remarkM $ "  Actual:   " <> proj_2_1_A_show
-    remarkM "  Expected: π₁(MyTupleA)"
+    remarkM "  Input:    project 2 1 MyTupleA" Nothing
+    remarkM ("  Actual:   " <> proj_2_1_A_show) Nothing
+    remarkM "  Expected: π₁(MyTupleA)" Nothing
 
     -- Test 3: 3-tuple, project index 1
-    remarkM "Test 3: Project 3 1 MyTupleB"
+    remarkM "Test 3: Project 3 1 MyTupleB" Nothing
     let proj_3_1_B = project 3 1 tupleB
     proj_3_1_B_show <- showObjM proj_3_1_B
-    remarkM "  Input:    project 3 1 MyTupleB"
-    remarkM $ "  Actual:   " <> proj_3_1_B_show
-    remarkM "  Expected: π₁(MyTupleB)"
+    remarkM "  Input:    project 3 1 MyTupleB" Nothing
+    remarkM ("  Actual:   " <> proj_3_1_B_show) Nothing
+    remarkM "  Expected: π₁(MyTupleB)" Nothing
 
     -- Test 4: Nested projection (term `t` is itself a projection)
-    remarkM "Test 4: Project 2 0 (project 2 1 MyTupleA)"
+    remarkM "Test 4: Project 2 0 (project 2 1 MyTupleA)" Nothing
     let inner_proj = project 2 1 tupleA
     let outer_proj = project 2 0 inner_proj
     outer_proj_show <- showObjM outer_proj
-    remarkM "  Input:    project 2 0 (project 2 1 MyTupleA)"
-    remarkM $ "  Actual:   " <> outer_proj_show
-    remarkM "  Expected: π₀(π₁(MyTupleA))"
+    remarkM "  Input:    project 2 0 (project 2 1 MyTupleA)" Nothing
+    remarkM ("  Actual:   " <> outer_proj_show) Nothing
+    remarkM "  Expected: π₀(π₁(MyTupleA))" Nothing
 
     -- Test 5: A standard Hilbert term that doesn't match the project structure
-    remarkM "Test 5: Standard Hilbert term hX 0 (X 0 :==: Constant A)"
+    remarkM "Test 5: Standard Hilbert term hX 0 (X 0 :==: Constant A)" Nothing
     let simpleHilbert = hX 0 (X 0 :==: constA)
     simpleHilbert_show <- showObjM simpleHilbert
-    remarkM "  Input:    hX 0 (X 0 :==: Constant A)"
-    remarkM $ "  Actual:   " <> simpleHilbert_show
-    remarkM "  Expected: ε𝑥₀(𝑥₀ = A)  (or similar default Hilbert rendering, NOT π)"
+    remarkM "  Input:    hX 0 (X 0 :==: Constant A)" Nothing
+    remarkM ("  Actual:   " <> simpleHilbert_show) Nothing
+    remarkM "  Expected: ε𝑥₀(𝑥₀ = A)  (or similar default Hilbert rendering, NOT π)" Nothing
 
     -- == Negative Cases (Should Fail Parsing) ==
 
     -- Test 6 (Negative Case - RHS Not a Tuple)
-    remarkM "Test 6: Hilbert term where RHS of equality is not a Tuple"
+    remarkM "Test 6: Hilbert term where RHS of equality is not a Tuple" Nothing
     let nonTupleRHS = hX 1 ( eX 0 ( Constant "A" :==: Constant "B" ) )
     nonTupleRHS_show <- showObjM nonTupleRHS
-    remarkM "  Input:    hX 1 ( eX 0 ( Constant \"A\" :==: Constant \"B\" ) )"
-    remarkM $ "  Actual:   " <> nonTupleRHS_show
-    remarkM "  Expected: ε𝑥₁(∃𝑥₀(A = B)) (Default Hilbert rendering, NOT π)"
+    remarkM "  Input:    hX 1 ( eX 0 ( Constant \"A\" :==: Constant \"B\" ) )" Nothing
+    remarkM ("  Actual:   " <> nonTupleRHS_show) Nothing
+    remarkM "  Expected: ε𝑥₁(∃𝑥₀(A = B)) (Default Hilbert rendering, NOT π)" Nothing
 
 
 
 
 
     -- Test 7 (Negative Case - Body Not Equality)
-    remarkM "Test 7: Hilbert term where body inside Exists is not an Equality"
+    remarkM "Test 7: Hilbert term where body inside Exists is not an Equality" Nothing
     let nonEqBody = hX 1 ( eX 0 ( Neg ( Constant "A" :==: pair (X 1) (X 0) ) ) )
     nonEqBody_show <- showObjM nonEqBody
-    remarkM "  Input:    hX 1 ( eX 0 ( Neg ( Constant \"A\" :==: Tupl [X 1, X 0] ) ) )"
-    remarkM $ "  Actual:   " <> nonEqBody_show
-    remarkM "  Expected: ε𝑥₁(∃𝑥₀(¬(A = (𝑥₁,𝑥₀)))) (Default Hilbert rendering, NOT π)"
+    remarkM "  Input:    hX 1 ( eX 0 ( Neg ( Constant \"A\" :==: Tupl [X 1, X 0] ) ) )" Nothing
+    remarkM ("  Actual:   " <> nonEqBody_show) Nothing
+    remarkM "  Expected: ε𝑥₁(∃𝑥₀(¬(A = (𝑥₁,𝑥₀)))) (Default Hilbert rendering, NOT π)" Nothing
 
 
-    remarkM "--- Project Shorthand Parsing Tests Complete ---"
+    remarkM "--- Project Shorthand Parsing Tests Complete ---" Nothing
     return ()
 
 
 -- Test function for the shorthand rendering of Cartesian Product (A × B)
 testCrossProductRendering :: ProofGenTStd () [PredRuleDeBr] PropDeBr Text () ObjDeBr IO ()
 testCrossProductRendering = do
-    remarkM "--- Testing Cross Product Shorthand Rendering (A × B) ---"
+    remarkM "--- Testing Cross Product Shorthand Rendering (A × B) ---" Nothing
 
     -- Setup Constants for sets
     let setA = Constant "A"
@@ -784,48 +784,48 @@ testCrossProductRendering = do
     fakeConstM "C" ()
 
     -- == Positive Case: Render term created by crossProd helper ==
-    remarkM "Test 1: Rendering term generated by crossProd A B"
+    remarkM "Test 1: Rendering term generated by crossProd A B" Nothing
     let prodAB = crossProd setA setB -- Use the helper function
     actualOutput <- showObjM prodAB     -- Use showObjM to trigger rendering
     let expectedOutput = "A × B"      -- Define the expected string output
 
-    remarkM "  Input Term: crossProd A B"
+    remarkM "  Input Term: crossProd A B" Nothing
     -- remarkM $ "  Internal Structure (for info): " <> (pack $ show prodAB) -- Uncomment to see raw structure if needed
-    remarkM $ "  Actual Rendered Output:   " <> actualOutput
-    remarkM $ "  Expected Rendered Output: " <> expectedOutput
+    remarkM ("  Actual Rendered Output:   " <> actualOutput) Nothing
+    remarkM ("  Expected Rendered Output: " <> expectedOutput) Nothing
 
     -- Check if rendering matches expectation
     if actualOutput == expectedOutput then
         do 
-            remarkM "  Check: Rendering matches expected output. PASSED."
-            remarkM "  (Requires parseCrossProduct logic within toSubexpParseTree to be correct)"
+            remarkM "  Check: Rendering matches expected output. PASSED." Nothing
+            remarkM "  (Requires parseCrossProduct logic within toSubexpParseTree to be correct)" Nothing
     else
         do 
-            remarkM "  Check: Rendering does NOT match expected output. FAILED."
-            remarkM "  (Check parseCrossProduct logic within toSubexpParseTree and showSubexpParseTree formatting)"
+            remarkM "  Check: Rendering does NOT match expected output. FAILED." Nothing
+            remarkM "  (Check parseCrossProduct logic within toSubexpParseTree and showSubexpParseTree formatting)" Nothing
 
     -- == Negative Case (Optional): Ensure unrelated terms don't render as cross product ==
-    remarkM "Test 2: Rendering a simple Tuple (A, B)"
+    remarkM "Test 2: Rendering a simple Tuple (A, B)" Nothing
     let tupleTerm = pair setA setB
     tupleOutput <- showObjM tupleTerm
     let expectedTupleOutput = "(A,B)" -- Or similar based on your tuple rendering
-    remarkM "  Input Term: Tupl [A, B]"
-    remarkM $ "  Actual Rendered Output: " <> tupleOutput
-    remarkM $ "  Expected Rendered Output (e.g.): " <> expectedTupleOutput
+    remarkM "  Input Term: Tupl [A, B]" Nothing
+    remarkM ("  Actual Rendered Output:   " <> tupleOutput) Nothing
+    remarkM ("  Expected Rendered Output (e.g.): " <> expectedTupleOutput) Nothing
     if tupleOutput /= expectedOutput && tupleOutput == expectedTupleOutput then
-         remarkM "  Check: Rendering is not 'A × B' and matches tuple format. PASSED."
+         remarkM "  Check: Rendering is not 'A × B' and matches tuple format. PASSED." Nothing
     else
-         remarkM "  Check: Rendering is incorrect. FAILED."
+         remarkM "  Check: Rendering is incorrect. FAILED." Nothing
 
 
-    remarkM "--- Cross Product Rendering Tests Complete ---"
+    remarkM "--- Cross Product Rendering Tests Complete ---" Nothing
     return ()
 
 
 -- Test function for the shorthand rendering of FUNCS(A,B)
 testFuncsSetRendering :: ProofGenTStd () [PredRuleDeBr] PropDeBr Text () ObjDeBr IO ()
 testFuncsSetRendering = do
-    remarkM "--- Testing FUNCS(A,B) Shorthand Rendering ---"
+    remarkM "--- Testing FUNCS(A,B) Shorthand Rendering ---" Nothing
 
     -- Setup Constants for sets
     let setA = Constant "A"
@@ -835,7 +835,7 @@ testFuncsSetRendering = do
     fakeConstM "B" ()
 
     -- == Positive Case: Render term created by funcsSet helper ==
-    remarkM "Test 1: Rendering term generated by funcsSet A B"
+    remarkM "Test 1: Rendering term generated by funcsSet A B" Nothing
     let funcsAB = funcsSet setA setB -- Use the helper function
 
     actualOutput <- showObjM funcsAB     -- Use showObjM to trigger rendering
@@ -844,10 +844,10 @@ testFuncsSetRendering = do
 
  
 
-    remarkM "  Input Term: funcsSet A B"
+    remarkM "  Input Term: funcsSet A B" Nothing
     --remarkM $ "  Internal Structure (for info): " <> (pack $ show funcsAB) -- Uncomment if needed
-    remarkM $ "  Actual Rendered Output:   " <> actualOutput
-    remarkM $ "  Expected Rendered Output: " <> expectedOutput
+    remarkM ("  Actual Rendered Output:   " <> actualOutput) Nothing
+    remarkM ("  Expected Rendered Output: " <> expectedOutput) Nothing
 
     --remarkM exp3
 
@@ -855,20 +855,20 @@ testFuncsSetRendering = do
     -- Check if rendering matches expectation
     if actualOutput == expectedOutput then
         do
-          remarkM "  Check: Rendering matches expected output. PASSED."
-          remarkM "  (Requires parseFuncsSet logic within toSubexpParseTree to be correct)"
+          remarkM "  Check: Rendering matches expected output. PASSED." Nothing
+          remarkM "  (Requires parseFuncsSet logic within toSubexpParseTree to be correct)" Nothing
     else
         do
-          remarkM "  Check: Rendering does NOT match expected output. FAILED."
-          remarkM "  (Check parseFuncsSet logic and showSubexpParseTree formatting for FuncApp/Tuple)"
+          remarkM "  Check: Rendering does NOT match expected output. FAILED." Nothing
+          remarkM "  (Check parseFuncsSet logic and showSubexpParseTree formatting for FuncApp/Tuple)" Nothing
 
-    remarkM "--- FUNCS(A,B) Rendering Tests Complete ---"
+    remarkM "--- FUNCS(A,B) Rendering Tests Complete ---" Nothing
     return ()
 
 -- Test function for the shorthand rendering of Binary Union (A ∪ B)
 testBinaryUnionRendering :: ProofGenTStd () [PredRuleDeBr] PropDeBr Text () ObjDeBr IO ()
 testBinaryUnionRendering = do
-    remarkM "--- Testing Binary Union Shorthand Rendering (A ∪ B) ---"
+    remarkM "--- Testing Binary Union Shorthand Rendering (A ∪ B) ---" Nothing
 
     -- Setup Constants for sets
     let setA = Constant "A"
@@ -878,34 +878,34 @@ testBinaryUnionRendering = do
     fakeConstM "B" ()
 
     -- == Positive Case: Render term created by binaryUnion helper ==
-    remarkM "Test 1: Rendering term generated by binaryUnion A B"
+    remarkM "Test 1: Rendering term generated by binaryUnion A B" Nothing
     let unionAB = setA .\/. setB -- Use the new helper function
     actualOutput <- showObjM unionAB     -- Use showObjM to trigger rendering
     let expectedOutput = "A ∪ B"      -- Define the expected string output
 
-    remarkM "  Input Term: A .\\/. B"
+    remarkM "  Input Term: A .\\/. B" Nothing
     -- remarkM $ "  Internal Structure (for info): " <> (pack $ show unionAB) -- Uncomment to see raw structure if needed
-    remarkM $ "  Actual Rendered Output:   " <> actualOutput
-    remarkM $ "  Expected Rendered Output: " <> expectedOutput
+    remarkM ("  Actual Rendered Output:   " <> actualOutput) Nothing
+    remarkM ("  Expected Rendered Output: " <> expectedOutput) Nothing
 
     -- Check if rendering matches expectation
     if actualOutput == expectedOutput then
         do
-            remarkM "  Check: Rendering matches expected output. PASSED."
-            remarkM "  (Requires parseBinaryUnion logic within toSubexpParseTree to be correct)"
+            remarkM "  Check: Rendering matches expected output. PASSED." Nothing
+            remarkM "  (Requires parseBinaryUnion logic within toSubexpParseTree to be correct)" Nothing
     else
         do
-            remarkM "  Check: Rendering does NOT match expected output. FAILED."
-            remarkM "  (Check parseBinaryUnion logic within toSubexpParseTree and showSubexpParseTree formatting)"
+            remarkM "  Check: Rendering does NOT match expected output. FAILED." Nothing
+            remarkM "  (Check parseBinaryUnion logic within toSubexpParseTree and showSubexpParseTree formatting)" Nothing
 
-    remarkM "--- Binary Union Rendering Tests Complete ---"
+    remarkM "--- Binary Union Rendering Tests Complete ---" Nothing
     return ()
 
 
 -- Test function for the shorthand rendering of Binary Intersection (A ∩ B)
 testIntersectionRendering :: ProofGenTStd () [PredRuleDeBr] PropDeBr Text () ObjDeBr IO ()
 testIntersectionRendering = do
-    remarkM "--- Testing Binary Intersection Shorthand Rendering (A ∩ B) ---"
+    remarkM "--- Testing Binary Intersection Shorthand Rendering (A ∩ B) ---" Nothing
 
     -- Setup Constants for sets
     let setA = Constant "A"
@@ -915,81 +915,81 @@ testIntersectionRendering = do
     fakeConstM "B" ()
 
     -- == Positive Case: Render term created by (./\.) helper ==
-    remarkM "Test 1: Rendering term generated by A ./\\. B"
+    remarkM "Test 1: Rendering term generated by A ./\\. B" Nothing
     let intersectionAB = setA ./\. setB -- Use the new operator
     actualOutput <- showObjM intersectionAB   -- Use showObjM to trigger rendering
     let expectedOutput = "A ∩ B"         -- Define the expected string output
 
-    remarkM "  Input Term: A ./\\. B"
+    remarkM "  Input Term: A ./\\. B" Nothing
     -- remarkM $ "  Internal Structure (for info): " <> (pack $ show intersectionAB) -- Uncomment if needed
-    remarkM $ "  Actual Rendered Output:   " <> actualOutput
-    remarkM $ "  Expected Rendered Output: " <> expectedOutput
+    remarkM ("  Actual Rendered Output:   " <> actualOutput) Nothing
+    remarkM ("  Expected Rendered Output: " <> expectedOutput) Nothing
 
     -- Check if rendering matches expectation
     if actualOutput == expectedOutput then
         do
-            remarkM "  Check: Rendering matches expected output. PASSED."
-            remarkM "  (Requires parseIntersectionOp logic within toSubexpParseTree to be correct)"
+            remarkM "  Check: Rendering matches expected output. PASSED." Nothing
+            remarkM "  (Requires parseIntersectionOp logic within toSubexpParseTree to be correct)" Nothing
     else
         do
-            remarkM "  Check: Rendering does NOT match expected output. FAILED."
-            remarkM "  (Check parseIntersectionOp logic within toSubexpParseTree and showSubexpParseTree formatting)"
+            remarkM "  Check: Rendering does NOT match expected output. FAILED." Nothing
+            remarkM "  (Check parseIntersectionOp logic within toSubexpParseTree and showSubexpParseTree formatting)" Nothing
 
-    remarkM "--- Binary Intersection Rendering Tests Complete ---"
+    remarkM "--- Binary Intersection Rendering Tests Complete ---" Nothing
     return ()
 
 -- Test function for the shorthand rendering of Big Union (∪S)
 testBigUnionRendering :: ProofGenTStd () [PredRuleDeBr] PropDeBr Text () ObjDeBr IO ()
 testBigUnionRendering = do
-    remarkM "--- Testing Big Union Shorthand Rendering (∪S) ---"
+    remarkM "--- Testing Big Union Shorthand Rendering (∪S) ---" Nothing
     let setS = Constant "S"
     fakeConstM "S" ()
 
-    remarkM "Test 1: Rendering term generated by bigUnion S"
+    remarkM "Test 1: Rendering term generated by bigUnion S" Nothing
     let unionS = bigUnion setS -- Use the helper function
     actualOutput <- showObjM unionS     -- Use showObjM to trigger rendering
     let expectedOutput = "∪S"      -- Define the expected string output
 
-    remarkM "  Input Term: bigUnion S"
-    remarkM $ "  Actual Rendered Output:   " <> actualOutput
-    remarkM $ "  Expected Rendered Output: " <> expectedOutput
+    remarkM "  Input Term: bigUnion S" Nothing
+    remarkM ("  Actual Rendered Output:   " <> actualOutput) Nothing
+    remarkM ("  Expected Rendered Output: " <> expectedOutput) Nothing
 
     if actualOutput == expectedOutput then
-        remarkM "  Check: Rendering matches expected output. PASSED."
+        remarkM "  Check: Rendering matches expected output. PASSED." Nothing
     else
-        remarkM "  Check: Rendering does NOT match expected output. FAILED."
+        remarkM "  Check: Rendering does NOT match expected output. FAILED." Nothing
 
-    remarkM "--- Big Union Rendering Tests Complete ---"
+    remarkM "--- Big Union Rendering Tests Complete ---" Nothing
     return ()
 
 -- Test function for the shorthand rendering of Big Intersection (∩S)
 testBigIntersectionRendering :: ProofGenTStd () [PredRuleDeBr] PropDeBr Text () ObjDeBr IO ()
 testBigIntersectionRendering = do
-    remarkM "--- Testing Big Intersection Shorthand Rendering (∩S) ---"
+    remarkM "--- Testing Big Intersection Shorthand Rendering (∩S) ---" Nothing
     let setS = Constant "S"
     fakeConstM "S" () -- Assume S exists and is non-empty for the test definition
 
-    remarkM "Test 1: Rendering term generated by bigIntersection S"
+    remarkM "Test 1: Rendering term generated by bigIntersection S" Nothing
     let intersectionS = bigIntersection setS -- Use the helper function
     actualOutput <- showObjM intersectionS     -- Use showObjM to trigger rendering
     let expectedOutput = "∩S"         -- Define the expected string output
 
-    remarkM "  Input Term: bigIntersection S"
-    remarkM $ "  Actual Rendered Output:   " <> actualOutput
-    remarkM $ "  Expected Rendered Output: " <> expectedOutput
+    remarkM "  Input Term: bigIntersection S" Nothing
+    remarkM ("  Actual Rendered Output:   " <> actualOutput) Nothing
+    remarkM ("  Expected Rendered Output: " <> expectedOutput) Nothing
 
     if actualOutput == expectedOutput then
-        remarkM "  Check: Rendering matches expected output. PASSED."
+        remarkM "  Check: Rendering matches expected output. PASSED." Nothing
     else
-        remarkM "  Check: Rendering does NOT match expected output. FAILED."
+        remarkM "  Check: Rendering does NOT match expected output. FAILED." Nothing
 
-    remarkM "--- Big Intersection Rendering Tests Complete ---"
+    remarkM "--- Big Intersection Rendering Tests Complete ---" Nothing
     return ()
 
 -- Test function for the shorthand rendering of Roster Notation {a, b, ...}
 testRosterRendering :: ProofGenTStd () [PredRuleDeBr] PropDeBr Text () ObjDeBr IO ()
 testRosterRendering = do
-    remarkM "--- Testing Roster Notation Shorthand Rendering {..} ---"
+    remarkM "--- Testing Roster Notation Shorthand Rendering {..} ---" Nothing
 
     -- Setup Constants
     let elemA = Constant "A"
@@ -1012,56 +1012,56 @@ testRosterRendering = do
     --if actualOutput1 == expectedOutput1 then remarkM "  Check: PASSED." else remarkM "  Check: FAILED."
 
     -- Test 2: Singleton set {A}
-    remarkM "Test 2: Rendering roster [A]"
+    remarkM "Test 2: Rendering roster [A]" Nothing
     let rosterA = roster [elemA]
     actualOutput2 <- showObjM rosterA
     let expectedOutput2 = "{A}"
-    remarkM "  Input Term: roster [A]"
-    remarkM $ "  Actual Rendered Output:   " <> actualOutput2
-    remarkM $ "  Expected Rendered Output: " <> expectedOutput2
-    if actualOutput2 == expectedOutput2 then remarkM "  Check: PASSED." else remarkM "  Check: FAILED."
+    remarkM "  Input Term: roster [A]" Nothing
+    remarkM ("  Actual Rendered Output:   " <> actualOutput2) Nothing
+    remarkM ("  Expected Rendered Output: " <> expectedOutput2) Nothing
+    if actualOutput2 == expectedOutput2 then remarkM "  Check: PASSED." Nothing else remarkM "  Check: FAILED." Nothing
 
     -- Test 3: Two element set {A, 1}
-    remarkM "Test 3: Rendering roster [A, 1]"
+    remarkM "Test 3: Rendering roster [A, 1]" Nothing
     let rosterA1 = roster [elemA, int1]
     actualOutput3 <- showObjM rosterA1
     -- Note: Expected output depends on the derived Ord instance for ObjDeBr
     -- Integ constructor usually comes before Constant constructor
     let expectedOutput3 = "{1,A}"
-    remarkM "  Input Term: roster [A, 1]"
-    remarkM $ "  Actual Rendered Output:   " <> actualOutput3
-    remarkM $ "  Expected Rendered Output: " <> expectedOutput3
-    if actualOutput3 == expectedOutput3 then remarkM "  Check: PASSED." else remarkM "  Check: FAILED."
+    remarkM "  Input Term: roster [A, 1]" Nothing
+    remarkM ("  Actual Rendered Output:   " <> actualOutput3) Nothing
+    remarkM ("  Expected Rendered Output: " <> expectedOutput3) Nothing
+    if actualOutput3 == expectedOutput3 then remarkM "  Check: PASSED." Nothing else remarkM "  Check: FAILED." Nothing
 
     -- Test 4: Three element set {C, B, A} - testing sorting
-    remarkM "Test 4: Rendering roster [C, B, A] (tests sorting)"
+    remarkM "Test 4: Rendering roster [C, B, A] (tests sorting)" Nothing
     let rosterCBA = roster [elemC, elemB, elemA]
     actualOutput4 <- showObjM rosterCBA
     let expectedOutput4 = "{A,B,C}" -- Assumes alphabetical sort for Constants
-    remarkM "  Input Term: roster [C, B, A]"
-    remarkM $ "  Actual Rendered Output:   " <> actualOutput4
-    remarkM $ "  Expected Rendered Output: " <> expectedOutput4
-    if actualOutput4 == expectedOutput4 then remarkM "  Check: PASSED." else remarkM "  Check: FAILED."
+    remarkM "  Input Term: roster [C, B, A]" Nothing
+    remarkM ("  Actual Rendered Output:   " <> actualOutput4) Nothing
+    remarkM ("  Expected Rendered Output: " <> expectedOutput4) Nothing
+    if actualOutput4 == expectedOutput4 then remarkM "  Check: PASSED." Nothing else remarkM "  Check: FAILED." Nothing
 
     -- Test 5: Set with duplicates {B, A, A} - testing deduplication
-    remarkM "Test 5: Rendering roster [B, A, A] (tests deduplication)"
+    remarkM "Test 5: Rendering roster [B, A, A] (tests deduplication)" Nothing
     let rosterBAA = roster [elemB, elemA, elemA]
     actualOutput5 <- showObjM rosterBAA
     let expectedOutput5 = "{A,B}" -- Sorted and deduplicated
-    remarkM "  Input Term: roster [B, A, A]"
-    remarkM $ "  Actual Rendered Output:   " <> actualOutput5
-    remarkM $ "  Expected Rendered Output: " <> expectedOutput5
-    if actualOutput5 == expectedOutput5 then remarkM "  Check: PASSED." else remarkM "  Check: FAILED."
+    remarkM "  Input Term: roster [B, A, A]" Nothing
+    remarkM ("  Actual Rendered Output:   " <> actualOutput5) Nothing
+    remarkM ("  Expected Rendered Output: " <> expectedOutput5) Nothing
+    if actualOutput5 == expectedOutput5 then remarkM "  Check: PASSED." Nothing else remarkM "  Check: FAILED." Nothing
 
 
-    remarkM "--- Roster Notation Rendering Tests Complete ---"
+    remarkM "--- Roster Notation Rendering Tests Complete ---" Nothing
     return ()
 
 
 -- Test function for the shorthand rendering of Set Difference (A \\ B)
 testSetDifferenceRendering :: ProofGenTStd () [PredRuleDeBr] PropDeBr Text () ObjDeBr IO ()
 testSetDifferenceRendering = do
-    remarkM "--- Testing Set Difference Shorthand Rendering (A \\\\ B) ---"
+    remarkM "--- Testing Set Difference Shorthand Rendering (A \\\\ B) ---" Nothing
 
     -- Setup Constants for sets
     let setA = Constant "A"
@@ -1071,65 +1071,65 @@ testSetDifferenceRendering = do
     fakeConstM "B" ()
 
     -- == Positive Case: Render term created by (.\.) helper ==
-    remarkM "Test 1: Rendering term generated by A .\\. B"
+    remarkM "Test 1: Rendering term generated by A .\\. B" Nothing
     let differenceAB = setA .\. setB -- Use the new operator
     actualOutput <- showObjM differenceAB   -- Use showObjM to trigger rendering
     let expectedOutput = "A ∖ B"         -- Define the expected string output (double backslash for Haskell String)
 
-    remarkM "  Input Term: A .\\. B"
+    remarkM "  Input Term: A .\\. B" Nothing
     -- remarkM $ "  Internal Structure (for info): " <> (pack $ show differenceAB) -- Uncomment if needed
-    remarkM $ "  Actual Rendered Output:   " <> actualOutput
-    remarkM $ "  Expected Rendered Output: " <> expectedOutput
+    remarkM ("  Actual Rendered Output:   " <> actualOutput) Nothing
+    remarkM ("  Expected Rendered Output: " <> expectedOutput) Nothing
 
     -- Check if rendering matches expectation
     if actualOutput == expectedOutput then
         do
-            remarkM "  Check: Rendering matches expected output. PASSED."
-            remarkM "  (Requires parseSetDifference logic and rendering logic in Rendering.hs to be correct)"
+            remarkM "  Check: Rendering matches expected output. PASSED." Nothing
+            remarkM "  (Requires parseSetDifference logic and rendering logic in Rendering.hs to be correct)" Nothing
     else
         do
-            remarkM "  Check: Rendering does NOT match expected output. FAILED."
-            remarkM "  (Check parseSetDifference, Rendering.hs formatting, and binaryOpInData)"
+            remarkM "  Check: Rendering does NOT match expected output. FAILED." Nothing
+            remarkM "  (Check parseSetDifference, Rendering.hs formatting, and binaryOpInData)" Nothing
 
-    remarkM "--- Set Difference Rendering Tests Complete ---"
+    remarkM "--- Set Difference Rendering Tests Complete ---" Nothing
     return ()
 
 -- Test function for the shorthand rendering of Power Set P(A)
 testPowerSetRendering :: ProofGenTStd () [PredRuleDeBr] PropDeBr Text () ObjDeBr IO ()
 testPowerSetRendering = do
-    remarkM "--- Testing Power Set Shorthand Rendering (P(A)) ---"
+    remarkM "--- Testing Power Set Shorthand Rendering (P(A)) ---" Nothing
 
     -- Setup Constant for set
     let setA = Constant "A"
     fakeConstM "A" ()
 
     -- == Positive Case: Render term created by powerSet helper ==
-    remarkM "Test 1: Rendering term generated by powerSet A"
+    remarkM "Test 1: Rendering term generated by powerSet A" Nothing
     let pSetA = powerSet setA -- Use the helper function
     actualOutput <- showObjM pSetA     -- Use showObjM to trigger rendering
     -- User specified Unicode Script P (U+1D4AB)
     let expectedOutput = "𝒫(A)"
-    remarkM "  Input Term: powerSet A"
-    remarkM $ "  Actual Rendered Output:   " <> actualOutput
-    remarkM $ "  Expected Rendered Output: " <> expectedOutput
+    remarkM "  Input Term: powerSet A" Nothing
+    remarkM ("  Actual Rendered Output:   " <> actualOutput) Nothing
+    remarkM ("  Expected Rendered Output: " <> expectedOutput) Nothing
 
     -- Check if rendering matches expectation
     if actualOutput == expectedOutput then
         do
-            remarkM "  Check: Rendering matches expected output. PASSED."
-            remarkM "  (Requires parsePowerSet logic and rendering logic in Rendering.hs to be correct)"
+            remarkM "  Check: Rendering matches expected output. PASSED." Nothing
+            remarkM "  (Requires parsePowerSet logic and rendering logic in Rendering.hs to be correct)" Nothing
     else
         do
-            remarkM "  Check: Rendering does NOT match expected output. FAILED."
-            remarkM "  (Check parsePowerSet, Rendering.hs formatting and ParseTreeConst)"
+            remarkM "  Check: Rendering does NOT match expected output. FAILED." Nothing
+            remarkM "  (Check parsePowerSet, Rendering.hs formatting and ParseTreeConst)" Nothing
 
-    remarkM "--- Power Set Rendering Tests Complete ---"
+    remarkM "--- Power Set Rendering Tests Complete ---" Nothing
     return ()
 
 
 testPairAndTupleRendering :: ProofGenTStd () [PredRuleDeBr] PropDeBr Text () ObjDeBr IO ()
 testPairAndTupleRendering = do
-    remarkM "--- Testing Pair and Tuple Rendering (Kuratowski) ---"
+    remarkM "--- Testing Pair and Tuple Rendering (Kuratowski) ---" Nothing
 
     -- Setup Constants for elements
     let constA = Constant "A"
@@ -1145,111 +1145,111 @@ testPairAndTupleRendering = do
     fakeConstM "D" ()
 
     -- Test 1: Simple Pair (A, B)
-    remarkM "Test 1: Rendering pair A B"
+    remarkM "Test 1: Rendering pair A B" Nothing
     let pairAB = pair constA constB
     actualOutput1 <- showObjM pairAB
     let expectedOutput1 = "(A,B)"
-    remarkM "  Input Term: pair A B"
-    remarkM $ "  Actual Rendered Output:   " <> actualOutput1
-    remarkM $ "  Expected Rendered Output: " <> expectedOutput1
+    remarkM "  Input Term: pair A B" Nothing
+    remarkM ("  Actual Rendered Output:   " <> actualOutput1) Nothing
+    remarkM ("  Expected Rendered Output: " <> expectedOutput1) Nothing
     if actualOutput1 == expectedOutput1 then
-        remarkM "  Check: PASSED."
+        remarkM "  Check: PASSED." Nothing
     else
-        remarkM "  Check: FAILED. (Verify parsePair and Tuple rendering in Rendering.hs)"
+        remarkM "  Check: FAILED. (Verify parsePair and Tuple rendering in Rendering.hs)" Nothing
 
     -- Test 2: Pair with an integer (1, C)
-    remarkM "Test 2: Rendering pair (Integ 1) C"
+    remarkM "Test 2: Rendering pair (Integ 1) C" Nothing
     let pair1C = pair int1 constC
     actualOutput2 <- showObjM pair1C
     let expectedOutput2 = "(1,C)"
-    remarkM "  Input Term: pair (Integ 1) C"
-    remarkM $ "  Actual Rendered Output:   " <> actualOutput2
-    remarkM $ "  Expected Rendered Output: " <> expectedOutput2
+    remarkM "  Input Term: pair (Integ 1) C" Nothing
+    remarkM ("  Actual Rendered Output:   " <> actualOutput2) Nothing
+    remarkM ("  Expected Rendered Output: " <> expectedOutput2) Nothing
     if actualOutput2 == expectedOutput2 then
-        remarkM "  Check: PASSED."
+        remarkM "  Check: PASSED." Nothing
     else
-        remarkM "  Check: FAILED."
+        remarkM "  Check: FAILED." Nothing
 
     -- Test 3: Simple Tuple (A, B, C) - built as Pair A (Pair B C)
-    remarkM "Test 3: Rendering tuple [A, B, C]"
+    remarkM "Test 3: Rendering tuple [A, B, C]" Nothing
     let tupleABC = tuple [constA, constB, constC]
     actualOutput3 <- showObjM tupleABC
     let expectedOutput3 = "(A,B,C)"
-    remarkM "  Input Term: tuple [A, B, C]"
-    remarkM $ "  Actual Rendered Output:   " <> actualOutput3
-    remarkM $ "  Expected Rendered Output: " <> expectedOutput3
+    remarkM "  Input Term: tuple [A, B, C]" Nothing
+    remarkM ("  Actual Rendered Output:   " <> actualOutput3) Nothing
+    remarkM ("  Expected Rendered Output: " <> expectedOutput3) Nothing
     if actualOutput3 == expectedOutput3 then
-        remarkM "  Check: PASSED."
+        remarkM "  Check: PASSED." Nothing
     else
-        remarkM "  Check: FAILED. (Verify parseTupleMax/parseTupleFixed and Tuple rendering)"
+        remarkM "  Check: FAILED. (Verify parseTupleMax/parseTupleFixed and Tuple rendering)" Nothing
 
     -- Test 4: Tuple with mixed types (A, 1, B, 2)
-    remarkM "Test 4: Rendering tuple [A, (Integ 1), B, (Integ 2)]"
+    remarkM "Test 4: Rendering tuple [A, (Integ 1), B, (Integ 2)]" Nothing
     let tupleA1B2 = tuple [constA, int1, constB, int2]
     actualOutput4 <- showObjM tupleA1B2
     let expectedOutput4 = "(A,1,B,2)"
-    remarkM "  Input Term: tuple [A, (Integ 1), B, (Integ 2)]"
-    remarkM $ "  Actual Rendered Output:   " <> actualOutput4
-    remarkM $ "  Expected Rendered Output: " <> expectedOutput4
+    remarkM "  Input Term: tuple [A, (Integ 1), B, (Integ 2)]" Nothing
+    remarkM ("  Actual Rendered Output:   " <> actualOutput4) Nothing
+    remarkM ("  Expected Rendered Output: " <> expectedOutput4) Nothing
     if actualOutput4 == expectedOutput4 then
-        remarkM "  Check: PASSED."
+        remarkM "  Check: PASSED." Nothing
     else
-        remarkM "  Check: FAILED."
+        remarkM "  Check: FAILED." Nothing
 
     -- Test 5: Single element tuple (A) - tuple [A] should just be A
-    remarkM "Test 5: Rendering tuple [A]"
+    remarkM "Test 5: Rendering tuple [A]" Nothing
     let tupleA_single = tuple [constA]
     actualOutput5 <- showObjM tupleA_single
     let expectedOutput5 = "A" -- As per tuple [x] -> x
-    remarkM "  Input Term: tuple [A]"
-    remarkM $ "  Actual Rendered Output:   " <> actualOutput5
-    remarkM $ "  Expected Rendered Output: " <> expectedOutput5
+    remarkM "  Input Term: tuple [A]" Nothing
+    remarkM ("  Actual Rendered Output:   " <> actualOutput5) Nothing
+    remarkM ("  Expected Rendered Output: " <> expectedOutput5) Nothing
     if actualOutput5 == expectedOutput5 then
-        remarkM "  Check: PASSED."
+        remarkM "  Check: PASSED." Nothing
     else
-        remarkM "  Check: FAILED."
+        remarkM "  Check: FAILED." Nothing
 
     -- Test 6: Empty tuple - tuple [] should be EmptySet, rendered as ∅
-    remarkM "Test 6: Rendering tuple []"
+    remarkM "Test 6: Rendering tuple []" Nothing
     let tupleEmpty = tuple []
     actualOutput6 <- showObjM tupleEmpty
     let expectedOutput6 = "∅" -- Assuming EmptySet renders as ∅
-    remarkM "  Input Term: tuple [] (which is EmptySet)"
-    remarkM $ "  Actual Rendered Output:   " <> actualOutput6
-    remarkM $ "  Expected Rendered Output: " <> expectedOutput6
+    remarkM "  Input Term: tuple [] (which is EmptySet)" Nothing
+    remarkM ("  Actual Rendered Output:   " <> actualOutput6) Nothing
+    remarkM ("  Expected Rendered Output: " <> expectedOutput6) Nothing
     if actualOutput6 == expectedOutput6 then
-        remarkM "  Check: PASSED."
+        remarkM "  Check: PASSED." Nothing
     else
-        remarkM "  Check: FAILED. (Verify EmptySet rendering or tuple [] behavior)"
+        remarkM "  Check: FAILED. (Verify EmptySet rendering or tuple [] behavior)" Nothing
 
     -- Test 7: Nested Pairs/Tuples - Pair (Pair A B) C -> ((A,B),C)
-    remarkM "Test 7: Rendering pair (pair A B) C"
+    remarkM "Test 7: Rendering pair (pair A B) C" Nothing
     let nestedPair = pair (pair constA constB) constC
     actualOutput7 <- showObjM nestedPair
     let expectedOutput7 = "((A,B),C)"
-    remarkM "  Input Term: pair (pair A B) C"
-    remarkM $ "  Actual Rendered Output:   " <> actualOutput7
-    remarkM $ "  Expected Rendered Output: " <> expectedOutput7
+    remarkM "  Input Term: pair (pair A B) C" Nothing
+    remarkM ("  Actual Rendered Output:   " <> actualOutput7) Nothing
+    remarkM ("  Expected Rendered Output: " <> expectedOutput7) Nothing
     if actualOutput7 == expectedOutput7 then
-        remarkM "  Check: PASSED."
+        remarkM "  Check: PASSED." Nothing
     else
-        remarkM "  Check: FAILED."
+        remarkM "  Check: FAILED." Nothing
 
     -- Test 8: A Kuratowski pair that is NOT created by pair, but by roster directly
     -- This tests if parsePair can still recognize it for tuple rendering.
-    remarkM "Test 8: Rendering a direct Kuratowski pair roster [roster[A], roster[A,B]]"
+    remarkM "Test 8: Rendering a direct Kuratowski pair roster [roster[A], roster[A,B]]" Nothing
     let directKuratowski = roster [roster[constA], roster[constA, constB]]
     actualOutput8 <- showObjM directKuratowski
     let expectedOutput8 = "(A,B)" -- Expecting it to be parsed as a pair
-    remarkM "  Input Term: roster [roster[A], roster[A,B]]"
-    remarkM $ "  Actual Rendered Output:   " <> actualOutput8
-    remarkM $ "  Expected Rendered Output: " <> expectedOutput8
+    remarkM "  Input Term: roster [roster[A], roster[A,B]]" Nothing
+    remarkM ("  Actual Rendered Output:   " <> actualOutput8) Nothing
+    remarkM ("  Expected Rendered Output: " <> expectedOutput8) Nothing
     if actualOutput8 == expectedOutput8 then
-        remarkM "  Check: PASSED."
+        remarkM "  Check: PASSED." Nothing
     else
-        remarkM "  Check: FAILED. (parsePair might not be robust enough, or roster rendering interferes)"
+        remarkM "  Check: FAILED. (parsePair might not be robust enough, or roster rendering interferes)" Nothing
 
-    remarkM "--- Pair and Tuple Rendering Tests Complete ---"
+    remarkM "--- Pair and Tuple Rendering Tests Complete ---" Nothing
     return ()
 
 
@@ -1259,7 +1259,7 @@ testAxiomOfChoice = do
     (acAx, acAxIdx) <- axiomOfChoiceM
 
     showAcAx <- showPropM acAx
-    remarkM $ "Axiom of Choice: " <> showAcAx <> " at index " <> pack (show acAxIdx)
+    remarkM ("Axiom of Choice: " <> showAcAx <> " at index " <> pack (show acAxIdx)) Nothing
     -- Due to its complexity, you might want to add a remark with its raw structure too for debugging:
     -- remarkM $ "Raw AC: " <> pack (show acAx)
     return ()
@@ -1559,7 +1559,7 @@ main = do
         fakePropM [] binaryUnionTheorem
         (x,_,union) <- binaryUnionInstantiateM (Constant "S") (Constant "C")
         txt <- showTermM union
-        remarkM $ "Binary Union of S and C is: " <> txt
+        remarkM ("Binary Union of S and C is: " <> txt) Nothing
         return ()
         
         )::ProofGenTStd () [ZFCRuleDeBr] PropDeBr Text () ObjDeBr IO ())
@@ -1586,7 +1586,7 @@ main = do
         fakePropM [] binaryIntersectionTheorem
         (x,_,intersection) <- binaryIntersectionInstantiateM (Constant "S") (Constant "C")
         txt <- showTermM intersection
-        remarkM $ "Binary Intersection of S and C is: " <> txt
+        remarkM ("Binary Intersection of S and C is: " <> txt) Nothing
         return ()
         
         )::ProofGenTStd () [ZFCRuleDeBr] PropDeBr Text () ObjDeBr IO ())
@@ -1679,7 +1679,7 @@ testprog::ProofGenTStd () [PredRuleDeBr] PropDeBr Text () ObjDeBr IO ()
 testprog = do
       let z1 = aX 0 ((X 0 `In` Constant "N") :&&: (X 0 :<=: Integ 10) :->: (X 0 :<=: Integ 0))
       showZ1 <- showPropM z1
-      remarkM $ showZ1 <> " Z1Z1Z1Z1" 
+      remarkM (showZ1 <> " Z1Z1Z1Z1") Nothing
       let z2 = aX 0 ((X 0 `In` Constant "N") :&&: (X 0 :<=: Integ 0) :->: (X 0 :==: Integ 0))
       let asm = (V 0 `In` Constant "N") :&&: (V 0 :<=: Integ 10)
       let asm2 = (V 0 `In` Constant "N") :&&: (V 0 :<=: Integ 10)
@@ -1705,9 +1705,9 @@ testprog = do
         (notZ1,_) <- fakePropM [](Neg z1)
         (falseness,_) <- contraFM z1
         showF <- showPropM falseness
-        remarkM $ showF <> " is the falseness"
+        remarkM (showF <> " is the falseness") Nothing
       showAbsurdImp <- showPropM absurdImp
-      remarkM $ showAbsurdImp <> " is the absurdity"
+      remarkM (showAbsurdImp <> " is the absurdity") Nothing
       absurdM absurdImp
       return ()
 
@@ -1721,7 +1721,7 @@ testprog2 = do
     fakePropM [] (neg q)
     (s,idx) <- modusTollensM pImpQ
     showS <- showPropM s
-    remarkM $ showS <> " is the sentence. It was proven in line " <> (pack . show) idx
+    remarkM (showS <> " is the sentence. It was proven in line " <> (pack . show) idx) Nothing
     return ()
 
 
@@ -1732,7 +1732,7 @@ testprog3 = do
     fakePropM [] a
     (s,idx) <- reverseANegIntroM a
     showS <- showPropM s
-    remarkM $ showS <> " is the sentence. It was proven in line " <> (pack . show) idx
+    remarkM (showS <> " is the sentence. It was proven in line " <> (pack . show) idx) Nothing
     return ()
 
 testprog4::ProofGenTStd () [PredRuleDeBr] PropDeBr Text () ObjDeBr IO ()
@@ -1742,7 +1742,7 @@ testprog4 = do
     fakePropM [] a
     (s,idx) <- reverseENegIntroM a
     showS <- showPropM s
-    remarkM $ showS <> " is the sentence. It was proven in line " <> (pack . show) idx
+    remarkM (showS <> " is the sentence. It was proven in line " <> (pack . show) idx) Nothing
     return ()
 
 
@@ -1754,7 +1754,7 @@ testprog5 = do
 
 
     showS <- showPropM a
-    remarkM $ showS <> " is the sentence. It was proven in line " <> (pack . show) idx
+    remarkM (showS <> " is the sentence. It was proven in line " <> (pack . show) idx) Nothing
     return ()
 
 
@@ -1769,18 +1769,18 @@ theoremProg = do
               newFreeVar <- getTopFreeVar
               (s1,_) <- uiM newFreeVar z1
               (s2,_) <- mpM s1
-              remarkIdx <- remarkM "Yeah baby"
-              remarkIdx2<-remarkM "" --empty remark
+              remarkIdx <- remarkM "Yeah baby" Nothing
+              remarkIdx2<-remarkM "" Nothing--empty remark
               --(lift . print) "Coment1"
               --(lift . print . show) s1
-              remarkM $ (pack . show) remarkIdx2 <> " was the index of the remark above/"
+              remarkM ((pack . show) remarkIdx2 <> " was the index of the remark above/") Nothing
               (natAsm,_) <- simpLM asm
               --(lift . print) "COmment 2"
               (s3,_) <- adjM natAsm s2
               (s4,line_idx) <- uiM newFreeVar z2
               showS4 <- showPropM s4
-              remarkM $ showS4 <> " is the sentence. It was proven in line " <> (pack . show) line_idx
-                       <> "\nThis is the next line of this remark."
+              remarkM (showS4 <> " is the sentence. It was proven in line " <> (pack . show) line_idx
+                       <> "\nThis is the next line of this remark.") Nothing
               -- (lift . print . show) line_idx
               (s5,_) <- mpM s4
               simpLM asm

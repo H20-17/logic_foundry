@@ -624,6 +624,7 @@ data TagRenderError where
     TagNotDefined :: Text -> Text -> TagRenderError
     TaggedPropNotIndexed :: Text -> Text -> PropDeBr -> TagRenderError
     TaggedTermNotIndexed :: Text -> Text -> ObjDeBr -> TagRenderError
+    RemarkTagsNotXlateable :: Text -> Text -> TagRenderError
      deriving (Typeable, Show)
 
 instance Exception TagRenderError
@@ -633,9 +634,10 @@ convertRemText ::
                   Map PropDeBr [Int] 
                -> Map Text [Int]
                -> Map Text (TagData PropDeBr ObjDeBr) 
+               -> Map Text [Int]
                -> Text 
                -> Either TagRenderError Text
-convertRemText sentIdxs constIdxs tagDict input = go input
+convertRemText sentIdxs constIdxs tagDict remarkTagIdxs input = go input
   where
     go :: Text -> Either TagRenderError Text
     go text 
@@ -670,7 +672,7 @@ convertRemText sentIdxs constIdxs tagDict input = go input
             Nothing -> Left (TagNotDefined tagName input)
             Just (TagDataTerm term) -> Right (showTerm sentIdxs term)
             Just (TagDataSent sent) -> Right (showSent sentIdxs sent)
-
+            Just TagDataRemark -> Left (RemarkTagsNotXlateable tagName input)
     handleIndexContent tagName =
         case Data.Map.lookup tagName tagDict of
             Nothing -> Left (TagNotDefined tagName input)
@@ -685,6 +687,9 @@ convertRemText sentIdxs constIdxs tagDict input = go input
                              Just idxs -> Right (showIndex idxs)
                              Nothing -> Left (TaggedTermNotIndexed tagName input term) -- LogicTerm mismatch error type?
                    _ -> Left (TaggedTermNotIndexed tagName input term)
+            Just TagDataRemark -> case Data.Map.lookup tagName remarkTagIdxs of
+                    Just idxs -> Right (showIndex idxs)
+                    Nothing -> error "Remark tag index lookup failed. This shouldn't happen since remark tags should be defined in the tag dictionary if they are being indexed."
       where             
         showIndex i = if Prelude.null i then "" else Data.Text.concat (intersperse "." (Prelude.map (pack . show) i))
 
@@ -702,6 +707,7 @@ printPropDeBrStep lastLineN notMonadic step = do
         let lineNum = stepCount state
         let mayPrntState = mayParentState context
         let oldTagData = tagData state
+        let oldTagIdxs = remarkTagIdxs state
         case step of
             PrfStdStepTagObject tagName obj ->
               unless notMonadic $ do
@@ -728,7 +734,8 @@ printPropDeBrStep lastLineN notMonadic step = do
                     provenSents = newDictMap,
                     consts = newConstMapFull,
                     stepCount = lineNum + 1,
-                    tagData = oldTagData
+                    tagData = oldTagData,
+                    remarkTagIdxs = oldTagIdxs
                 }
                 liftIO $ putStr $ unpack $ showProp newDictMap prop
                        <> "    "
@@ -753,7 +760,8 @@ printPropDeBrStep lastLineN notMonadic step = do
                     provenSents = newDictMap,
                     consts = newConstMapFull,
                     stepCount = lineNum + 1,
-                    tagData=oldTagData
+                    tagData=oldTagData,
+                    remarkTagIdxs = oldTagIdxs
                 }
 
                 liftIO $ putStr $ unpack $ showProp newDictMap prop
@@ -777,7 +785,8 @@ printPropDeBrStep lastLineN notMonadic step = do
                     provenSents = dictMap,
                     consts = newConstMapFull,
                     stepCount = lineNum + 1,
-                    tagData = oldTagData
+                    tagData = oldTagData,
+                    remarkTagIdxs = oldTagIdxs
                 }
                 
                 liftIO $ putStr $ unpack $ "Const "
@@ -791,13 +800,14 @@ printPropDeBrStep lastLineN notMonadic step = do
                     provenSents = newDictMap,
                     consts = newConstMapFull,
                     stepCount = lineNum + 1,
-                    tagData=oldTagData
+                    tagData=oldTagData,
+                    remarkTagIdxs = oldTagIdxs
                 }
                 liftIO $ putStr $ unpack $ showProp newDictMap prop
                        <> "    THEOREM"
                        <> qed
                 
-                printSubproofF steps True notMonadic mempty mempty cf [] state oldTagData
+                printSubproofF steps True notMonadic mempty mempty cf [] state oldTagData oldTagIdxs
                 
             PrfStdStepSubproof prop subproofName steps -> do
                 let newDictMap = insert prop newIndex dictMap
@@ -806,14 +816,15 @@ printPropDeBrStep lastLineN notMonadic step = do
                     provenSents = newDictMap,
                     consts = newConstMapFull,
                     stepCount = lineNum + 1,
-                    tagData=oldTagData
+                    tagData=oldTagData,
+                    remarkTagIdxs = oldTagIdxs
                     
                 }
                 liftIO $ putStr $ unpack $ showProp newDictMap prop
                        <> "    "
                        <> subproofName
                        <> qed
-                printSubproofF steps False notMonadic newDictMap cnstMap cf newIndex state oldTagData
+                printSubproofF steps False notMonadic newDictMap cnstMap cf newIndex state oldTagData oldTagIdxs
             PrfStdStepTheoremM prop -> do
                 let newDictMap = insert prop newIndex dictMap
                 let newConstMapFull = fmap (\const -> ((),const)) cnstMap
@@ -821,7 +832,8 @@ printPropDeBrStep lastLineN notMonadic step = do
                     provenSents = newDictMap,
                     consts = newConstMapFull,
                     stepCount = lineNum + 1,
-                    tagData=oldTagData
+                    tagData=oldTagData,
+                    remarkTagIdxs = oldTagIdxs
                 }
                 liftIO $ putStr $ unpack $ showProp newDictMap prop
                        <> "    ALGORITHMIC_THEOREM"
@@ -832,7 +844,8 @@ printPropDeBrStep lastLineN notMonadic step = do
                     provenSents = dictMap,
                     consts = newConstMapFull,
                     stepCount = lineNum + 1,
-                    tagData=oldTagData
+                    tagData=oldTagData,
+                    remarkTagIdxs = oldTagIdxs
                 }
                 liftIO $ putStr $ unpack $ "FreeVar 𝑣"
                      <> showIndexAsSubscript index
@@ -844,20 +857,22 @@ printPropDeBrStep lastLineN notMonadic step = do
                     provenSents = dictMap,
                     consts = newConstMapFull,
                     stepCount = lineNum + 1,
-                    tagData=oldTagData
+                    tagData=oldTagData,
+                    remarkTagIdxs = oldTagIdxs
                 }
                 liftIO $ putStr $ unpack $ "Const "
                      <> constName
                      <> "    FAKE_CONST"
-            PrfStdStepRemark text -> do
+            PrfStdStepRemark text mayTag -> do
                 let newConstMapFull = fmap (\const -> ((),const)) cnstMap
                 put $ PrfStdState {
                     provenSents = dictMap,
                     consts = newConstMapFull,
                     stepCount = lineNum + 1,
-                    tagData=oldTagData
+                    tagData=maybe oldTagData (\tag -> Data.Map.insert tag TagDataRemark oldTagData) mayTag,
+                    remarkTagIdxs = maybe oldTagIdxs (\tag -> insert tag newIndex oldTagIdxs) mayTag
                 }
-                convertedRem <- either throwM return (convertRemText dictMap cnstMap oldTagData text)
+                convertedRem <- either throwM return (convertRemText dictMap cnstMap oldTagData oldTagIdxs text)
                 --convertedRem = text
                 liftIO $ putStr $ unpack $ "REMARK"
                      <> qed
@@ -872,7 +887,8 @@ printPropDeBrStep lastLineN notMonadic step = do
                     provenSents = dictMap,
                     consts = newConstMapFull,
                     stepCount = lineNum,
-                    tagData=Data.Map.insert tagName tagObj oldTagData
+                    tagData=Data.Map.insert tagName tagObj oldTagData,
+                    remarkTagIdxs = oldTagIdxs
                 }
                 unless notMonadic $ liftIO $ putStr $ unpack $ tagText
                    where
@@ -899,7 +915,7 @@ printPropDeBrStep lastLineN notMonadic step = do
                             <> "]"
         showIndexDepend sentIndexMap s = maybe "?" showIndex (Data.Map.lookup s sentIndexMap)
         showIndex i = if Prelude.null i then "" else Data.Text.concat (intersperse "." (Prelude.map (pack . show) i))
-        printSubproofF steps isTheorem notMonadic dictMap constMap cf newIndex state tagData = liftIO $ 
+        printSubproofF steps isTheorem notMonadic dictMap constMap cf newIndex state tagData remarkTagIdxs = liftIO $ 
                     when notMonadic $ do
                               putStr "\n"
                               let newContext = PrfStdContext {
@@ -912,7 +928,8 @@ printPropDeBrStep lastLineN notMonadic step = do
                                     provenSents = newDictMap,
                                     consts = fmap (\const -> ((),const)) newConstMap,
                                     stepCount = 0,
-                                    tagData = newTagData
+                                    tagData = newTagData,
+                                    remarkTagIdxs = newTagIdxs
                               }
                               printPropDeBrSteps newContext newState notMonadic steps
                               putStr "\n"
@@ -930,7 +947,10 @@ printPropDeBrStep lastLineN notMonadic step = do
                                         mempty
                                      else
                                         tagData
-
+                        newTagIdxs = if isTheorem then
+                                        mempty
+                                     else
+                                        remarkTagIdxs
                         cornerFrame = if isTheorem then
                                  "┗"
                               else

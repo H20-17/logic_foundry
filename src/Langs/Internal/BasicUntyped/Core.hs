@@ -817,7 +817,7 @@ objDeBrSwapObjWithX targetObj replacementIdx originObj =
 
 
 type PropErrDeBr = PL.LogicError PropDeBr DeBrSe Text ObjDeBr
-type PropRuleDeBr = PL.LogicRule () PropDeBr DeBrSe Text ()
+type PropRuleDeBr = PL.LogicRule () PropDeBr DeBrSe Text () ObjDeBr
 
 type PredErrDeBr = PREDL.LogicError PropDeBr DeBrSe Text ObjDeBr ()
 type PredRuleDeBr = PREDL.LogicRule PropDeBr DeBrSe Text ObjDeBr () ()

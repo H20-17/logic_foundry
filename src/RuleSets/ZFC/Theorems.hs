@@ -215,10 +215,8 @@ proveBuilderTheoremMFree source_set (p_pred::(t->s)) = do
         let freeSpecAxiom = specAxInstance (const source_set) (const p_pred
                                             ::(V.Empty t -> t -> s))
         txt <- showSentM freeSpecAxiom
-        remarkM txt
+        remarkM txt Nothing
         (tm,_,h_obj) <- eiHilbertM freeSpecAxiom
-        txt <- showTermM h_obj
-        remarkM $ "hilbert_obj: " <> txt
         tagSentM "other tag" freeSpecAxiom
         return h_obj 
 
@@ -238,14 +236,20 @@ proveBuilderTheoremM (source_set_pred::(v t -> t )) p_pred = do
         (freeSpecAx,idx) <- multiUIM closedSpecAxiom (reverse freeVars)
         tagSentM "freeSpecAx" freeSpecAx
         txt <- showSentM freeSpecAx
-        remarkM txt
+        remarkM txt Nothing
         let freeVars_v = V.fromList freeVars
         let source_set_pred_free = source_set_pred freeVars_v
         let p_pred_free = p_pred freeVars_v
         returnFunc <- proveBuilderTheoremMFree source_set_pred_free p_pred_free
         tagSentM "AnotherTag" freeSpecAx
         z <- fakeConstM "z" ()
-        remarkM "Testing tag {%AnotherTag%} {%freeSpecAx%} {@freeSpecAx@}"
+        tagTermM "z" z
+        remarkM "Testing tag {%AnotherTag%} {%freeSpecAx%} {@freeSpecAx@} {%z%} {@z@}" Nothing
+        remarkM "Some sentence" (Just "whatever")
+        -- ps <- getProofState
+        -- let txt = show ps
+        -- remarkM (pack txt) Nothing
+        remarkM "The index of the previous remark should be {@whatever@}" Nothing
         return returnFunc
     let returnFunc = returnFuncListForm . V.toList
 
@@ -322,11 +326,11 @@ builderInstantiateM :: (HelperConstraints sE s eL m r t,V.Vector v t) =>
     ProofGenTStd () r s Text () t m ((s,t),[Int])
 builderInstantiateM source_set_f pred_f args = do
     (builderProps, proofIdx, instantiatedObj) <- runProofBySubArgM $ do
-        remarkM "hello 1"
+        remarkM "hello 1" Nothing
         (tm,idx,builderFunc) <- runTheoremM $ builderSchema source_set_f pred_f
-        remarkM "hello 2"
+        remarkM "hello 2" Nothing
         (builderProps,_) <- multiUIM tm (V.toList args)
-        remarkM "hello 3"
+        remarkM "hello 3" Nothing
         
         let instantiatedObj = builderFunc args
         return instantiatedObj
@@ -514,7 +518,7 @@ proveBinaryUnionExistsM = do
         
         return emptySet
     txt <- showSentM binaryUnionExistsTheorem
-    remarkM txt
+    remarkM txt Nothing
     return ()
 
 
@@ -720,10 +724,10 @@ proveBinaryIntersectionExistsM = do
                 return $ isSet set_x0 .&&. forall_subexp
 
             txt <- showSentM defining_prop
-            remarkM $ "Defining property of intersection set: " <> txt
+            remarkM ("Defining property of intersection set: " <> txt) Nothing
 
             txt <- showSentM target_existential
-            remarkM $ "Target existential statement: " <> txt
+            remarkM ("Target existential statement: " <> txt) Nothing
 
             -- target_existential is the statement ∃S (isSet S ∧ ∀x(x ∈ S ↔ (x ∈ A ∧ x ∈ B))))
 
@@ -731,10 +735,10 @@ proveBinaryIntersectionExistsM = do
             -- This works because 'defining_prop' is the instantiated version of the
             -- property inside the target existential statement.
             txt <- showTermM intersectionObj
-            remarkM $ "Intersection object: " <> txt
+            remarkM ("Intersection object: " <> txt) Nothing
             egM intersectionObj target_existential
 
-            remarkM "Got here"
+            remarkM "Got here" Nothing
             return intersectionObj
         return intersectionObj
     return ()
@@ -877,9 +881,9 @@ proveUnionIsSetM :: HelperConstraints sE s eL m r t =>
     t -> t -> ProofGenTStd () r s Text () t m (s, [Int])
 proveUnionIsSetM setA setB = do
     (resultProp,idx,_) <- runProofBySubArgM $ do
-        remarkM "Proving union is set"
+        remarkM "Proving union is set" Nothing
         (prop_of_union, _, unionObj) <- binaryUnionInstantiateM setB setA
-        remarkM "Instantiated binary union"
+        remarkM "Instantiated binary union" Nothing
         (isSet_union_proven, _) <- simpLM prop_of_union
         return ()
     return (resultProp,idx)
@@ -946,7 +950,7 @@ proveUnionWithEmptySetM = do
             -- proveUnionIsSetM requires isSet v and isSet ∅ to be proven.
             (isSet_unionObj_proven, _) <- proveUnionIsSetM emptySet v
 
-            remarkM "here"
+            remarkM "here" Nothing
             -- Step 3: Prove ∀y (y ∈ v ↔ y ∈ (v ∪ ∅))
             (forall_bicond, _,f) <- runProofByUGM $ do
                 y <- getTopFreeVar
@@ -994,7 +998,7 @@ proveUnionWithEmptySetM = do
                 return emptySet
             let z = f emptySet
             txt <- showTermM z
-            remarkM $ "Something " <> txt
+            remarkM ("Something " <> txt) Nothing
             -- Step 4: Apply the Axiom of Extensionality.
             (ext_axiom, _) <- extensionalityAxiomM
             (ext_inst, _) <- multiUIM ext_axiom [unionObj, v]
@@ -1006,7 +1010,7 @@ proveUnionWithEmptySetM = do
             mpM ext_inst
         return emptySet
     txt <- showSentM unionWithEmptySetTheorem
-    remarkM txt
+    remarkM txt Nothing
     return ()
 
 
@@ -1096,11 +1100,11 @@ proveDisjointSubsetIsEmptyM = do
                     -- From x ∈ a and x ∈ b, we get x ∈ (a ∩ b).
                     (def_prop_inter, _, _) <- binaryIntersectionInstantiateM v_a v_b
                     txt1 <- showTermM v_b
-                    remarkM $ "Lef set is: " <> txt1
+                    remarkM ("Left set is: " <> txt1) Nothing
                     txt2 <- showTermM v_a
-                    remarkM $ "Right set is: " <> txt2
+                    remarkM ("Right set is: " <> txt2) Nothing
                     txt3 <- showSentM def_prop_inter
-                    remarkM $ "Defining property of intersection: " <> txt3
+                    remarkM ("Defining property of intersection: " <> txt3) Nothing
                     -- error "STOP HERE"
 
                     (forall_inter_bicond, _) <- simpRM def_prop_inter
@@ -1114,7 +1118,7 @@ proveDisjointSubsetIsEmptyM = do
                     --(x_in_empty, _) <- eqSubstM 1 (X 0 :==: X 1 :->: ((x `In` X 0) :->: (x `In` X 1)))
                     --                         [v_a ./\. v_b, EmptySet]
                     txt <- showSentM intersection_is_empty
-                    remarkM $ "About to do eqsubst with: " <> txt
+                    remarkM ("About to do eqsubst with: " <> txt) Nothing
                     (x_in_empty, _) <- eqSubstM 0 eqSubstTmplt intersection_is_empty
 
 
@@ -1158,7 +1162,7 @@ proveDisjointSubsetIsEmptyM = do
             return ()
         return emptySet
     txt <- showSentM disjointSubsetIsEmptyTheorem
-    remarkM txt    
+ 
     return ()
 
 

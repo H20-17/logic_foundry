@@ -6,7 +6,7 @@ module RuleSets.BaseLogic.Helpers
 (
     remarkM, 
     fakePropM, fakeConstM, repM,
-    runProofBySubArgM, tagSentM
+    runProofBySubArgM, tagSentM, tagTermM
 ) where
 
 import RuleSets.BaseLogic.Core
@@ -43,7 +43,7 @@ runProofBySubArgM prog =  do
         let newStepIdxPrefix = stepIdxPrefix context ++ [stepCount state]
         let newContextFrames = contextFrames context <> [False]
         let newContext = PrfStdContext frVarTypeStack newStepIdxPrefix newContextFrames (Just state)
-        let newState = PrfStdState mempty mempty 0 mempty
+        let newState = mempty
 
         let preambleSteps = []
         vIdx <- get
@@ -55,10 +55,10 @@ runProofBySubArgM prog =  do
 
 
 remarkM :: HelperConstraints r s o tType sE eL q t m
-          => Text -> ProofGenTStd tType r s o q t m [Int]
+          => Text -> Maybe Text -> ProofGenTStd tType r s o q t m [Int]
           
-remarkM txt = do
-    monadifyProofStd (remark txt)
+remarkM txt mayTag = do
+    monadifyProofStd (remark txt mayTag)
     -- The index will be that of the last step generated.
     state <- getProofState
     context <- ask
@@ -105,4 +105,12 @@ tagSentM tag sent = do
     monadifyProofStd (tagSent tag sent)
     -- There is essentially nothing to return. A tag step in a proof is a virtual step that doesn't generate or sentence
     -- or have an index for that matter. It's just a way to attach a tag to a sentence for later reference. So we return unit, and the caller can choose to ignore it or return something else if they want.
+    return ()
+
+tagTermM :: HelperConstraints r s o tType sE eL q t m
+          => Text -> t -> ProofGenTStd tType  r s o q t m ()
+tagTermM tag term = do
+    monadifyProofStd (tagTerm tag term)
+    -- Similar to tagSentM, there is essentially nothing to return. A tag step in a proof is a virtual step that doesn't generate or sentence
+    -- or have an index for that matter. It's just a way to attach a tag to a term for later reference. So we return unit, and the caller can choose to ignore it or return something else if they want.
     return ()

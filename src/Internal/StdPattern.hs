@@ -75,6 +75,9 @@ data PrfStdContext q s o tType t where
 data TagData s t where
     TagDataTerm :: t -> TagData s t
     TagDataSent :: s -> TagData s t
+    TagDataRemark :: TagData s t 
+    -- There is no data associated with a remark tag,
+    -- but we want to be able to distinguish it from the other tag types.
   deriving Show
 
 
@@ -83,7 +86,9 @@ data PrfStdState s o tType t where
       provenSents :: Map s [Int],
       consts :: Map o (tType, [Int]),
       stepCount :: Int,
-      tagData :: Map Text (TagData s t)
+      tagData :: Map Text (TagData s t),
+      remarkTagIdxs :: Map Text [Int]
+      
    } -> PrfStdState s o tType t
    deriving Show
 
@@ -106,13 +111,19 @@ instance Monoid (PrfStdContext q s o tType t) where
 instance (Ord s, Ord o) => Semigroup (PrfStdState s o tType t ) where
     (<>) :: PrfStdState s o tType t
               -> PrfStdState s o tType t -> PrfStdState s o tType t
-    (<>) (PrfStdState proven1 consts1 count1 tagDict1) (PrfStdState proven2 consts2 count2 tagDict2)
-            = PrfStdState (proven2 <> proven1) (consts1 <> consts2) (count1 + count2) (tagDict2 <> tagDict1)
+    (<>) (PrfStdState proven1 consts1 count1 tagDict1 tagIdxs1) (PrfStdState proven2 consts2 count2 tagDict2 tagIdxs2)
+            = PrfStdState (proven2 <> proven1) (consts1 <> consts2) (count1 + count2) (tagDict2 <> tagDict1) (tagIdxs2 <> tagIdxs1)
 
 
 instance (Ord s, Ord o) => Monoid (PrfStdState s o tType t) where
      mempty :: (Ord s, Ord o) => PrfStdState s o tType t
-     mempty = PrfStdState mempty mempty 0 mempty
+     mempty = PrfStdState {
+        provenSents = mempty,
+        consts = mempty,
+        stepCount = 0,
+        tagData = mempty,
+        remarkTagIdxs = mempty
+     }
 
 
 
@@ -139,7 +150,7 @@ data PrfStdStep s o tType t where
     PrfStdStepTheoremM :: s -> PrfStdStep s o tType t
     PrfStdStepFreevar :: Int -> tType -> PrfStdStep s o tType t
     PrfStdStepFakeConst :: o ->tType -> PrfStdStep s o tType t
-    PrfStdStepRemark :: Text -> PrfStdStep s o tType t
+    PrfStdStepRemark :: Text -> Maybe Text -> PrfStdStep s o tType t
     PrfStdStepTagObject :: Text -> TagData s t -> PrfStdStep s o tType t
   deriving Show
 
@@ -207,7 +218,13 @@ testSubproof context baseState preambleState preambleSteps mayPreambleLastProp t
       --either return (const Nothing) eitherResult
       do
              let frVarTypeStack = freeVarTypeStack context
-             let baseStateZero = PrfStdState (provenSents baseState) (consts baseState) 0 (tagData baseState)
+             let baseStateZero = PrfStdState {
+                 provenSents = provenSents baseState,
+                 consts = consts baseState,
+                 stepCount = 0,
+                 tagData = tagData baseState,
+                 remarkTagIdxs = remarkTagIdxs baseState
+             }
              let startState = baseStateZero <> preambleState
              let constdict = fmap fst (consts startState)
              let sc = checkSanity mempty frVarTypeStack constdict targetProp
@@ -261,12 +278,7 @@ printStepsFull = printSteps
                     mayParentState = Nothing
 
                    }
-                    PrfStdState {
-                         provenSents = mempty,
-                         consts = mempty,
-                         stepCount = 0,
-                         tagData = mempty
-                     }
+                   mempty
                    True
 
 
@@ -401,10 +413,16 @@ runSubproofM :: ( Monoid r1, ProofStd s eL1 r1 o tType q t, Monad m,
                           ->  m (x,s,r1,[PrfStdStep s o tType t])
 runSubproofM context baseState preambleState preambleSteps mayPreambleLastProp prog vIdx = do
           printStartFrame (contextFrames context)
-          let newParentStateData = case mayParentState context of
-               Just (PrfStdState provenSents consts stepCount tagDict) -> Just (provenSents, fmap snd consts, stepCount) 
-               Nothing -> Nothing
-          let baseStateZero = PrfStdState (provenSents baseState) (consts baseState) 0 (tagData baseState)
+          --let newParentStateData = case mayParentState context of
+          --     Just (PrfStdState provenSents consts stepCount tagDict remTagIdxs) -> Just (provenSents, fmap snd consts, stepCount) 
+          --     Nothing -> Nothing
+          let baseStateZero = PrfStdState {
+                 provenSents = provenSents baseState,
+                 consts = consts baseState,
+                 stepCount = 0,
+                 tagData = tagData baseState,
+                 remarkTagIdxs = remarkTagIdxs baseState
+          }
           unless (Prelude.null preambleSteps) 
                  --   (printSteps (contextFrames context) (stepIdxPrefix context) 0
                  --       (provenSents baseState) (fmap snd (consts baseState)) False newParentStateData preambleSteps)

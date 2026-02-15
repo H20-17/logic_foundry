@@ -123,42 +123,42 @@ data LogicError s sE o tType where
 
     deriving(Show)
 
-data LogicRule tType s sE o q where
-    BaseRule :: REM.LogicRule tType s sE o q -> LogicRule tType s sE o q
-    MP :: s -> LogicRule tType s sE o q
-    ProofByAsm :: ProofByAsmSchema s [LogicRule tType s sE o q] -> LogicRule tType s sE o q
-    ProofBySubArg :: ProofBySubArgSchema s [LogicRule tType s sE o q] -> LogicRule tType s sE o q
-    ExclMid :: s -> LogicRule tType s sE o q
-    SimpL :: s -> LogicRule tType s sE o q
-    SimpR :: s -> LogicRule tType s sE o q
-    Adj :: s -> s -> LogicRule tType s sE o q
-    ContraF:: s -> LogicRule tType s sE o q
-    Absurd :: s -> LogicRule tType s sE o q
-    DisjIntroL :: s -> s -> LogicRule tType s sE o q
-    DisjIntroR :: s -> s -> LogicRule tType s sE o q
-    DisjElim :: s -> s -> s -> LogicRule tType s sE o q
-    DoubleNegElim :: s -> LogicRule tType s sE o q
-    DeMorganConj :: s -> LogicRule tType s sE o q
-    DeMorganDisj :: s -> LogicRule tType s sE o q
-    BicondIntro :: s -> s -> LogicRule tType s sE o q
-    BicondElimL :: s -> LogicRule tType s sE o q
-    BicondElimR :: s -> LogicRule tType s sE o q
-    AbsorpAnd :: s -> LogicRule tType s sE o q  -- P ∧ (P ∨ Q) ⟶ P
-    AbsorpOr :: s -> LogicRule tType s sE o q   -- P ∨ (P ∧ Q) ⟶ P
-    DistAndOverOr :: s -> LogicRule tType s sE o q  -- P ∧ (Q ∨ R) ⟶ (P ∧ Q) ∨ (P ∧ R)
-    DistOrOverAnd :: s -> LogicRule tType s sE o q   -- P ∨ (Q ∧ R) ⟶ (P ∨ Q) ∧ (P ∨ R)
+data LogicRule tType s sE o q t where
+    BaseRule :: REM.LogicRule tType s sE o q t -> LogicRule tType s sE o q t
+    MP :: s -> LogicRule tType s sE o q t
+    ProofByAsm :: ProofByAsmSchema s [LogicRule tType s sE o q t] -> LogicRule tType s sE o q t
+    ProofBySubArg :: ProofBySubArgSchema s [LogicRule tType s sE o q t] -> LogicRule tType s sE o q t
+    ExclMid :: s -> LogicRule tType s sE o q t
+    SimpL :: s -> LogicRule tType s sE o q t
+    SimpR :: s -> LogicRule tType s sE o q t
+    Adj :: s -> s -> LogicRule tType s sE o q t
+    ContraF:: s -> LogicRule tType s sE o q t
+    Absurd :: s -> LogicRule tType s sE o q t
+    DisjIntroL :: s -> s -> LogicRule tType s sE o q t
+    DisjIntroR :: s -> s -> LogicRule tType s sE o q t
+    DisjElim :: s -> s -> s -> LogicRule tType s sE o q t
+    DoubleNegElim :: s -> LogicRule tType s sE o q t
+    DeMorganConj :: s -> LogicRule tType s sE o q t
+    DeMorganDisj :: s -> LogicRule tType s sE o q t
+    BicondIntro :: s -> s -> LogicRule tType s sE o q t
+    BicondElimL :: s -> LogicRule tType s sE o q t
+    BicondElimR :: s -> LogicRule tType s sE o q t
+    AbsorpAnd :: s -> LogicRule tType s sE o q t  -- P ∧ (P ∨ Q) ⟶ P
+    AbsorpOr :: s -> LogicRule tType s sE o q t  -- P ∨ (P ∧ Q) ⟶ P
+    DistAndOverOr :: s -> LogicRule tType s sE o q t  -- P ∧ (Q ∨ R) ⟶ (P ∧ Q) ∨ (P ∧ R)
+    DistOrOverAnd :: s -> LogicRule tType s sE o q t   -- P ∨ (Q ∧ R) ⟶ (P ∨ Q) ∧ (P ∨ R)
 
-    PeircesLaw :: s -> LogicRule tType s sE o q  -- Peirce’s Law: ((P → Q) → P) → P
+    PeircesLaw :: s -> LogicRule tType s sE o q t  -- Peirce’s Law: ((P → Q) → P) → P
 
 
     deriving(Show)
 
 
 
-runProofAtomic :: (ProofStd s (LogicError s sE o tType) [LogicRule tType s sE o q] o tType q t,
+runProofAtomic :: (ProofStd s (LogicError s sE o tType) [LogicRule tType s sE o q t] o tType q t,
                LogicSent s tType, Show sE, Typeable sE, Show s, Typeable s, Ord o, TypedSent o tType sE s,
                Show o, Typeable o, Typeable tType, Show tType, StdPrfPrintMonad q s o tType t (Either SomeException)) =>
-                            LogicRule tType s sE o q -> PrfStdContext q s o tType t -> PrfStdState s o tType t
+                            LogicRule tType s sE o q t-> PrfStdContext q s o tType t -> PrfStdState s o tType t
                                       -> Either (LogicError s sE o tType) (Maybe s,Maybe (o,tType),Maybe (Text, TagData s t), Bool,PrfStdStep s o tType t)
 runProofAtomic rule context state = 
       case rule of
@@ -364,7 +364,7 @@ instance (LogicSent s tType, Show sE, Typeable sE, Show s, Typeable s, Ord o, Ty
           StdPrfPrintMonad q s o tType t (Either SomeException),
           Monoid (PrfStdContext q s o tType t))
              => Proof (LogicError s sE o tType)
-                 [LogicRule tType s sE o q] 
+                 [LogicRule tType s sE o q t] 
                  (PrfStdState s o tType t) 
                  (PrfStdContext q s o tType t)
                  [PrfStdStep s o tType t]
@@ -373,53 +373,94 @@ instance (LogicSent s tType, Show sE, Typeable sE, Show s, Typeable s, Ord o, Ty
   runProofOpen :: (LogicSent s tType, Show sE, Typeable sE, Show s, Typeable s,
                Ord o, TypedSent o tType sE s, Typeable o, Show o, Typeable tType,
                Show tType, Monoid (PrfStdState s o tType t)) =>
-                 [LogicRule tType s sE o q] -> 
+                 [LogicRule tType s sE o q t] -> 
                  PrfStdContext q s o tType t -> PrfStdState s o tType t
                         -> Either (LogicError s sE o tType) (PrfStdState s o tType t, [PrfStdStep s o tType t],Last s) 
-  runProofOpen rs context oldState = foldM f (PrfStdState mempty mempty 0 mempty,[], Last Nothing) rs
+  runProofOpen rs context oldState = foldM f (mempty,[], Last Nothing) rs
        where
            f (newState,newSteps, mayLastProp) r =  fmap g (runProofAtomic r context (oldState <> newState))
              where
                  g ruleResult = case ruleResult of
-                    (Just s,Nothing,Nothing, False, step) -> (newState <> PrfStdState (Data.Map.insert s (newLineIndex False) mempty) mempty 1 mempty,
+                    (Just s,Nothing,Nothing, False, step) -> (newState <> 
+                         PrfStdState {
+                            provenSents= Data.Map.insert s (newLineIndex False) mempty,
+                            consts = mempty,
+                            stepCount = 1, 
+                            tagData = mempty, 
+                            remarkTagIdxs = mempty},
                                          newSteps <> [step], (Last . Just) s)
                     (Just s,Just (newConst,tType), Nothing, False, step) -> (newState <> 
-                            PrfStdState (Data.Map.insert s (newLineIndex False) mempty) 
-                               (Data.Map.insert newConst (tType,newLineIndex False) mempty) 1 mempty,
+                            PrfStdState {
+                                provenSents = Data.Map.insert s (newLineIndex False) mempty,
+                                consts = Data.Map.insert newConst (tType,newLineIndex False) mempty,
+                                stepCount = 1,
+                                tagData = mempty,
+                                remarkTagIdxs = mempty
+                            },
                                newSteps <> [step], (Last . Just) s)
                     (Nothing,Just (newConst,tType), Nothing, False, step) -> (newState <> 
-                            PrfStdState mempty
-                               (Data.Map.insert newConst (tType,newLineIndex False) mempty) 1 mempty,
+                            PrfStdState {
+                                provenSents = mempty,
+                                consts = Data.Map.insert newConst (tType,newLineIndex False) mempty,
+                                stepCount = 1,
+                                tagData = mempty,
+                                remarkTagIdxs = mempty
+                            },
                                newSteps <> [step], mayLastProp)
                     (Nothing,Nothing, Nothing, False, step) -> (newState <>
-                            PrfStdState mempty mempty 1 mempty,
+                            PrfStdState {
+                                provenSents = mempty,
+                                consts = mempty,
+                                stepCount = 1, 
+                                tagData = mempty,
+                                remarkTagIdxs = mempty
+                            },
                                newSteps <> [step], mayLastProp)
                     (Nothing, Nothing, Just (tagName, tagData), True, step) -> (newState <>
-                            PrfStdState mempty mempty 0 (Data.Map.singleton tagName tagData),
+                            PrfStdState {
+                                provenSents = mempty,
+                                consts = mempty,
+                                stepCount = 0,
+                                tagData = Data.Map.singleton tagName tagData,
+                                remarkTagIdxs = Data.Map.singleton tagName (newLineIndex True)
+                            },
                                newSteps <> [step], mayLastProp)
+                    (Nothing, Nothing, Just (tag, tagData), False, step) -> 
+                        -- this pattern matches if we have a remark with a tag
+                        (newState <>
+                            PrfStdState {
+                                provenSents = mempty,
+                                consts = mempty,
+                                stepCount = 1,
+                                tagData = Data.Map.singleton tag tagData,
+                                remarkTagIdxs = Data.Map.singleton tag (newLineIndex False)
+                            },
+                            newSteps <> [step], mayLastProp)
                     where
                         newStepCount hiddenStep = if hiddenStep then stepCount newState else stepCount newState + 1
                         newLineIndex hiddenStep = stepIdxPrefix context <> [stepCount oldState + newStepCount hiddenStep-1]
 
 
 
-instance REM.LogicRuleClass [LogicRule tType s sE o q] s o tType sE where
-    remark :: Text -> [LogicRule tType s sE o q]
-    remark rem = [(BaseRule . REM.Remark) rem]
-    rep :: s -> [LogicRule tType s sE o q]
+instance REM.LogicRuleClass [LogicRule tType s sE o q t] s o tType sE t where
+    remark :: Text -> Maybe Text -> [LogicRule tType s sE o q t]
+    remark rem mayTag = [(BaseRule . REM.Remark rem) mayTag]
+    rep :: s -> [LogicRule tType s sE o q t]
     rep s = [BaseRule . REM.Rep $ s]
-    fakeProp :: [s] -> s -> [LogicRule tType s sE o q]
+    fakeProp :: [s] -> s -> [LogicRule tType s sE o q t]
     fakeProp deps s = [BaseRule . REM.FakeProp deps $ s]
-    fakeConst:: o -> tType -> [LogicRule tType s sE o q]
+    fakeConst:: o -> tType -> [LogicRule tType s sE o q t]
     fakeConst o t = [BaseRule $ REM.FakeConst o t]
-    tagSent :: Text -> s -> [LogicRule tType s sE o q]
+    tagSent :: Text -> s -> [LogicRule tType s sE o q t]
     tagSent tagName sent = [BaseRule $ REM.TagSent tagName sent]
+    tagTerm :: Text -> t -> [LogicRule tType s sE o q t]
+    tagTerm tagName term = [BaseRule $ REM.TagTerm tagName term]
 
         --   return . PropRemark . REM.ProofBySubArg  
 
 
-instance RuleInject [REM.LogicRule tType s sE o q] [LogicRule tType s sE o q] where
-    injectRule :: [REM.LogicRule tType s sE o q] -> [LogicRule tType s sE o q]
+instance RuleInject [REM.LogicRule tType s sE o q t] [LogicRule tType s sE o q t] where
+    injectRule :: [REM.LogicRule tType s sE o q t] -> [LogicRule tType s sE o q t]
     injectRule = Prelude.map BaseRule
 
 
@@ -446,60 +487,60 @@ class LogicRuleClass r s tType sE o | r-> s, r->tType, r->sE, r->o where
     distOrOverAnd :: s -> r
     peircesLaw :: s -> r
 
-instance LogicRuleClass [LogicRule tType s sE o q] s tType sE o where
-    mp :: s -> [LogicRule tType s sE o q]
+instance LogicRuleClass [LogicRule tType s sE o q t] s tType sE o where
+    mp :: s -> [LogicRule tType s sE o q t]
     mp s = [MP s]
-    exclMid :: s -> [LogicRule tType s sE o q]
+    exclMid :: s -> [LogicRule tType s sE o q t]
     exclMid s = [ExclMid s]
-    simpL :: s -> [LogicRule tType s sE o q]
+    simpL :: s -> [LogicRule tType s sE o q t]
     simpL s = [SimpL s]
-    simpR :: s -> [LogicRule tType s sE o q]
+    simpR :: s -> [LogicRule tType s sE o q t]
     simpR s = [SimpR s]
-    adj :: s -> s -> [LogicRule tType s sE o q]
+    adj :: s -> s -> [LogicRule tType s sE o q t]
     adj a b = [Adj a b]
-    contraF :: s -> [LogicRule tType s sE o q]
+    contraF :: s -> [LogicRule tType s sE o q t]
     contraF s = [ContraF s]
-    absurd :: s -> [LogicRule tType s sE o q]
+    absurd :: s -> [LogicRule tType s sE o q t]
     absurd s = [Absurd s]
-    disjIntroL :: s -> s -> [LogicRule tType s sE o q]
+    disjIntroL :: s -> s -> [LogicRule tType s sE o q t]
     disjIntroL a b = [DisjIntroL a b]
-    disjIntroR :: s -> s -> [LogicRule tType s sE o q]
+    disjIntroR :: s -> s -> [LogicRule tType s sE o q t]
     disjIntroR a b = [DisjIntroR a b]
-    disjElim :: s -> s -> s -> [LogicRule tType s sE o q]
+    disjElim :: s -> s -> s -> [LogicRule tType s sE o q t]
     disjElim a b c = [DisjElim a b c]
-    doubleNegElim :: s -> [LogicRule tType s sE o q]
+    doubleNegElim :: s -> [LogicRule tType s sE o q t]
     doubleNegElim s = [DoubleNegElim s]
-    deMorganConj :: s -> [LogicRule tType s sE o q]
+    deMorganConj :: s -> [LogicRule tType s sE o q t]
     deMorganConj s = [DeMorganConj s]
-    deMorganDisj :: s -> [LogicRule tType s sE o q]
+    deMorganDisj :: s -> [LogicRule tType s sE o q t]
     deMorganDisj s = [DeMorganDisj s]
-    bicondIntro :: s -> s -> [LogicRule tType s sE o q]
+    bicondIntro :: s -> s -> [LogicRule tType s sE o q t]
     bicondIntro a b = [BicondIntro a b]
-    bicondElimL :: s -> [LogicRule tType s sE o q]
+    bicondElimL :: s -> [LogicRule tType s sE o q t]
     bicondElimL s = [BicondElimL s]
-    bicondElimR :: s -> [LogicRule tType s sE o q]
+    bicondElimR :: s -> [LogicRule tType s sE o q t]
     bicondElimR s = [BicondElimR s]
-    absorpAnd :: s -> [LogicRule tType s sE o q]
+    absorpAnd :: s -> [LogicRule tType s sE o q t]
     absorpAnd s = [AbsorpAnd s]
-    absorpOr :: s -> [LogicRule tType s sE o q]
+    absorpOr :: s -> [LogicRule tType s sE o q t]
     absorpOr s = [AbsorpOr s]
-    distAndOverOr :: s -> [LogicRule tType s sE o q]
+    distAndOverOr :: s -> [LogicRule tType s sE o q t]
     distAndOverOr s = [DistAndOverOr s]
-    distOrOverAnd :: s -> [LogicRule tType s sE o q]
+    distOrOverAnd :: s -> [LogicRule tType s sE o q t]
     distOrOverAnd s = [DistOrOverAnd s]
-    peircesLaw :: s -> [LogicRule tType s sE o q]
+    peircesLaw :: s -> [LogicRule tType s sE o q t]
     peircesLaw p = [PeircesLaw p]
 
 
 
 
-instance REM.SubproofRule [LogicRule tType s sE o q] s where
-    proofBySubArg :: s -> [LogicRule tType s sE o q] -> [LogicRule tType s sE o q]
+instance REM.SubproofRule [LogicRule tType s sE o q t] s where
+    proofBySubArg :: s -> [LogicRule tType s sE o q t] -> [LogicRule tType s sE o q t]
     proofBySubArg s r = [ProofBySubArg $ ProofBySubArgSchema s r]
  
 
-instance SubproofRule [LogicRule tType s sE o q] s where
-    proofByAsm :: s -> s -> [LogicRule tType s sE o q] -> [LogicRule tType s sE o q]
+instance SubproofRule [LogicRule tType s sE o q t] s where
+    proofByAsm :: s -> s -> [LogicRule tType s sE o q t] -> [LogicRule tType s sE o q t]
     proofByAsm asm cons subproof = [ProofByAsm $ ProofByAsmSchema asm cons subproof]
 
 
@@ -605,7 +646,13 @@ runProofByAsm (ProofByAsmSchema assumption consequent subproof) context state  =
          let newSents = Data.Map.insert assumption (newStepIdxPrefix ++ [0]) mempty
          let newContextFrames = contextFrames context <> [False]
          let newContext = PrfStdContext frVarTypeStack newStepIdxPrefix newContextFrames (Just state)
-         let newState = PrfStdState newSents mempty 1 mempty
+         let newState = PrfStdState {
+            provenSents = newSents,
+            consts = mempty,
+            stepCount = 1,
+            tagData = mempty,
+            remarkTagIdxs = mempty
+         }
          let preambleSteps = [PrfStdStepStep assumption "ASM" Nothing []]
          let mayPreambleLastProp = (Last . Just) assumption
          let eitherTestResult = testSubproof newContext state newState preambleSteps mayPreambleLastProp consequent subproof

@@ -512,7 +512,13 @@ runProofByUGM tt prog =  do
         let newContextFrames = contextFrames context <> [False]
         let newStepIdxPrefix = stepIdxPrefix context ++ [stepCount state]
         let newContext = PrfStdContext newFrVarTypStack newStepIdxPrefix newContextFrames (Just state)
-        let newState = PrfStdState mempty mempty 1 mempty
+        let newState = PrfStdState {
+            provenSents = mempty,
+            consts = mempty,
+            stepCount = 1,
+            tagData = mempty,
+            remarkTagIdxs = mempty
+        }
         let preambleSteps = [PrfStdStepFreevar (length frVarTypeStack) (qTypeToTType tt)]
         let modifiedProg = do
             progData <- prog

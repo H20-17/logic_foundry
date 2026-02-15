@@ -31,7 +31,7 @@ import qualified Data.Set as Set
 import Data.Text ( pack, Text, unpack,concat)
 import qualified Data.Text as T
 import Data.Map
-    ( (!), foldrWithKey, fromList, insert, keysSet, lookup, map, Map,restrictKeys )
+    ( (!), foldrWithKey, fromList, insert, keysSet, lookup, map, Map,restrictKeys, singleton )
 import Control.Applicative ( Alternative((<|>)) )
 import Control.Monad.Except ( MonadError(throwError) )
 import Control.Monad.Catch
@@ -123,7 +123,7 @@ data LogicError s sE o t tType where
 
 data LogicRule s sE o t tType q  where
    -- t is a term
-    PropRule :: PL.LogicRule tType s sE o q -> LogicRule s sE o t tType q
+    PropRule :: PL.LogicRule tType s sE o q t -> LogicRule s sE o t tType q
     ProofByAsm :: ProofByAsmSchema s [LogicRule s sE o t tType q] -> LogicRule s sE o t tType q
     ProofBySubArg :: ProofBySubArgSchema s [LogicRule s sE o t tType q] -> LogicRule s sE o t tType q
     ProofByUG :: ProofByUGSchema s [LogicRule s sE o t tType q] -> LogicRule s sE o t tType q
@@ -155,9 +155,9 @@ data LogicRule s sE o t tType q  where
     deriving(Show)
 
 
-instance REM.LogicRuleClass [LogicRule s sE o t tType q] s o tType sE where
-     remark:: Text -> [LogicRule s sE o t tType q]
-     remark rem = [(PropRule . PL.BaseRule . REM.Remark) rem]
+instance REM.LogicRuleClass [LogicRule s sE o t tType q] s o tType sE t where
+     remark:: Text -> Maybe Text -> [LogicRule s sE o t tType q]
+     remark rem mayTag = [(PropRule . PL.BaseRule . REM.Remark rem) mayTag]
      rep :: s -> [LogicRule s sE o t tType q]
      rep s = [(PropRule . PL.BaseRule . REM.Rep) s]
      fakeProp:: [s] -> s -> [LogicRule s sE o t tType q]
@@ -166,6 +166,8 @@ instance REM.LogicRuleClass [LogicRule s sE o t tType q] s o tType sE where
      fakeConst o t = [PropRule $ PL.BaseRule $ REM.FakeConst o t]
      tagSent :: Text -> s -> [LogicRule s sE o t tType q]
      tagSent tagName sent = [PropRule $ PL.BaseRule $ REM.TagSent tagName sent]
+     tagTerm :: Text -> t -> [LogicRule s sE o t tType q]
+     tagTerm tagName term = [PropRule $ PL.BaseRule $ REM.TagTerm tagName term]
 
 instance PL.LogicRuleClass [LogicRule s sE o t tType q] s tType sE o where
      mp:: s -> [LogicRule s sE o t tType q]
@@ -468,27 +470,67 @@ instance (LogicSent s t tType o q, Show sE, Typeable sE, Show s, Typeable s, Typ
                      -> PrfStdContext q s o tType t
                      -> PrfStdState s o tType t
                      -> Either (LogicError s sE o t tType ) (PrfStdState s o tType t,[PrfStdStep s o tType t], Last s)
-    runProofOpen rs context oldState = foldM f (PrfStdState mempty mempty 0 mempty,[], Last Nothing) rs
+    runProofOpen rs context oldState = foldM f (mempty,[], Last Nothing) rs
        where
            f (newState,newSteps, mayLastProp) r =  fmap g (runProofAtomic r context (oldState <> newState))
              where
                  g ruleResult = case ruleResult of
-                    (Just s,Nothing,Nothing, False,step) -> (newState <> PrfStdState (Data.Map.insert s (newLineIndex False) mempty) mempty 1 mempty,
+                    (Just s,Nothing,Nothing, False,step) -> (newState <> 
+                                                             PrfStdState {
+                                                                provenSents = Data.Map.insert s (newLineIndex False) mempty,
+                                                                consts = mempty,
+                                                                stepCount = 1,
+                                                                tagData = mempty,
+                                                                remarkTagIdxs = mempty
+                                                             },
                                          newSteps <> [step], (Last . Just) s)
                     (Just s,Just (newConst,tType), Nothing, False, step) -> (newState <> 
-                            PrfStdState (Data.Map.insert s (newLineIndex False) mempty) 
-                               (Data.Map.insert newConst (tType,newLineIndex False) mempty) 1 mempty,
+                            PrfStdState {
+                                provenSents = Data.Map.insert s (newLineIndex False) mempty,
+                                consts = Data.Map.insert newConst (tType,newLineIndex False) mempty,
+                                stepCount = 1,
+                                tagData = mempty,
+                                remarkTagIdxs = mempty
+                            },
                                newSteps <> [step], (Last . Just) s)
                     (Nothing,Just (newConst,tType), Nothing, False, step) -> (newState <> 
-                            PrfStdState mempty
-                               (Data.Map.insert newConst (tType,newLineIndex False) mempty) 1 mempty,
+                            PrfStdState {
+                                provenSents = mempty,
+                                consts = Data.Map.insert newConst (tType,newLineIndex False) mempty,
+                                stepCount = 1,
+                                tagData = mempty,
+                                remarkTagIdxs = mempty
+                            },
                                newSteps <> [step], mayLastProp)
                     (Nothing,Nothing, Nothing, False, step) -> (newState <>
-                            PrfStdState mempty mempty 1 mempty,
+                            PrfStdState {
+                                provenSents = mempty,
+                                consts = mempty,
+                                stepCount = 1,
+                                tagData = mempty,
+                                remarkTagIdxs = mempty
+                            },
                                newSteps <> [step], mayLastProp)
                     (Nothing, Nothing, Just (tagName, tagData), True, step) ->
-                            (newState <> PrfStdState mempty mempty 0 (Data.Map.insert tagName tagData mempty),
+                            (newState <> PrfStdState {
+                                provenSents = mempty,
+                                consts = mempty,
+                                stepCount = 0,
+                                tagData = Data.Map.insert tagName tagData mempty,
+                                remarkTagIdxs = mempty
+                            },
                             newSteps <> [step], mayLastProp)
+                    (Nothing, Nothing, Just (tag, tagData), False, step) -> 
+                        -- this pattern matches if we have a remark with a tag
+                        (newState <>
+                            PrfStdState {
+                                provenSents = mempty,
+                                consts = mempty,
+                                stepCount = 1,
+                                tagData = Data.Map.singleton tag tagData,
+                                remarkTagIdxs = Data.Map.singleton tag (newLineIndex False)
+                            },
+                               newSteps <> [step], mayLastProp)       
                     where
                         newStepCount hiddenStep = if hiddenStep then stepCount newState else stepCount newState + 1
                         newLineIndex hiddenStep = stepIdxPrefix context <> [stepCount oldState + newStepCount hiddenStep -1]
@@ -520,13 +562,13 @@ instance SubproofRule [LogicRule s sE o t tType q] s o tType q t where
 
 
 
-instance RuleInject [REM.LogicRule tType s sE o q] [LogicRule s sE o t tType q] where
-    injectRule:: [REM.LogicRule tType s sE o q] -> [LogicRule s sE o t tType q]
+instance RuleInject [REM.LogicRule tType s sE o q t] [LogicRule s sE o t tType q] where
+    injectRule:: [REM.LogicRule tType s sE o q t] -> [LogicRule s sE o t tType q]
     injectRule = Prelude.map (PropRule . PL.BaseRule)
 
 
-instance RuleInject [PL.LogicRule tType s sE o q] [LogicRule s sE o t tType q] where
-    injectRule:: [PL.LogicRule tType s sE o q] -> [LogicRule s sE o t tType q]
+instance RuleInject [PL.LogicRule tType s sE o q t] [LogicRule s sE o t tType q] where
+    injectRule:: [PL.LogicRule tType s sE o q t] -> [LogicRule s sE o t tType q]
     injectRule = Prelude.map PropRule
 
 
@@ -583,7 +625,13 @@ checkTheoremOpen mayPrStateCxt (TheoremSchema constdict lemmas theorem subproof)
        maybe (return ()) throwError (maybe (g1 constdictPure) (g2 constdictPure) mayPrStateCxt)
        let newContext = PrfStdContext [] [] (maybe []  ((<>[True]) . contextFrames . snd) mayPrStateCxt)
               (fmap fst mayPrStateCxt)
-       let newState = PrfStdState newProven newConsts newStepCountB mempty
+       let newState = PrfStdState {
+        provenSents = newProven,
+        consts = newConsts,
+        stepCount = newStepCountB,
+        tagData = mempty,
+        remarkTagIdxs = mempty
+       }
        let preambleSteps = conststeps <> lemmasteps
        let mayPreambleLastProp = if Prelude.null lemmas then Last Nothing else (Last . Just . last) lemmas  
        left ChkTheoremErrSubproofErr (
@@ -600,7 +648,7 @@ checkTheoremOpen mayPrStateCxt (TheoremSchema constdict lemmas theorem subproof)
                  q Nothing = Nothing
                  q (Just (state,_)) = Data.Map.lookup lemma (provenSents state) 
 
-         g2 constdictPure (PrfStdState alreadyProven alreadyDefinedConsts stepCount tagDict, 
+         g2 constdictPure (PrfStdState alreadyProven alreadyDefinedConsts stepCount tagDict remarkTagIdxs, 
                  PrfStdContext freeVarTypeStack stepIdfPrefix contextDepth mayPState) 
                = fmap constDictErr (constDictTest (fmap fst alreadyDefinedConsts) constdictPure)
                                                <|> Prelude.foldr f1 Nothing lemmas
@@ -694,7 +742,13 @@ runProofByUGMWorker tt prog =  do
         let newContextFrames = contextFrames context <> [False]
         let newStepIdxPrefix = stepIdxPrefix context ++ [stepCount state]
         let newContext = PrfStdContext newFrVarTypStack newStepIdxPrefix newContextFrames (Just state)
-        let newState = PrfStdState mempty mempty 1 mempty
+        let newState = PrfStdState {
+            provenSents = mempty,
+            consts = mempty,
+            stepCount = 1,
+            tagData = mempty,
+            remarkTagIdxs = mempty
+        }
         let preambleSteps = [PrfStdStepFreevar (length frVarTypeStack) (qTypeToTType tt)]
         vIdx <- get
         (extraData,generalizable,subproof, newSteps) 
@@ -780,7 +834,13 @@ checkTheoremMOpen mayPrStateCxt errOnTargetMismatch (TheoremSchemaMT mayTargetM 
                         Nothing -> do
                             let newContext = PrfStdContext [] [] (maybe []  ((<>[True]) . contextFrames . snd) mayPrStateCxt) (Just provenState)
                             let preambleSteps = conststeps <> lemmasteps
-                            let newState = PrfStdState newProven newConsts newStepCountB mempty
+                            let newState = PrfStdState {
+                                provenSents = newProven,
+                                consts = newConsts,
+                                stepCount = newStepCountB,
+                                tagData = mempty,
+                                remarkTagIdxs = mempty
+                            }
                             let mayPreambleLastProp = if Prelude.null lemmas then Last Nothing else (Last . Just . last) lemmas
                             let maxIndex = if null idxs then 0 else maximum idxs + 1
     
@@ -792,7 +852,13 @@ checkTheoremMOpen mayPrStateCxt errOnTargetMismatch (TheoremSchemaMT mayTargetM 
                 Nothing -> do
                     let newContext = PrfStdContext [] [] (maybe []  ((<>[True]) . contextFrames . snd) mayPrStateCxt) (Just provenState)
                     let preambleSteps = conststeps <> lemmasteps
-                    let newState = PrfStdState newProven newConsts newStepCountB mempty
+                    let newState = PrfStdState {
+                        provenSents = newProven,
+                        consts = newConsts,
+                        stepCount = newStepCountB,
+                        tagData = mempty,
+                        remarkTagIdxs = mempty
+                    }
                     let mayPreambleLastProp = if Prelude.null lemmas then Last Nothing else (Last . Just . last) lemmas
                     let maxIndex = if null idxs then 0 else maximum idxs + 1
     
@@ -802,7 +868,13 @@ checkTheoremMOpen mayPrStateCxt errOnTargetMismatch (TheoremSchemaMT mayTargetM 
         Nothing -> do
             let newContext = PrfStdContext [] [] (maybe []  ((<>[True]) . contextFrames . snd) mayPrStateCxt) Nothing
             let preambleSteps = conststeps <> lemmasteps
-            let newState = PrfStdState newProven newConsts newStepCountB mempty
+            let newState = PrfStdState {
+                provenSents = newProven,
+                consts = newConsts,
+                stepCount = newStepCountB,
+                tagData = mempty,
+                remarkTagIdxs = mempty
+            }
             let mayPreambleLastProp = if Prelude.null lemmas then Last Nothing else (Last . Just . last) lemmas
             let maxIndex = if null idxs then 0 else maximum idxs + 1
     
@@ -827,7 +899,8 @@ checkTheoremMOpen mayPrStateCxt errOnTargetMismatch (TheoremSchemaMT mayTargetM 
                  q Nothing = Nothing
                  q (Just (state,_)) = Data.Map.lookup lemma (provenSents state) 
 
-            g2 constdictPure (PrfStdState alreadyProven alreadyDefinedConsts stepCount tagDict, PrfStdContext freeVarTypeStack stepIdfPrefix contextDepth mayPrntState) 
+            g2 constdictPure (PrfStdState alreadyProven alreadyDefinedConsts stepCount tagDict remarkTagIdxs,
+                              PrfStdContext freeVarTypeStack stepIdfPrefix contextDepth mayPrntState) 
                  = fmap constDictErr (constDictTest (fmap fst alreadyDefinedConsts) constdictPure)
                                                <|> Prelude.foldr f1 Nothing lemmas
              where
@@ -1015,7 +1088,13 @@ runProofByUG (ProofByUGSchema generalization subproof) context state =
          let newStepIdxPrefix = stepIdxPrefix context ++ [stepCount state]
          let newContextFrames = contextFrames context <> [False]
          let newContext = PrfStdContext newVarstack newStepIdxPrefix newContextFrames (Just state)
-         let newState = PrfStdState mempty mempty 1 mempty
+         let newState = PrfStdState {
+            provenSents = mempty,
+            consts = mempty,
+            stepCount = 1,
+            tagData = mempty,
+            remarkTagIdxs = mempty
+        }
          let newFreeTerm = free2Term $ length varstack
          let generalizable = f newFreeTerm
          let preambleSteps = [PrfStdStepFreevar (length varstack) (qTypeToTType tType)]
@@ -1088,7 +1167,7 @@ type HelperConstraints m s tType o t sE eL r q = (
             , Typeable t
             , Show t
             , QuantifiableTerm q tType
-            , BASE.LogicRuleClass r s o tType sE
+            , BASE.LogicRuleClass r s o tType sE t
             , StdPrfPrintMonad
                       q s o tType t (Either SomeException)        
             , Eq t

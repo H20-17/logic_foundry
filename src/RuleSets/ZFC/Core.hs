@@ -263,9 +263,9 @@ data LogicRule s sE t  where
     deriving(Show)
 
 
-instance REM.LogicRuleClass [LogicRule s sE t] s Text () sE where
-     remark:: Text -> [LogicRule s sE t]
-     remark rem = [(PredRule . PREDL.PropRule . PL.BaseRule . REM.Remark) rem]
+instance REM.LogicRuleClass [LogicRule s sE t] s Text () sE t where
+     remark:: Text -> Maybe Text -> [LogicRule s sE t]
+     remark rem mayTag = [(PredRule . PREDL.PropRule . PL.BaseRule . REM.Remark rem) mayTag]
      rep :: s -> [LogicRule s sE t ]
      rep s = [(PredRule . PREDL.PropRule . PL.BaseRule . REM.Rep) s]
      fakeProp:: [s] -> s -> [LogicRule s o t ]
@@ -274,6 +274,8 @@ instance REM.LogicRuleClass [LogicRule s sE t] s Text () sE where
      fakeConst o t = [PredRule $ PREDL.PropRule $ PL.BaseRule $ REM.FakeConst o t]
      tagSent :: Text -> s -> [LogicRule s sE t]
      tagSent tagName sent = [PredRule $ PREDL.PropRule . PL.BaseRule $ REM.TagSent tagName sent]  
+     tagTerm :: Text -> t -> [LogicRule s sE t]
+     tagTerm tagName term = [PredRule $ PREDL.PropRule . PL.BaseRule $ REM.TagTerm tagName term]
 
 
 instance PL.LogicRuleClass [LogicRule s sE t] s () sE Text where
@@ -854,27 +856,69 @@ instance (Show sE, Typeable sE, Show s, Typeable s, TypedSent Text () sE s,
                      -> PrfStdContext () s Text () t
                      -> PrfStdState s Text () t
                      -> Either (LogicError s sE t) (PrfStdState s Text () t,[PrfStdStep s Text () t], Last s)
-    runProofOpen rs context oldState = foldM f (PrfStdState mempty mempty 0 mempty,[], Last Nothing) rs
+    runProofOpen rs context oldState = foldM f (mempty,[], Last Nothing) rs
        where
            f (newState,newSteps, mayLastProp) r =  fmap g (runProofAtomic r context (oldState <> newState))
              where
                  g ruleResult = case ruleResult of
-                    (Just s,Nothing,Nothing, False, step) -> (newState <> PrfStdState (Data.Map.insert s (newLineIndex False) mempty ) mempty 1 mempty,
-                                         newSteps <> [step], (Last . Just) s)
+                    (Just s,Nothing,Nothing, False, step) -> (newState <> 
+                        PrfStdState {
+                            provenSents = Data.Map.insert s (newLineIndex False) mempty,
+                            consts = mempty,
+                            stepCount = 1,
+                            tagData = mempty,
+                            remarkTagIdxs = mempty
+                        }, 
+                             newSteps <> [step],
+                            (Last . Just) s)
                     (Just s,Just (newConst,tType), Nothing, False, step) -> (newState <> 
-                            PrfStdState (Data.Map.insert s (newLineIndex False) mempty) 
-                               (Data.Map.insert newConst (tType,newLineIndex False) mempty) 1 mempty,
+                            PrfStdState {
+                                provenSents = Data.Map.insert s (newLineIndex False) mempty,
+                                consts = Data.Map.insert newConst (tType,newLineIndex False) mempty,
+                                stepCount = 1,
+                                tagData = mempty,
+                                remarkTagIdxs = mempty
+                            },
                                newSteps <> [step], (Last . Just) s)
                     (Nothing,Just (newConst,tType), Nothing, False, step) -> (newState <> 
-                            PrfStdState mempty
-                               (Data.Map.insert newConst (tType,newLineIndex False) mempty) 1 mempty,
+                            PrfStdState {
+                                provenSents = mempty,
+                                consts = Data.Map.insert newConst (tType,newLineIndex False) mempty,
+                                stepCount = 1,
+                                tagData = mempty,
+                                remarkTagIdxs = mempty
+                            },
                                newSteps <> [step], mayLastProp)
                     (Nothing,Nothing, Nothing, False, step) -> (newState <>
-                            PrfStdState mempty mempty 1 mempty,
+                            PrfStdState {
+                                provenSents = mempty,
+                                consts = mempty,
+                                stepCount = 1,
+                                tagData = mempty,
+                                remarkTagIdxs = mempty
+                            },
                                newSteps <> [step], mayLastProp)
                     (Nothing, Nothing, Just (tagName, tagData), True, step) -> 
-                        (newState <> PrfStdState mempty mempty 0 (Data.Map.singleton tagName tagData),
-                         newSteps <> [step], mayLastProp)         
+                        (newState <> PrfStdState {
+                            provenSents = mempty,
+                            consts = mempty,
+                            stepCount = 0,
+                            tagData = Data.Map.singleton tagName tagData,
+                            remarkTagIdxs = mempty
+                        },
+                         newSteps <> [step], mayLastProp)
+                    (Nothing, Nothing, Just (tag, tagData), False, step) -> 
+                        -- this pattern matches if we have a remark with a tag
+                        (newState <>
+                            PrfStdState {
+                                provenSents = mempty,
+                                consts = mempty,
+                                stepCount = 1,
+                                tagData = Data.Map.singleton tag tagData,
+                                remarkTagIdxs = Data.Map.singleton tag (newLineIndex False)
+                            },
+                               newSteps <> [step], mayLastProp)    
+                    
                     where
                         newStepCount hiddenStep = if hiddenStep then stepCount newState else stepCount newState + 1
                         newLineIndex hiddenStep = stepIdxPrefix context <> [stepCount oldState + newStepCount hiddenStep -1]
@@ -907,14 +951,14 @@ instance PREDL.SubproofRule [LogicRule s sE t] s Text () () t where
 
 
 
-instance RuleInject [REM.LogicRule () s sE Text ()] [LogicRule s sE t] where
-    injectRule:: [REM.LogicRule () s sE Text ()] -> [LogicRule s sE t]
+instance RuleInject [REM.LogicRule () s sE Text () t] [LogicRule s sE t] where
+    injectRule:: [REM.LogicRule () s sE Text () t] -> [LogicRule s sE t]
     injectRule = Prelude.map (PredRule . PREDL.PropRule . PL.BaseRule)
 
 
 
-instance RuleInject [PL.LogicRule () s sE Text ()] [LogicRule s sE t] where
-    injectRule:: [PL.LogicRule () s sE Text ()] -> [LogicRule s sE t]
+instance RuleInject [PL.LogicRule () s sE Text () t] [LogicRule s sE t] where
+    injectRule:: [PL.LogicRule () s sE Text () t] -> [LogicRule s sE t]
     injectRule = Prelude.map (PredRule . PREDL.PropRule)
 
 

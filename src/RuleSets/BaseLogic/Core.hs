@@ -40,13 +40,14 @@ data LogicError s sE o where
     LogicErrFakePropDependencyNotProven :: s -> LogicError s sE o
     deriving (Show)
 
-data LogicRule tType s sE o q where
-    Remark :: Text -> LogicRule tType s sE o q
-    Rep :: s -> LogicRule tType s sE o q
-    ProofBySubArg :: ProofBySubArgSchema s [LogicRule tType s sE o q] -> LogicRule tType s sE o q
-    FakeProp :: [s] -> s -> LogicRule tType s sE o q
-    FakeConst :: o -> tType -> LogicRule tType s sE o q
-    TagSent :: Text -> s -> LogicRule tType s sE o q
+data LogicRule tType s sE o q t where
+    Remark :: Text -> Maybe Text -> LogicRule tType s sE o q t
+    Rep :: s -> LogicRule tType s sE o q t
+    ProofBySubArg :: ProofBySubArgSchema s [LogicRule tType s sE o q t] -> LogicRule tType s sE o q t
+    FakeProp :: [s] -> s -> LogicRule tType s sE o q t
+    FakeConst :: o -> tType -> LogicRule tType s sE o q t
+    TagSent :: Text -> s -> LogicRule tType s sE o q t
+    TagTerm :: Text -> t -> LogicRule tType s sE o q t
     deriving(Show)
 
 -- Helper function to fetch proof index of a dependency
@@ -63,11 +64,15 @@ runProofAtomic :: (Ord s, TypedSent o tType sE s,Typeable s, Show s, Typeable o,
                     Typeable tType, Show tType, StdPrfPrintMonad q s o tType t (Either SomeException)
                     
                      ) =>
-               LogicRule tType s sE o q -> PrfStdContext q s o tType t -> PrfStdState s o tType t
+               LogicRule tType s sE o q t -> PrfStdContext q s o tType t -> PrfStdState s o tType t
                 -> Either (LogicError s sE o) (Maybe s, Maybe (o,tType), Maybe (Text, TagData s t), Bool, PrfStdStep s o tType t)
 runProofAtomic rule context state =
     case rule of
-        Remark remark -> return (Nothing, Nothing, Nothing, False, PrfStdStepRemark remark)
+        Remark remark mayTag -> do
+            let tagInfo = case mayTag of
+                            Nothing -> Nothing
+                            Just tag -> Just (tag, TagDataRemark)
+            return (Nothing, Nothing, tagInfo, False, PrfStdStepRemark remark mayTag)
         Rep s -> do
             maybe ((throwError . LogicErrRepOriginNotProven) s) return (Data.Map.lookup s (provenSents state))
             return (Just s, Nothing, Nothing, False, PrfStdStepStep s "REP" Nothing [s])
@@ -93,6 +98,8 @@ runProofAtomic rule context state =
              return (Just $ argPrfConsequent schema, Nothing, Nothing, False, step)
         TagSent tag sent -> do
             return (Nothing, Nothing, Just (tag, TagDataSent sent), True, PrfStdStepTagObject tag (TagDataSent sent))
+        TagTerm tag term -> do
+            return (Nothing, Nothing, Just (tag, TagDataTerm term), True, PrfStdStepTagObject tag (TagDataTerm term))    
     where
         constDict = fmap fst (consts state)
 
@@ -105,7 +112,7 @@ instance ( Show s, Typeable s, Ord o, TypedSent o tType sE s,
           StdPrfPrintMonad q s o tType t (Either SomeException),
           Monoid (PrfStdContext q s o tType t))
              => Proof (LogicError s sE o)
-                 [LogicRule tType s sE o q] 
+                 [LogicRule tType s sE o q t] 
                  (PrfStdState s o tType t) 
                  (PrfStdContext q s o tType t)
                  [PrfStdStep s o tType t]
@@ -114,72 +121,111 @@ instance ( Show s, Typeable s, Ord o, TypedSent o tType sE s,
   runProofOpen :: (Show s, Typeable s,
                Ord o, TypedSent o tType sE s, Typeable o, Show o, Typeable tType,
                Show tType, Monoid (PrfStdState s o tType t)) =>
-                 [LogicRule tType s sE o q] ->
+                 [LogicRule tType s sE o q t] ->
                  PrfStdContext q s o tType t -> PrfStdState s o tType t
                         -> Either (LogicError s sE o) (PrfStdState s o tType t, [PrfStdStep s o tType t],Last s) 
 
-  runProofOpen rs context oldState = foldM f (PrfStdState mempty mempty 0 mempty, [], Last Nothing) rs
+  runProofOpen rs context oldState = foldM f (mempty, [], Last Nothing) rs
        where
            f (newState,newSteps, mayLastProp) r =  fmap g (runProofAtomic r context (oldState <> newState))
              where
                  g ruleResult = case ruleResult of
-                    (Just s,Nothing,Nothing, False, step) -> (newState <> PrfStdState (Data.Map.insert s (newLineIndex False) mempty) mempty 1 mempty,
-                                         newSteps <> [step], (Last . Just) s)
+                    (Just s,Nothing,Nothing, False, step) -> 
+                        (newState <> 
+                             PrfStdState {
+                                              provenSents = (Data.Map.insert s (newLineIndex False) mempty), 
+                                              consts = mempty,
+                                              stepCount = 1,
+                                              tagData = mempty,
+                                              remarkTagIdxs = mempty
+                                            }
+                            , newSteps <> [step], (Last . Just) s)
                     (Just s,Just (newConst,tType), Nothing, False, step) -> (newState <> 
-                            PrfStdState (Data.Map.insert s (newLineIndex False) mempty) 
-                               (Data.Map.insert newConst (tType,(newLineIndex False)) mempty) 1 mempty,
-                               newSteps <> [step], (Last . Just) s)
+                            PrfStdState {
+                                              provenSents = (Data.Map.insert s (newLineIndex False) mempty), 
+                                              consts = (Data.Map.insert newConst (tType,(newLineIndex False)) mempty),
+                                              stepCount = 1,
+                                              tagData = mempty,
+                                              remarkTagIdxs = mempty
+                                            }
+                               , newSteps <> [step], (Last . Just) s)
                     (Nothing,Just (newConst,tType), Nothing, False, step) -> (newState <> 
-                            PrfStdState mempty
-                               (Data.Map.insert newConst (tType,newLineIndex False) mempty) 1 mempty,
-                               newSteps <> [step], mayLastProp)
+                            PrfStdState {
+                                              provenSents = mempty,
+                                              consts = (Data.Map.insert newConst (tType,newLineIndex False) mempty),
+                                              stepCount = 1,
+                                              tagData = mempty,
+                                              remarkTagIdxs = mempty
+                                            }
+                               , newSteps <> [step], mayLastProp)
                     (Nothing,Nothing, Nothing, False, step) -> (newState <>
-                            PrfStdState mempty mempty 1 mempty,
+                            PrfStdState {
+                                provenSents = mempty,
+                                consts = mempty,
+                                stepCount = 1,
+                                tagData = mempty,
+                                remarkTagIdxs = mempty
+                            },
                                newSteps <> [step], mayLastProp)
                     (Nothing, Nothing, Just (tag, tagData), True, step) -> (newState <>
                             PrfStdState {
                                 provenSents = mempty,
                                 consts = mempty,
                                 stepCount = 0,
-                                tagData = Data.Map.singleton tag tagData
+                                tagData = Data.Map.singleton tag tagData,
+                                remarkTagIdxs = mempty
                             },
                                newSteps <> [step], mayLastProp)
+                    (Nothing, Nothing, Just (tag, tagData), False, step) -> 
+                        (newState <>
+                            PrfStdState {
+                                provenSents = mempty,
+                                consts = mempty,
+                                stepCount = 1,
+                                tagData = Data.Map.singleton tag tagData,
+                                remarkTagIdxs = Data.Map.singleton tag (newLineIndex False)
+                            },
+                               newSteps <> [step], mayLastProp)
+
                     where
                         newStepCount hiddenStep = if hiddenStep then stepCount newState else stepCount newState + 1
                         newLineIndex hiddenStep = stepIdxPrefix context <> [stepCount oldState + newStepCount hiddenStep-1]
 
-instance RuleInject [LogicRule tType s sE o q] [LogicRule tType s sE o q] where
-    injectRule :: [LogicRule tType s sE o q] -> [LogicRule tType s sE o q]
+instance RuleInject [LogicRule tType s sE o q t] [LogicRule tType s sE o q t] where
+    injectRule :: [LogicRule tType s sE o q t] -> [LogicRule tType s sE o q t]
     injectRule = id
 
 
 
 
-class LogicRuleClass r s o tType sE | r -> s, r->o, r->tType, r -> sE where
-    remark :: Text -> r
+class LogicRuleClass r s o tType sE t | r -> s, r->o, r->tType, r -> sE, r->t where
+    remark :: Text -> Maybe Text -> r
     rep :: s -> r
     fakeProp :: [s] -> s -> r
     fakeConst:: o -> tType -> r
     tagSent :: Text -> s -> r
+    tagTerm :: Text -> t -> r
 
-instance LogicRuleClass [LogicRule tType s sE o q] s o tType sE where
-    remark :: Text -> [LogicRule tType s sE o q]
-    remark text = [Remark text]
-    rep :: s -> [LogicRule tType s sE o q]
+instance LogicRuleClass [LogicRule tType s sE o q t] s o tType sE t where
+    remark :: Text -> Maybe Text -> [LogicRule tType s sE o q t]
+    remark text mayTag = [Remark text mayTag]
+    rep :: s -> [LogicRule tType s sE o q t]
     rep s = [Rep s]
-    fakeProp :: [s] -> s -> [LogicRule tType s sE o q]
+    fakeProp :: [s] -> s -> [LogicRule tType s sE o q t]
     fakeProp deps s = [FakeProp deps s]
-    fakeConst :: o -> tType -> [LogicRule tType s sE o q]
+    fakeConst :: o -> tType -> [LogicRule tType s sE o q t]
     fakeConst o t = [FakeConst o t]
-    tagSent :: Text -> s -> [LogicRule tType s sE o q]
+    tagSent :: Text -> s -> [LogicRule tType s sE o q t]
     tagSent tag sent = [TagSent tag sent]
+    tagTerm :: Text -> t -> [LogicRule tType s sE o q t]
+    tagTerm tag term = [TagTerm tag term]
 
 
 
 
 
-instance SubproofRule [LogicRule tType s sE o q] s where
-    proofBySubArg :: s -> [LogicRule tType s sE o q] -> [LogicRule tType s sE o q]
+instance SubproofRule [LogicRule tType s sE o q t] s where
+    proofBySubArg :: s -> [LogicRule tType s sE o q t] -> [LogicRule tType s sE o q t]
     proofBySubArg s r = [ProofBySubArg $ ProofBySubArgSchema s r]
 
 
@@ -212,7 +258,7 @@ runProofBySubArg (ProofBySubArgSchema consequent subproof) context state  =
          let newStepIdxPrefix = stepIdxPrefix context ++ [stepCount state]
          let newContextFrames = contextFrames context <> [False]
          let newContext = PrfStdContext frVarTypeStack newStepIdxPrefix newContextFrames (Just state)
-         let newState = PrfStdState mempty mempty 0 mempty
+         let newState = mempty
          let preambleSteps = []
          let eitherTestResult = testSubproof newContext state newState preambleSteps (Last Nothing) consequent subproof
          finalSteps <- either (throwError . ProofBySubArgErrSubproofFailedOnErr) return eitherTestResult
@@ -229,5 +275,5 @@ class SubproofRule r s where
 type HelperConstraints r s o tType sE eL q t m = (Monad m, Ord o, Show sE, Typeable sE, Show s, Typeable s,
        MonadThrow m, Show o, Typeable o, Show tType, Typeable tType, TypedSent o tType sE s,
        Monoid (PrfStdState s o tType t), StdPrfPrintMonad q s o tType t m, ShowableSent s,
-       StdPrfPrintMonad q s o tType t (Either SomeException), Monoid (PrfStdContext q s o tType t), LogicRuleClass r s o tType sE, ProofStd s eL r o tType q t,
+       StdPrfPrintMonad q s o tType t (Either SomeException), Monoid (PrfStdContext q s o tType t), LogicRuleClass r s o tType sE t, ProofStd s eL r o tType q t,
        Monoid r, Show eL, Typeable eL, SubproofRule r s)
