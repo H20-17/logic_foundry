@@ -715,6 +715,14 @@ printPropDeBrStep lastLineN notMonadic step = do
                     liftIO $ putStr $ unpack $ "[" <> tagName <> "]: "
                 -- tag lines are not indexed since they are not proof steps, but organizational markers. 
                 -- If we indexed them, it would be confusing since they don't represent propositions or constants that can be referenced in justifications.
+            PrfStdStepRemark remarkText (Just tagName) -> do
+                liftIO $ putStr $ unpack $ contextFramesShown cf
+                liftIO $ putStr $ unpack $ showIndex lIndex
+                      <> (if (not . Prelude.null) lIndex then "." else "")
+                      <> (pack . show) lineNum
+                unless notMonadic $ do
+                        liftIO $ putStr $ unpack $ "[" <> tagName <> "]"
+                liftIO  $ putStr ": "
             _ -> 
                 liftIO $ do
                     liftIO $ putStr $ unpack $ contextFramesShown cf

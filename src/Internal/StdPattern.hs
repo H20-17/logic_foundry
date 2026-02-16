@@ -75,9 +75,10 @@ data PrfStdContext q s o tType t where
 data TagData s t where
     TagDataTerm :: t -> TagData s t
     TagDataSent :: s -> TagData s t
-    TagDataRemark :: TagData s t 
+    TagDataRemark :: TagData s t
     -- There is no data associated with a remark tag,
     -- but we want to be able to distinguish it from the other tag types.
+    TagDataRawText :: Text -> TagData s t
   deriving Show
 
 

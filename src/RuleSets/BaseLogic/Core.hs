@@ -48,6 +48,7 @@ data LogicRule tType s sE o q t where
     FakeConst :: o -> tType -> LogicRule tType s sE o q t
     TagSent :: Text -> s -> LogicRule tType s sE o q t
     TagTerm :: Text -> t -> LogicRule tType s sE o q t
+    TagRawText :: Text -> Text -> LogicRule tType s sE o q t
     deriving(Show)
 
 -- Helper function to fetch proof index of a dependency
