@@ -625,6 +625,7 @@ data TagRenderError where
     TaggedPropNotIndexed :: Text -> Text -> PropDeBr -> TagRenderError
     TaggedTermNotIndexed :: Text -> Text -> ObjDeBr -> TagRenderError
     RemarkTagsNotXlateable :: Text -> Text -> TagRenderError
+    RawTextTagNotIndexable :: Text -> Text -> TagRenderError
      deriving (Typeable, Show)
 
 instance Exception TagRenderError
@@ -667,12 +668,19 @@ convertRemText sentIdxs constIdxs tagDict remarkTagIdxs input = go input
                restConverted <- go (T.drop (T.length closer) remainder)
                Right (prefix <> replacement <> restConverted)
 
-    handleTagContent tagName = 
-        case Data.Map.lookup tagName tagDict of
-            Nothing -> Left (TagNotDefined tagName input)
-            Just (TagDataTerm term) -> Right (showTerm sentIdxs term)
-            Just (TagDataSent sent) -> Right (showSent sentIdxs sent)
-            Just TagDataRemark -> Left (RemarkTagsNotXlateable tagName input)
+    handleTagContent tagName =
+        case tagName of 
+             "[%" -> Right "{%"
+             "%]" -> Right "%}"
+             "[@" -> Right "{@"
+             "@]" -> Right "@}" 
+             _ ->
+                case Data.Map.lookup tagName tagDict of
+                   Nothing -> Left (TagNotDefined tagName input)
+                   Just (TagDataTerm term) -> Right (showTerm sentIdxs term)
+                   Just (TagDataSent sent) -> Right (showSent sentIdxs sent)
+                   Just TagDataRemark -> Left (RemarkTagsNotXlateable tagName input)
+                   Just (TagDataRawText raw) -> Right raw
     handleIndexContent tagName =
         case Data.Map.lookup tagName tagDict of
             Nothing -> Left (TagNotDefined tagName input)
@@ -690,6 +698,7 @@ convertRemText sentIdxs constIdxs tagDict remarkTagIdxs input = go input
             Just TagDataRemark -> case Data.Map.lookup tagName remarkTagIdxs of
                     Just idxs -> Right (showIndex idxs)
                     Nothing -> error "Remark tag index lookup failed. This shouldn't happen since remark tags should be defined in the tag dictionary if they are being indexed."
+            Just (TagDataRawText raw) -> Left (RawTextTagNotIndexable tagName input)
       where             
         showIndex i = if Prelude.null i then "" else Data.Text.concat (intersperse "." (Prelude.map (pack . show) i))
 
@@ -903,6 +912,7 @@ printPropDeBrStep lastLineN notMonadic step = do
                       tagText = case tagObj of
                         TagDataTerm obj -> showObj dictMap obj
                         TagDataSent prop -> showProp dictMap prop
+                        TagDataRawText raw -> "<raw text>"
         -- let eol = if lineNum < lastLineN then "\n" else ""
         when (lineNum < lastLineN && not (isTagStep step)) (liftIO $ putStrLn "")
            

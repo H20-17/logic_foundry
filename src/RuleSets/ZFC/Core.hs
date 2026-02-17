@@ -276,6 +276,8 @@ instance REM.LogicRuleClass [LogicRule s sE t] s Text () sE t where
      tagSent tagName sent = [PredRule $ PREDL.PropRule . PL.BaseRule $ REM.TagSent tagName sent]  
      tagTerm :: Text -> t -> [LogicRule s sE t]
      tagTerm tagName term = [PredRule $ PREDL.PropRule . PL.BaseRule $ REM.TagTerm tagName term]
+     tagRawText :: Text -> Text -> [LogicRule s sE t]
+     tagRawText tagName text = [PredRule $ PREDL.PropRule . PL.BaseRule $ REM.TagRawText tagName text]
 
 
 instance PL.LogicRuleClass [LogicRule s sE t] s () sE Text where

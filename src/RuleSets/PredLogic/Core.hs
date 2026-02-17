@@ -168,6 +168,8 @@ instance REM.LogicRuleClass [LogicRule s sE o t tType q] s o tType sE t where
      tagSent tagName sent = [PropRule $ PL.BaseRule $ REM.TagSent tagName sent]
      tagTerm :: Text -> t -> [LogicRule s sE o t tType q]
      tagTerm tagName term = [PropRule $ PL.BaseRule $ REM.TagTerm tagName term]
+     tagRawText :: Text -> Text -> [LogicRule s sE o t tType q]
+     tagRawText tagName text = [PropRule $ PL.BaseRule $ REM.TagRawText tagName text]
 
 instance PL.LogicRuleClass [LogicRule s sE o t tType q] s tType sE o where
      mp:: s -> [LogicRule s sE o t tType q]

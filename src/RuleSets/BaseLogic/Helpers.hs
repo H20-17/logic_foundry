@@ -6,7 +6,8 @@ module RuleSets.BaseLogic.Helpers
 (
     remarkM, 
     fakePropM, fakeConstM, repM,
-    runProofBySubArgM, tagSentM, tagTermM
+    runProofBySubArgM, tagSentM, tagTermM,
+    tagRawTextM
 ) where
 
 import RuleSets.BaseLogic.Core
@@ -104,7 +105,8 @@ tagSentM :: HelperConstraints r s o tType sE eL q t m
 tagSentM tag sent = do
     monadifyProofStd (tagSent tag sent)
     -- There is essentially nothing to return. A tag step in a proof is a virtual step that doesn't generate or sentence
-    -- or have an index for that matter. It's just a way to attach a tag to a sentence for later reference. So we return unit, and the caller can choose to ignore it or return something else if they want.
+    -- or have an index for that matter. It's just a way to attach a tag to a sentence for later use in a remark. 
+    --So we return unit, and the caller can choose to ignore it or return something else if they want.
     return ()
 
 tagTermM :: HelperConstraints r s o tType sE eL q t m
@@ -112,5 +114,16 @@ tagTermM :: HelperConstraints r s o tType sE eL q t m
 tagTermM tag term = do
     monadifyProofStd (tagTerm tag term)
     -- Similar to tagSentM, there is essentially nothing to return. A tag step in a proof is a virtual step that doesn't generate or sentence
-    -- or have an index for that matter. It's just a way to attach a tag to a term for later reference. So we return unit, and the caller can choose to ignore it or return something else if they want.
+    -- or have an index for that matter. It's just a way to attach a tag to a term for later
+    -- use in a remark. So we return unit, and the caller can choose to ignore it or return something else if they want.
+    return ()
+
+tagRawTextM :: HelperConstraints r s o tType sE eL q t m
+          => Text -> Text -> ProofGenTStd tType  r s o q t m ()
+tagRawTextM tag text = do
+    monadifyProofStd (tagRawText tag text)
+    -- Similar to tagSentM, there is essentially nothing to return. A tag step in a proof is a virtual step that doesn't generate or sentence
+    -- or have an index for that matter. It's just a way to attach a tag to a piece of raw text for later reference.
+    -- It's a method of attaching arbitrary text to a proof that can be referred to in a remark, without having to attach it to a specific sentence or term.
+    -- It serves as one method of escaping patterns (within remarks) like {%tagname%} or {@tagname@}.
     return ()

@@ -29,7 +29,7 @@ import Control.Monad.Trans ( MonadTrans(lift) )
 import Data.Map (Map,lookup)
 import Internal.StdPattern
 import Kernel
-
+import Data.Char (isAlphaNum)
 
 
 data LogicError s sE o where
@@ -38,6 +38,7 @@ data LogicError s sE o where
     LogicErrFakeConstDefined :: o -> LogicError s sE o
     LogicErrPrfBySubArgErr :: SubproofError s sE (LogicError s sE o) -> LogicError s sE o
     LogicErrFakePropDependencyNotProven :: s -> LogicError s sE o
+    LogicErrInvalidTagName :: Text -> LogicError s sE o
     deriving (Show)
 
 data LogicRule tType s sE o q t where
@@ -58,6 +59,16 @@ fetchProofIndexOfDependency provenMap dep =
         Nothing -> Left $ LogicErrFakePropDependencyNotProven dep
         Just idx -> Right idx
 
+isValidTagName :: String -> Bool
+isValidTagName [] = False
+isValidTagName (x:xs) = isFirstChar x && all isRestChar xs
+  where
+    -- First character: letter or underscore (no numbers)
+    isFirstChar c = (isAlphaNum c && not (isDigit c)) || c == '_'
+    -- Remaining characters: alphanumeric or underscore
+    isRestChar c  = isAlphaNum c || c == '_'
+    -- Helper to check for digits
+    isDigit c = c >= '0' && c <= '9'
 
 
 
@@ -98,9 +109,14 @@ runProofAtomic rule context state =
              step <- left LogicErrPrfBySubArgErr (runProofBySubArg schema context state)
              return (Just $ argPrfConsequent schema, Nothing, Nothing, False, step)
         TagSent tag sent -> do
+            unless (isValidTagName (unpack tag)) (throwError $ LogicErrInvalidTagName tag)
             return (Nothing, Nothing, Just (tag, TagDataSent sent), True, PrfStdStepTagObject tag (TagDataSent sent))
         TagTerm tag term -> do
-            return (Nothing, Nothing, Just (tag, TagDataTerm term), True, PrfStdStepTagObject tag (TagDataTerm term))    
+            unless (isValidTagName (unpack tag)) (throwError $ LogicErrInvalidTagName tag)
+            return (Nothing, Nothing, Just (tag, TagDataTerm term), True, PrfStdStepTagObject tag (TagDataTerm term)) 
+        TagRawText tag rawText -> do
+            unless (isValidTagName (unpack tag)) (throwError $ LogicErrInvalidTagName tag)
+            return (Nothing, Nothing, Just (tag, TagDataRawText rawText), True, PrfStdStepTagObject tag (TagDataRawText rawText))   
     where
         constDict = fmap fst (consts state)
 
@@ -206,6 +222,7 @@ class LogicRuleClass r s o tType sE t | r -> s, r->o, r->tType, r -> sE, r->t wh
     fakeConst:: o -> tType -> r
     tagSent :: Text -> s -> r
     tagTerm :: Text -> t -> r
+    tagRawText :: Text -> Text -> r
 
 instance LogicRuleClass [LogicRule tType s sE o q t] s o tType sE t where
     remark :: Text -> Maybe Text -> [LogicRule tType s sE o q t]
@@ -220,6 +237,8 @@ instance LogicRuleClass [LogicRule tType s sE o q t] s o tType sE t where
     tagSent tag sent = [TagSent tag sent]
     tagTerm :: Text -> t -> [LogicRule tType s sE o q t]
     tagTerm tag term = [TagTerm tag term]
+    tagRawText :: Text -> Text -> [LogicRule tType s sE o q t]
+    tagRawText tag text = [TagRawText tag text]
 
 
 

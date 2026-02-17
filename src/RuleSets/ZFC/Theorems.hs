@@ -217,7 +217,7 @@ proveBuilderTheoremMFree source_set (p_pred::(t->s)) = do
         txt <- showSentM freeSpecAxiom
         remarkM txt Nothing
         (tm,_,h_obj) <- eiHilbertM freeSpecAxiom
-        tagSentM "other tag" freeSpecAxiom
+        tagSentM "othertag" freeSpecAxiom
         return h_obj 
 
              
@@ -241,18 +241,22 @@ proveBuilderTheoremM (source_set_pred::(v t -> t )) p_pred = do
         let source_set_pred_free = source_set_pred freeVars_v
         let p_pred_free = p_pred freeVars_v
         returnFunc <- proveBuilderTheoremMFree source_set_pred_free p_pred_free
+      
         tagSentM "AnotherTag" freeSpecAx
         z <- fakeConstM "z" ()
         tagTermM "z" z
         remarkM "Testing tag {%AnotherTag%} {%freeSpecAx%} {@freeSpecAx@} {%z%} {@z@}" Nothing
         remarkM "Some sentence" (Just "whatever")
-        -- ps <- getProofState
-        -- let txt = show ps
-        -- remarkM (pack txt) Nothing
         remarkM "The index of the previous remark should be {@whatever@}" Nothing
+        rawTextTag <- tagRawTextM "rawTag" "This is some raw text that should be retrievable in the remark above via {%rawTag%}"
+        remarkM "This remark should have a tag that retrieves the raw text: {%rawTag%}" Nothing
+        remarkM "All special sequences: {%[%%}, {%%]%}, {%[@%}, {%@]%}" Nothing
+
+
+
+
         return returnFunc
     let returnFunc = returnFuncListForm . V.toList
-
 
 
     return returnFunc

@@ -455,6 +455,8 @@ instance REM.LogicRuleClass [LogicRule tType s sE o q t] s o tType sE t where
     tagSent tagName sent = [BaseRule $ REM.TagSent tagName sent]
     tagTerm :: Text -> t -> [LogicRule tType s sE o q t]
     tagTerm tagName term = [BaseRule $ REM.TagTerm tagName term]
+    tagRawText :: Text -> Text -> [LogicRule tType s sE o q t]
+    tagRawText tagName text = [BaseRule $ REM.TagRawText tagName text]
 
         --   return . PropRemark . REM.ProofBySubArg  
 
