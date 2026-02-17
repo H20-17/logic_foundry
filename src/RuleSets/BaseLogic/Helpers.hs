@@ -35,7 +35,7 @@ import Kernel
 
 runProofBySubArgM :: HelperConstraints r1 s o tType sE eL q t m
                  =>   ProofGenTStd tType r1 s o q t m x
-                            -> ProofGenTStd tType r1 s o q t m (s, [Int],x)
+                            -> ProofGenTStd tType r1 s o q t m (s,x)
 runProofBySubArgM prog =  do
         state <- getProofState
         context <- ask
@@ -51,8 +51,8 @@ runProofBySubArgM prog =  do
         (extraData,consequent,subproof,newSteps) 
             <- lift $ runSubproofM newContext state newState preambleSteps (Last Nothing) prog vIdx
         mayMonadifyRes <- monadifyProofStd $ proofBySubArg consequent subproof
-        idx <- maybe (error "No theorem returned by monadifyProofStd on subarg schema. This shouldn't happen") (return . snd) mayMonadifyRes
-        return (consequent, idx, extraData)
+        maybe (error "No theorem returned by monadifyProofStd on subarg schema. This shouldn't happen") return mayMonadifyRes
+        return (consequent, extraData)
 
 
 remarkM :: HelperConstraints r s o tType sE eL q t m
@@ -70,7 +70,7 @@ remarkM txt mayTag = do
 
 
 standardRuleM :: HelperConstraints r s o tType sE eL q t m
-       => r -> ProofGenTStd tType r s o q t m (s,[Int])
+       => r -> ProofGenTStd tType r s o q t m s
 standardRuleM rule = do
     -- function is unsafe and used for rules that generate one or more sentence.
     -- probably should not be externally facing.
@@ -83,11 +83,11 @@ standardRuleM rule = do
 
 
 repM :: HelperConstraints r s o tType sE eL q t m
-          => s -> ProofGenTStd tType r s o q t m (s,[Int])
+          => s -> ProofGenTStd tType r s o q t m s
 repM s = standardRuleM (rep s)
 
 fakePropM :: HelperConstraints r s o tType sE eL q t m
-          => [s] -> s -> ProofGenTStd tType r s o q t m (s,[Int])
+          => [s] -> s -> ProofGenTStd tType r s o q t m s
 fakePropM deps s = standardRuleM (fakeProp deps s)
 
 

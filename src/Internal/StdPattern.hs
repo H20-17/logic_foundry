@@ -315,17 +315,15 @@ instance (StdPrfPrintMonad q s o tType t m,
 
 monadifyProofStd :: (MonadThrow m, ProofStd s eL r o tType q t, Monoid r,
                     Show eL, Typeable eL, StdPrfPrintMonad q s o tType t m, Ord s)
-           => r -> ProofGenTStd tType r s o q t m (Maybe (s,[Int]))
+           => r -> ProofGenTStd tType r s o q t m (Maybe s)
 monadifyProofStd p = do
      context <- ask
      -- PrfStdContext fvStack idx contextFrames maybeParentState <- ask
      state <- getProofState
      (addedState,steps, mayLastProp) <- monadifyProof p
-     let typelessConstDict = fmap snd (consts state) 
      --printSteps contextFrames idx (stepCount state) (provenSents state) typelessConstDict False (Just (provenSents state, typelessConstDict, stepCount state)) steps
      printSteps context state False steps
-     let stuff = f addedState =<< mayLastProp
-     return stuff
+     return mayLastProp
    where
        f state prop = Just (prop, provenSents state!prop )
           

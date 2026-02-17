@@ -110,32 +110,32 @@ testEqualityRules = do
     -- Test eqReflM
     remarkM "Testing eqReflM (0 == 0):" Nothing
     let term0 = Integ 0
-    (reflSent, reflIdx) <- eqReflM term0
+    reflSent <- eqReflM term0
     reflShow <- showPropM reflSent
-    remarkM ("Proved: " <> reflShow <> " at index " <> pack (show reflIdx)) Nothing
+    remarkM ("Proved: " <> reflShow) Nothing
 
     -- Test eqSymM
     remarkM "Testing eqSymM (given fake 1 == 2):" Nothing
     let term1 = Integ 1
     let term2 = Integ 2
     let eq12 = term1 :==: term2
-    (eq12Sent, eq12Idx) <- fakePropM [] eq12 -- Assume 1==2 is proven for the test
+    eq12Sent <- fakePropM [] eq12 -- Assume 1==2 is proven for the test
     eq12Show <- showPropM eq12Sent
-    remarkM ("Assuming: " <> eq12Show <> " at index " <> pack (show eq12Idx)) Nothing
-    (symSent, symIdx) <- eqSymM eq12Sent
+    remarkM ("Assuming: " <> eq12Show) Nothing
+    symSent <- eqSymM eq12Sent
     symShow <- showPropM symSent
-    remarkM ("Proved: " <> symShow <> " at index " <> pack (show symIdx)) Nothing
+    remarkM ("Proved: " <> symShow) Nothing
 
     -- Test eqTransM
     remarkM "Testing eqTransM (given fake 1 == 2 and 2 == 3):" Nothing
     let term3 = Integ 3
     let eq23 = term2 :==: term3
-    (eq23Sent, eq23Idx) <- fakePropM []eq23 -- Assume 2==3 is proven
+    eq23Sent <- fakePropM []eq23 -- Assume 2==3 is proven
     eq23Show <- showPropM eq23Sent
-    remarkM ("Assuming: " <> eq23Show <> " at index " <> pack (show eq23Idx)) Nothing
-    (transSent, transIdx) <- eqTransM eq12Sent eq23Sent -- Use eq12Sent from previous step
+    remarkM ("Assuming: " <> eq23Show) Nothing
+    transSent <- eqTransM eq12Sent eq23Sent -- Use eq12Sent from previous step
     transShow <- showPropM transSent
-    remarkM ("Proved: " <> transShow <> " at index " <> pack (show transIdx)) Nothing
+    remarkM ("Proved: " <> transShow) Nothing
 
     -- Test eqSubstM
     remarkM "Testing eqSubstM (template X0 == X0, given fake 5 == 6):" Nothing
@@ -144,17 +144,17 @@ testEqualityRules = do
     let term6 = Integ 6
     let eq56 = term5 :==: term6
     -- Prove the source sentence P(a), which is 5 == 5
-    (sourceSent, sourceIdx) <- eqReflM term5 -- Use eqReflM to prove 5==5
+    sourceSent <- eqReflM term5 -- Use eqReflM to prove 5==5
     sourceShow <- showPropM sourceSent
-    remarkM ("Proved source: " <> sourceShow <> " at index " <> pack (show sourceIdx)) Nothing
+    remarkM ("Proved source: " <> sourceShow) Nothing
     -- Assume the equality a == b, which is 5 == 6
-    (eqSent, eqIdx) <- fakePropM [] eq56
+    eqSent <- fakePropM [] eq56
     eqShow <- showPropM eqSent
-    remarkM ("Assuming equality: " <> eqShow <> " at index " <> pack (show eqIdx)) Nothing
+    remarkM ("Assuming equality: " <> eqShow) Nothing
     -- Perform substitution
-    (substSent, substIdx) <- eqSubstM 0 template eqSent -- Use the template, not the source sentence here
+    substSent <- eqSubstM 0 template eqSent -- Use the template, not the source sentence here
     substShow <- showPropM substSent
-    remarkM ("Proved subst: " <> substShow <> " at index " <> pack (show substIdx)) Nothing
+    remarkM ("Proved subst: " <> substShow) Nothing
 
     remarkM "--- Equality Rule Tests Complete ---" Nothing
     return ()
@@ -228,7 +228,7 @@ testComplexSubsetNotation = do
     -- 3. Test 1: Basic subset A B
     remarkM "Test 1: Basic subset A B" Nothing
     let subPropAB = subset setA setB
-    (addedProp1, _) <- fakePropM [] subPropAB
+    addedProp1 <- fakePropM [] subPropAB
     printedOutput1 <- showPropM addedProp1
     remarkM ("Actual printed output (Test 1): " <> printedOutput1) Nothing
     remarkM "(Should be A ⊆ B)" Nothing
@@ -238,7 +238,7 @@ testComplexSubsetNotation = do
     let subPropBC = subset setB setC
     -- Construct the conjunction using the PropDeBr operator :&&:
     let conjProp = subPropAB :&&: subPropBC
-    (addedConjProp, _) <- fakePropM [] conjProp
+    addedConjProp <- fakePropM [] conjProp
     printedOutputConj <- showPropM addedConjProp
     remarkM ("Actual printed output (Test 2): " <> printedOutputConj) Nothing
     -- Note: Depending on operator precedence for ∧ and ⊆, parentheses might appear
@@ -255,7 +255,7 @@ testComplexSubsetNotation = do
     -- Create the subset proposition: {x ∈ N | x ≥ 5} ⊆ N
     let subPropBuilder = subset setBuilderA setN
     -- Add, print, and check the output
-    (addedPropBuilder, _) <- fakePropM []subPropBuilder
+    addedPropBuilder <- fakePropM []subPropBuilder
     printedOutputBuilder <- showPropM addedPropBuilder
     remarkM ("Actual printed output (Test 3): " <> printedOutputBuilder) Nothing
     remarkM "(Should look like {𝑥₀ ∈ N | 𝑥₀ ≥ 5} ⊆ N or similar)" Nothing
@@ -281,7 +281,7 @@ testStrictSubsetNotation = do
     remarkM "Test 1: Basic strict subset A ⊂ B" Nothing
     -- This assumes strictSubset a b = subset a b :&&: Neg (a :==: b)
     let strictSubProp1 = strictSubset setA setB
-    (addedProp1, _) <- fakePropM [] strictSubProp1
+    addedProp1 <- fakePropM [] strictSubProp1
     printedOutput1 <- showPropM addedProp1
     remarkM ("Actual printed output (Test 1): " <> printedOutput1) Nothing
     remarkM "(Should be A ⊂ B)" Nothing
@@ -293,7 +293,7 @@ testStrictSubsetNotation = do
     let setBuilderA = builderX 0 setN propertyP -- {x ∈ N | x ≥ 5}
     -- Create the strict subset proposition: {x ∈ N | x ≥ 5} ⊂ N
     let strictSubPropBuilder = strictSubset setBuilderA setN
-    (addedPropBuilder, _) <- fakePropM [] strictSubPropBuilder
+    addedPropBuilder <- fakePropM [] strictSubPropBuilder
     printedOutputBuilder <- showPropM addedPropBuilder
     remarkM ("Actual printed output (Test 2): " <> printedOutputBuilder) Nothing
     remarkM "(Should look like {𝑥₀ ∈ N | 𝑥₀ ≥ 5} ⊂ N or similar)" Nothing
@@ -301,10 +301,10 @@ testStrictSubsetNotation = do
     -- 5. Test 3: A structure that should NOT use the ⊂ notation
     remarkM "Test 3: Structure that should NOT print as ⊂ (using A=A instead of Not(A=B))" Nothing
     -- Example: (A ⊆ B) ∧ (A = A) -- Does not match Neg(A==B)
-    (eqAA, _) <- eqReflM setA -- Prove A = A using EqRefl rule
+    eqAA <- eqReflM setA -- Prove A = A using EqRefl rule
     let subPropAB = subset setA setB -- A ⊆ B part
     let nonStrictSubProp = subPropAB :&&: eqAA -- Combine with A=A
-    (addedProp3, _) <- fakePropM [] nonStrictSubProp
+    addedProp3 <- fakePropM [] nonStrictSubProp
     printedOutput3 <- showPropM addedProp3
     remarkM ("Actual printed output (Test 3): " <> printedOutput3) Nothing
     remarkM "(Should be (A ⊆ B) ∧ (A = A) or similar, *NOT* A ⊂ B)" Nothing
@@ -331,7 +331,7 @@ testNotSubsetNotation = do
     remarkM "Test 1: Basic not subset A ⊈ B" Nothing
     -- Assumes notSubset a b = Neg (subset a b)
     let notSubProp1 = notSubset setA setB
-    (addedProp1, _) <- fakePropM [] notSubProp1
+    addedProp1 <- fakePropM [] notSubProp1
     printedOutput1 <- showPropM addedProp1
     remarkM ("Actual printed output (Test 1): " <> printedOutput1) Nothing
     remarkM "(Should be A ⊈ B)" Nothing
@@ -343,7 +343,7 @@ testNotSubsetNotation = do
     let setBuilderA = builderX 0 setN propertyP -- {x ∈ N | x ≥ 5}
     -- Create the not subset proposition: {x ∈ N | x ≥ 5} ⊈ N
     let notSubPropBuilder = notSubset setBuilderA setN
-    (addedPropBuilder, _) <- fakePropM [] notSubPropBuilder
+    addedPropBuilder <- fakePropM [] notSubPropBuilder
     printedOutputBuilder <- showPropM addedPropBuilder
     remarkM ("Actual printed output (Test 2): " <> printedOutputBuilder) Nothing
     remarkM "(Should look like {𝑥₀ ∈ N | 𝑥₀ ≥ 5} ⊈ N or similar)" Nothing
@@ -353,7 +353,7 @@ testNotSubsetNotation = do
     -- Example: Neg (A ⊂ B) -- Should print as ¬(A ⊂ B), not A ⊈ B
     let strictSubProp = strictSubset setA setB -- Assuming this helper exists and works
     let negStrictSubProp = Neg strictSubProp
-    (addedProp3, _) <- fakePropM []negStrictSubProp
+    addedProp3 <- fakePropM []negStrictSubProp
     printedOutput3 <- showPropM addedProp3
     remarkM ("Actual printed output (Test 3): " <> printedOutput3) Nothing
     remarkM "(Should be ¬(A ⊂ B) or similar, *NOT* related to ⊈)" Nothing
@@ -388,7 +388,7 @@ testHelperPreconditionViolation = do
 
     -- Add it to the proof state. It might pass checkSanity if the check isn't perfect,
     -- but it represents a violation of the helper's intended use conditions.
-    (addedProp, _) <- fakePropM [] violatingSubsetProp
+    addedProp <- fakePropM [] violatingSubsetProp
     printedProp <- showPropM addedProp
     remarkM ("Resulting PropDeBr structure (printed form): " <> printedProp) Nothing
     remarkM "(Check if it printed using ⊆ or fallback ∀ notation)" Nothing
@@ -611,13 +611,13 @@ testShorthandRendering = do
     let hilbert_prop = X 0 :==: a -- Example property P(x) = (x == A)
     let hilbert_term = hX 0 hilbert_prop -- εx.(x == A)
     let exists_prop = eX 0 hilbert_prop -- ∃x.(x == A)
-    (fake_exists, fake_idx) <- fakePropM [] exists_prop
+    fake_exists <- fakePropM [] exists_prop
     exists_show <- showPropM fake_exists -- Show the prop being faked
-    remarkM ("  Faking proof of: " <> exists_show  <> " at index " <> pack (show fake_idx)) Nothing
+    remarkM ("  Faking proof of: " <> exists_show) Nothing
     hilbert_term_short_show <- showObjM hilbert_term
     remarkM "  Input: hX 0 (X 0 :==: A)  (after proving Exists)" Nothing
-    remarkM ("  Actual:   " <> hilbert_term_short_show) Nothing
-    remarkM ("  Expected: ε" <> pack (show fake_idx)) Nothing -- Adjust format if needed
+    remarkM ("  Actual And Expected:   " <> hilbert_term_short_show) Nothing
+    remarkM "The tests are turning into a mess that needs to be reviewed...." Nothing
 
     -- Test 6: Default Hilbert -> εx.(...)
     remarkM "Test 6: Default Hilbert ε binding" Nothing
@@ -1256,10 +1256,10 @@ testPairAndTupleRendering = do
 testAxiomOfChoice :: ProofGenTStd () [ZFCRuleDeBr] PropDeBr Text () ObjDeBr IO ()
 testAxiomOfChoice = do
     -- Test for Axiom of Choice
-    (acAx, acAxIdx) <- axiomOfChoiceM
+    acAx <- axiomOfChoiceM
 
     showAcAx <- showPropM acAx
-    remarkM ("Axiom of Choice: " <> showAcAx <> " at index " <> pack (show acAxIdx)) Nothing
+    remarkM ("Axiom of Choice: " <> showAcAx) Nothing
     -- Due to its complexity, you might want to add a remark with its raw structure too for debugging:
     -- remarkM $ "Raw AC: " <> pack (show acAx)
     return ()
@@ -1557,7 +1557,7 @@ main = do
         fakePropM [] (isSet (Constant "S"))
         fakePropM [] (isSet (Constant "C"))
         fakePropM [] binaryUnionTheorem
-        (x,_,union) <- binaryUnionInstantiateM (Constant "S") (Constant "C")
+        (x,union) <- binaryUnionInstantiateM (Constant "S") (Constant "C")
         txt <- showTermM union
         remarkM ("Binary Union of S and C is: " <> txt) Nothing
         return ()
@@ -1584,7 +1584,7 @@ main = do
         fakePropM [] (isSet (Constant "S"))
         fakePropM [] (isSet (Constant "C"))
         fakePropM [] binaryIntersectionTheorem
-        (x,_,intersection) <- binaryIntersectionInstantiateM (Constant "S") (Constant "C")
+        (x,intersection) <- binaryIntersectionInstantiateM (Constant "S") (Constant "C")
         txt <- showTermM intersection
         remarkM ("Binary Intersection of S and C is: " <> txt) Nothing
         return ()
@@ -1689,21 +1689,21 @@ testprog = do
       
       fux<- PRED.runProofByUGM () $ do
           runProofByAsmM  asm2 do
-              (s5,_,_)<- runProofBySubArgM  do
+              (s5,_)<- runProofBySubArgM  do
                  newFreeVar <- getTopFreeVar
-                 (s1,_) <- uiM newFreeVar z1
-                 (s2,idx) <- mpM s1
-                 (natAsm,_) <- simpLM asm
-                 (s3,_) <- adjM natAsm s2
-                 (s4,_) <- uiM newFreeVar z2
+                 s1 <- uiM newFreeVar z1
+                 s2 <- mpM s1
+                 natAsm <- simpLM asm
+                 s3 <- adjM natAsm s2
+                 s4 <- uiM newFreeVar z2
                  mpM s4
               return ()
           return undefined
       runTheoremM  testTheoremMSchema
       runTmSilentM  testTheoremMSchema
-      (absurdImp,_,_) <- runProofByAsmM z2 do
-        (notZ1,_) <- fakePropM [](Neg z1)
-        (falseness,_) <- contraFM z1
+      (absurdImp,_) <- runProofByAsmM z2 do
+        notZ1 <- fakePropM [](Neg z1)
+        falseness <- contraFM z1
         showF <- showPropM falseness
         remarkM (showF <> " is the falseness") Nothing
       showAbsurdImp <- showPropM absurdImp
@@ -1719,9 +1719,9 @@ testprog2 = do
     fakeConstM "N" ()
     fakePropM [] pImpQ
     fakePropM [] (neg q)
-    (s,idx) <- modusTollensM pImpQ
+    s <- modusTollensM pImpQ
     showS <- showPropM s
-    remarkM (showS <> " is the sentence. It was proven in line " <> (pack . show) idx) Nothing
+    remarkM (showS <> " is the sentence.") Nothing
     return ()
 
 
@@ -1730,9 +1730,9 @@ testprog3 = do
     let a = eX 0 (X 0 `nIn` Constant "N")
     fakeConstM "N" ()
     fakePropM [] a
-    (s,idx) <- reverseANegIntroM a
+    s <- reverseANegIntroM a
     showS <- showPropM s
-    remarkM (showS <> " is the sentence. It was proven in line " <> (pack . show) idx) Nothing
+    remarkM (showS <> " is the sentence.") Nothing
     return ()
 
 testprog4::ProofGenTStd () [PredRuleDeBr] PropDeBr Text () ObjDeBr IO ()
@@ -1740,9 +1740,9 @@ testprog4 = do
     let a = aX 0 (X 0 `nIn` Constant "N")
     fakeConstM "N" ()
     fakePropM [] a
-    (s,idx) <- reverseENegIntroM a
+    s <- reverseENegIntroM a
     showS <- showPropM s
-    remarkM (showS <> " is the sentence. It was proven in line " <> (pack . show) idx) Nothing
+    remarkM (showS <> " is the sentence.") Nothing
     return ()
 
 
@@ -1750,11 +1750,11 @@ testprog5::ProofGenTStd () [PredRuleDeBr] PropDeBr Text () ObjDeBr IO ()
 testprog5 = do
     let a = eXBang 99 (Neg (X 99 `In` Constant "N"))
     fakeConstM "N" ()
-    (s,idx) <- fakePropM [] a
+    s <- fakePropM [] a
 
 
     showS <- showPropM a
-    remarkM (showS <> " is the sentence. It was proven in line " <> (pack . show) idx) Nothing
+    remarkM (showS <> " is the sentence.") Nothing
     return ()
 
 
@@ -1764,25 +1764,25 @@ theoremProg = do
     let z2 = aX 0 ((X 0 `In` Constant "N") :&&: (X 0 :<=: Integ 0) :->: (X 0 :==: Integ  0))
     let asm = (V 0 `In` Constant "N") :&&: (V 0 :<=: Integ 10)
     let asm2 = (V 0 `In` Constant "N") :&&: (V 0 :<=: Integ 10)
-    (generalized, _, _ ) <- PRED.runProofByUGM () $ do
+    (generalized,  _ ) <- PRED.runProofByUGM () $ do
           runProofByAsmM asm2 do
               newFreeVar <- getTopFreeVar
-              (s1,_) <- uiM newFreeVar z1
-              (s2,_) <- mpM s1
+              s1 <- uiM newFreeVar z1
+              s2 <- mpM s1
               remarkIdx <- remarkM "Yeah baby" Nothing
               remarkIdx2<-remarkM "" Nothing--empty remark
               --(lift . print) "Coment1"
               --(lift . print . show) s1
               remarkM ((pack . show) remarkIdx2 <> " was the index of the remark above/") Nothing
-              (natAsm,_) <- simpLM asm
+              natAsm <- simpLM asm
               --(lift . print) "COmment 2"
-              (s3,_) <- adjM natAsm s2
-              (s4,line_idx) <- uiM newFreeVar z2
+              s3 <- adjM natAsm s2
+              s4 <- uiM newFreeVar z2
               showS4 <- showPropM s4
-              remarkM (showS4 <> " is the sentence. It was proven in line " <> (pack . show) line_idx
+              remarkM (showS4 <> " is the sentence."
                        <> "\nThis is the next line of this remark.") Nothing
               -- (lift . print . show) line_idx
-              (s5,_) <- mpM s4
+              s5 <- mpM s4
               simpLM asm
           return undefined
     return ()

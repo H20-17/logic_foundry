@@ -216,7 +216,7 @@ proveBuilderTheoremMFree source_set (p_pred::(t->s)) = do
                                             ::(V.Empty t -> t -> s))
         txt <- showSentM freeSpecAxiom
         remarkM txt Nothing
-        (tm,_,h_obj) <- eiHilbertM freeSpecAxiom
+        (tm,h_obj) <- eiHilbertM freeSpecAxiom
         tagSentM "othertag" freeSpecAxiom
         return h_obj 
 
@@ -228,12 +228,12 @@ proveBuilderTheoremM :: (HelperConstraints sE s eL m r t, V.Vector v t) =>
     ProofGenTStd () r s Text () t m (v t -> t)
 proveBuilderTheoremM (source_set_pred::(v t -> t )) p_pred = do
 
-    (closedSpecAxiom, _) <- specificationMNew source_set_pred p_pred
+    closedSpecAxiom <- specificationMNew source_set_pred p_pred
 
     let contextDepth = V.length (undefined::(v t))
-    (_,_,returnFuncListForm) <- multiUGM contextDepth $ do
+    (_,returnFuncListForm) <- multiUGM contextDepth $ do
         freeVars <- getFreeVars       
-        (freeSpecAx,idx) <- multiUIM closedSpecAxiom (reverse freeVars)
+        freeSpecAx <- multiUIM closedSpecAxiom (reverse freeVars)
         tagSentM "freeSpecAx" freeSpecAx
         txt <- showSentM freeSpecAx
         remarkM txt Nothing
@@ -327,18 +327,18 @@ builderInstantiateM :: (HelperConstraints sE s eL m r t,V.Vector v t) =>
      (v t -> t)  ->         -- source_set expressed as a function on paramaters
      (v t -> t -> s) ->            -- predicate, expressed as a function on paramaters
      v t ->  -- arguments to apply to the paramaters
-    ProofGenTStd () r s Text () t m ((s,t),[Int])
+    ProofGenTStd () r s Text () t m (s,t)
 builderInstantiateM source_set_f pred_f args = do
-    (builderProps, proofIdx, instantiatedObj) <- runProofBySubArgM $ do
+    (builderProps, instantiatedObj) <- runProofBySubArgM $ do
         remarkM "hello 1" Nothing
-        (tm,idx,builderFunc) <- runTheoremM $ builderSchema source_set_f pred_f
+        (tm, builderFunc) <- runTheoremM $ builderSchema source_set_f pred_f
         remarkM "hello 2" Nothing
-        (builderProps,_) <- multiUIM tm (V.toList args)
+        builderProps <- multiUIM tm (V.toList args)
         remarkM "hello 3" Nothing
         
         let instantiatedObj = builderFunc args
         return instantiatedObj
-    return ((builderProps, instantiatedObj), proofIdx)
+    return (builderProps, instantiatedObj)
 
 
 
@@ -489,34 +489,34 @@ proveBinaryUnionExistsM = do
             -- Now, isSet(A) and isSet(B) are proven assumptions in this context.
 
             -- Step 1: Use the Axiom of Pairing to prove ∃P. isSet(P) ∧ P = {A,B}.
-            (pairAxiom,_) <- pairingAxiomM
-            (pairAxiom_inst,_) <- multiUIM pairAxiom [setA, setB]
+            pairAxiom <- pairingAxiomM
+            pairAxiom_inst <- multiUIM pairAxiom [setA, setB]
 
 
             -- Step 2: Instantiate this pair set with a Hilbert term `pairSetAB`.
             -- `pair_prop` is isSet({A,B}) ∧ ∀z(z∈{A,B} ↔ z=A ∨ z=B).
-            (pair_prop, _, pairSetAB) <- eiHilbertM pairAxiom_inst
-            (isSet_pair_proven, _) <- simpLM pair_prop
+            (pair_prop, pairSetAB) <- eiHilbertM pairAxiom_inst
+            isSet_pair_proven <- simpLM pair_prop
 
             -- Step 3: Use the Axiom of Union on the proven set `pairSetAB`.
-            (unionAxiom,_) <- unionAxiomM
-            (unionAxiom_inst, _) <- uiM pairSetAB unionAxiom
+            unionAxiom <- unionAxiomM
+            unionAxiom_inst <- uiM pairSetAB unionAxiom
 
             -- Step 4: Use Modus Ponens with `isSet(pairSetAB)` to derive the existence of the union.
             -- `exists_U` is ∃U(isSet U ∧ ∀x(x∈U ↔ ∃Y(Y∈{A,B} ∧ x∈Y))).
-            (exists_U, _) <- mpM unionAxiom_inst
+            exists_U <- mpM unionAxiom_inst
             -- Step 5: Assert a general, CLOSED theorem about the equivalence of the two forms of union.
             -- Thm: ∀A,B. (isSet A ∧ isSet B) → ( (∃U. from Axiom of Union on {A,B}) ↔ (∃S. with canonical binary union prop) )
             -- We build the two existential statements as templates first.                      
 
             -- Step 6: Instantiate the theorem with our specific sets A and B.
-            (instantiated_thm, _) <- multiUIM unionEquivTheorem [setA, setB]
+            instantiated_thm <- multiUIM unionEquivTheorem [setA, setB]
 
             -- Step 7: Use Modus Ponens with our assumption `isSet A ∧ isSet B`.
-            (proven_biconditional, _) <- mpM instantiated_thm
+            proven_biconditional <- mpM instantiated_thm
 
             -- Step 8: From the equivalence and the proven `exists_U`, derive the target existential.
-            (forward_imp, _) <- bicondElimLM proven_biconditional
+            forward_imp <- bicondElimLM proven_biconditional
 
             mpM forward_imp -- This proves the target_existential
         
@@ -591,15 +591,15 @@ proveBinaryUnionTheorem :: HelperConstraints sE s eL m r t =>
 
 
 proveBinaryUnionTheorem = do
-    (_,_,unionFuncRaw) <- multiUGM 2 $ do
+    (_,unionFuncRaw) <- multiUGM 2 $ do
         v_Av_B <- getTopFreeVars 2
         let setB = head v_Av_B
         let setA = v_Av_B!!1
 
-        (_,_,unionObj) <- runProofByAsmM (isSet setA .&&. isSet setB) $ do
-            (existance_stmt, _) <- multiUIM binaryUnionExistsTheorem [setA, setB]
-            (consequent,_) <-mpM existance_stmt
-            (_,_,unionObj) <- eiHilbertM consequent
+        (_,unionObj) <- runProofByAsmM (isSet setA .&&. isSet setB) $ do
+            existance_stmt <- multiUIM binaryUnionExistsTheorem [setA, setB]
+            consequent <-mpM existance_stmt
+            (_,unionObj) <- eiHilbertM consequent
             return unionObj
         return unionObj
     let unionFunc a b = unionFuncRaw [a,b]
@@ -620,19 +620,19 @@ binaryUnionSchema =
 -- | For this function to work in a proof, isSet(setA) and isSet(setB) must be already proven,
 -- | as well as the binary union theorem itself.
 binaryUnionInstantiateM ::  HelperConstraints sE s eL m r t =>
-    t -> t -> ProofGenTStd () r s Text () t m (s, [Int], t)
+    t -> t -> ProofGenTStd () r s Text () t m (s, t)
 binaryUnionInstantiateM setA setB = do
-    (unionProps, proofIdx, instantiatedObj) <- runProofBySubArgM $ do
+    (unionProps, instantiatedObj) <- runProofBySubArgM $ do
         repM $ isSet setA
         repM $ isSet setB
         repM binaryUnionTheorem
-        (isSetAAndisSetB, _) <- adjM (isSet setA) (isSet setB)
+        isSetAAndisSetB <- adjM (isSet setA) (isSet setB)
         -- this is where we make use of our assumptions isSet(setA) and isSet(setB)
-        (unionPropsConditional, _) <- multiUIM binaryUnionTheorem [setA, setB]
-        (unionProps, _) <- mpM unionPropsConditional
+        unionPropsConditional <- multiUIM binaryUnionTheorem [setA, setB]
+        unionProps <- mpM unionPropsConditional
         let instantiatedObj = setA .\/. setB
         return instantiatedObj
-    return (unionProps, proofIdx, instantiatedObj)
+    return (unionProps, instantiatedObj)
 
 ---- BEGIN BINARY INTERSECTION EXISTS SECTION
 
@@ -679,14 +679,14 @@ proveBinaryIntersectionExistsM :: HelperConstraints sE s eL m r t =>
     ProofGenTStd () r s Text () t m ()
 proveBinaryIntersectionExistsM = do
     -- The theorem is universally quantified over two sets, A and B.
-    (final_sent,_,_) <- multiUGM 2 $ do
+    (final_sent,_) <- multiUGM 2 $ do
         -- Inside the UG, free variables v_A and v_B are introduced.
         v_Av_B <- getTopFreeVars 2
         let setB = head v_Av_B
         let setA = v_Av_B !! 1
 
         -- Prove the main implication by assuming the antecedent: isSet(A) ∧ isSet(B).
-        (implication,_,intersectionObj) <- runProofByAsmM (isSet setA .&&. isSet setB) $ do
+        (implication,intersectionObj) <- runProofByAsmM (isSet setA .&&. isSet setB) $ do
             -- Within this subproof, isSet(A) and isSet(B) are proven assumptions.
 
             -- Step 1: Define the templates for the Axiom of Specification.
@@ -710,7 +710,7 @@ proveBinaryIntersectionExistsM = do
             -- It will construct the set {x ∈ A | x ∈ B} and prove its defining property.
             -- The instantiation terms [setA, setB] correspond to the template params [X 0, X 1].
 
-            ((defining_prop, intersectionObj),_) <- builderInstantiateM
+            (defining_prop, intersectionObj) <- builderInstantiateM
                 source_set_func p_func (V.mk2 setA setB)
 
   
@@ -827,15 +827,15 @@ proveBinaryIntersectionTheorem :: HelperConstraints sE s eL m r t =>
     ProofGenTStd () r s Text () t m (t -> t -> t)
 
 proveBinaryIntersectionTheorem = do
-    (_,_,intersectionFuncRaw) <- multiUGM 2 $ do
+    (_,intersectionFuncRaw) <- multiUGM 2 $ do
         v_Av_B <- getTopFreeVars 2
         let setB = head v_Av_B
         let setA = v_Av_B!!1
 
-        (_,_,intersectionObj) <- runProofByAsmM (isSet setA .&&. isSet setB) $ do
-            (existance_stmt, _) <- multiUIM binaryIntersectionExistsTheorem [setA, setB]
-            (consequent,_) <-mpM existance_stmt
-            (_,_,intersectionObj) <- eiHilbertM consequent
+        (_,intersectionObj) <- runProofByAsmM (isSet setA .&&. isSet setB) $ do
+            existance_stmt <- multiUIM binaryIntersectionExistsTheorem [setA, setB]
+            consequent <-mpM existance_stmt
+            (_,intersectionObj) <- eiHilbertM consequent
             return intersectionObj
         return intersectionObj
     let intersectionFunc a b = intersectionFuncRaw [a,b]
@@ -854,19 +854,19 @@ binaryIntersectionSchema =
 -- | For this function to work in a proof, isSet(setA) and isSet(setB) must be already proven,
 -- | as well as the binary intersection theorem itself.
 binaryIntersectionInstantiateM ::  HelperConstraints sE s eL m r t =>
-    t -> t -> ProofGenTStd () r s Text () t m (s, [Int], t)
+    t -> t -> ProofGenTStd () r s Text () t m (s, t)
 binaryIntersectionInstantiateM setA setB = do
-    (intersectionProps, proofIdx, instantiatedObj) <- runProofBySubArgM $ do
+    (intersectionProps, instantiatedObj) <- runProofBySubArgM $ do
         repM $ isSet setA
         repM $ isSet setB
         repM binaryIntersectionTheorem
-        (isSetAAndisSetB, _) <- adjM (isSet setA) (isSet setB)
+        isSetAAndisSetB <- adjM (isSet setA) (isSet setB)
         -- this is where we make use of our assumptions isSet(setA) and isSet(setB)
-        (intersectionPropsConditional, _) <- multiUIM binaryIntersectionTheorem [setA, setB]
-        (intersectionProps, _) <- mpM intersectionPropsConditional
+        intersectionPropsConditional <- multiUIM binaryIntersectionTheorem [setA, setB]
+        intersectionProps <- mpM intersectionPropsConditional
         let instantiatedObj = setA ./\. setB
         return instantiatedObj
-    return (intersectionProps, proofIdx, instantiatedObj)
+    return (intersectionProps, instantiatedObj)
 
 
 
@@ -882,15 +882,15 @@ binaryIntersectionInstantiateM setA setB = do
 -- | proven in the current proof context.
 -- | It also relies on the theorem `binaryUnionExistsTheorem` being proven beforehand.
 proveUnionIsSetM :: HelperConstraints sE s eL m r t =>
-    t -> t -> ProofGenTStd () r s Text () t m (s, [Int])
+    t -> t -> ProofGenTStd () r s Text () t m s
 proveUnionIsSetM setA setB = do
-    (resultProp,idx,_) <- runProofBySubArgM $ do
+    (resultProp,_) <- runProofBySubArgM $ do
         remarkM "Proving union is set" Nothing
-        (prop_of_union, _, unionObj) <- binaryUnionInstantiateM setB setA
+        (prop_of_union, unionObj) <- binaryUnionInstantiateM setB setA
         remarkM "Instantiated binary union" Nothing
-        (isSet_union_proven, _) <- simpLM prop_of_union
+        isSet_union_proven <- simpLM prop_of_union
         return ()
-    return (resultProp,idx)
+    return resultProp
 
 
 --------end binary union section------------
@@ -945,30 +945,30 @@ proveUnionWithEmptySetM = do
 
             -- (isSet_EmptySet_axiom, _) <- ZFC.emptySetAxiomM
 
-            (forall_not_in_empty, _) <- emptySetAxiomM
+            forall_not_in_empty <- emptySetAxiomM
 
             -- (isSet_EmptySet_proven, _) <- simpLM isSet_EmptySet_axiom
             
-            (isSet_EmptySet_proven, _) <- emptySetNotIntM
+            isSet_EmptySet_proven <- emptySetNotIntM
 
             -- proveUnionIsSetM requires isSet v and isSet ∅ to be proven.
-            (isSet_unionObj_proven, _) <- proveUnionIsSetM emptySet v
+            isSet_unionObj_proven <- proveUnionIsSetM emptySet v
 
             remarkM "here" Nothing
             -- Step 3: Prove ∀y (y ∈ v ↔ y ∈ (v ∪ ∅))
-            (forall_bicond, _,f) <- runProofByUGM $ do
+            (forall_bicond,f) <- runProofByUGM $ do
                 y <- getTopFreeVar
 
                -- Direction 1: y ∈ v → y ∈ (v ∪ ∅)
-                (dir1, _,_) <- runProofByAsmM (y `memberOf` v) $ do
+                (dir1,_) <- runProofByAsmM (y `memberOf` v) $ do
                     -- This is a simple Disjunction Introduction.
                     disjIntroLM  (y `memberOf` v) (y `memberOf` emptySet) 
 
                     -- Now, use the definition of union to get back to y ∈ (v ∪ ∅)
-                    (def_prop_union, _, _) <- binaryUnionInstantiateM v emptySet
-                    (forall_union_bicond, _) <- simpRM def_prop_union
-                    (inst_union_bicond, _) <- uiM y forall_union_bicond
-                    (imp_to_union, _) <- bicondElimRM inst_union_bicond
+                    (def_prop_union, _) <- binaryUnionInstantiateM v emptySet
+                    forall_union_bicond <- simpRM def_prop_union
+                    inst_union_bicond <- uiM y forall_union_bicond
+                    imp_to_union <- bicondElimRM inst_union_bicond
                     
                     -- Apply Modus Ponens to get the final conclusion of this subproof.
                     mpM imp_to_union
@@ -976,21 +976,21 @@ proveUnionWithEmptySetM = do
 
                 -- To prove the biconditional, we prove each direction.
                 -- Direction 2: y ∈ (v ∪ ∅) → y ∈ v
-                (dir2, _, _) <- runProofByAsmM (y `memberOf` unionObj) $ do
+                (dir2, _) <- runProofByAsmM (y `memberOf` unionObj) $ do
                     -- Get the defining property of the union.
-                    (def_prop_union, _, _) <- binaryUnionInstantiateM v emptySet
-                    (forall_union_bicond, _) <- simpRM def_prop_union
-                    (inst_union_bicond, _) <- uiM y forall_union_bicond
-                    (imp_from_union, _) <- bicondElimLM inst_union_bicond
+                    (def_prop_union, _) <- binaryUnionInstantiateM v emptySet
+                    forall_union_bicond <- simpRM def_prop_union
+                    inst_union_bicond <- uiM y forall_union_bicond
+                    imp_from_union <- bicondElimLM inst_union_bicond
                     -- We have now proven: y ∈ (v ∪ ∅) → (y ∈ ∅ ∨ y ∈ v)
-                    (y_empty_or_in_v, _) <- mpM imp_from_union
+                    y_empty_or_in_v <- mpM imp_from_union
                     -- We have now prove that: y ∈ ∅ ∨ y ∈ v
                     -- We need a proof of ¬(y ∈ ∅) to use Disjunctive Syllogism.
 
-                    (not_y_in_empty, _) <- uiM y forall_not_in_empty
+                    not_y_in_empty <- uiM y forall_not_in_empty
                     -- We have now proved: ¬(y ∈ ∅)
                     -- We now prove that: y ∈ v ∨ y ∈ ∅
-                    (y_in_v_or_empty,_) <- commOrM y_empty_or_in_v
+                    y_in_v_or_empty <- commOrM y_empty_or_in_v
                     -- Use the Disjunctive Syllogism argument to prove y_in_v.
                     disjunctiveSyllogismM y_empty_or_in_v -- y_in_v_or_empty
 
@@ -1004,12 +1004,12 @@ proveUnionWithEmptySetM = do
             txt <- showTermM z
             remarkM ("Something " <> txt) Nothing
             -- Step 4: Apply the Axiom of Extensionality.
-            (ext_axiom, _) <- extensionalityAxiomM
-            (ext_inst, _) <- multiUIM ext_axiom [unionObj, v]
+            ext_axiom <- extensionalityAxiomM
+            ext_inst <- multiUIM ext_axiom [unionObj, v]
             -- (adj1,_) <- adjM isSet_unionObj_proven forall_bicond
             -- (full_antecedent,_) <- adjM (isSet v) adj1
-            (adj1,_) <- adjM (isSet v) forall_bicond
-            (full_antecedent,_) <- adjM isSet_unionObj_proven adj1
+            adj1 <- adjM (isSet v) forall_bicond
+            full_antecedent <- adjM isSet_unionObj_proven adj1
             repM ext_inst
             mpM ext_inst
         return emptySet
@@ -1086,23 +1086,23 @@ proveDisjointSubsetIsEmptyM = do
         let antecedent = isSet v_a .&&. ((v_a ./\. v_b) .==. emptySet) .&&. (v_b `subset` v_a)
         runProofByAsmM antecedent $ do
             -- Step 1: Deconstruct the antecedent assumption.
-            (isSet_a_proven, _) <- simpLM antecedent
-            (rest1,_) <- simpRM antecedent
-            (intersection_is_empty, _) <- simpLM rest1
-            (subset_b_a,_) <- simpRM rest1 
+            isSet_a_proven <- simpLM antecedent
+            rest1 <- simpRM antecedent
+            intersection_is_empty <- simpLM rest1
+            subset_b_a <- simpRM rest1 
 
             -- Step 2: Prove ∀x(¬(x ∈ v_b)) by contradiction.
-            (forall_not_in_b, _,_) <- runProofByUGM $ do
+            (forall_not_in_b, _) <- runProofByUGM $ do
                 x_var <- getTopFreeVar
-                (x_in_b_implies_false, _, _) <- runProofByAsmM (x_var `memberOf` v_b) $ do
+                (x_in_b_implies_false,  _) <- runProofByAsmM (x_var `memberOf` v_b) $ do
                     -- From b ⊆ a and x ∈ b, we get x ∈ a.
-                    (isSet_b, _) <- simpLM subset_b_a
-                    (forall_imp, _) <- simpRM subset_b_a
-                    (x_in_b_implies_x_in_a, _) <- uiM x_var forall_imp  
-                    (x_in_a, _) <- mpM x_in_b_implies_x_in_a
+                    isSet_b  <- simpLM subset_b_a
+                    forall_imp  <- simpRM subset_b_a
+                    x_in_b_implies_x_in_a <- uiM x_var forall_imp  
+                    x_in_a <- mpM x_in_b_implies_x_in_a
 
                     -- From x ∈ a and x ∈ b, we get x ∈ (a ∩ b).
-                    (def_prop_inter, _, _) <- binaryIntersectionInstantiateM v_a v_b
+                    (def_prop_inter, _) <- binaryIntersectionInstantiateM v_a v_b
                     txt1 <- showTermM v_b
                     remarkM ("Left set is: " <> txt1) Nothing
                     txt2 <- showTermM v_a
@@ -1111,11 +1111,11 @@ proveDisjointSubsetIsEmptyM = do
                     remarkM ("Defining property of intersection: " <> txt3) Nothing
                     -- error "STOP HERE"
 
-                    (forall_inter_bicond, _) <- simpRM def_prop_inter
-                    (inst_inter_bicond, _) <- uiM x_var forall_inter_bicond
-                    (imp_to_inter, _) <- bicondElimRM inst_inter_bicond
-                    (x_in_a_and_b, _) <- adjM   x_in_a  (x_var `memberOf` v_b) 
-                    (x_in_intersection, _) <- mpM imp_to_inter
+                    forall_inter_bicond <- simpRM def_prop_inter
+                    inst_inter_bicond <- uiM x_var forall_inter_bicond
+                    imp_to_inter <- bicondElimRM inst_inter_bicond
+                    x_in_a_and_b <- adjM   x_in_a  (x_var `memberOf` v_b) 
+                    x_in_intersection <- mpM imp_to_inter
 
                     -- From a ∩ b = ∅ and x ∈ (a ∩ b), we get x ∈ ∅.
                     let eqSubstTmplt = x_var `memberOf` x 0
@@ -1123,12 +1123,12 @@ proveDisjointSubsetIsEmptyM = do
                     --                         [v_a ./\. v_b, EmptySet]
                     txt <- showSentM intersection_is_empty
                     remarkM ("About to do eqsubst with: " <> txt) Nothing
-                    (x_in_empty, _) <- eqSubstM 0 eqSubstTmplt intersection_is_empty
+                    x_in_empty <- eqSubstM 0 eqSubstTmplt intersection_is_empty
 
 
                     -- But we know from the empty set axiom that ¬(x ∈ ∅).
-                    (forall_not_in_empty, _) <- emptySetAxiomM
-                    (not_x_in_empty, _) <- uiM x_var forall_not_in_empty
+                    forall_not_in_empty <- emptySetAxiomM
+                    not_x_in_empty <- uiM x_var forall_not_in_empty
 
                     -- This is a contradiction.
                     contraFM x_in_empty
@@ -1137,30 +1137,30 @@ proveDisjointSubsetIsEmptyM = do
                 absurdM x_in_b_implies_false
                 return emptySet
             -- Step 3: Use the result from Step 2 to prove ∀x(x ∈ b ↔ x ∈ ∅).
-            (forall_bicond, _,_) <- runProofByUGM $ do
+            (forall_bicond, _) <- runProofByUGM $ do
                 x <- getTopFreeVar
-                (not_in_b, _) <- uiM x forall_not_in_b
-                (forall_not_in_empty, _) <- emptySetAxiomM
-                (not_in_empty, _) <- uiM x forall_not_in_empty
+                not_in_b <- uiM x forall_not_in_b
+                forall_not_in_empty <- emptySetAxiomM
+                not_in_empty <- uiM x forall_not_in_empty
 
-                (dir1, _,_) <- runProofByAsmM (neg (x `memberOf` v_b))
+                (dir1, _) <- runProofByAsmM (neg (x `memberOf` v_b))
                                             (repM not_in_empty)
 
-                (dir2, _, _) <- runProofByAsmM (neg (x `memberOf` emptySet))
+                (dir2, _) <- runProofByAsmM (neg (x `memberOf` emptySet))
                                    (repM not_in_b)
-                (bicond_of_negs, _) <- bicondIntroM dir1 dir2
+                bicond_of_negs <- bicondIntroM dir1 dir2
 
                 -- Use our tautology helper to get the positive biconditional.
                 negBicondToPosBicondM bicond_of_negs
                 return emptySet
             -- Step 4: Apply the Axiom of Extensionality to prove b = ∅.
-            (isSet_b, _) <- simpLM subset_b_a
-            (isSet_empty, _) <- emptySetNotIntM
-            (ext_axiom, _) <- extensionalityAxiomM
-            (ext_inst, _) <- multiUIM ext_axiom [v_b, emptySet]
+            isSet_b <- simpLM subset_b_a
+            isSet_empty <- emptySetNotIntM
+            ext_axiom <- extensionalityAxiomM
+            ext_inst <- multiUIM ext_axiom [v_b, emptySet]
             
-            (adj1, _) <- adjM isSet_empty forall_bicond
-            (full_antecedent, _) <- adjM isSet_b adj1
+            adj1 <- adjM isSet_empty forall_bicond
+            full_antecedent <- adjM isSet_b adj1
             
             mpM ext_inst
             return ()

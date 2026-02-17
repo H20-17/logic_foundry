@@ -146,22 +146,22 @@ import qualified Data.Vector.Fixed.Cont as C
 import Control.Monad.Trans.Maybe ( MaybeT(MaybeT, runMaybeT) )
 
 standardRuleM :: HelperConstraints sE s eL m r t
-       => r -> ProofGenTStd () r s Text () t m (s,[Int])
+       => r -> ProofGenTStd () r s Text () t m s
 standardRuleM rule = do
     -- function is unsafe and used for rules that generate one or more sentence.
     -- probably should not be externally facing.
-     mayPropIndex <- monadifyProofStd rule
-     maybe (error "Critical failure: No index looking up sentence.") return mayPropIndex
+     mayProp <- monadifyProofStd rule
+     maybe (error "Critical failure: No index looking up sentence.") return mayProp
 
 
 
 specificationM :: HelperConstraints sE s eL m r t
-       => [Int] -> Int -> t -> s -> ProofGenTStd () r s Text () t m (s,[Int])
+       => [Int] -> Int -> t -> s -> ProofGenTStd () r s Text () t m s
 specificationM outerIdxs idx t s = standardRuleM (specification outerIdxs idx t s)
 
 
 specificationMNew :: (HelperConstraints sE s eL m r t, V.Vector v t)
-       => (v t -> t) -> (v t -> t -> s) -> ProofGenTStd () r s Text () t m (s,[Int])
+       => (v t -> t) -> (v t -> t -> s) -> ProofGenTStd () r s Text () t m s
 specificationMNew (t::(v t -> t)) p_pred = do
     let param_n = V.length (undefined :: v t)
     outerIdxs <- newIndices param_n
@@ -185,18 +185,18 @@ specificationMNew (t::(v t -> t)) p_pred = do
 
 
 replacementM :: HelperConstraints sE s eL m r t
-       => [Int] -> Int -> Int -> t -> s -> ProofGenTStd () r s Text () t m (s,[Int])
+       => [Int] -> Int -> Int -> t -> s -> ProofGenTStd () r s Text () t m s
 replacementM outerIdxs idx1 idx2 t s = standardRuleM (replacement outerIdxs idx1 idx2 t s)
 
 
 integerMembershipM, integerNegationM :: HelperConstraints sE s eL m r t
-       => Int -> ProofGenTStd () r s Text () t m (s,[Int])
+       => Int -> ProofGenTStd () r s Text () t m s
 integerMembershipM i = standardRuleM (integerMembership i)
 integerNegationM i = standardRuleM (integerNegation i)
 
 integerAdditionM, integerMultiplicationM, integerCompareM, integerInequalityM
  :: HelperConstraints sE s eL m r t
-       => Int -> Int -> ProofGenTStd () r s Text () t m (s,[Int])
+       => Int -> Int -> ProofGenTStd () r s Text () t m s
 integerAdditionM i1 i2 = standardRuleM (integerAddition i1 i2)
 integerMultiplicationM i1 i2 = standardRuleM (integerMultiplication i1 i2)
 integerCompareM i1 i2 = standardRuleM (integerCompare i1 i2)
@@ -212,7 +212,7 @@ integersAreUrelementsM, emptySetAxiomM, extensionalityAxiomM,emptySetNotIntM,reg
              intDistributivityAxiomM,intOrderAddCompatibilityAxiomM, intOrderMulCompatibilityAxiomM,
              natWellOrderingAxiomM
        :: HelperConstraints sE s eL m r t
-       => ProofGenTStd () r s Text () t m (s,[Int])
+       => ProofGenTStd () r s Text () t m s
 integersAreUrelementsM = standardRuleM integersAreUrelements
 emptySetAxiomM = standardRuleM emptySetStatement
 extensionalityAxiomM = standardRuleM extensionality
@@ -260,24 +260,24 @@ natWellOrderingAxiomM = standardRuleM natWellOrdering
 -- |    `isSet(PowerSet(x)) ∧ ∀Y(...)`.
 powerSetInstantiateM :: HelperConstraints sE s eL m r t =>
     t -> -- ^ The object 'x' for which to prove its power set is a set.
-    ProofGenTStd () r s Text () t m (s, [Int], t)
+    ProofGenTStd () r s Text () t m (s, t)
 powerSetInstantiateM x = do
     runProofBySubArgM $ do
         -- Step 1: Get the Axiom of Power Set from the ZFC rule set.
-        (powerSetAxiom_proven, _) <- powerSetAxiomM
+        powerSetAxiom_proven <- powerSetAxiomM
 
         -- Step 2: Instantiate the axiom with our object `x`.
         -- This proves: isSet(x) → ∃P (isSet(P) ∧ ...)
-        (instantiatedAxiom, _) <- uiM x powerSetAxiom_proven
+        instantiatedAxiom <- uiM x powerSetAxiom_proven
 
         -- Step 3: Use Modus Ponens. This relies on `isSet x` being already proven
         -- in the parent context where this helper is called.
-        (exists_P, _) <- mpM instantiatedAxiom
+        exists_P <- mpM instantiatedAxiom
 
         -- Step 4: Apply Hilbert's Existential Instantiation to the existential proposition.
         -- This introduces the `powerSet x` object and proves its property.
         -- `prop_of_powSet` is: isSet(powerSet x) ∧ ∀Y(...)
-        (prop_of_powSet, _, powSet_obj) <- eiHilbertM exists_P
+        (prop_of_powSet, powSet_obj) <- eiHilbertM exists_P
         return powSet_obj
 
 
@@ -287,14 +287,14 @@ powerSetInstantiateM x = do
 
 runProofByUGM :: HelperConstraints sE s eL m r t
                  =>  ProofGenTStd () r s Text () t m t
-                            -> ProofGenTStd () r s Text () t m (s, [Int],t -> t)
+                            -> ProofGenTStd () r s Text () t m (s, t -> t)
 runProofByUGM = PREDL.runProofByUGM ()
 
 multiUGM :: HelperConstraints sE s eL m r t =>
     Int ->                             -- ^ Number of UG's
     ProofGenTStd () r s Text () t m t ->       -- ^ The core program. Its monadic return 'x' is discarded.
                                            --   It must set 'Last s' with the prop to be generalized.
-    ProofGenTStd () r s Text () t m (s, [Int],[t] -> t)  -- ^ Returns (final_generalized_prop, its_index).
+    ProofGenTStd () r s Text () t m (s,[t] -> t)  -- ^ Returns (final_generalized_prop, its_index).
 multiUGM n = PREDL.multiUGM (replicate n ()) 
 
 

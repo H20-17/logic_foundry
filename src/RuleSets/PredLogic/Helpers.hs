@@ -96,33 +96,33 @@ import Data.Char (isDigit)
 
 
 standardRuleM :: HelperConstraints m s tType o t sE eL r q
-       => r -> ProofGenTStd tType r s o q t m (s,[Int])
+       => r -> ProofGenTStd tType r s o q t m s
 standardRuleM rule = do
     -- function is unsafe and used for rules that generate one or more sentence.
     -- probably should not be externally facing.
-     mayPropIndex <- monadifyProofStd rule
-     maybe (error "Critical failure: No index looking up sentence.") return mayPropIndex
+     mayProp <- monadifyProofStd rule
+     maybe (error "Critical failure: No index looking up sentence.") return mayProp
 
 
 
 
 uiM, egM :: HelperConstraints m s tType o t sE eL r q
-                   => t -> s -> ProofGenTStd tType r s o q t m (s,[Int])
+                   => t -> s -> ProofGenTStd tType r s o q t m s
 uiM term sent = standardRuleM (ui term sent)
 egM term sent = standardRuleM (eg term sent)
 
 
 
 eiM :: HelperConstraints m s tType o t sE eL r q
-                   => s -> o -> ProofGenTStd tType r s o q t m (s,[Int],t)
+                   => s -> o -> ProofGenTStd tType r s o q t m (s,t)
 eiM sent const = do
-                   (instantiated, idx) <- standardRuleM (ei sent const)
-                   return (instantiated,idx,const2Term const)
+                   instantiated <- standardRuleM (ei sent const)
+                   return (instantiated,const2Term const)
 
 
 
 eNegIntroM, aNegIntroM, eqSymM :: HelperConstraints m s tType o t sE eL r q
-                   => s -> ProofGenTStd tType r s o q t m (s,[Int])
+                   => s -> ProofGenTStd tType r s o q t m s
 eNegIntroM sent = standardRuleM (eNegIntro sent)
 
 aNegIntroM sent = standardRuleM (aNegIntro sent)
@@ -131,18 +131,18 @@ eqSymM eqSent = standardRuleM (eqSym eqSent)
 
 
 eiHilbertM :: HelperConstraints m s tType o t sE eL r q
-                   => s -> ProofGenTStd tType r s o q t m (s,[Int],t)
+                   => s -> ProofGenTStd tType r s o q t m (s,t)
 
 eiHilbertM sent = do
-         (instantiated, idx) <- standardRuleM (eiHilbert sent)
+         instantiated <- standardRuleM (eiHilbert sent)
          let mayParse = parseExists sent
          (f,tType) <- maybe (error "parse exists failed when it should not have") return mayParse
          let hilbertObj = reverseParseQuantToHilbert f tType
-         return (instantiated,idx,hilbertObj)
+         return (instantiated,hilbertObj)
 
 
 eqTransM :: HelperConstraints m s tType o t sE eL r q
-           => s -> s -> ProofGenTStd tType r s o q t m (s,[Int])
+           => s -> s -> ProofGenTStd tType r s o q t m s
 eqTransM eqSent1 eqSent2 = standardRuleM (eqTrans eqSent1 eqSent2)
 
 -- | Given a template sentence and a list of equalities, this function iteratively
@@ -158,7 +158,7 @@ eqTransM eqSent1 eqSent2 = standardRuleM (eqTrans eqSent1 eqSent2)
 eqSubstMultiM :: HelperConstraints m s tType o t sE eL r q
               => [(Int, s)]  -- ^ List of (index, equality) pairs for substitution.
               -> s           -- ^ The template sentence.
-              -> ProofGenTStd tType r s o q t m (s, [Int])
+              -> ProofGenTStd tType r s o q t m s
 eqSubstMultiM substitutions templateSent = do
     -- This function requires parsers for the left and right sides of an equality.
     -- We'll assume a `parseEq :: s -> Maybe (t, t)` function exists in the environment.
@@ -181,7 +181,7 @@ eqSubstMultiM substitutions templateSent = do
 
     -- Wrap the argument in a subproof
 
-    (substituted,idx,_) <- runProofBySubArgM $ do
+    (substituted,_) <- runProofBySubArgM $ do
         -- We use `repM` to assert that this initial premise is already proven in the context.
         -- This is the starting point for our chain of substitutions.
         initial_proof_data <- repM initial_premise
@@ -213,21 +213,21 @@ eqSubstMultiM substitutions templateSent = do
             ) 
             initial_proof_data
             indexed_substitutions
-    return (substituted,idx)
+    return substituted
 
 
 
 eqSubstM :: HelperConstraints m s tType o t sE eL r q
-           => Int -> s -> s -> ProofGenTStd tType r s o q t m (s,[Int])
+           => Int -> s -> s -> ProofGenTStd tType r s o q t m s
 eqSubstM idx templateSent eqSent = standardRuleM (eqSubst idx templateSent eqSent)
 
 eqReflM :: HelperConstraints m s tType o t sE eL r q
-          => t -> ProofGenTStd tType r s o q t m (s,[Int])
+          => t -> ProofGenTStd tType r s o q t m s
 eqReflM term = standardRuleM (eqRefl term)
 
 
 reverseANegIntroM, reverseENegIntroM :: HelperConstraints m s tType o t sE eL r q
-                   => s -> ProofGenTStd tType r s o q t m (s,[Int])
+                   => s -> ProofGenTStd tType r s o q t m s
 
 
 
@@ -250,27 +250,27 @@ reverseANegIntroM existsXNotPx = do
       let mayExistsNot = parseExistsNot existsXNotPx
       (f,tType) <- maybe (throwM $ ReverseANegIntroMNotExistsNot existsXNotPx) return mayExistsNot
       
-      (result_prop,idx,extra_data) <- runProofBySubArgM $ do
-         (notPc,_, hObj) <- eiHilbertM existsXNotPx
+      (result_prop,extra_data) <- runProofBySubArgM $ do
+         (notPc, hObj) <- eiHilbertM existsXNotPx
          let forallXPx = reverseParseQuantToForall f tType
-         (absurdity,_,_) <- runProofByAsmM forallXPx $ do         
-            (pc,_) <- uiM hObj forallXPx
+         (absurdity,_) <- runProofByAsmM forallXPx $ do         
+            pc <- uiM hObj forallXPx
             contraFM pc
          absurdM absurdity
-      return (result_prop, idx)
+      return result_prop
 
 reverseENegIntroM forallXNotPx = do
       let mayForallNot = parseForallNot forallXNotPx
       (f,tType) <- maybe (throwM $ ReverseENegIntroMNotForallNot forallXNotPx) return mayForallNot
       
-      (result_prop,idx,extra_data) <- runProofBySubArgM $ do
+      (result_prop,extra_data) <- runProofBySubArgM $ do
          let existsXPx = reverseParseQuantToExists f tType
-         (absurdity,_,_) <- runProofByAsmM existsXPx $ do
-            (pc,_,obj)<- eiHilbertM existsXPx
-            (notPc,_) <- uiM obj forallXNotPx        
+         (absurdity,_) <- runProofByAsmM existsXPx $ do
+            (pc,obj)<- eiHilbertM existsXPx
+            notPc <- uiM obj forallXNotPx        
             contraFM pc
          absurdM absurdity
-      return (result_prop, idx)
+      return result_prop
 
 
 
@@ -317,7 +317,7 @@ constDictTest envDict = Data.Map.foldrWithKey f Nothing
 
 runTheoremM :: HelperConstraints m s tType o t sE eL r1 q
                  =>   TheoremSchemaMT tType r1 s o q t m x ->
-                               ProofGenTStd tType r1 s o q t m (s, [Int], x)
+                               ProofGenTStd tType r1 s o q t m (s, x)
 runTheoremM (TheoremSchemaMT mayTargetM constDict lemmas prog idxs qTypes) =  do
         state <- getProofState
         context <- ask
@@ -325,11 +325,11 @@ runTheoremM (TheoremSchemaMT mayTargetM constDict lemmas prog idxs qTypes) =  do
         case other of
             Left (proof,newSteps) -> do
                 mayMonadifyRes <- monadifyProofStd (theoremSchema $ TheoremSchema constDict lemmas tm proof)
-                idx <- maybe (error "No theorem returned by monadifyProofStd on theorem schema. This shouldn't happen") (return . snd) mayMonadifyRes
-                return (tm, idx, extra)
+                maybe (error "No theorem returned by monadifyProofStd on theorem schema. This shouldn't happen") return mayMonadifyRes
+                return (tm, extra)
             Right idxs -> do
-                (_,idx) <- repM tm
-                return (tm,idx,extra)
+                _ <- repM tm
+                return (tm,extra)
 
 
 checkTheoremM :: (HelperConstraints m s tType o t sE eL r1 q)
@@ -356,7 +356,7 @@ checkSilentTheoremM (TheoremSchemaMT mayTargetM constDict lemmas prog idxs qType
 
 runTmSilentM :: HelperConstraints m s tType o t sE eL r1 q
                  =>   TheoremAlgSchema tType r1 s o q t x ->
-                               ProofGenTStd tType r1 s o q t m (s, [Int], x)
+                               ProofGenTStd tType r1 s o q t m (s,  x)
 -- runTmSilentM f (TheoremSchemaMT constDict lemmas prog) =  do
 runTmSilentM (TheoremSchemaMT mayTargetM constDict lemmas prog idxs qTypes) =  do
         state <- getProofState
@@ -366,11 +366,11 @@ runTmSilentM (TheoremSchemaMT mayTargetM constDict lemmas prog idxs qTypes) =  d
         case other of
             Left (proof,newSteps) -> do
                 mayMonadifyRes <- monadifyProofStd (theoremSchema $ TheoremSchema constDict lemmas tm proof)
-                idx <- maybe (error "No theorem returned by monadifyProofStd on theorem schema. This shouldn't happen") (return . snd) mayMonadifyRes
-                return (tm, idx, extra)
+                maybe (error "No theorem returned by monadifyProofStd on theorem schema. This shouldn't happen") return mayMonadifyRes
+                return (tm, extra)
             Right idxs -> do
-                (_,idx) <- repM tm
-                return (tm,idx,extra)
+                _ <- repM tm
+                return (tm,extra)
 
                    
 -- | Applies Universal Instantiation (UI) multiple times to a given proposition.
@@ -381,7 +381,7 @@ runTmSilentM (TheoremSchemaMT mayTargetM constDict lemmas prog idxs qTypes) =  d
 multiUIM ::  HelperConstraints m s tType o t sE eL r1 q =>
     s ->      -- initialProposition: The proposition to start with.
     [t] ->    -- instantiationTerms: List of terms to instantiate with, in order.
-    ProofGenTStd tType r1 s o q t m (s,[Int])
+    ProofGenTStd tType r1 s o q t m s
 multiUIM initialProposition instantiationTerms =
     case instantiationTerms of
         [] ->
@@ -399,24 +399,24 @@ multiUIM initialProposition instantiationTerms =
             -- Case 2: Multiple instantiation terms.
             -- Create a sub-argument whose internal proof is the sequence of UI steps.
             do
-                (result_prop, idx, extra_data) <- runProofBySubArgM (
+                (result_prop, extra_data) <- runProofBySubArgM (
                     -- Use foldM to iteratively apply PREDL.uiM.
                     -- The accumulator for foldM is (current_proposition_term, its_index).
                     foldM
-                        (\(currentProp_term, _currentProp_idx) term_to_instantiate ->
+                        (\currentProp_term term_to_instantiate ->
                             -- PREDL.uiM applies UI, proves the new proposition, adds it to proof steps,
                             -- updates the Last s writer state, and returns (new_proposition_term, new_index).
                             -- This (new_prop, new_idx) becomes the new accumulator.
                             uiM term_to_instantiate currentProp_term
                         )
-                        (initialProposition, []) -- Start fold with initialProposition and a dummy index.
+                        initialProposition -- Start fold with initialProposition and a dummy index.
                         instantiationTerms
                     -- The result of this foldM is a monadic action of type m (PropDeBr, [Int]).
                     -- This is the 'prog' for runProofBySubArgM.
                     -- Its 'Last s' writer state (set by the last PREDL.uiM) will be used
                     -- by runProofBySubArgM as the 'consequent' of the sub-argument.
                     )
-                return (result_prop, idx)
+                return result_prop
 
 
 getXVar :: MonadSent s t tType o q sE m => m t
@@ -503,7 +503,7 @@ multiEXM quantTypes inner = case quantTypes of
 
 runProofByUGM :: HelperConstraints m s tType o t sE eL r1 q
                  =>  q -> ProofGenTStd tType r1 s o q t m t
-                            -> ProofGenTStd tType r1 s o q t m (s, [Int], t-> t)
+                            -> ProofGenTStd tType r1 s o q t m (s, t-> t)
 runProofByUGM tt prog =  do
         state <- getProofState
         context <- ask
@@ -539,8 +539,8 @@ runProofByUGM tt prog =  do
                  <- lift $ runSubproofM newContext state newState preambleSteps (Last Nothing) modifiedProg vIdx
         let resultSent = createForall tt (Prelude.length frVarTypeStack) generalizable
         mayMonadifyRes <- monadifyProofStd $ proofByUG resultSent subproof
-        idx <- maybe (error "No theorem returned by monadifyProofStd on ug schema. This shouldn't happen") (return . snd) mayMonadifyRes
-        return (resultSent,idx, extraData)
+        idx <- maybe (error "No theorem returned by monadifyProofStd on ug schema. This shouldn't happen") return mayMonadifyRes
+        return (resultSent, extraData)
 
 
 
@@ -551,7 +551,7 @@ multiUGM :: HelperConstraints m s tType o t sE eL r1 q =>
     [q] ->                             -- ^ List of types for UG variables (outermost first).
     ProofGenTStd tType r1 s o q t m t ->       -- ^ The core program. Its monadic return 'x' is discarded.
                                            --   It must set 'Last s' with the prop to be generalized.
-    ProofGenTStd tType r1 s o q t m (s, [Int],[t]->t)  -- ^ Returns (final_generalized_prop, its_index).
+    ProofGenTStd tType r1 s o q t m (s, [t]->t)  -- ^ Returns (final_generalized_prop, its_index).
 multiUGM typeList programCore =
     case typeList of
         [] ->
@@ -560,21 +560,21 @@ multiUGM typeList programCore =
             -- take its 'Last s' (the proposition proven by programCore) as the consequent,
             -- wrap it in a PRF_BY_SUBARG step, and return (consequent, index_of_that_step).
             do 
-               (arg_result_prop, idx, extraData) <- runProofBySubArgM programCore
-               return (arg_result_prop, idx,const extraData)
+               (arg_result_prop,  extraData) <- runProofBySubArgM programCore
+               return (arg_result_prop, const extraData)
         [single_ug_var_type] -> -- Base case: RunproofbyUG<.
             -- Run 'programCore'. 'REM.runProofBySubArgM' will execute it,
             -- take its 'Last s' (the proposition proven by programCore) as the consequent,
             -- wrap it in a PRF_BY_SUBARG step, and return (consequent, index_of_that_step).
             do 
-               (arg_result_prop, idx, dataFunc) <- runProofByUGM single_ug_var_type programCore
+               (arg_result_prop,  dataFunc) <- runProofByUGM single_ug_var_type programCore
                let returnFunc args = dataFunc (head args)
-               return (arg_result_prop, idx,returnFunc)
+               return (arg_result_prop, returnFunc)
         (outermost_ug_var_type : penultimate_ug_var_type : remaining_ug_types) ->
             do
                 newIdxs <- newIndices (length typeList)
-                (s,idx,template_f) <- runProofByUGM outermost_ug_var_type $ do
-                    (_,_,dataFunc) <- multiUGM (penultimate_ug_var_type : remaining_ug_types) programCore
+                (s,template_f) <- runProofByUGM outermost_ug_var_type $ do
+                    (_,dataFunc) <- multiUGM (penultimate_ug_var_type : remaining_ug_types) programCore
                     let newXs = Prelude.map x newIdxs
                     let dataFuncTmplt = dataFunc newXs
                     return dataFuncTmplt
@@ -583,7 +583,7 @@ multiUGM typeList programCore =
                 let returnFunc = lambdaTermMultiNew (newIndex:newIdxs) newTmplt
                 dropIndices 1
                 dropIndices (length typeList -1)
-                return (s,idx,returnFunc)
+                return (s,returnFunc)
 
 
 createTermTmplt :: SentConstraints s t tType o q sE => 

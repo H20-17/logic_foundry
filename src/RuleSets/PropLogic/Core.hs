@@ -551,7 +551,7 @@ instance SubproofRule [LogicRule tType s sE o q t] s where
 standardRuleM :: (Monoid r,Monad m, Ord o, Show sE, Typeable sE, Show s, Typeable s, Show eL, Typeable eL,
        MonadThrow m, Show o, Typeable o, Show tType, Typeable tType, TypedSent o tType sE s,
        Monoid (PrfStdState s o tType t), ProofStd s eL r o tType q t, StdPrfPrintMonad q s o tType t m    )
-       => r -> ProofGenTStd tType r s o q t m (s,[Int])
+       => r -> ProofGenTStd tType r s o q t m s
 standardRuleM rule = do
     -- function is unsafe and used for rules that generate one or more sentence.
     -- probably should not be externally facing.
@@ -568,7 +568,7 @@ mpM, exclMidM, simpLM, simpRM, absurdM, doubleNegElimM, deMorganConjM,
        StdPrfPrintMonad q s o tType t (Either SomeException), Monoid (PrfStdContext q s o tType t),
        LogicRuleClass r s tType sE o, Monoid r,
        ProofStd s eL r o tType q t, Typeable eL, Show eL )
-          => s -> ProofGenTStd tType r s o q t m (s,[Int])
+          => s -> ProofGenTStd tType r s o q t m s
 
 adjM, disjIntroLM, disjIntroRM,  bicondIntroM  ::
        (Monad m, LogicSent s tType, Ord o, Show sE, Typeable sE, Show s, Typeable s,
@@ -577,7 +577,7 @@ adjM, disjIntroLM, disjIntroRM,  bicondIntroM  ::
        StdPrfPrintMonad q s o tType t (Either SomeException), Monoid (PrfStdContext q s o tType t),
        LogicRuleClass r s tType sE o, Monoid r,
        ProofStd s eL r o tType q t, Typeable eL, Show eL )
-          => s -> s -> ProofGenTStd tType r s o q t m (s,[Int])
+          => s -> s -> ProofGenTStd tType r s o q t m s
 
 disjElimM ::
        (Monad m, LogicSent s tType, Ord o, Show sE, Typeable sE, Show s, Typeable s,
@@ -586,7 +586,7 @@ disjElimM ::
        StdPrfPrintMonad q s o tType t (Either SomeException), Monoid (PrfStdContext q s o tType t),
        LogicRuleClass r s tType sE o, Monoid r,
        ProofStd s eL r o tType q t, Typeable eL, Show eL )
-          => s -> s -> s -> ProofGenTStd tType r s o q t m (s,[Int])
+          => s -> s -> s -> ProofGenTStd tType r s o q t m s
 
 mpM s = standardRuleM (mp s)
 exclMidM s = standardRuleM (exclMid s)
