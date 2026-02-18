@@ -434,7 +434,7 @@ negImpToConjViaEquivM s_input_neg_A_implies_B = do
 
     x <- showSentM assumption_for_raa
 
-    remarkM x Nothing
+    remarkM x
 
     -- 3. Start the RAA subproof: Assume ¬(A ∧ ¬B) and derive False.
     --    This will prove (¬(A ∧ ¬B) → False).

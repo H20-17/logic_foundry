@@ -215,7 +215,7 @@ proveBuilderTheoremMFree source_set (p_pred::(t->s)) = do
         let freeSpecAxiom = specAxInstance (const source_set) (const p_pred
                                             ::(V.Empty t -> t -> s))
         txt <- showSentM freeSpecAxiom
-        remarkM txt Nothing
+        remarkM txt
         (tm,h_obj) <- eiHilbertM freeSpecAxiom
         tagSentM "othertag" freeSpecAxiom
         return h_obj 
@@ -236,7 +236,7 @@ proveBuilderTheoremM (source_set_pred::(v t -> t )) p_pred = do
         freeSpecAx <- multiUIM closedSpecAxiom (reverse freeVars)
         tagSentM "freeSpecAx" freeSpecAx
         txt <- showSentM freeSpecAx
-        remarkM txt Nothing
+        remarkM txt
         let freeVars_v = V.fromList freeVars
         let source_set_pred_free = source_set_pred freeVars_v
         let p_pred_free = p_pred freeVars_v
@@ -245,12 +245,12 @@ proveBuilderTheoremM (source_set_pred::(v t -> t )) p_pred = do
         tagSentM "AnotherTag" freeSpecAx
         z <- fakeConstM "z" ()
         tagTermM "z" z
-        remarkM "Testing tag {%AnotherTag%} {%freeSpecAx%} {@freeSpecAx@} {%z%} {@z@}" Nothing
-        remarkM "Some sentence" (Just "whatever")
-        remarkM "The index of the previous remark should be {@whatever@}" Nothing
+        remarkM "Testing tag {%AnotherTag%} {%freeSpecAx%} {@freeSpecAx@} {%z%} {@z@}"
+        taggedRemarkM "Some sentence" "whatever"
+        remarkM "The index of the previous remark should be {@whatever@}"
         rawTextTag <- tagRawTextM "rawTag" "This is some raw text that should be retrievable in the remark above via {%rawTag%}"
-        remarkM "This remark should have a tag that retrieves the raw text: {%rawTag%}" Nothing
-        remarkM "All special sequences: {%[%%}, {%%]%}, {%[@%}, {%@]%}" Nothing
+        remarkM "This remark should have a tag that retrieves the raw text: {%rawTag%}"
+        remarkM "All special sequences: {%[%%}, {%%]%}, {%[@%}, {%@]%}"
 
 
 
@@ -330,11 +330,11 @@ builderInstantiateM :: (HelperConstraints sE s eL m r t,V.Vector v t) =>
     ProofGenTStd () r s Text () t m (s,t)
 builderInstantiateM source_set_f pred_f args = do
     (builderProps, instantiatedObj) <- runProofBySubArgM $ do
-        remarkM "hello 1" Nothing
+        remarkM "hello 1"
         (tm, builderFunc) <- runTheoremM $ builderSchema source_set_f pred_f
-        remarkM "hello 2" Nothing
+        remarkM "hello 2"
         builderProps <- multiUIM tm (V.toList args)
-        remarkM "hello 3" Nothing
+        remarkM "hello 3"
         
         let instantiatedObj = builderFunc args
         return instantiatedObj
@@ -522,7 +522,7 @@ proveBinaryUnionExistsM = do
         
         return emptySet
     txt <- showSentM binaryUnionExistsTheorem
-    remarkM txt Nothing
+    remarkM txt
     return ()
 
 
@@ -728,10 +728,10 @@ proveBinaryIntersectionExistsM = do
                 return $ isSet set_x0 .&&. forall_subexp
 
             txt <- showSentM defining_prop
-            remarkM ("Defining property of intersection set: " <> txt) Nothing
+            remarkM ("Defining property of intersection set: " <> txt)
 
             txt <- showSentM target_existential
-            remarkM ("Target existential statement: " <> txt) Nothing
+            remarkM ("Target existential statement: " <> txt)
 
             -- target_existential is the statement ∃S (isSet S ∧ ∀x(x ∈ S ↔ (x ∈ A ∧ x ∈ B))))
 
@@ -739,10 +739,10 @@ proveBinaryIntersectionExistsM = do
             -- This works because 'defining_prop' is the instantiated version of the
             -- property inside the target existential statement.
             txt <- showTermM intersectionObj
-            remarkM ("Intersection object: " <> txt) Nothing
+            remarkM ("Intersection object: " <> txt)
             egM intersectionObj target_existential
 
-            remarkM "Got here" Nothing
+            remarkM "Got here"
             return intersectionObj
         return intersectionObj
     return ()
@@ -885,9 +885,9 @@ proveUnionIsSetM :: HelperConstraints sE s eL m r t =>
     t -> t -> ProofGenTStd () r s Text () t m s
 proveUnionIsSetM setA setB = do
     (resultProp,_) <- runProofBySubArgM $ do
-        remarkM "Proving union is set" Nothing
+        remarkM "Proving union is set"
         (prop_of_union, unionObj) <- binaryUnionInstantiateM setB setA
-        remarkM "Instantiated binary union" Nothing
+        remarkM "Instantiated binary union"
         isSet_union_proven <- simpLM prop_of_union
         return ()
     return resultProp
@@ -954,7 +954,7 @@ proveUnionWithEmptySetM = do
             -- proveUnionIsSetM requires isSet v and isSet ∅ to be proven.
             isSet_unionObj_proven <- proveUnionIsSetM emptySet v
 
-            remarkM "here" Nothing
+            remarkM "here"
             -- Step 3: Prove ∀y (y ∈ v ↔ y ∈ (v ∪ ∅))
             (forall_bicond,f) <- runProofByUGM $ do
                 y <- getTopFreeVar
@@ -1002,7 +1002,7 @@ proveUnionWithEmptySetM = do
                 return emptySet
             let z = f emptySet
             txt <- showTermM z
-            remarkM ("Something " <> txt) Nothing
+            remarkM ("Something " <> txt)
             -- Step 4: Apply the Axiom of Extensionality.
             ext_axiom <- extensionalityAxiomM
             ext_inst <- multiUIM ext_axiom [unionObj, v]
@@ -1014,7 +1014,7 @@ proveUnionWithEmptySetM = do
             mpM ext_inst
         return emptySet
     txt <- showSentM unionWithEmptySetTheorem
-    remarkM txt Nothing
+    remarkM txt
     return ()
 
 
@@ -1104,11 +1104,11 @@ proveDisjointSubsetIsEmptyM = do
                     -- From x ∈ a and x ∈ b, we get x ∈ (a ∩ b).
                     (def_prop_inter, _) <- binaryIntersectionInstantiateM v_a v_b
                     txt1 <- showTermM v_b
-                    remarkM ("Left set is: " <> txt1) Nothing
+                    remarkM ("Left set is: " <> txt1)
                     txt2 <- showTermM v_a
-                    remarkM ("Right set is: " <> txt2) Nothing
+                    remarkM ("Right set is: " <> txt2)
                     txt3 <- showSentM def_prop_inter
-                    remarkM ("Defining property of intersection: " <> txt3) Nothing
+                    remarkM ("Defining property of intersection: " <> txt3)
                     -- error "STOP HERE"
 
                     forall_inter_bicond <- simpRM def_prop_inter
@@ -1122,7 +1122,7 @@ proveDisjointSubsetIsEmptyM = do
                     --(x_in_empty, _) <- eqSubstM 1 (X 0 :==: X 1 :->: ((x `In` X 0) :->: (x `In` X 1)))
                     --                         [v_a ./\. v_b, EmptySet]
                     txt <- showSentM intersection_is_empty
-                    remarkM ("About to do eqsubst with: " <> txt) Nothing
+                    remarkM ("About to do eqsubst with: " <> txt)
                     x_in_empty <- eqSubstM 0 eqSubstTmplt intersection_is_empty
 
 

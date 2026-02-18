@@ -7,7 +7,7 @@ module RuleSets.BaseLogic.Helpers
     remarkM, 
     fakePropM, fakeConstM, repM,
     runProofBySubArgM, tagSentM, tagTermM,
-    tagRawTextM
+    tagRawTextM, taggedRemarkM
 ) where
 
 import RuleSets.BaseLogic.Core
@@ -56,13 +56,19 @@ runProofBySubArgM prog =  do
 
 
 remarkM :: HelperConstraints r s o tType sE eL q t m
-          => Text -> Maybe Text -> ProofGenTStd tType r s o q t m ()
+          => Text -> ProofGenTStd tType r s o q t m ()
           
-remarkM txt mayTag = do
-    monadifyProofStd (remark txt mayTag)
-    -- The index will be that of the last step generated.
+remarkM txt = do
+    monadifyProofStd (remark txt Nothing)
     return ()
 
+
+taggedRemarkM :: HelperConstraints r s o tType sE eL q t m
+          => Text -> Text -> ProofGenTStd tType r s o q t m ()
+          
+taggedRemarkM txt tag = do
+    monadifyProofStd (remark txt (Just tag))
+    return ()
 
 
 standardRuleM :: HelperConstraints r s o tType sE eL q t m
