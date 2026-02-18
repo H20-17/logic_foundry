@@ -81,9 +81,11 @@ runProofAtomic :: (Ord s, TypedSent o tType sE s,Typeable s, Show s, Typeable o,
 runProofAtomic rule context state =
     case rule of
         Remark remark mayTag -> do
-            let tagInfo = case mayTag of
-                            Nothing -> Nothing
-                            Just tag -> Just (tag, TagDataRemark)
+            tagInfo <- case mayTag of
+                         Nothing -> return Nothing
+                         Just tag -> do
+                             unless (isValidTagName (unpack tag)) (throwError $ LogicErrInvalidTagName tag)
+                             (return . Just) (tag,TagDataRemark)
             return (Nothing, Nothing, tagInfo, False, PrfStdStepRemark remark mayTag)
         Rep s -> do
             maybe ((throwError . LogicErrRepOriginNotProven) s) return (Data.Map.lookup s (provenSents state))

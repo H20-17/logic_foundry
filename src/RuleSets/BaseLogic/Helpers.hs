@@ -56,17 +56,13 @@ runProofBySubArgM prog =  do
 
 
 remarkM :: HelperConstraints r s o tType sE eL q t m
-          => Text -> Maybe Text -> ProofGenTStd tType r s o q t m [Int]
+          => Text -> Maybe Text -> ProofGenTStd tType r s o q t m ()
           
 remarkM txt mayTag = do
     monadifyProofStd (remark txt mayTag)
     -- The index will be that of the last step generated.
-    state <- getProofState
-    context <- ask
-    let stepCnt = stepCount state
-    let idxPrefix = stepIdxPrefix context
-    let finalIdx = idxPrefix <> [stepCnt-1]
-    return finalIdx  
+    return ()
+
 
 
 standardRuleM :: HelperConstraints r s o tType sE eL q t m
