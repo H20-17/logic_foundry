@@ -79,6 +79,7 @@ import RuleSets.PropLogic.Helpers hiding
    (MetaRuleError(..))
 import qualified Data.Text.Read as TR
 import Data.Char (isDigit, digitToInt)
+import IndexTracker
 
 
 
@@ -1178,5 +1179,5 @@ type SentConstraints s t tType o q sE = (LogicSent s t tType o q, LogicTerm t, T
                                         Eq t,Show t)
 
 
-type MonadSent s t tType o q sE m = (SentConstraints s t tType o q sE,  MonadState (Sum Int) m)
 
+type MonadSent s t tType o q sE i m = (SentConstraints s t tType o q sE,  BoundVarState i m)

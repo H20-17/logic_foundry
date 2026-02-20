@@ -1,9 +1,11 @@
+{-# LANGUAGE UndecidableInstances #-}
 module IndexTracker (
     IndexTracker,
     newIndex,
     newIndices,
     dropIndices,
-    runIndexTracker
+    runIndexTracker,
+    BoundVarState(..)
 
 )
   where
@@ -18,12 +20,12 @@ type IndexTracker o =  State (Sum Int) o
 
 
 
-class (Monad m,MonadState a m) => BoundVarState a b m where
-    bvsProject :: m b
-    bvsEmbed :: b -> m ()
+class (Monad m,MonadState a m) => BoundVarState a m where
+    bvsProject :: m (Sum Int)
+    bvsEmbed :: Sum Int -> m ()
     
-instance (Monad m, MonadState (Sum Int, Sum Int) m) 
-          => BoundVarState (Sum Int, Sum Int) (Sum Int) m where
+instance (Monad m,MonadState (Sum Int, Sum Int) m) 
+          => BoundVarState (Sum Int, Sum Int)  m where
     bvsProject :: m (Sum Int)
     bvsProject = do
         state <- get
@@ -34,7 +36,7 @@ instance (Monad m, MonadState (Sum Int, Sum Int) m)
         put (a, b)            
 
 instance (Monad m, MonadState (Sum Int) m) =>
-           BoundVarState (Sum Int) (Sum Int) m where
+           BoundVarState (Sum Int) m where
     bvsProject :: m (Sum Int)
     bvsProject = get
     bvsEmbed :: Sum Int -> m ()
@@ -44,7 +46,7 @@ instance (Monad m, MonadState (Sum Int) m) =>
 
 
 
-newIndex :: (MonadState s m, BoundVarState s (Sum Int) m) => m Int
+newIndex :: (MonadState s m, BoundVarState s m) => m Int
 newIndex = do
     currentIndex <- bvsProject
     bvsEmbed $ currentIndex + ((Sum 1):: Sum Int)
@@ -52,7 +54,7 @@ newIndex = do
 
 
 
-newIndices :: (MonadState s m, BoundVarState s (Sum Int) m) => Int -> m [Int]
+newIndices :: (MonadState s m, BoundVarState s m) => Int -> m [Int]
 newIndices n = do
     currentIndex <- bvsProject
     let currentIndexInt = getSum currentIndex
@@ -60,10 +62,10 @@ newIndices n = do
     return [currentIndexInt + i | i <- [0 .. n - 1]]
 
 
-dropIndices :: (MonadState (Sum Int) m) => Int -> m ()
+dropIndices :: (MonadState s m, BoundVarState s m) => Int -> m ()
 dropIndices n = do
-    currentIndex <- get
-    put (currentIndex - Sum n)
+    currentIndex <- bvsProject
+    bvsEmbed $ currentIndex - ((Sum n):: Sum Int)
 
 
 

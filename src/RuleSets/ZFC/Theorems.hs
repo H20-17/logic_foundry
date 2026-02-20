@@ -159,7 +159,7 @@ import Control.Monad.IO.Class(MonadIO,liftIO)
 
 
 -- | Worker employed by builderTheorem
-builderTheoremWorker :: (MonadSent s t sE m, V.Vector v t)  =>
+builderTheoremWorker :: (MonadSent s t sE (Sum Int) m, V.Vector v t)  =>
     (v t -> t) ->  -- t: The set, expressed a a function on the paramaters
     (v t -> t -> s) -> -- p_pred
     m s -- the theorem
@@ -364,7 +364,7 @@ builderInstantiateM source_set_f pred_f args = do
 
 ------begin binary union section------
 
-unionEquivTheoremWorker :: MonadSent s t sE m => m s
+unionEquivTheoremWorker :: MonadSent s t sE (Sum Int) m => m s
 unionEquivTheoremWorker = do
     multiAXM 2 $ do
         setAsetBrev <- getXVars 2
@@ -403,7 +403,7 @@ unionEquivTheorem =
     runIndexTracker unionEquivTheoremWorker
 
 
-binUnionExistsTmWorker :: MonadSent s t sE m => m s
+binUnionExistsTmWorker :: MonadSent s t sE (Sum Int) m => m s
 binUnionExistsTmWorker = do
     multiAXM 2 $ do
         setAsetBrev <- getXVars 2
@@ -539,7 +539,7 @@ binaryUnionExistsSchema =
     theoremSchemaMT (MaybeT $ return Nothing) [unionEquivTheorem] proveBinaryUnionExistsM []
 
 
-binUnionTmWorker :: MonadSent s t sE m => m s
+binUnionTmWorker :: MonadSent s t sE (Sum Int) m => m s
 binUnionTmWorker = do
     multiAXM 2 $ do
         setAsetBrev <- getXVars 2
@@ -636,7 +636,7 @@ binaryUnionInstantiateM setA setB = do
 
 ---- BEGIN BINARY INTERSECTION EXISTS SECTION
 
-binaryIntersectionExistsTheoremWorker :: MonadSent s t sE m => m s
+binaryIntersectionExistsTheoremWorker :: MonadSent s t sE (Sum Int) m => m s
 binaryIntersectionExistsTheoremWorker = do
     multiAXM 2 $ do
         setAsetBrev <- getXVars 2
@@ -776,7 +776,7 @@ binaryIntersectionExistsSchema =
             []
 
 
-binIntersectionTmWorker :: MonadSent s t sE m => m s
+binIntersectionTmWorker :: MonadSent s t sE (Sum Int) m => m s
 binIntersectionTmWorker = do
     multiAXM 2 $ do
         setAsetBrev <- getXVars 2
@@ -899,7 +899,7 @@ proveUnionIsSetM setA setB = do
 
 
 
-unionWithEmptySetTmWorker :: MonadSent s t sE m => m s
+unionWithEmptySetTmWorker :: MonadSent s t sE (Sum Int) m => m s
 unionWithEmptySetTmWorker = do
     aXM $ do
         setX <- getXVar
@@ -1039,7 +1039,7 @@ unionWithEmptySetSchema =
 ----------DISJOINT SUBSETISEMPTY THEOREM
 
 
-disjointSubsetIsEmptyTheoremWorker :: MonadSent s t sE m => m s
+disjointSubsetIsEmptyTheoremWorker :: MonadSent s t sE (Sum Int) m => m s
 disjointSubsetIsEmptyTheoremWorker = do
     multiAXM 2 $ do
         setAsetB <- getXVars 2

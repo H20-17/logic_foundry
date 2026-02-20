@@ -302,7 +302,7 @@ multiUGM n = PREDL.multiUGM (replicate n ())
 -- | after builderInstantiateM has been called
 -- | Reproduces some of the work of builderInstantiateM but allows
 -- | us to pass less information to functions as a consequence.
-builderXM ::  MonadSent s t sE m => 
+builderXM ::  MonadSent s t sE i m => 
     t ->  -- t: The instantiated set, with all of the original outer context
                 --    variables instantiated
     m s -> -- p_pred: the original p_template expressed as a function (ObjDeBr -> PropDeBr),
@@ -321,7 +321,7 @@ builderXM t pred_prog= do
 -- | after builderInstantiateM has been called
 -- | Reproduces some of the work of builderInstantiateM but allows
 -- | us to pass less information to functions as a consequence.
-builderXMP ::  (MonadSent s t sE m) =>
+builderXMP ::  (MonadSent s t sE i m) =>
     t ->  -- t: The instantiated set, with all of the original outer context
                 --    variables instantiated
     (t -> s) -> -- p_pred: the original p_template expressed as a function (ObjDeBr -> PropDeBr),
@@ -352,28 +352,28 @@ multiAx :: LogicSent s t => [Int] -> s -> s
 multiAx idxs s = PREDL.multiAx (Prelude.map ((),) idxs) s
 
 
-multiAXM :: MonadSent s t sE m => Int -> m s -> m s
+multiAXM :: MonadSent s t sE i m => Int -> m s -> m s
 multiAXM quantDepth inner = PREDL.multiAXM (replicate quantDepth ()) inner
 
-multiEXM :: MonadSent s t sE m => Int -> m s -> m s
+multiEXM :: MonadSent s t sE i m => Int -> m s -> m s
 multiEXM quantDepth inner = PREDL.multiEXM (replicate quantDepth ()) inner
 
 
-eXM :: MonadSent s t sE m => m s -> m s
+eXM :: MonadSent s t sE i m => m s -> m s
 eXM inner = PREDL.eXM () inner
 
-aXM :: MonadSent s t sE m => m s -> m s
+aXM :: MonadSent s t sE i m => m s -> m s
 aXM inner = PREDL.aXM () inner
 
 
-hXM :: MonadSent s t sE m => m s -> m t
+hXM :: MonadSent s t sE i m => m s -> m t
 hXM inner = PREDL.hXM () inner
 
 
 
 
 -- | Worker employed by builderTheorem
-specAxInstanceWorker :: (MonadSent s t sE m, V.Vector v t)  =>
+specAxInstanceWorker :: (MonadSent s t sE i m, V.Vector v t)  =>
     (v t -> t) ->  -- t: The set, expressed a a function on the paramaters
     (v t -> t -> s) -> -- p_pred
 

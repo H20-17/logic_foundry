@@ -419,22 +419,22 @@ multiUIM initialProposition instantiationTerms =
                 return result_prop
 
 
-getXVar :: MonadSent s t tType o q sE m => m t
+getXVar :: MonadSent s t tType o q sE i m => m t
 getXVar = do
-    topIdx <- getSum <$> get
+    topIdx <- getSum <$> bvsProject
     return $ x (topIdx - 1)
     --       gets (x . (\x -> x - 1) . getSum)
 
-getXVars :: MonadSent s t tType o q sE m => Int -> m [t]
+getXVars :: MonadSent s t tType o q sE i m => Int -> m [t]
 getXVars n = do
-    topIdx <- getSum <$> get
+    topIdx <- getSum <$> bvsProject
     return [x (topIdx - i - 1) | i <- [0..(n-1)]]
 
 -- n starts out as 2 and ..... we have added to things to the stack... stack started out as 0, now is 2....
 -- i draws frp, [0..1].......... sp we get x (2-0-1) which is x 1, and we get x (2-1-1) which is x 0
 
 
-aXM :: MonadSent s t tType o q sE m => q -> m s -> m s
+aXM :: MonadSent s t tType o q sE i m => q -> m s -> m s
 aXM quantType inner = do
     x_idx <- newIndex
     innerSent <-inner
@@ -442,7 +442,7 @@ aXM quantType inner = do
     dropIndices 1
     return returnSent
 
-multiAXM :: MonadSent s t tType o q sE m => [q] -> m s -> m s
+multiAXM :: MonadSent s t tType o q sE i m => [q] -> m s -> m s
 -- | Applies the universal quantifier ('∀') `quantDepth` times to the result
 -- | of the inner monadic action.
 multiAXM quantTypes inner =
@@ -451,7 +451,7 @@ multiAXM quantTypes inner =
         [singleType] -> aXM singleType inner
         (firstType:restTypes) -> aXM firstType (multiAXM restTypes inner)
 
-eXM :: MonadSent s t tType o q sE m => q -> m s -> m s
+eXM :: MonadSent s t tType o q sE i m => q -> m s -> m s
 eXM quantType inner = do
     x_idx <- newIndex
     innerSent <-inner
@@ -460,7 +460,7 @@ eXM quantType inner = do
     return returnSent
 
 
-hXM :: MonadSent s t tType o q sE m => q -> m s -> m t
+hXM :: MonadSent s t tType o q sE i m => q -> m s -> m t
 hXM quantType inner = do
     x_idx <- newIndex
     innerSent <-inner
@@ -472,7 +472,7 @@ hXM quantType inner = do
 
 -- | Applies the existential quantifier ('∃') `quantDepth` times to the result
 -- | of the inner monadic action.
-multiEXM :: MonadSent s t tType o q sE m => [q] -> m s -> m s
+multiEXM :: MonadSent s t tType o q sE i m => [q] -> m s -> m s
 multiEXM quantTypes inner = case quantTypes of
     [] -> inner
     [singleType] -> eXM singleType inner
@@ -620,7 +620,7 @@ lambdaTerm target_idx template replacement =
     termSubX target_idx replacement template
 
 
-lambdaTermMultiM :: (MonadSent s t tType o q sE m, V.Vector v t) =>
+lambdaTermMultiM :: (MonadSent s t tType o q sE i m, V.Vector v t) =>
     v t -> t ->  m (v t -> t)
 lambdaTermMultiM (targetTerms::v t) sourceTerm = do
     let param_n = V.length (undefined :: v t)

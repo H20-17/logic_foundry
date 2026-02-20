@@ -495,12 +495,16 @@ findFirstDuplicate xs = fst $ foldl' check (Nothing, Set.empty) xs
 
 
 -- | Worker employed by builderTheorem
-specAxInstanceWorker :: (MonadSent s t sE m)  =>
+specAxInstanceWorker :: (MonadSent s t sE (Sum Int) m)  =>
     Int ->    -- param_n: The number of outer paramaters
     ([t] -> t) ->  -- t: The set, expressed a a function on the paramaters
     ([t] -> t -> s) -> -- p_pred
 
-    m s -- the theorem
+    m s -- the theorem    
+
+
+
+
 specAxInstanceWorker param_n t p_pred = do
     PREDL.multiAXM (replicate param_n ()) $ do
         paramVars <- PREDL.getXVars param_n
@@ -982,7 +986,7 @@ type SentConstraints s t sE
     PREDL.SentConstraints s t () Text () sE, 
     LogicSent s t, RuleSets.ZFC.Core.LogicTerm t)
 
-type MonadSent s t sE m = (SentConstraints s t sE,  MonadState (Sum Int) m)
+type MonadSent s t sE i m = (SentConstraints s t sE,BoundVarState i m)
 -- , PREDL.MonadSent s t () Text m)
 
 

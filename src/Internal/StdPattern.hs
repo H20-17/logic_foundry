@@ -132,7 +132,7 @@ instance (Ord s, Ord o) => Monoid (PrfStdState s o tType t) where
 
 
 type ProofGenTStd tType r s o q t m 
-               = ProofGeneratorT s [PrfStdStep s o tType t] (PrfStdContext q s o tType t) r (PrfStdState s o tType t) (Sum Int) m
+               = ProofGeneratorT s [PrfStdStep s o tType t] (PrfStdContext q s o tType t) r (PrfStdState s o tType t) (Sum Int,Sum Int) m
 
 
 
@@ -408,7 +408,7 @@ runSubproofM :: ( Monoid r1, ProofStd s eL1 r1 o tType q t, Monad m,
                         MonadThrow m, TypedSent o tType sE s, Show sE, Typeable sE, StdPrfPrintMonad q s o tType t m )
                  =>    PrfStdContext q s o tType t -> PrfStdState s o tType t -> PrfStdState s o tType t
                           -> [PrfStdStep s o tType t] -> Last s -> ProofGenTStd tType r1 s o q t m x
-                          -> Sum Int
+                          -> (Sum Int, Sum Int)
                           ->  m (x,s,r1,[PrfStdStep s o tType t])
 runSubproofM context baseState preambleState preambleSteps mayPreambleLastProp prog vIdx = do
           printStartFrame (contextFrames context)
