@@ -441,7 +441,6 @@ theoremSchemaMT mayTargetProg lemmas proof consts =
             , constDictM = constDict
             , lemmasM = lemmas
             , proofM = proof
-            , protectedXVars = []
             , contextVarTypes = []
         }
 

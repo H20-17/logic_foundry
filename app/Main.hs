@@ -93,7 +93,7 @@ import Control.Monad.Trans.Maybe ( MaybeT(MaybeT, runMaybeT) )
 
 
 testTheoremMSchema :: (MonadThrow m, StdPrfPrintMonad () PropDeBr Text () ObjDeBr m) => PRED.TheoremSchemaMT () [PredRuleDeBr] PropDeBr Text () ObjDeBr m ()
-testTheoremMSchema = PRED.TheoremSchemaMT mayTargetM [("N",())] [z1,z2] theoremProg [] []
+testTheoremMSchema = PRED.TheoremSchemaMT mayTargetM [("N",())] [z1,z2] theoremProg []
   where
     z1 = aX 99 ((X 99 `In` Constant "N") :&&: (X 99 :<=: Integ 10) :->: (X 99 :<=: Integ 0))
     z2 = aX 0 ((X 0 `In` Constant "N") :&&: (X 0 :<=: Integ 0) :->: (X 0 :==: Integ 0))
