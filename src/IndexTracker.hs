@@ -21,26 +21,26 @@ type IndexTracker o =  State (Sum Int) o
 
 
 class (Monad m,MonadState a m) => BoundVarState a m where
-    bvsProject :: m (Sum Int)
-    bvsEmbed :: Sum Int -> m ()
+    bvsGet :: m (Sum Int)
+    bvsPut :: Sum Int -> m ()
     
 instance (Monad m,MonadState (Sum Int, [Int]) m) 
           => BoundVarState (Sum Int, [Int])  m where
-    bvsProject :: m (Sum Int)
-    bvsProject = do
+    bvsGet :: m (Sum Int)
+    bvsGet = do
         state <- get
         return $ fst state
-    bvsEmbed :: Sum Int -> m ()
-    bvsEmbed a = do
+    bvsPut :: Sum Int -> m ()
+    bvsPut a = do
         (_,b) <- get
         put (a, b)            
 
 instance (Monad m, MonadState (Sum Int) m) =>
            BoundVarState (Sum Int) m where
-    bvsProject :: m (Sum Int)
-    bvsProject = get
-    bvsEmbed :: Sum Int -> m ()
-    bvsEmbed = put
+    bvsGet :: m (Sum Int)
+    bvsGet = get
+    bvsPut :: Sum Int -> m ()
+    bvsPut = put
 
 
 
@@ -48,24 +48,24 @@ instance (Monad m, MonadState (Sum Int) m) =>
 
 newIndex :: (MonadState s m, BoundVarState s m) => m Int
 newIndex = do
-    currentIndex <- bvsProject
-    bvsEmbed $ currentIndex + ((Sum 1):: Sum Int)
+    currentIndex <- bvsGet
+    bvsPut $ currentIndex + ((Sum 1):: Sum Int)
     return $ getSum currentIndex
 
 
 
 newIndices :: (MonadState s m, BoundVarState s m) => Int -> m [Int]
 newIndices n = do
-    currentIndex <- bvsProject
+    currentIndex <- bvsGet
     let currentIndexInt = getSum currentIndex
-    bvsEmbed $ currentIndex + (Sum n)
+    bvsPut $ currentIndex + (Sum n)
     return [currentIndexInt + i | i <- [0 .. n - 1]]
 
 
 dropIndices :: (MonadState s m, BoundVarState s m) => Int -> m ()
 dropIndices n = do
-    currentIndex <- bvsProject
-    bvsEmbed $ currentIndex - ((Sum n):: Sum Int)
+    currentIndex <- bvsGet
+    bvsPut $ currentIndex - ((Sum n):: Sum Int)
 
 
 

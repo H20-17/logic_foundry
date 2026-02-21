@@ -20,7 +20,9 @@ module Internal.StdPattern(
     ShowableTerm(..),
     QuantifiableTerm(..),
     printStepsFull,
-    TagData(..)
+    TagData(..),
+    pushUniversalVar, popUniversalVar,
+    popUniversalVars
 
 
 ) where
@@ -52,7 +54,7 @@ import Kernel
 import Control.Arrow ( left )
 import Control.Monad.Trans ( MonadTrans(lift) )
 import Control.Monad.Reader ( MonadReader(ask) )
-import Control.Monad.State ( MonadState(get) )
+import Control.Monad.State ( MonadState(get,put) )
 import Control.Monad.Writer ( MonadWriter(tell) )
 import Data.Monoid ( Monoid(mempty, mappend),Last(..), Sum(..), getSum )
 import IndexTracker
@@ -247,6 +249,7 @@ data TestSubproofMException s sE where
    BigExceptNothingProved :: TestSubproofMException s sE
    BigExceptEmptyVarStack :: TestSubproofMException s sE
    BigExceptNotNFreeVars :: Int -> TestSubproofMException s sE
+   BigExceptEmptyFreeVarStack :: TestSubproofMException s sE
 
    deriving(Show)
 
@@ -457,4 +460,32 @@ showSentM obj =
       let dict = provenSents state
       return $ showSent dict obj
 
-      
+pushUniversalVar :: (Monoid r1, Monad m,
+                     Proof eL r1 (PrfStdState s o tType t) (PrfStdContext q s o tType t) [PrfStdStep s o tType t] s) 
+                          => Int -> ProofGenTStd tType r1 s o q t m ()
+pushUniversalVar n = do
+        (bvIndex,freeVarStack) <- get
+        let newStack = n : freeVarStack
+        put (bvIndex, newStack)
+
+popUniversalVar :: (Monoid r1, Monad m, MonadThrow m,
+                     Proof eL r1 (PrfStdState s o tType t) (PrfStdContext q s o tType t) [PrfStdStep s o tType t] s, 
+                     TypeableTerm t Text tType sE q) => ProofGenTStd tType r1 s o q t m t
+popUniversalVar = do
+        (bvIndex,freeVarStack) <- get
+        case freeVarStack of
+             [] -> throwM BigExceptEmptyFreeVarStack
+             (x:xs) -> do 
+                put (bvIndex, xs)               
+                return $ free2Term x
+
+popUniversalVars :: (Monoid r1, Monad m, MonadThrow m,
+                     Proof eL r1 (PrfStdState s o tType t) (PrfStdContext q s o tType t) [PrfStdStep s o tType t] s,
+                     TypeableTerm t Text tType sE q) => 
+                          Int -> ProofGenTStd tType r1 s o q t m [t]
+popUniversalVars n = do
+        (bvIndex,freeVarStack) <- get
+        if length freeVarStack < n then throwM (BigExceptNotNFreeVars n)
+            else do
+                put (bvIndex, drop n freeVarStack)     
+                return (Prelude.map free2Term (take n freeVarStack))

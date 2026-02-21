@@ -80,7 +80,8 @@ import Internal.StdPattern
       ProofGenTStd,
       TypeableTerm(extractConstsTerm),
       TypedSent(extractConstsSent),
-      getFreeVars, ShowableTerm (showTerm),
+      getFreeVars, ShowableTerm (showTerm), popUniversalVar,
+      popUniversalVars
      )
 
 import RuleSets.BaseLogic.Core hiding 
@@ -232,6 +233,7 @@ proveBuilderTheoremM (source_set_pred::(v t -> t )) p_pred = do
 
     let contextDepth = V.length (undefined::(v t))
     (_,returnFuncListForm) <- multiUGM contextDepth $ do
+        freeVars <- popUniversalVars contextDepth
         freeVars <- getFreeVars       
         freeSpecAx <- multiUIM closedSpecAxiom (reverse freeVars)
         tagSentM "freeSpecAx" freeSpecAx

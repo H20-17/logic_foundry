@@ -95,6 +95,7 @@ import Data.Char (isDigit)
 
 
 
+
 standardRuleM :: HelperConstraints m s tType o t sE eL r q
        => r -> ProofGenTStd tType r s o q t m s
 standardRuleM rule = do
@@ -421,13 +422,13 @@ multiUIM initialProposition instantiationTerms =
 
 getXVar :: MonadSent s t tType o q sE i m => m t
 getXVar = do
-    topIdx <- getSum <$> bvsProject
+    topIdx <- getSum <$> bvsGet
     return $ x (topIdx - 1)
     --       gets (x . (\x -> x - 1) . getSum)
 
 getXVars :: MonadSent s t tType o q sE i m => Int -> m [t]
 getXVars n = do
-    topIdx <- getSum <$> bvsProject
+    topIdx <- getSum <$> bvsGet
     return [x (topIdx - i - 1) | i <- [0..(n-1)]]
 
 -- n starts out as 2 and ..... we have added to things to the stack... stack started out as 0, now is 2....
@@ -521,10 +522,16 @@ runProofByUGM tt prog =  do
         }
         let preambleSteps = [PrfStdStepFreevar (length frVarTypeStack) (qTypeToTType tt)]
         let modifiedProg = do
+            pushUniversalVar (length frVarTypeStack)
+            -- this puts an index of a free variable onto the dynamic stack.
+            -- This stack is part of the user-manipulable state.
+            -- This is different from the static stack of free variable types, which is part of the context and is not directly manipulable by the user.
+
             progData <- prog
             -- txt <- showTermM progData
             -- remarkM $ "Data returned from program: " <> txt
             topFreeVar <- getTopFreeVar
+            
             newIdx <- newIndex
             -- remarkM $ "new index for ug variable: " <> pack (show newIdx)
             let dataFuncTmplt = createTermTmplt [(topFreeVar, newIdx)] progData

@@ -13,7 +13,10 @@ module StdPattern(
     showSentM,
     showTermM,
     QuantifiableTerm(..),
-    getFreeVars
+    getFreeVars,
+    pushUniversalVar,
+    popUniversalVar,
+    popUniversalVars
     
 ) where
 import Kernel
@@ -46,4 +49,7 @@ import Internal.StdPattern
       showSentM,
       showTermM,
       QuantifiableTerm(..),
-      getFreeVars)
+      getFreeVars,
+      pushUniversalVar,
+      popUniversalVar,
+      popUniversalVars)
