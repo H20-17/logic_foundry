@@ -24,8 +24,8 @@ class (Monad m,MonadState a m) => BoundVarState a m where
     bvsProject :: m (Sum Int)
     bvsEmbed :: Sum Int -> m ()
     
-instance (Monad m,MonadState (Sum Int, Sum Int) m) 
-          => BoundVarState (Sum Int, Sum Int)  m where
+instance (Monad m,MonadState (Sum Int, [Int]) m) 
+          => BoundVarState (Sum Int, [Int])  m where
     bvsProject :: m (Sum Int)
     bvsProject = do
         state <- get
