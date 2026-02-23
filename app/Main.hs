@@ -1689,7 +1689,7 @@ testprog = do
       
       fux<- PRED.runProofByUGM () $ do
           runProofByAsmM  asm2 do
-              (s5,_)<- runProofBySubArgM  do
+              (s5,_)<- runProofBySubArgM Nothing do
                  newFreeVar <- getTopFreeVar
                  s1 <- uiM newFreeVar z1
                  s2 <- mpM s1

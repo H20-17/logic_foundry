@@ -34,9 +34,10 @@ import Kernel
 
 
 runProofBySubArgM :: HelperConstraints r1 s o tType sE eL q t m
-                 =>   ProofGenTStd tType r1 s o q t m x
+                 =>  Maybe Text 
+                   ->   ProofGenTStd tType r1 s o q t m x
                             -> ProofGenTStd tType r1 s o q t m (s,x)
-runProofBySubArgM prog =  do
+runProofBySubArgM mayLabel prog =  do
         state <- getProofState
         context <- ask
         let frVarTypeStack = freeVarTypeStack context
@@ -50,7 +51,7 @@ runProofBySubArgM prog =  do
         vIdx <- get
         (extraData,consequent,subproof,newSteps) 
             <- lift $ runSubproofM newContext state newState preambleSteps (Last Nothing) prog vIdx
-        mayMonadifyRes <- monadifyProofStd $ proofBySubArg consequent subproof
+        mayMonadifyRes <- monadifyProofStd $ proofBySubArg consequent mayLabel subproof
         maybe (error "No theorem returned by monadifyProofStd on subarg schema. This shouldn't happen") return mayMonadifyRes
         return (consequent, extraData)
 

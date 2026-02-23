@@ -234,7 +234,7 @@ proveBuilderTheoremM (source_set_pred::(v t -> t )) p_pred = do
     let contextDepth = V.length (undefined::(v t))
     (_,returnFuncListForm) <- multiUGM contextDepth $ do
         freeVars <- popUniversalVars contextDepth
-        freeVars <- getFreeVars       
+        --freeVars <- getFreeVars       
         freeSpecAx <- multiUIM closedSpecAxiom (reverse freeVars)
         tagSentM "freeSpecAx" freeSpecAx
         txt <- showSentM freeSpecAx
@@ -262,6 +262,30 @@ proveBuilderTheoremM (source_set_pred::(v t -> t )) p_pred = do
 
 
     return returnFunc
+
+
+builderSchema :: (HelperConstraints sE s eL m r t, V.Vector v t) =>
+    (v t -> t)  ->         -- source_set expressed as a function on paramaters
+    (v t -> t -> s) ->            -- predicate, expressed as a function on paramaters
+    TheoremSchemaMT r s t m (v t -> t)
+builderSchema (source_set_f::(v t -> t)) p_pred = 
+    let
+        all_consts = Set.toList $ extractConstsFromLambdaSpec source_set_f p_pred
+        builder_func = runIndexTracker $ do
+            let param_n = V.length (undefined::(v t))
+            param_idxs <- newIndices param_n
+            let param_vars = V.fromList $ Prelude.map x param_idxs
+            let source_set_tmplt = source_set_f param_vars
+            let p_tmplt_pred = p_pred param_vars
+            builderSet <- builderXMP source_set_tmplt p_tmplt_pred
+            builderFunc <- lambdaTermMultiM (V.reverse param_vars) builderSet
+            dropIndices param_n
+            return builderFunc
+
+    in
+        theoremSchemaMT (return (builderTheorem source_set_f p_pred, builder_func)) []
+           (proveBuilderTheoremM source_set_f p_pred)
+           all_consts
 
 
 testBuilderTheoremM :: (HelperConstraints sE s eL m r t, V.Vector v t, MonadIO m, Show (v t)) =>
@@ -297,28 +321,7 @@ testBuilderTheoremM source_set_pred pred_f args (proxy_r :: Proxy r) = do
 
 
 
-builderSchema :: (HelperConstraints sE s eL m r t, V.Vector v t) =>
-    (v t -> t)  ->         -- source_set expressed as a function on paramaters
-    (v t -> t -> s) ->            -- predicate, expressed as a function on paramaters
-    TheoremSchemaMT r s t m (v t -> t)
-builderSchema (source_set_f::(v t -> t)) p_pred = 
-    let
-        all_consts = Set.toList $ extractConstsFromLambdaSpec source_set_f p_pred
-        builder_func = runIndexTracker $ do
-            let param_n = V.length (undefined::(v t))
-            param_idxs <- newIndices param_n
-            let param_vars = V.fromList $ Prelude.map x param_idxs
-            let source_set_tmplt = source_set_f param_vars
-            let p_tmplt_pred = p_pred param_vars
-            builderSet <- builderXMP source_set_tmplt p_tmplt_pred
-            builderFunc <- lambdaTermMultiM (V.reverse param_vars) builderSet
-            dropIndices param_n
-            return builderFunc
 
-    in
-        theoremSchemaMT (return (builderTheorem source_set_f p_pred, builder_func)) []
-           (proveBuilderTheoremM source_set_f p_pred)
-           all_consts
 
    
 
@@ -331,7 +334,7 @@ builderInstantiateM :: (HelperConstraints sE s eL m r t,V.Vector v t) =>
      v t ->  -- arguments to apply to the paramaters
     ProofGenTStd () r s Text () t m (s,t)
 builderInstantiateM source_set_f pred_f args = do
-    (builderProps, instantiatedObj) <- runProofBySubArgM $ do
+    (builderProps, instantiatedObj) <- runProofBySubArgM (Just "BUILDER_INSTANTIATE")$ do
         remarkM "hello 1"
         (tm, builderFunc) <- runTheoremM $ builderSchema source_set_f pred_f
         remarkM "hello 2"
@@ -624,7 +627,7 @@ binaryUnionSchema =
 binaryUnionInstantiateM ::  HelperConstraints sE s eL m r t =>
     t -> t -> ProofGenTStd () r s Text () t m (s, t)
 binaryUnionInstantiateM setA setB = do
-    (unionProps, instantiatedObj) <- runProofBySubArgM $ do
+    (unionProps, instantiatedObj) <- runProofBySubArgM Nothing $ do
         repM $ isSet setA
         repM $ isSet setB
         repM binaryUnionTheorem
@@ -858,7 +861,7 @@ binaryIntersectionSchema =
 binaryIntersectionInstantiateM ::  HelperConstraints sE s eL m r t =>
     t -> t -> ProofGenTStd () r s Text () t m (s, t)
 binaryIntersectionInstantiateM setA setB = do
-    (intersectionProps, instantiatedObj) <- runProofBySubArgM $ do
+    (intersectionProps, instantiatedObj) <- runProofBySubArgM Nothing $ do
         repM $ isSet setA
         repM $ isSet setB
         repM binaryIntersectionTheorem
@@ -886,7 +889,7 @@ binaryIntersectionInstantiateM setA setB = do
 proveUnionIsSetM :: HelperConstraints sE s eL m r t =>
     t -> t -> ProofGenTStd () r s Text () t m s
 proveUnionIsSetM setA setB = do
-    (resultProp,_) <- runProofBySubArgM $ do
+    (resultProp,_) <- runProofBySubArgM Nothing $ do
         remarkM "Proving union is set"
         (prop_of_union, unionObj) <- binaryUnionInstantiateM setB setA
         remarkM "Instantiated binary union"

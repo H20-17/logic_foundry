@@ -182,7 +182,7 @@ eqSubstMultiM substitutions templateSent = do
 
     -- Wrap the argument in a subproof
 
-    (substituted,_) <- runProofBySubArgM $ do
+    (substituted,_) <- runProofBySubArgM (Just "EQ_SUBST_MULTI") $ do
         -- We use `repM` to assert that this initial premise is already proven in the context.
         -- This is the starting point for our chain of substitutions.
         initial_proof_data <- repM initial_premise
@@ -251,7 +251,7 @@ reverseANegIntroM existsXNotPx = do
       let mayExistsNot = parseExistsNot existsXNotPx
       (f,tType) <- maybe (throwM $ ReverseANegIntroMNotExistsNot existsXNotPx) return mayExistsNot
       
-      (result_prop,extra_data) <- runProofBySubArgM $ do
+      (result_prop,extra_data) <- runProofBySubArgM (Just "REVERSE_ANEG_INTRO") $ do
          (notPc, hObj) <- eiHilbertM existsXNotPx
          let forallXPx = reverseParseQuantToForall f tType
          (absurdity,_) <- runProofByAsmM forallXPx $ do         
@@ -264,7 +264,7 @@ reverseENegIntroM forallXNotPx = do
       let mayForallNot = parseForallNot forallXNotPx
       (f,tType) <- maybe (throwM $ ReverseENegIntroMNotForallNot forallXNotPx) return mayForallNot
       
-      (result_prop,extra_data) <- runProofBySubArgM $ do
+      (result_prop,extra_data) <- runProofBySubArgM (Just "REVERSE_ENEG_INTRO") $ do
          let existsXPx = reverseParseQuantToExists f tType
          (absurdity,_) <- runProofByAsmM existsXPx $ do
             (pc,obj)<- eiHilbertM existsXPx
@@ -400,7 +400,7 @@ multiUIM initialProposition instantiationTerms =
             -- Case 2: Multiple instantiation terms.
             -- Create a sub-argument whose internal proof is the sequence of UI steps.
             do
-                (result_prop, extra_data) <- runProofBySubArgM (
+                (result_prop, extra_data) <- runProofBySubArgM (Just "MULTI_UI")(
                     -- Use foldM to iteratively apply PREDL.uiM.
                     -- The accumulator for foldM is (current_proposition_term, its_index).
                     foldM
@@ -567,7 +567,7 @@ multiUGM typeList programCore =
             -- take its 'Last s' (the proposition proven by programCore) as the consequent,
             -- wrap it in a PRF_BY_SUBARG step, and return (consequent, index_of_that_step).
             do 
-               (arg_result_prop,  extraData) <- runProofBySubArgM programCore
+               (arg_result_prop,  extraData) <- runProofBySubArgM Nothing programCore
                return (arg_result_prop, const extraData)
         [single_ug_var_type] -> -- Base case: RunproofbyUG<.
             -- Run 'programCore'. 'REM.runProofBySubArgM' will execute it,

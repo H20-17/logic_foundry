@@ -935,8 +935,8 @@ instance (Show sE, Typeable sE, Show s, Typeable s, TypedSent Text () sE s,
 
 
 instance REM.SubproofRule [LogicRule s sE t] s where
-     proofBySubArg:: s -> [LogicRule s sE t] -> [LogicRule s sE t]
-     proofBySubArg s r = [ProofBySubArg $ ProofBySubArgSchema s r]
+     proofBySubArg:: s -> Maybe Text -> [LogicRule s sE t] -> [LogicRule s sE t]
+     proofBySubArg s mayLabel r = [ProofBySubArg $ ProofBySubArgSchema s mayLabel r]
 
 
 

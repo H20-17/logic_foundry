@@ -520,7 +520,7 @@ exFalsoM :: HelperConstraints r1 s o tType sE eL q t m =>
     s -> -- ^ s_target: The arbitrary proposition 'p' to be proven.
     ProofGenTStd tType r1 s o q t m s
 exFalsoM s_target = do
-    (s_target_proven,_) <- runProofBySubArgM $ do
+    (s_target_proven,_) <- runProofBySubArgM (Just "EX_FALSO_QUODLIBET") $ do
         -- Step 1: Start a subproof assuming the negation of our target.
         -- This will prove (¬P → False).
         (not_p_implies_false, _) <- runProofByAsmM (neg s_target) $ do
@@ -553,7 +553,7 @@ disjunctiveSyllogismM :: (HelperConstraints r1 s o tType sE eL q t m) =>
 disjunctiveSyllogismM pOrQ = do
     (p,q) <- maybe (throwM $ MetaRuleErrDisjSyllNotDisj pOrQ) return (parseDisj pOrQ)
     let negQ = neg q
-    (result_sent, _) <- runProofBySubArgM $ do
+    (result_sent, _) <- runProofBySubArgM (Just "DISJUNCTIVE_SYLLOGISM") $ do
         repM pOrQ -- Re-assert P ∨ Q to emphasize that it should already be proven
         repM negQ -- Re-Assert ¬Q to emphasize that it should already be proven.
         -- Prove the goal P by using Disjunction Elimination (Proof by Cases) on P ∨ Q.
@@ -602,7 +602,7 @@ posBicondToNegBicondM s = do
 
     repM s -- We are assuming P ↔ Q is already proven in the context and we reiterate it for emphasis.
     
-    (target,_) <- runProofBySubArgM $ do
+    (target,_) <- runProofBySubArgM (Just "POS_BICOND_TO_NEG_BICOND") $ do
         (notP_implies_notQ, _) <- runProofByAsmM negP $ do
             -- Assume ¬P.
             -- From P ↔ Q, we can derive Q → P.
@@ -649,7 +649,7 @@ negBicondToPosBicondM s = do
     q <- maybe (throwM $ MetaRuleErrNotNegBicond s) return (parseNeg negQ)
     let negBicond = neg p .<->. neg q
     
-    (target,_) <- runProofBySubArgM $ do
+    (target,_) <- runProofBySubArgM (Just "NEG_BICOND_TO_POS_BICOND") $ do
         posBicondPre <- posBicondToNegBicondM negBicond
         negNegP_imp_negNegQ <- bicondElimLM posBicondPre
         (p_implies_q, _) <- runProofByAsmM p $ do

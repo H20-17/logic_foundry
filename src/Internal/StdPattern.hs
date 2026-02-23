@@ -150,6 +150,7 @@ data PrfStdStep s o tType t where
     PrfStdStepConst :: o -> tType -> PrfStdStep s o tType t
     PrfStdStepTheorem :: s -> [PrfStdStep s o tType t] -> PrfStdStep s o tType t
     PrfStdStepSubproof :: s -> Text -> [PrfStdStep s o tType t] ->  PrfStdStep s o tType t
+    PrfStdStepSubproofBasic :: s -> Maybe Text -> [PrfStdStep s o tType t] -> PrfStdStep s o tType t
     PrfStdStepTheoremM :: s -> PrfStdStep s o tType t
     PrfStdStepFreevar :: Int -> tType -> PrfStdStep s o tType t
     PrfStdStepFakeConst :: o ->tType -> PrfStdStep s o tType t

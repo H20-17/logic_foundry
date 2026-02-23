@@ -537,8 +537,8 @@ instance LogicRuleClass [LogicRule tType s sE o q t] s tType sE o where
 
 
 instance REM.SubproofRule [LogicRule tType s sE o q t] s where
-    proofBySubArg :: s -> [LogicRule tType s sE o q t] -> [LogicRule tType s sE o q t]
-    proofBySubArg s r = [ProofBySubArg $ ProofBySubArgSchema s r]
+    proofBySubArg :: s -> Maybe Text -> [LogicRule tType s sE o q t] -> [LogicRule tType s sE o q t]
+    proofBySubArg s mayLabel r = [ProofBySubArg $ ProofBySubArgSchema s mayLabel r]
  
 
 instance SubproofRule [LogicRule tType s sE o q t] s where

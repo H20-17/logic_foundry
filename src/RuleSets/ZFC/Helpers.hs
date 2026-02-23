@@ -262,7 +262,7 @@ powerSetInstantiateM :: HelperConstraints sE s eL m r t =>
     t -> -- ^ The object 'x' for which to prove its power set is a set.
     ProofGenTStd () r s Text () t m (s, t)
 powerSetInstantiateM x = do
-    runProofBySubArgM $ do
+    runProofBySubArgM (Just "POWER_SET_INSTANTIATE") $ do
         -- Step 1: Get the Axiom of Power Set from the ZFC rule set.
         powerSetAxiom_proven <- powerSetAxiomM
 

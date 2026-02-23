@@ -541,8 +541,8 @@ instance (LogicSent s t tType o q, Show sE, Typeable sE, Show s, Typeable s, Typ
 
 
 instance REM.SubproofRule [LogicRule s sE o t tType q] s where
-     proofBySubArg:: s -> [LogicRule s sE o t tType q] -> [LogicRule s sE o t tType q]
-     proofBySubArg s r = [ProofBySubArg $ ProofBySubArgSchema s r]
+     proofBySubArg:: s -> Maybe Text -> [LogicRule s sE o t tType q] -> [LogicRule s sE o t tType q]
+     proofBySubArg s mayLabel r = [ProofBySubArg $ ProofBySubArgSchema s mayLabel r]
 
 
 
@@ -778,7 +778,7 @@ multiUGMWorker typeList programCore =
             -- take its 'Last s' (the proposition proven by programCore) as the consequent,
             -- wrap it in a PRF_BY_SUBARG step, and return (consequent, index_of_that_step).
             do 
-               (arg_result_prop, extraData) <- runProofBySubArgM programCore
+               (arg_result_prop, extraData) <- runProofBySubArgM Nothing programCore
                return (arg_result_prop, extraData)
 
         (outermost_ug_var_type : remaining_ug_types) ->

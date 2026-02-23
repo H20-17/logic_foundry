@@ -30,6 +30,7 @@ import Data.Map (Map,lookup)
 import Internal.StdPattern
 import Kernel
 import Data.Char (isAlphaNum)
+import Distribution.Simple.Setup (maybeToFlag)
 
 
 data LogicError s sE o where
@@ -247,14 +248,15 @@ instance LogicRuleClass [LogicRule tType s sE o q t] s o tType sE t where
 
 
 instance SubproofRule [LogicRule tType s sE o q t] s where
-    proofBySubArg :: s -> [LogicRule tType s sE o q t] -> [LogicRule tType s sE o q t]
-    proofBySubArg s r = [ProofBySubArg $ ProofBySubArgSchema s r]
+    proofBySubArg :: s -> Maybe Text -> [LogicRule tType s sE o q t] -> [LogicRule tType s sE o q t]
+    proofBySubArg s mayLabel r = [ProofBySubArg $ ProofBySubArgSchema s mayLabel r]
 
 
 
 data ProofBySubArgSchema s r where
    ProofBySubArgSchema :: {
                        argPrfConsequent :: s,
+                       maybeLabel :: Maybe Text,
                        argPrfProof :: r
                     } -> ProofBySubArgSchema s r
     deriving Show
@@ -272,7 +274,7 @@ runProofBySubArg :: (ProofStd s eL1 r1 o tType q t,  TypedSent o tType sE s) =>
                         PrfStdContext q s o tType t -> 
                         PrfStdState s o tType t ->
                         Either (SubproofError s sE eL1) (PrfStdStep s o tType t)
-runProofBySubArg (ProofBySubArgSchema consequent subproof) context state  =
+runProofBySubArg (ProofBySubArgSchema consequent mayLabel subproof) context state  =
       do
          let frVarTypeStack = freeVarTypeStack context
          let constdict = fmap fst (consts state)
@@ -284,14 +286,14 @@ runProofBySubArg (ProofBySubArgSchema consequent subproof) context state  =
          let preambleSteps = []
          let eitherTestResult = testSubproof newContext state newState preambleSteps (Last Nothing) consequent subproof
          finalSteps <- either (throwError . ProofBySubArgErrSubproofFailedOnErr) return eitherTestResult
-         return (PrfStdStepSubproof consequent "PRF_BY_SUBARG" finalSteps)
+         return (PrfStdStepSubproofBasic consequent mayLabel finalSteps)
 
 
 
 
 
 class SubproofRule r s where
-   proofBySubArg :: s -> r -> r
+   proofBySubArg :: s -> Maybe Text -> r -> r
 
 
 type HelperConstraints r s o tType sE eL q t m = (Monad m, Ord o, Show sE, Typeable sE, Show s, Typeable s,

@@ -842,6 +842,23 @@ printPropDeBrStep lastLineN notMonadic step = do
                        <> subproofName
                        <> qed
                 printSubproofF steps False notMonadic newDictMap cnstMap cf newIndex state oldTagData oldTagIdxs
+            PrfStdStepSubproofBasic prop mayLabel steps -> do
+                let newDictMap = insert prop newIndex dictMap
+                let newConstMapFull = fmap (\const -> ((),const)) cnstMap
+                put $ PrfStdState {
+                    provenSents = newDictMap,
+                    consts = newConstMapFull,
+                    stepCount = lineNum + 1,
+                    tagData=oldTagData,
+                    remarkTagIdxs = oldTagIdxs
+                    
+                }
+                liftIO $ putStr $ unpack $ showProp newDictMap prop
+                       <> "    "
+                       <> "PRF_BY_SUBARG"
+                       <> maybe "" (\label -> " (" <> label <> ")") mayLabel
+                       <> qed
+                printSubproofF steps False notMonadic newDictMap cnstMap cf newIndex state oldTagData oldTagIdxs
             PrfStdStepTheoremM prop -> do
                 let newDictMap = insert prop newIndex dictMap
                 let newConstMapFull = fmap (\const -> ((),const)) cnstMap
