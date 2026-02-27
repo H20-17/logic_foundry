@@ -1,4 +1,5 @@
 {-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE TupleSections #-}
 module Langs.Internal.BasicUntyped.Rendering (
     printPropDeBrStepsBase,
     showProp,
@@ -745,7 +746,7 @@ printPropDeBrStep lastLineN notMonadic step = do
             PrfStdStepStep prop justification mayConst depends -> do
                 let newDictMap = insert prop newIndex dictMap
                 let newConstMap = maybe cnstMap (\const -> insert const newIndex cnstMap) mayConst
-                let newConstMapFull = fmap (\const -> ((),const)) newConstMap
+                let newConstMapFull = fmap ((),) newConstMap
                 -- put $ PrfStdState newDictMap newConstMap (lineNum + 1)
                 put $ PrfStdState {
                     provenSents = newDictMap,
@@ -771,7 +772,7 @@ printPropDeBrStep lastLineN notMonadic step = do
                                 Nothing -> error $ "Parent context state index map does not contain proposition: " <> show prop
                       Nothing -> ""
                 let newDictMap = insert prop newIndex dictMap
-                let newConstMapFull = fmap (\const -> ((),const)) cnstMap
+                let newConstMapFull = fmap ((),) cnstMap
                 -- put $ PropDeBrStepState newDictMap cnstMap (lineNum + 1)
                 put $ PrfStdState {
                     provenSents = newDictMap,
@@ -797,7 +798,7 @@ printPropDeBrStep lastLineN notMonadic step = do
                                 Nothing -> error $ "Parent context state index map does not contain const: " <> unpack constName <> " " <> show cMap
                       Nothing -> ""
                 let newConstMap = insert constName newIndex cnstMap
-                let newConstMapFull = fmap (\const -> ((),const)) newConstMap
+                let newConstMapFull = fmap ((),) newConstMap
                 put $ PrfStdState {
                     provenSents = dictMap,
                     consts = newConstMapFull,
@@ -812,7 +813,7 @@ printPropDeBrStep lastLineN notMonadic step = do
                      <> idxTxt
             PrfStdStepTheorem prop steps -> do
                 let newDictMap = insert prop newIndex dictMap
-                let newConstMapFull = fmap (\const -> ((),const)) cnstMap
+                let newConstMapFull = fmap ((),) cnstMap
                 put $ PrfStdState {
                     provenSents = newDictMap,
                     consts = newConstMapFull,
@@ -828,7 +829,7 @@ printPropDeBrStep lastLineN notMonadic step = do
                 
             PrfStdStepSubproof prop subproofName steps -> do
                 let newDictMap = insert prop newIndex dictMap
-                let newConstMapFull = fmap (\const -> ((),const)) cnstMap
+                let newConstMapFull = fmap ((),) cnstMap
                 put $ PrfStdState {
                     provenSents = newDictMap,
                     consts = newConstMapFull,
@@ -844,7 +845,7 @@ printPropDeBrStep lastLineN notMonadic step = do
                 printSubproofF steps False notMonadic newDictMap cnstMap cf newIndex state oldTagData oldTagIdxs
             PrfStdStepSubproofBasic prop mayLabel steps -> do
                 let newDictMap = insert prop newIndex dictMap
-                let newConstMapFull = fmap (\const -> ((),const)) cnstMap
+                let newConstMapFull = fmap ((),) cnstMap
                 put $ PrfStdState {
                     provenSents = newDictMap,
                     consts = newConstMapFull,
@@ -861,7 +862,7 @@ printPropDeBrStep lastLineN notMonadic step = do
                 printSubproofF steps False notMonadic newDictMap cnstMap cf newIndex state oldTagData oldTagIdxs
             PrfStdStepTheoremM prop -> do
                 let newDictMap = insert prop newIndex dictMap
-                let newConstMapFull = fmap (\const -> ((),const)) cnstMap
+                let newConstMapFull = fmap ((),) cnstMap
                 put $ PrfStdState {
                     provenSents = newDictMap,
                     consts = newConstMapFull,
@@ -873,7 +874,7 @@ printPropDeBrStep lastLineN notMonadic step = do
                        <> "    ALGORITHMIC_THEOREM"
                        <> qed
             PrfStdStepFreevar index _ -> do
-                let newConstMapFull = fmap (\const -> ((),const)) cnstMap
+                let newConstMapFull = fmap ((),) cnstMap
                 put $ PrfStdState {
                     provenSents = dictMap,
                     consts = newConstMapFull,
@@ -886,7 +887,7 @@ printPropDeBrStep lastLineN notMonadic step = do
                      <> "    VARDEF"
             PrfStdStepFakeConst constName _ -> do
                 let newConstMap = insert constName newIndex cnstMap
-                let newConstMapFull = fmap (\const -> ((),const)) newConstMap
+                let newConstMapFull = fmap ((),) newConstMap
                 put $ PrfStdState {
                     provenSents = dictMap,
                     consts = newConstMapFull,
@@ -898,7 +899,7 @@ printPropDeBrStep lastLineN notMonadic step = do
                      <> constName
                      <> "    FAKE_CONST"
             PrfStdStepRemark text mayTag -> do
-                let newConstMapFull = fmap (\const -> ((),const)) cnstMap
+                let newConstMapFull = fmap ((),) cnstMap
                 put $ PrfStdState {
                     provenSents = dictMap,
                     consts = newConstMapFull,
@@ -916,7 +917,7 @@ printPropDeBrStep lastLineN notMonadic step = do
                      <> contextFramesShown cf
                      <> "╚"
             PrfStdStepTagObject tagName tagObj -> do
-                let newConstMapFull = fmap (\const -> ((),const)) cnstMap
+                let newConstMapFull = fmap ((),) cnstMap
                 put $ PrfStdState {
                     provenSents = dictMap,
                     consts = newConstMapFull,
@@ -924,7 +925,7 @@ printPropDeBrStep lastLineN notMonadic step = do
                     tagData=Data.Map.insert tagName tagObj oldTagData,
                     remarkTagIdxs = oldTagIdxs
                 }
-                unless notMonadic $ liftIO $ putStr $ unpack $ tagText
+                unless notMonadic $ liftIO $ putStr $ unpack tagText
                    where
                       tagText = case tagObj of
                         TagDataTerm obj -> showObj dictMap obj
@@ -961,7 +962,7 @@ printPropDeBrStep lastLineN notMonadic step = do
                               }
                               let newState = PrfStdState{
                                     provenSents = newDictMap,
-                                    consts = fmap (\const -> ((),const)) newConstMap,
+                                    consts = fmap ((),) newConstMap,
                                     stepCount = 0,
                                     tagData = newTagData,
                                     remarkTagIdxs = newTagIdxs
