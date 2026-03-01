@@ -403,13 +403,7 @@ multiUIM initialProposition instantiationTerms =
                 (result_prop, extra_data) <- runProofBySubArgM (Just "MULTI_UI")(
                     -- Use foldM to iteratively apply PREDL.uiM.
                     -- The accumulator for foldM is (current_proposition_term, its_index).
-                    foldM
-                        (\currentProp_term term_to_instantiate ->
-                            -- PREDL.uiM applies UI, proves the new proposition, adds it to proof steps,
-                            -- updates the Last s writer state, and returns (new_proposition_term, new_index).
-                            -- This (new_prop, new_idx) becomes the new accumulator.
-                            uiM term_to_instantiate currentProp_term
-                        )
+                    foldM (flip uiM)
                         initialProposition -- Start fold with initialProposition and a dummy index.
                         instantiationTerms
                     -- The result of this foldM is a monadic action of type m (PropDeBr, [Int]).
@@ -522,7 +516,7 @@ runProofByUGM tt prog =  do
         }
         let preambleSteps = [PrfStdStepFreevar (length frVarTypeStack) (qTypeToTType tt)]
         let modifiedProg = do
-            pushUniversalVar (length frVarTypeStack)
+            pushUniversalVar $ free2Term (length frVarTypeStack)
             -- this puts an index of a free variable onto the dynamic stack.
             -- This stack is part of the user-manipulable state.
             -- This is different from the static stack of free variable types, which is part of the context and is not directly manipulable by the user.

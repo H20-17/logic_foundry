@@ -508,6 +508,10 @@ instance TypeableTerm ObjDeBr Text () DeBrSe () where
      free2Term = V
      extractConstsTerm :: ObjDeBr -> Set Text
      extractConstsTerm obj = objDeBrExtractConsts obj
+     getFreeVarIndex :: ObjDeBr -> Maybe Int
+     getFreeVarIndex obj = case obj of
+        V idx -> Just idx
+        _ -> Nothing
 
 
 instance TypedSent  Text () DeBrSe PropDeBr where

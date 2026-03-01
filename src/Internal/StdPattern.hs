@@ -170,6 +170,9 @@ class (Eq tType, Ord o) => TypeableTerm t o tType sE q | t -> o, t ->tType, t ->
     const2Term :: o -> t
     free2Term :: Int -> t
     extractConstsTerm :: t -> Set o
+    getFreeVarIndex :: t -> Maybe Int
+    -- if the term is a free variable, return its index in the free variable stack. The index is 0-based, so the top free variable on the stack has index 0,
+    -- the next one has index 1 and so on. If the term is not a free variable, return Nothing.
 
 
 class QuantifiableTerm q tType | q -> tType where
@@ -248,9 +251,9 @@ data TestSubproofMException s sE where
    BigExceptResNotProven :: s -> TestSubproofMException s sE
    BigExceptResultSanity :: s -> sE -> TestSubproofMException s sE
    BigExceptNothingProved :: TestSubproofMException s sE
-   BigExceptEmptyVarStack :: TestSubproofMException s sE
-   BigExceptNotNFreeVars :: Int -> TestSubproofMException s sE
-   BigExceptEmptyFreeVarStack :: TestSubproofMException s sE
+   --BigExceptEmptyVarStack :: TestSubproofMException s sE
+   --BigExceptNotNFreeVars :: Int -> TestSubproofMException s sE
+   --BigExceptEmptyFreeVarStack :: TestSubproofMException s sE
 
    deriving(Show)
 
@@ -461,17 +464,34 @@ showSentM obj =
       let dict = provenSents state
       return $ showSent dict obj
 
-pushUniversalVar :: (Monoid r1, Monad m,
-                     Proof eL r1 (PrfStdState s o tType t) (PrfStdContext q s o tType t) [PrfStdStep s o tType t] s) 
-                          => Int -> ProofGenTStd tType r1 s o q t m ()
-pushUniversalVar n = do
+pushUniversalVar :: (Monoid r1, Monad m, MonadThrow m,
+                     Proof eL r1 (PrfStdState s o tType t) (PrfStdContext q s o tType t) [PrfStdStep s o tType t] s,
+                     TypeableTerm t o tType sE q)
+                          => t -> ProofGenTStd tType r1 s o q t m ()
+pushUniversalVar obj = do
+        freevarIdx <- maybe  (throwM BigExceptNotFreeVar) return (getFreeVarIndex obj) 
         (bvIndex,freeVarStack) <- get
-        let newStack = n : freeVarStack
+        let newStack = freevarIdx : freeVarStack
         put (bvIndex, newStack)
+
+
+data FreeVarStackException t where
+   BigExceptEmptyVarStack :: FreeVarStackException t
+   BigExceptNotNFreeVars :: Int -> FreeVarStackException t
+   BigExceptEmptyFreeVarStack :: FreeVarStackException t
+   BigExceptNotFreeVar :: FreeVarStackException t
+
+   deriving(Show)
+
+instance (
+              Show t, Typeable t)
+           => Exception (FreeVarStackException t)
+
+
 
 popUniversalVar :: (Monoid r1, Monad m, MonadThrow m,
                      Proof eL r1 (PrfStdState s o tType t) (PrfStdContext q s o tType t) [PrfStdStep s o tType t] s, 
-                     TypeableTerm t Text tType sE q) => ProofGenTStd tType r1 s o q t m t
+                     TypeableTerm t o tType sE q) => ProofGenTStd tType r1 s o q t m t
 popUniversalVar = do
         (bvIndex,freeVarStack) <- get
         case freeVarStack of
